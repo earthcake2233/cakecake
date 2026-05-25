@@ -1,0 +1,339 @@
+/* 评论区（主站 PC：#00a1d6、#f4f5f7 输入底、顶栏仅当前页蓝） */
+$vd-cmt-blue: #00a1d6;
+$vd-cmt-blue-hover: #0090c2;
+$vd-cmt-input-bg: #f4f5f7;
+$vd-cmt-line: #e5e9ef;
+
+.vd-comments {
+  padding-top: 4px;
+}
+
+.vd-cmt-head {
+  margin-bottom: 0;
+}
+
+.vd-cmt-title {
+  margin: 0 0 10px;
+  padding-left: 2px;
+  font-size: 18px;
+  font-weight: 600;
+  color: #18191c;
+}
+
+.vd-cmt-curated-label {
+  flex-shrink: 0;
+  padding: 0 2px 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #18191c;
+  line-height: 1.2;
+}
+
+.vd-cmt-count {
+  font-weight: 600;
+  color: #18191c;
+}
+
+.vd-cmt-head-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 20px;
+  flex-wrap: wrap;
+}
+
+.vd-cmt-head-row--toolbar {
+  padding-bottom: 10px;
+  border-bottom: 1px solid $vd-cmt-line;
+  margin-bottom: 16px;
+  flex-wrap: nowrap;
+  gap: 12px;
+  min-width: 0;
+}
+
+.vd-cmt-sort {
+  display: flex;
+  gap: 22px;
+  flex-shrink: 0;
+  min-width: 0;
+}
+
+.vd-sort-tab {
+  position: relative;
+  border: none;
+  background: none;
+  padding: 0 2px 8px;
+  font-size: 13px;
+  color: #18191c;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  &.on {
+    color: $vd-cmt-blue;
+    font-weight: 600;
+    border-bottom-color: $vd-cmt-blue;
+  }
+  &.on::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    bottom: -9px;
+    margin-left: -4px;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-bottom: 4px solid $vd-cmt-blue;
+    transform: translateY(-1px);
+  }
+  &:hover:not(.on) {
+    color: #61666d;
+  }
+}
+
+.vd-cmt-page-top {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 2px 4px;
+  font-size: 12px;
+  color: #9499a0;
+  flex-shrink: 0;
+  margin-left: auto;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+/* 顶栏分页：纯文字链式；勿复用 .vd-page-num 盒式背景（类名叠加会盖住数字） */
+.vd-cmt-page-top--links {
+  .vd-page-info {
+    display: inline;
+    margin-right: 8px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: #9499a0;
+    font-size: 12px;
+    font-weight: 400;
+  }
+  button.vd-page-num.vd-page-num--link {
+    appearance: none;
+    -webkit-appearance: none;
+    margin: 0;
+    min-width: 0;
+    height: auto;
+    padding: 0 5px;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    background: transparent;
+    background-image: none;
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 1.5;
+    color: #18191c;
+    cursor: pointer;
+    display: inline;
+    align-items: unset;
+    justify-content: unset;
+    &:hover:not(:disabled):not(.on) {
+      color: $vd-cmt-blue;
+    }
+    &.on {
+      background: transparent;
+      background-image: none;
+      border: none;
+      box-shadow: none;
+      color: $vd-cmt-blue;
+      font-weight: 600;
+    }
+  }
+  button.vd-page-next.vd-page-next--link {
+    appearance: none;
+    -webkit-appearance: none;
+    margin: 0;
+    height: auto;
+    padding: 0 0 0 6px;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    background: transparent;
+    background-image: none;
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 1.5;
+    color: #18191c;
+    cursor: pointer;
+    display: inline;
+    align-items: unset;
+    justify-content: unset;
+    &:hover:not(:disabled) {
+      color: $vd-cmt-blue;
+    }
+    &:disabled {
+      background: transparent;
+      color: #c0c4cc;
+      cursor: not-allowed;
+    }
+  }
+  .vd-page-ellipsis {
+    color: #9499a0;
+    padding: 0 4px;
+  }
+}
+
+.vd-page-info {
+  margin-right: 0;
+}
+
+.vd-page-num {
+  box-sizing: border-box;
+  appearance: none;
+  -webkit-appearance: none;
+  margin: 0;
+  min-width: 28px;
+  height: 26px;
+  padding: 0 6px;
+  border: 1px solid $vd-cmt-line;
+  border-radius: 4px;
+  background: #fff;
+  background-image: none;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1;
+  color: #18191c;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  &.on {
+    background: $vd-cmt-blue;
+    background-image: none;
+    border-color: $vd-cmt-blue;
+    color: #fff;
+  }
+  &:hover:not(.on) {
+    border-color: #c9ccd0;
+    color: #18191c;
+  }
+}
+
+.vd-page-num--boxed {
+  min-width: 28px;
+  height: 26px;
+}
+
+.vd-page-ellipsis {
+  padding: 0 4px;
+  color: #9499a0;
+}
+
+.vd-page-next {
+  box-sizing: border-box;
+  appearance: none;
+  -webkit-appearance: none;
+  margin: 0;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid $vd-cmt-line;
+  border-radius: 4px;
+  background: #fff;
+  background-image: none;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1;
+  color: #18191c;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  &:hover:not(:disabled) {
+    border-color: #c9ccd0;
+    color: #18191c;
+  }
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+.vd-page-next--boxed {
+  height: 26px;
+}
+
+.vd-cmt-page-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid $vd-cmt-line;
+  font-size: 12px;
+}
+
+.vd-cmt-page-bottom-left {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.vd-cmt-page-bottom-right {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.vd-page-bottom-meta {
+  color: #9499a0;
+}
+
+.vd-page-jump-input {
+  width: 42px;
+  height: 24px;
+  padding: 0 6px;
+  border: 1px solid $vd-cmt-line;
+  border-radius: 2px;
+  font-size: 12px;
+  text-align: center;
+  box-sizing: border-box;
+  background: #fff;
+  color: #18191c;
+}
+
+.vd-cmt-page-bottom--mb {
+  margin-top: 12px;
+  flex-wrap: nowrap;
+  gap: 12px 16px;
+  min-width: 0;
+}
+
+.vd-cmt-page-bottom--mb .vd-cmt-page-bottom-left {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.vd-cmt-page-bottom--mb .vd-cmt-page-bottom-right {
+  flex: 0 0 auto;
+  flex-shrink: 0;
+}
+
+/* 评论精选：未登录时评论框仅展示说明占位 */
+.vd-cmt-uni-inbox:has(.vd-cmt-uni-inbox__field.is-curated-hint) {
+  background: $vd-cmt-input-bg;
+  border-color: transparent;
+  box-shadow: none;
+  .vd-cmt-uni-inbox__bar {
+    display: none;
+  }
+}
+
+.vd-cmt-uni-inbox__field.is-curated-hint {
+  cursor: default;
+  color: #61666d;
+  &::placeholder {
+    color: #61666d;
+  }
+}
+

@@ -1,0 +1,89 @@
+/* 历史记录 · 暂停 / 清空确认（ElMessageBox 挂载在 body） */
+.mb-hist-msgbox.el-message-box {
+  width: 400px;
+  max-width: 92vw;
+  padding: 0;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
+}
+
+.mb-hist-msgbox .el-message-box__header {
+  display: none;
+}
+
+.mb-hist-msgbox .el-message-box__status {
+  display: none;
+}
+
+.mb-hist-msgbox .el-message-box__container {
+  padding: 0;
+}
+
+.mb-hist-msgbox .el-message-box__content {
+  padding: 40px 28px 32px;
+  margin-left: 0 !important;
+}
+
+.mb-hist-msgbox .el-message-box__message {
+  text-align: center !important;
+  padding: 0 !important;
+  margin-left: 0 !important;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 22px;
+  color: #18191c;
+}
+
+.mb-hist-msgbox .el-message-box__message p {
+  margin: 0;
+}
+
+.mb-hist-msgbox .el-message-box__btns {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  padding: 0 24px 28px;
+}
+
+.mb-hist-msgbox .mb-hist-msgbox__ok {
+  order: 1;
+  min-width: 96px;
+  height: 36px !important;
+  padding: 0 20px !important;
+  margin: 0 !important;
+  border-radius: 4px !important;
+  font-size: 14px !important;
+  font-weight: 400 !important;
+  background: #00aeec !important;
+  border-color: #00aeec !important;
+  color: #fff !important;
+}
+
+.mb-hist-msgbox .mb-hist-msgbox__ok:hover {
+  background: #00a1d6 !important;
+  border-color: #00a1d6 !important;
+}
+
+.mb-hist-msgbox .mb-hist-msgbox__cancel {
+  order: 2;
+  min-width: 88px;
+  height: 36px !important;
+  padding: 0 20px !important;
+  margin: 0 !important;
+  border-radius: 4px !important;
+  font-size: 14px !important;
+  font-weight: 400 !important;
+  background: #fff !important;
+  border: 1px solid #e3e5e7 !important;
+  color: #61666d !important;
+  box-shadow: none !important;
+}
+
+.mb-hist-msgbox .mb-hist-msgbox__cancel:hover {
+  border-color: #00aeec !important;
+  color: #00aeec !important;
+  background: #fff !important;
+}

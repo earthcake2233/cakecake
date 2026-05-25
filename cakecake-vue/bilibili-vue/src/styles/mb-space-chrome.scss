@@ -1,0 +1,349 @@
+/* 个人空间顶栏（头图 + 主导航 + 统计），供 PersonalSpace / SpaceRelations 复用 */
+$mb-space-nav-pad-l: 62px;
+$mb-space-nav-pad-r: 20px;
+
+.mb-space-chrome__header {
+  position: relative;
+  z-index: 2;
+  height: 160px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  overflow: visible;
+  background: #222;
+}
+
+.mb-space-chrome__banner-bg {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center center;
+  background-repeat: no-repeat;
+  background-color: #222;
+}
+
+.mb-space-chrome__header-shade {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 80px;
+  pointer-events: none;
+  background: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 0.45) 0%,
+    rgba(0, 0, 0, 0) 100%
+  );
+}
+
+.mb-space-chrome__header-bar {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0 $mb-space-nav-pad-r 14px $mb-space-nav-pad-l;
+  box-sizing: border-box;
+  overflow: visible;
+}
+
+.mb-space-chrome__profile {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: 1;
+  min-width: 0;
+  flex-wrap: wrap;
+  box-sizing: border-box;
+}
+
+.mb-space-chrome__avatar {
+  display: block;
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  object-fit: cover;
+  background: #222;
+  flex-shrink: 0;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.25);
+}
+
+.mb-space-chrome__profile-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 5px;
+  min-height: 80px;
+}
+
+.mb-space-chrome__name-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+}
+
+.mb-space-chrome__name {
+  font-size: 21px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+.mb-space-chrome__level-badge {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  display: block;
+  object-fit: contain;
+}
+
+.mb-space-chrome__badges {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 6px;
+}
+
+.mb-space-chrome__gender--ico {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: transparent;
+}
+
+.mb-space-chrome__gender-img {
+  display: block;
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.mb-space-chrome__sign {
+  margin: 0;
+  max-width: 760px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.88);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+.mb-space-chrome__navbar {
+  position: relative;
+  z-index: 1;
+  box-sizing: border-box;
+  background: #fff;
+  border-bottom: 1px solid #e5e9ef;
+  padding: 0 $mb-space-nav-pad-r 0 $mb-space-nav-pad-l;
+}
+
+.mb-space-chrome__dock-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  min-height: 50px;
+  padding: 2px 0 4px;
+}
+
+.mb-space-chrome__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  flex-shrink: 0;
+}
+
+.mb-space-chrome__dock-gap {
+  flex: 1;
+  min-width: 12px;
+  height: 1px;
+}
+
+.mb-space-chrome__tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 48px;
+  padding: 0 12px;
+  border: none;
+  background: transparent;
+  font-size: 13px;
+  color: #18191c;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -4px;
+
+  &:hover {
+    color: #00a1d6;
+  }
+
+  &.is-on {
+    color: #00a1d6;
+    border-bottom-color: #00a1d6;
+    font-weight: 600;
+  }
+}
+
+.mb-space-chrome__tab-ico {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.mb-space-chrome__tab-ico--home {
+  filter: invert(52%) sepia(90%) saturate(420%) hue-rotate(99deg)
+    brightness(96%) contrast(92%);
+}
+
+.mb-space-chrome__tab-ico--collect {
+  width: 24px;
+  height: 24px;
+}
+
+.mb-space-chrome__tab-badge {
+  margin-left: 2px;
+  font-size: 12px;
+  color: #999;
+  font-weight: 400;
+}
+
+.mb-space-chrome__search {
+  display: flex;
+  align-items: center;
+  border: 1px solid #ccd0d7;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #fff;
+  flex-shrink: 0;
+}
+
+.mb-space-chrome__search-input {
+  width: 148px;
+  border: none;
+  background: transparent;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: #9499a0;
+  outline: none;
+
+  &::placeholder {
+    color: #99a2aa;
+  }
+}
+
+.mb-space-chrome__search-btn {
+  width: 34px;
+  height: 30px;
+  border: none;
+  border-left: 1px solid #e5e9ef;
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.mb-space-chrome__search-ico {
+  width: 13px;
+  height: 13px;
+  border: 2px solid #99a2aa;
+  border-radius: 50%;
+  box-sizing: border-box;
+  position: relative;
+
+  &::after {
+    content: "";
+    position: absolute;
+    right: -4px;
+    bottom: -4px;
+    width: 5px;
+    height: 2px;
+    background: #99a2aa;
+    transform: rotate(45deg);
+    border-radius: 1px;
+  }
+}
+
+.mb-space-chrome__stats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 18px 26px;
+  flex-shrink: 0;
+}
+
+.mb-space-chrome__stat {
+  text-align: center;
+  min-width: 44px;
+}
+
+.mb-space-chrome__stat--link {
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+
+  &:hover:not(:disabled) .mb-space-chrome__stat-v {
+    color: #00a1d6;
+  }
+
+  &:disabled {
+    cursor: default;
+    opacity: 1;
+  }
+
+  &.is-on .mb-space-chrome__stat-v {
+    color: #00a1d6;
+    font-weight: 600;
+  }
+}
+
+.mb-space-chrome__stat-k {
+  display: block;
+  font-size: 12px;
+  line-height: 1.2;
+  color: #99a2aa;
+}
+
+.mb-space-chrome__stat-v {
+  display: block;
+  margin-top: 2px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #222;
+}
+
+@media (max-width: 900px) {
+  .mb-space-chrome__header-bar {
+    padding: 0 12px 12px 42px;
+  }
+
+  .mb-space-chrome__header {
+    height: 140px;
+  }
+
+  .mb-space-chrome__header-shade {
+    height: 72px;
+  }
+
+  .mb-space-chrome__navbar {
+    padding-left: 42px;
+    padding-right: 12px;
+  }
+}

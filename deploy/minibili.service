@@ -1,0 +1,23 @@
+[Unit]
+Description=Minibili API Server
+After=network.target mariadb.service mysqld.service mysql.service redis.service rabbitmq-server.service
+Wants=redis.service rabbitmq-server.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/minibili
+EnvironmentFile=/opt/minibili/.env
+ExecStart=/opt/minibili/bin/mini-bili
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=65535
+
+# 2G 机可适当限制；若 OOM 可改为 1800M
+# MemoryMax=1800M
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

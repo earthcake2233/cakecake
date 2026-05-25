@@ -1,0 +1,21 @@
+/* Element Plus Message 挂 body，需全局样式；覆盖默认 top 偏移，屏幕正中 */
+.mb-dark-toast.el-message {
+  top: 50% !important;
+  bottom: auto !important;
+  left: 50% !important;
+  right: auto !important;
+  transform: translate(-50%, -50%) !important;
+  min-width: auto;
+  padding: 10px 28px;
+  background: #555 !important;
+  border: none !important;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.18) !important;
+
+  .el-message__content {
+    color: #fff !important;
+  }
+
+  .el-message__icon {
+    display: none;
+  }
+}

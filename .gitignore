@@ -1,0 +1,45 @@
+# ── Personal notes（本地私密，勿提交）──
+Minibili.md
+README_REFLECT.md
+
+# ── Secrets & local env（切勿提交）──
+.env
+.env.*
+!.env.example
+!deploy/env.production.example
+cakecake-vue/bilibili-vue/.env
+cakecake-vue/bilibili-vue/.env.production
+cakecake-vue/bilibili-vue/.env.local
+cakecake-vue/bilibili-vue/.env.*.local
+!cakecake-vue/bilibili-vue/.env.example
+!cakecake-vue/bilibili-vue/.env.production.example
+
+# ── Binaries & build artifacts ──
+/bin/
+/tmp/
+*.exe
+*.exe~
+/mini-bili-linux
+cakecake-vue/bilibili-vue/dist/
+cakecake-vue/bilibili-vue/dist.zip
+
+# ── Dependencies ──
+node_modules/
+
+# ── Runtime / upload data ──
+/data/
+
+# ── Large third-party databases（仓库内保留路径说明，文件自行下载）──
+configs/ip2region_v4.xdb
+
+# ── IDE / OS / logs ──
+.DS_Store
+.idea/
+.vscode/
+.cursor/
+*.log
+*.swp
+*.swo
+
+# ── Air live-reload temp ──
+tmp/

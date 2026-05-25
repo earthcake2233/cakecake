@@ -1,0 +1,425 @@
+/* 与播放页 video.vue 评论区列表一致，供本页 mock 与 MinibiliCommentsLive 共用 */
+$vd-bili-blue: #00a1d6;
+$vd-icons-comment-w: 1000px;
+$vd-icons-comment-h: 1000px;
+
+.vd-cmt-list {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 72px;
+}
+
+.vd-cmt-thread {
+  position: relative;
+  z-index: 0;
+  padding: 18px 0;
+  border-bottom: 1px solid #e3e5e7;
+}
+
+.vd-cmt-thread:has(.vd-cmt-menu-wrap.is-open) {
+  z-index: 12;
+}
+
+.vd-cmt-item {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.vd-cmt-item--reply {
+  margin-top: 14px;
+  margin-left: 12px;
+  padding: 10px 12px 10px 40px;
+}
+
+/* 楼中楼「回复 @昵称 :」：@ 与昵称同为主题蓝；「回复」「:」为灰字 */
+.vd-cmt-text .vd-cmt-reply-prefix {
+  margin-right: 2px;
+  font-weight: 400;
+}
+.vd-cmt-text .vd-cmt-reply-prefix-muted {
+  color: #9499a0;
+}
+.vd-cmt-text .vd-cmt-reply-prefix-atwrap {
+  display: inline;
+}
+.vd-cmt-text .vd-cmt-reply-prefix-at {
+  color: $vd-bili-blue !important;
+  font-weight: 400;
+}
+.vd-cmt-text .vd-cmt-reply-prefix-name {
+  color: $vd-bili-blue !important;
+  font-weight: 400;
+}
+.vd-cmt-pin-ico {
+  display: inline-block;
+  vertical-align: -2px;
+  margin-right: 6px;
+  width: 26px;
+  height: auto;
+  max-height: 13px;
+  object-fit: contain;
+}
+.vd-cmt-up-badge {
+  margin-left: -4px;
+  height: 14px;
+  width: auto;
+  vertical-align: middle;
+  object-fit: contain;
+}
+
+.vd-cmt-face-link {
+  display: block;
+  flex-shrink: 0;
+  line-height: 0;
+  border-radius: 50%;
+  overflow: hidden;
+  align-self: flex-start;
+}
+
+.vd-cmt-face {
+  border-radius: 50%;
+  flex-shrink: 0;
+  object-fit: cover;
+}
+
+.vd-cmt-face--sm {
+  border-radius: 50%;
+}
+
+.vd-cmt-body {
+  position: relative;
+  overflow: visible;
+  flex: 1;
+  min-width: 0;
+}
+
+.vd-cmt-user-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.vd-cmt-name {
+  font-size: 13px;
+  font-weight: 400;
+  text-decoration: none;
+  color: #9499a0;
+  &.tone-blue,
+  &.tone-pink,
+  &.tone-black {
+    color: #9499a0;
+  }
+  &:hover {
+    color: #61666d;
+  }
+}
+
+.vd-cmt-text {
+  margin: 0 0 8px;
+  font-size: 14px;
+  line-height: 22px;
+  color: #18191c;
+  white-space: pre-line;
+}
+
+.vd-cmt-meta-row {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 10px 14px;
+  font-size: 12px;
+  color: #9499a0;
+}
+
+.vd-cmt-meta-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  flex: 1;
+  min-width: 0;
+}
+
+.vd-cmt-menu-wrap {
+  position: relative;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.vd-cmt-menu-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: none;
+  padding: 2px 4px;
+  cursor: pointer;
+  color: #9499a0;
+  line-height: 1;
+  &:hover {
+    color: $vd-bili-blue;
+  }
+}
+
+.vd-cmt-menu-dots {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: center;
+  span {
+    width: 3px;
+    height: 3px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+}
+
+.vd-cmt-menu-wrap--root .vd-cmt-menu-trigger,
+.vd-cmt-menu-wrap--reply .vd-cmt-menu-trigger {
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.vd-cmt-menu-wrap--reply {
+  margin-right: 40px;
+}
+
+.vd-cmt-thread:hover .vd-cmt-menu-wrap--root .vd-cmt-menu-trigger,
+.vd-cmt-menu-wrap--root.is-open .vd-cmt-menu-trigger,
+.vd-cmt-item--reply:hover .vd-cmt-menu-wrap--reply .vd-cmt-menu-trigger,
+.vd-cmt-menu-wrap--reply.is-open .vd-cmt-menu-trigger {
+  opacity: 1;
+}
+
+.vd-cmt-menu-dropdown {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 50;
+  min-width: 128px;
+  padding: 4px 0;
+  margin: 0;
+  border: 1px solid #e3e5e7;
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+}
+
+/* 楼中楼靠底时改为向上展开，避免被下一楼遮挡 */
+.vd-cmt-menu-wrap--reply.is-open .vd-cmt-menu-dropdown {
+  top: auto;
+  bottom: calc(100% + 4px);
+}
+
+/* 列表末尾根评论菜单向上展开，四项（置顶/拉黑/举报/删除）可完整显示 */
+.vd-cmt-thread:last-child .vd-cmt-menu-wrap--root.is-open .vd-cmt-menu-dropdown {
+  top: auto;
+  bottom: calc(100% + 4px);
+}
+
+.vd-cmt-menu-item {
+  display: block;
+  width: 100%;
+  padding: 8px 14px;
+  border: none;
+  background: none;
+  text-align: left;
+  font-size: 13px;
+  color: #18191c;
+  cursor: pointer;
+  &:hover {
+    background: #e8f4fc;
+    color: $vd-bili-blue;
+  }
+}
+
+.vd-cmt-ip {
+  color: #9499a0;
+}
+
+.vd-cmt-act {
+  border: none;
+  background: none;
+  padding: 0;
+  font-size: 12px;
+  color: #9499a0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* 点赞/踩单独配色，避免沿用「回复」等按钮的悬停蓝 */
+.vd-cmt-act:not(.vd-cmt-act--like):not(.vd-cmt-act--dislike):hover {
+  color: $vd-bili-blue;
+}
+
+/* 点赞：与消息中心「回复我的」一致 — 默认灰 / 悬停蓝 / 已赞实心软蓝 + 字重 */
+.vd-cmt-act--like {
+  gap: 4px;
+  color: #9499a0;
+  font-weight: normal;
+}
+.vd-cmt-act--like:hover:not(.is-liked) {
+  color: #00aeec;
+}
+.vd-cmt-act--like.is-liked {
+  color: #00aeec;
+  font-weight: 600;
+}
+.vd-cmt-act--like.is-liked:hover {
+  color: #0099cc;
+}
+
+.vd-cmt-like-ico {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  opacity: 0.92;
+}
+.vd-cmt-like-ico--solid {
+  opacity: 1;
+}
+
+/* 踩：与点赞同一套配色与字重，仅图标方向不同、不显示数量 */
+.vd-cmt-act--dislike {
+  gap: 4px;
+  color: #9499a0;
+  font-weight: normal;
+}
+.vd-cmt-act--dislike:hover:not(.is-disliked) {
+  color: #00aeec;
+}
+.vd-cmt-act--dislike.is-disliked {
+  color: #00aeec;
+  font-weight: 600;
+}
+.vd-cmt-act--dislike.is-disliked:hover {
+  color: #0099cc;
+}
+
+.vd-cmt-act--quiet {
+  opacity: 0.85;
+}
+
+.vd-cmt-link {
+  color: $vd-bili-blue;
+  text-decoration: none;
+  font-size: 12px;
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.vd-ico-like,
+.vd-ico-unlike {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  margin-right: 4px;
+  vertical-align: -3px;
+  background-image: url("@/assets/icons-comment.2f36fc5.png");
+  background-repeat: no-repeat;
+  background-size: $vd-icons-comment-w $vd-icons-comment-h;
+}
+
+.vd-ico-like {
+  background-position: -218px -25px;
+}
+
+.vd-ico-unlike {
+  background-position: -153px -153px;
+}
+
+.vd-cmt-replies {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+}
+
+.vd-cmt-fold {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: #9499a0;
+  a {
+    color: $vd-bili-blue;
+    text-decoration: none;
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+}
+
+.vd-cmt-fold-meta {
+  color: #61666d;
+}
+
+button.vd-cmt-fold-link {
+  border: none;
+  background: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  cursor: pointer;
+  color: $vd-bili-blue;
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+/* 与楼中楼首条文字列大致对齐：根评论内边距 + 子项 margin + 头像 + gap */
+.vd-cmt-fold--mb-more {
+  margin: 10px 0 0 56px;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.vd-cmt-fold--mb-collapse {
+  margin-top: 6px;
+}
+
+.vd-cmt-page-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 20px;
+  padding-top: 18px;
+}
+
+.vd-cmt-page-bottom-left {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.vd-cmt-page-bottom-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #9499a0;
+}
+
+.vd-page-jump-input {
+  width: 44px;
+  height: 26px;
+  border: 1px solid #e3e5e7;
+  border-radius: 2px;
+  text-align: center;
+  font-size: 12px;
+}
+
+.level-badge {
+  flex-shrink: 0;
+  display: inline-block;
+  vertical-align: middle;
+  width: 30px;
+  height: 30px;
+}

@@ -1,0 +1,94 @@
+# Minibili 生产部署（ECS + Nginx + systemd）
+#
+# 在 GitHub 仓库 Settings → Secrets and variables → Actions 中配置：
+#   DEPLOY_HOST          服务器 IP 或域名
+#   DEPLOY_USER          SSH 用户名
+#   DEPLOY_SSH_KEY       SSH 私钥（PEM 全文）
+#   DEPLOY_PORT          可选，默认 22
+#
+# 服务器需已按 deploy/DEPLOY.md 初始化：
+#   /opt/minibili/bin、/opt/minibili/www、/opt/minibili/.env、systemd minibili、Nginx
+
+name: Deploy Minibili
+
+on:
+  workflow_dispatch:
+  # push:
+  #   branches: [main, master]
+
+concurrency:
+  group: deploy-minibili
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: cakecake-vue/bilibili-vue/package-lock.json
+
+      - name: Build frontend
+        working-directory: cakecake-vue/bilibili-vue
+        run: |
+          cp .env.production.example .env.production
+          npm ci
+          npm run build
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build backend (linux/amd64)
+        run: |
+          GOOS=linux GOARCH=amd64 CGO_ENABLED=0 \
+            go build -ldflags="-s -w" -o mini-bili-linux ./cmd/mini-bili
+
+      - name: Pack release bundle
+        run: |
+          mkdir -p release/dist
+          cp mini-bili-linux release/mini-bili
+          cp -a cakecake-vue/bilibili-vue/dist/. release/dist/
+          tar czf minibili-release.tar.gz -C release .
+
+      - name: Upload bundle to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: ${{ secrets.DEPLOY_PORT || 22 }}
+          source: minibili-release.tar.gz
+          target: /tmp
+
+      - name: Install on server and restart
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: ${{ secrets.DEPLOY_PORT || 22 }}
+          script: |
+            set -euo pipefail
+            WORK=/tmp/minibili-release
+            rm -rf "$WORK"
+            mkdir -p "$WORK"
+            tar xzf /tmp/minibili-release.tar.gz -C "$WORK"
+            install -m 755 "$WORK/mini-bili" /opt/minibili/bin/mini-bili
+            rm -rf /opt/minibili/www/*
+            mkdir -p /opt/minibili/www
+            cp -a "$WORK/dist/." /opt/minibili/www/
+            rm -rf "$WORK" /tmp/minibili-release.tar.gz
+            systemctl restart minibili
+            nginx -t
+            systemctl reload nginx
+            curl -fsS http://127.0.0.1:8080/api/v1/health | head -c 200
+            echo
+            echo "Minibili deploy OK"

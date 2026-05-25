@@ -1,0 +1,319 @@
+$mb-coin-blue: #00a1d6;
+$mb-coin-blue-num: #00a1d7;
+$mb-coin-border: #e5e9ef;
+$mb-coin-text: #18191c;
+$mb-coin-sub: #99a2aa;
+
+.mb-pc-coin {
+  flex: 1;
+  min-width: 0;
+  min-height: 560px;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+}
+
+.mb-pc-coin .mb-pc-subpage-hd {
+  flex-shrink: 0;
+  box-sizing: border-box;
+  height: 50px;
+  display: flex;
+  align-items: center;
+  padding: 0 28px;
+  border-bottom: 1px solid $mb-coin-border;
+}
+
+.mb-pc-coin .mb-pc-subpage-hd__title {
+  margin: 0;
+  padding-left: 10px;
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1.35;
+  color: $mb-coin-text;
+}
+
+.mb-pc-coin .mb-pc-subpage-hd__title--accent {
+  color: $mb-coin-blue;
+  border-left: 3px solid $mb-coin-blue;
+}
+
+.mb-pc-coin__body {
+  flex: 1;
+  min-height: 500px;
+  padding: 0 28px 40px;
+  box-sizing: border-box;
+}
+
+.mb-pc-coin__tabs {
+  display: flex;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  border-bottom: 1px solid $mb-coin-border;
+}
+
+.mb-pc-coin__tab {
+  position: relative;
+  margin: 0;
+  padding: 0 20px;
+  height: 42px;
+  line-height: 42px;
+  font-size: 14px;
+  color: $mb-coin-text;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+
+  &:hover {
+    color: $mb-coin-blue;
+  }
+
+  &--on {
+    color: $mb-coin-blue;
+    font-weight: 500;
+
+    &::after {
+      content: "";
+      position: absolute;
+      left: 20px;
+      right: 20px;
+      bottom: -1px;
+      height: 2px;
+      background: $mb-coin-blue;
+    }
+  }
+}
+
+.coin-rest-p {
+  margin: 20px 0 24px;
+  color: #222;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.coin-num {
+  margin-left: 20px;
+  color: $mb-coin-blue-num;
+  font-style: normal;
+  font-weight: 400;
+  font-size: 18px;
+}
+
+/* 首页：左表 + 右说明；硬币记录 tab：仅左表，样式与首页表格一致 */
+.mb-pc-coin__content {
+  display: flex;
+  align-items: flex-start;
+  gap: 28px;
+  margin-top: 4px;
+}
+
+.mb-pc-coin__content--records {
+  margin-top: 16px;
+
+  .mb-pc-coin__ledger-col {
+    flex: 1;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .mb-pc-coin__table-wrap {
+    width: 100%;
+  }
+
+  .mb-pc-coin__table th:nth-child(1),
+  .mb-pc-coin__cell-time {
+    width: 200px;
+  }
+
+  .mb-pc-coin__table th:nth-child(2),
+  .mb-pc-coin__cell-change {
+    width: 72px;
+  }
+}
+
+.mb-pc-coin__ledger-col {
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+.mb-pc-coin__side-col {
+  flex: 1;
+  min-width: 0;
+  max-width: 280px;
+  box-sizing: border-box;
+}
+
+.mb-pc-coin__block-hd {
+  margin: 0 0 12px;
+  font-size: 14px;
+  font-weight: 700;
+  color: $mb-coin-text;
+  line-height: 1.4;
+}
+
+.mb-pc-coin__block-sub {
+  margin-left: 8px;
+  font-size: 12px;
+  font-weight: 400;
+  color: $mb-coin-sub;
+}
+
+.mb-pc-coin__table-wrap {
+  width: 400px;
+  max-width: 100%;
+  border: 1px solid $mb-coin-border;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.mb-pc-coin__content--records .mb-pc-coin__block-hd {
+  width: 100%;
+}
+
+.mb-pc-coin__table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 12px;
+  color: $mb-coin-text;
+
+  th,
+  td {
+    padding: 12px 10px;
+    line-height: 1.5;
+    text-align: center;
+    border-bottom: 1px solid $mb-coin-border;
+    border-right: 1px solid $mb-coin-border;
+    vertical-align: middle;
+
+    &:last-child {
+      border-right: none;
+    }
+  }
+
+  th {
+    background: #f4f5f7;
+    font-weight: 400;
+    color: $mb-coin-sub;
+  }
+
+  tr:last-child td {
+    border-bottom: none;
+  }
+}
+
+.mb-pc-coin__table th:nth-child(1),
+.mb-pc-coin__cell-time {
+  width: 140px;
+  white-space: nowrap;
+  word-break: keep-all;
+  font-variant-numeric: tabular-nums;
+}
+
+.mb-pc-coin__table th:nth-child(2),
+.mb-pc-coin__cell-change {
+  width: 48px;
+  white-space: nowrap;
+}
+
+.mb-pc-coin__table th:nth-child(3),
+.mb-pc-coin__cell-reason {
+  word-break: break-word;
+}
+
+.mb-pc-coin__empty,
+.mb-pc-coin__loading {
+  padding: 32px 16px;
+  text-align: center;
+  font-size: 12px;
+  color: $mb-coin-sub;
+  border-right: none !important;
+}
+
+.mb-pc-coin__more {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 12px 0;
+  font-size: 12px;
+  color: $mb-coin-sub;
+  text-align: center;
+  background: #f6f7f8;
+  border: none;
+  border-top: 1px solid $mb-coin-border;
+  cursor: pointer;
+  font-family: inherit;
+  box-sizing: border-box;
+
+  &:hover {
+    color: $mb-coin-blue;
+    background: #f0f9fc;
+  }
+}
+
+.mb-pc-coin__help {
+  margin-bottom: 24px;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+.mb-pc-coin__help-hd {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.mb-pc-coin__help-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: $mb-coin-text;
+}
+
+.mb-pc-coin__help-link {
+  font-size: 12px;
+  color: $mb-coin-blue;
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.mb-pc-coin__help-intro {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: $mb-coin-text;
+  line-height: 1.6;
+}
+
+.mb-pc-coin__help-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+  color: $mb-coin-text;
+  line-height: 1.75;
+
+  li {
+    position: relative;
+    margin-bottom: 6px;
+    padding-left: 14px;
+
+    &::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0.62em;
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: $mb-coin-blue;
+    }
+  }
+}

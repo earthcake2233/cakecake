@@ -1,0 +1,127 @@
+/* 动态/视频/专栏删除确认弹窗（Teleport 至 body，全局样式） */
+
+.mb-space__dyn-del-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 10040;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+  padding: 24px;
+  box-sizing: border-box;
+}
+
+.mb-space__dyn-del-box {
+  position: relative;
+  width: 100%;
+  max-width: 400px;
+  padding: 28px 28px 24px;
+  border-radius: 10px;
+  background: #fff;
+  box-sizing: border-box;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+}
+
+.mb-space__dyn-del-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 32px;
+  height: 32px;
+  border: none;
+  padding: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #9499a0;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  &:hover:not(:disabled) {
+    color: #18191c;
+    background: rgba(0, 0, 0, 0.06);
+  }
+  &:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+}
+
+.mb-space__dyn-del-copy {
+  padding: 0 40px;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+.mb-space__dyn-del-title {
+  margin: 0 0 10px;
+  font-size: 18px;
+  font-weight: 600;
+  color: #18191c;
+  line-height: 1.35;
+}
+
+.mb-space__dyn-del-sub {
+  margin: 0 0 22px;
+  font-size: 13px;
+  color: #9499a0;
+  line-height: 1.5;
+}
+
+.mb-space__dyn-del-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.mb-space__dyn-del-cancel {
+  min-width: 104px;
+  padding: 8px 18px;
+  border: 1px solid #e3e5e7;
+  border-radius: 6px;
+  background: #fff;
+  color: #18191c;
+  font-size: 14px;
+  cursor: pointer;
+  &:hover:not(:disabled) {
+    border-color: #c9ccd0;
+  }
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+.mb-space__dyn-del-ok {
+  min-width: 104px;
+  padding: 8px 18px;
+  border: none;
+  border-radius: 6px;
+  background: #ff5967;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  &:hover:not(:disabled) {
+    filter: brightness(0.96);
+  }
+  &:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+}
+
+.mb-space-dyn-delete-toast.el-message {
+  min-width: auto;
+  padding: 10px 28px;
+  background: #555 !important;
+  border: none !important;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.18) !important;
+  .el-message__content {
+    color: #fff !important;
+  }
+  .el-message__icon {
+    display: none;
+  }
+}

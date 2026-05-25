@@ -1,0 +1,602 @@
+$bili-blue: #00aeec;
+$bili-pink: #fb7299;
+$text1: #18191c;
+$text2: #61666d;
+$text3: #9499a0;
+$line: #e3e5e7;
+$card-radius: 8px;
+
+/* —— 页面与背景（对齐消息中心） —— */
+.mb-dyn-page {
+  position: relative;
+  isolation: isolate;
+  min-height: 100vh;
+  box-sizing: border-box;
+}
+
+.mb-dyn-bg {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-color: transparent;
+  background-repeat: no-repeat;
+  background-size: cover;
+  background-position: center bottom;
+}
+
+.mb-dyn-root {
+  position: relative;
+  z-index: 1;
+  box-sizing: border-box;
+  min-height: 100vh;
+  width: 100%;
+  padding: 20px 16px 24px;
+  background: transparent;
+}
+
+.mb-dyn-wrap {
+  box-sizing: border-box;
+  width: 1400px;
+  max-width: calc(100% - 32px);
+}
+
+.mb-dyn-grid {
+  display: flex;
+  align-items: flex-start;
+  gap: 22px;
+}
+
+.mb-dyn-left {
+  flex: 0 0 270px;
+  width: 270px;
+}
+
+.mb-dyn-center {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: transparent;
+}
+
+.mb-dyn-right {
+  flex: 0 0 290px;
+  width: 290px;
+}
+
+.mb-dyn-card {
+  background: #fff;
+  border-radius: $card-radius;
+  border: 1px solid $line;
+  box-sizing: border-box;
+}
+
+/* —— 左侧个人卡片 —— */
+.mb-dyn-profile {
+  padding: 16px 16px 14px;
+}
+
+.mb-dyn-profile__head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.mb-dyn-profile__avatar-link {
+  flex-shrink: 0;
+  line-height: 0;
+}
+
+.mb-dyn-profile__avatar {
+  display: block;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid #f0f0f0;
+}
+
+.mb-dyn-profile__info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding-top: 10px;
+}
+
+.mb-dyn-profile__level {
+  display: block;
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+}
+
+.mb-dyn-profile__name {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 15px;
+  font-weight: 600;
+  color: $bili-pink;
+  line-height: 1.35;
+  text-decoration: none;
+  &:hover {
+    color: #ff85a8;
+  }
+}
+
+.mb-dyn-profile__stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  margin-top: 14px;
+  padding-top: 0;
+}
+
+.mb-dyn-profile__stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+  b {
+    font-size: 16px;
+    font-weight: 600;
+    color: $text1;
+    line-height: 1.2;
+    font-variant-numeric: tabular-nums;
+  }
+  span {
+    font-size: 12px;
+    color: $text3;
+    line-height: 1.2;
+  }
+  &:hover b {
+    color: $bili-blue;
+  }
+}
+
+/* —— 发布框 —— */
+.mb-dyn-editor {
+  padding: 16px 20px 14px;
+}
+
+.mb-dyn-editor__compose {
+  border: 1px solid #e3e5e7;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #fff;
+}
+
+.mb-dyn-editor__title,
+.mb-dyn-editor__content {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: none;
+  font-size: 14px;
+  line-height: 1.6;
+  color: $text1;
+  background: transparent;
+  outline: none;
+  box-sizing: border-box;
+  &::placeholder {
+    color: $text3;
+  }
+}
+
+.mb-dyn-editor__title {
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+
+.mb-dyn-editor__content {
+  min-height: 56px;
+  resize: none;
+  overflow: auto;
+}
+
+.mb-dyn-editor__media {
+  margin-top: 10px;
+}
+
+.mb-dyn-editor__media-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.mb-dyn-editor__media-item {
+  position: relative;
+  width: 96px;
+  height: 96px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #f6f7f8;
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+}
+
+.mb-dyn-editor__media-remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.mb-dyn-editor__media-add {
+  width: 96px;
+  height: 96px;
+  border: 1px dashed #c9ccd0;
+  border-radius: 8px;
+  background: #fafafa;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  &:hover {
+    border-color: $bili-blue;
+    background: #f0f9ff;
+    .mb-dyn-editor__media-add-plus {
+      color: $bili-blue;
+    }
+  }
+}
+
+.mb-dyn-editor__media-add-plus {
+  font-size: 28px;
+  line-height: 1;
+  color: #c9ccd0;
+  font-weight: 300;
+}
+
+.mb-dyn-editor__file-input {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.mb-dyn-editor__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 10px;
+  padding-top: 0;
+}
+
+.mb-dyn-editor__tools {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.mb-dyn-editor__tool {
+  border: none;
+  background: transparent;
+  padding: 4px;
+  border-radius: 6px;
+  color: $text3;
+  cursor: pointer;
+  line-height: 1;
+  &:hover {
+    color: $bili-blue;
+  }
+  &.is-on {
+    color: $bili-blue;
+    background: #e8f7fc;
+  }
+}
+
+.mb-dyn-editor__right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.mb-dyn-editor__count {
+  font-size: 12px;
+  color: $text3;
+  font-variant-numeric: tabular-nums;
+}
+
+.mb-dyn-editor__submit {
+  min-width: 72px;
+  height: 32px;
+  padding: 0 16px;
+  border: none;
+  border-radius: 6px;
+  background: $bili-blue;
+  color: #fff;
+  font-size: 14px;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+  &:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+  &:not(:disabled):hover {
+    background: #00b5f5;
+  }
+}
+
+/* —— 关注的人横条 —— */
+.mb-dyn-follow-strip {
+  padding: 14px 16px 12px;
+}
+
+.mb-dyn-follow-scroll {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: thin;
+  &::-webkit-scrollbar {
+    height: 4px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: #e3e5e7;
+    border-radius: 2px;
+  }
+}
+
+.mb-dyn-follow-item {
+  flex: 0 0 auto;
+  width: 56px;
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  text-align: center;
+  &.is-on .mb-dyn-follow-name {
+    color: $bili-blue;
+    font-weight: 500;
+  }
+}
+
+.mb-dyn-follow-avatar-wrap {
+  position: relative;
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 6px;
+  border-radius: 50%;
+  box-sizing: border-box;
+  &.is-on:not(:has(.mb-dyn-follow-avatar--all)) {
+    box-shadow: 0 0 0 2px $bili-blue;
+  }
+}
+
+.mb-dyn-follow-avatar {
+  display: block;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid #f0f0f0;
+  box-sizing: border-box;
+}
+
+.mb-dyn-follow-avatar--all {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  box-sizing: border-box;
+  background: #e8f7fd;
+  border: 2px solid $bili-blue;
+}
+
+.mb-dyn-follow-windmill {
+  display: block;
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+}
+
+.mb-dyn-follow-avatar-wrap.is-on .mb-dyn-follow-avatar--all {
+  box-shadow: 0 0 0 2px rgba(0, 174, 236, 0.25);
+}
+
+.mb-dyn-follow-name {
+  display: block;
+  max-width: 56px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: $text2;
+  line-height: 1.3;
+}
+
+/* —— 筛选 Tab 白底栏 —— */
+.mb-dyn-tabs {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  padding: 0 20px;
+  min-height: 48px;
+  margin: 0;
+  background: #fff;
+  border: 1px solid $line;
+  border-radius: $card-radius;
+  box-sizing: border-box;
+}
+
+.mb-dyn-tab {
+  position: relative;
+  border: none;
+  background: transparent;
+  padding: 8px 0;
+  font-size: 15px;
+  color: $text2;
+  cursor: pointer;
+  line-height: 1.25;
+  &.is-on {
+    color: $bili-blue;
+    font-weight: 600;
+    &::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      bottom: 2px;
+      width: 20px;
+      height: 3px;
+      margin-left: -10px;
+      border-radius: 2px;
+      background: $bili-blue;
+    }
+  }
+}
+
+/* —— 动态卡片（与个人空间动态 Tab 对齐） —— */
+@import "./dynFeedShared.scss";
+
+.mb-dyn-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* —— 右侧热搜 —— */
+.mb-dyn-hot {
+  padding: 14px 16px 10px;
+}
+
+.mb-dyn-hot__title {
+  margin: 0 0 12px;
+  font-size: 16px;
+  font-weight: 600;
+  color: $text1;
+  line-height: 1.3;
+}
+
+.mb-dyn-hot__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.mb-dyn-hot__row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 0;
+  cursor: pointer;
+  &:hover .mb-dyn-hot__topic {
+    color: $bili-blue;
+  }
+}
+
+.mb-dyn-hot__rank {
+  flex: 0 0 18px;
+  font-size: 14px;
+  font-weight: 600;
+  color: $text3;
+  line-height: 20px;
+  font-variant-numeric: tabular-nums;
+  &--top1 {
+    color: #ff6699;
+  }
+  &--top2 {
+    color: #ff7f24;
+  }
+  &--top3 {
+    color: #ffb027;
+  }
+}
+
+.mb-dyn-hot__topic {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  color: $text1;
+  line-height: 20px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: color 0.15s ease;
+}
+
+.mb-dyn-hot__badge {
+  flex-shrink: 0;
+  padding: 0 4px;
+  border-radius: 2px;
+  font-size: 10px;
+  line-height: 16px;
+  font-weight: 600;
+  &--hot {
+    color: #fff;
+    background: #ff6699;
+  }
+  &--new {
+    color: #fff;
+    background: #ffb027;
+  }
+  &--rec {
+    color: #fff;
+    background: #00a1d6;
+  }
+}
+
+/* —— 状态 —— */
+.mb-dyn-login {
+  max-width: 480px;
+  margin: 48px auto 0;
+  padding: 28px 32px;
+  text-align: center;
+  font-size: 14px;
+  color: $text2;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 4px 12px rgba(0, 0, 0, 0.06);
+}
+
+.mb-dyn-login__link {
+  color: $bili-blue;
+  text-decoration: none;
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.mb-dyn-loading,
+.mb-dyn-empty {
+  padding: 48px 20px;
+  text-align: center;
+  font-size: 14px;
+  color: $text3;
+}
+
+.mb-dyn-end {
+  padding: 8px 0 4px;
+  text-align: center;
+  font-size: 13px;
+  color: $text3;
+}

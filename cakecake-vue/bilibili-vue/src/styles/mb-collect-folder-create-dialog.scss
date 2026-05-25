@@ -1,0 +1,326 @@
+$mb-cf-blue: #00a1d6;
+$mb-cf-text: #18191c;
+$mb-cf-muted: #9499a0;
+$mb-cf-border: #e3e5e7;
+
+.mb-collect-folder-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10070;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.mb-collect-folder-dialog {
+  position: relative;
+  width: 440px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  padding: 24px 24px 20px;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.18);
+  box-sizing: border-box;
+}
+
+.mb-collect-folder-dialog__close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: $mb-cf-muted;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    color: $mb-cf-text;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+.mb-collect-folder-dialog__title {
+  margin: 0 0 20px;
+  font-size: 16px;
+  font-weight: 600;
+  color: $mb-cf-text;
+  text-align: center;
+}
+
+.mb-collect-folder-dialog__cover {
+  position: relative;
+  display: block;
+  width: 180px;
+  height: 132px;
+  margin: 0 0 20px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+
+  &:hover:not(:disabled) .mb-collect-folder-dialog__layer--front {
+    background: #e8eaec;
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  &.has-preview {
+    width: 180px;
+    height: 108px;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+}
+
+.mb-collect-folder-dialog__cover-stack {
+  position: relative;
+  display: block;
+  width: 180px;
+  height: 132px;
+}
+
+.mb-collect-folder-dialog__layer {
+  position: absolute;
+  left: 0;
+  border-radius: 8px;
+  box-sizing: border-box;
+}
+
+.mb-collect-folder-dialog__layer--back2 {
+  z-index: 0;
+  top: 0;
+  width: 126px;
+  height: 24px;
+  background: #f6f7f8;
+}
+
+.mb-collect-folder-dialog__layer--back1 {
+  z-index: 1;
+  top: 11px;
+  width: 154px;
+  height: 24px;
+  background: #eceef1;
+}
+
+.mb-collect-folder-dialog__layer--front {
+  z-index: 2;
+  top: 24px;
+  width: 180px;
+  height: 108px;
+  background: #e3e5e7;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mb-collect-folder-dialog__plus {
+  font-size: 52px;
+  font-weight: 300;
+  line-height: 1;
+  color: #c9ccd0;
+  user-select: none;
+  pointer-events: none;
+}
+
+.mb-collect-folder-dialog__cover-img {
+  display: block;
+  width: 180px;
+  height: 108px;
+  border-radius: 8px;
+  object-fit: cover;
+}
+
+.mb-collect-folder-dialog__file {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.mb-collect-folder-dialog__field {
+  margin-bottom: 16px;
+}
+
+.mb-collect-folder-dialog__label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 14px;
+  color: $mb-cf-text;
+  line-height: 1.4;
+
+  .is-req {
+    color: #f85a54;
+    margin-left: 2px;
+  }
+}
+
+.mb-collect-folder-dialog__input-wrap {
+  position: relative;
+}
+
+.mb-collect-folder-dialog__input,
+.mb-collect-folder-dialog__textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid $mb-cf-border;
+  border-radius: 8px;
+  font-size: 14px;
+  color: $mb-cf-text;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s ease;
+
+  &::placeholder {
+    color: #c9ccd0;
+  }
+
+  &:focus {
+    border-color: $mb-cf-blue;
+  }
+
+  &:disabled {
+    background: #f6f7f8;
+    cursor: not-allowed;
+  }
+}
+
+.mb-collect-folder-dialog__input {
+  height: 40px;
+  padding: 0 52px 0 12px;
+}
+
+.mb-collect-folder-dialog__textarea {
+  min-height: 88px;
+  padding: 10px 12px 32px;
+  resize: none;
+  line-height: 1.5;
+}
+
+.mb-collect-folder-dialog__count {
+  position: absolute;
+  right: 10px;
+  font-size: 12px;
+  color: $mb-cf-muted;
+  line-height: 1.2;
+  pointer-events: none;
+  user-select: none;
+}
+
+.mb-collect-folder-dialog__input-wrap--line .mb-collect-folder-dialog__count {
+  top: 50%;
+  bottom: auto;
+  transform: translateY(-50%);
+}
+
+.mb-collect-folder-dialog__input-wrap--area .mb-collect-folder-dialog__count {
+  right: 10px;
+  bottom: 8px;
+  top: auto;
+  transform: none;
+}
+
+.mb-collect-folder-dialog__switch-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.mb-collect-folder-dialog__switch {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 12px;
+  background: #e3e5e7;
+  cursor: pointer;
+  transition: background 0.18s ease;
+
+  &::after {
+    content: "";
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+    transition: transform 0.18s ease;
+  }
+
+  &.is-on {
+    background: $mb-cf-blue;
+
+    &::after {
+      transform: translateX(20px);
+    }
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+.mb-collect-folder-dialog__actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.mb-collect-folder-dialog__btn {
+  flex: 1;
+  height: 40px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    opacity 0.15s ease;
+
+  &--cancel {
+    border: 1px solid $mb-cf-border;
+    background: #fff;
+    color: $mb-cf-text;
+
+    &:hover:not(:disabled) {
+      border-color: #c9ccd0;
+    }
+  }
+
+  &--ok {
+    border: none;
+    background: $mb-cf-blue;
+    color: #fff;
+
+    &:hover:not(:disabled) {
+      background: #00b5e7;
+    }
+  }
+
+  &:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+}

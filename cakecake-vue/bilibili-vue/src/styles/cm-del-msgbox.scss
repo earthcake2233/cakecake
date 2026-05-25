@@ -1,0 +1,139 @@
+/* 创作中心删除确认弹窗（ElMessageBox，挂载在 body） */
+.cm-del-msgbox.el-message-box {
+  width: 420px;
+  max-width: 92vw;
+  padding: 0;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
+}
+
+.cm-del-msgbox .el-message-box__header {
+  padding: 16px 20px 12px;
+  margin-right: 0;
+}
+
+.cm-del-msgbox .el-message-box__title {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 22px;
+  color: #18191c;
+  padding-left: 0;
+}
+
+.cm-del-msgbox .el-message-box__headerbtn {
+  top: 14px;
+  right: 16px;
+  width: 24px;
+  height: 24px;
+}
+
+.cm-del-msgbox .el-message-box__status {
+  display: none;
+}
+
+.cm-del-msgbox .el-message-box__container {
+  padding: 0;
+}
+
+.cm-del-msgbox .el-message-box__content {
+  padding: 0 20px 20px;
+  margin-left: 0 !important;
+}
+
+.cm-del-msgbox .el-message-box__message {
+  width: 100%;
+  text-align: left !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+.cm-del-msgbox .el-message-box__message > p {
+  display: none;
+}
+
+.cm-del-msgbox-body {
+  width: 100%;
+  text-align: left;
+}
+
+.cm-del-msgbox-msg {
+  margin: 0 0 16px;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 22px;
+  color: #61666d;
+}
+
+.cm-del-msgbox-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  cursor: pointer;
+  user-select: none;
+}
+
+.cm-del-msgbox-check-input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  flex-shrink: 0;
+  accent-color: #00aeec;
+  cursor: pointer;
+}
+
+.cm-del-msgbox-check-label {
+  font-size: 14px;
+  line-height: 16px;
+  color: #18191c;
+}
+
+.cm-del-msgbox .el-message-box__btns {
+  display: flex;
+  flex-direction: row;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+  padding: 0 20px 20px;
+}
+
+.cm-del-msgbox .cm-del-msgbox__ok {
+  order: 1;
+  min-width: 72px;
+  height: 32px !important;
+  padding: 0 16px !important;
+  margin: 0 !important;
+  border-radius: 4px !important;
+  font-size: 14px !important;
+  font-weight: 400 !important;
+  background: #00aeec !important;
+  border-color: #00aeec !important;
+  color: #fff !important;
+}
+
+.cm-del-msgbox .cm-del-msgbox__ok:hover {
+  background: #00a1d6 !important;
+  border-color: #00a1d6 !important;
+}
+
+.cm-del-msgbox .cm-del-msgbox__cancel {
+  order: 2;
+  min-width: 72px;
+  height: 32px !important;
+  padding: 0 16px !important;
+  margin: 0 !important;
+  border-radius: 4px !important;
+  font-size: 14px !important;
+  font-weight: 400 !important;
+  background: #fff !important;
+  border: 1px solid #e3e5e7 !important;
+  color: #61666d !important;
+  box-shadow: none !important;
+}
+
+.cm-del-msgbox .cm-del-msgbox__cancel:hover {
+  border-color: #00aeec !important;
+  color: #00aeec !important;
+  background: #fff !important;
+}

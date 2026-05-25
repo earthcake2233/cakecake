@@ -1,0 +1,62 @@
+# Air 热重载：https://github.com/air-verse/air
+# 安装：go install github.com/air-verse/air@latest
+# 使用：在仓库根目录（与 go.mod 同级）执行 air
+#
+# 子进程会合并加载根目录 .env（与 godotenv 一致），请在 .env 中配置 FFPROBE_PATH 绝对路径，
+# 否则 Air/IDE 启动的进程常拿不到你在 PowerShell 里配置的 PATH，ffprobe 会报「找不到」。
+
+root = "."
+testdata_dir = "testdata"
+tmp_dir = "tmp"
+env_files = [".env"]
+
+[build]
+  args_bin = []
+  entrypoint = ["./tmp/mini-bili"]
+  cmd = "go build -buildvcs=false -o ./tmp/mini-bili ./cmd/mini-bili"
+  # 避免 GoLand 遗留 GOPATH 导致「ignoring go.mod in $GOPATH」；可按本机情况删改
+  env = ["GO111MODULE=on", "GOPATH="]
+  delay = 500
+  exclude_dir = [
+    "tmp",
+    "vendor",
+    "testdata",
+    ".git",
+    "cakecake-vue",
+    "bin",
+    "node_modules",
+  ]
+  exclude_file = []
+  exclude_regex = ["_test\\.go$"]
+  exclude_unchanged = false
+  follow_symlink = false
+  include_ext = ["go", "mod", "sum"]
+  kill_delay = "2s"
+  log = "tmp/air-build-errors.log"
+  poll = false
+  rerun = false
+  send_interrupt = true
+  stop_on_error = true
+
+[build.windows]
+  entrypoint = ["./tmp/mini-bili.exe"]
+  cmd = "go build -buildvcs=false -o ./tmp/mini-bili.exe ./cmd/mini-bili"
+  env = ["GO111MODULE=on", "GOPATH="]
+
+[color]
+  app = ""
+  build = "yellow"
+  main = "magenta"
+  runner = "green"
+  watcher = "cyan"
+
+[log]
+  main_only = false
+  time = false
+
+[misc]
+  clean_on_exit = true
+
+[screen]
+  clear_on_rebuild = false
+  keep_scroll = true

@@ -1,0 +1,61 @@
+/* 评论删除确认：居中主文 + 蓝底白字确认 / 灰字无边框取消（与 MinibiliCommentsLive 一致，挂载在 body） */
+.vd-cmb-del-msgbox.el-message-box {
+  width: 400px;
+  max-width: 92vw;
+  padding: 20px 20px 16px;
+  border-radius: 8px;
+}
+.vd-cmb-del-msgbox .el-message-box__header {
+  padding-bottom: 0;
+}
+.vd-cmb-del-msgbox .el-message-box__title {
+  display: none;
+}
+.vd-cmb-del-msgbox .el-message-box__container {
+  padding: 4px 4px 0;
+}
+.vd-cmb-del-msgbox .el-message-box__message {
+  text-align: center !important;
+  padding: 8px 12px 16px !important;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.6;
+  color: #61666d;
+}
+.vd-cmb-del-msgbox .el-message-box__btns {
+  display: flex;
+  flex-direction: row-reverse;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  padding-top: 4px;
+}
+.vd-cmb-del-msgbox .vd-cmb-del-msgbox__ok {
+  min-width: 80px;
+  height: 32px !important;
+  padding: 0 16px !important;
+  border-radius: 4px !important;
+  font-size: 13px !important;
+  font-weight: 400 !important;
+  background: #00a1d6 !important;
+  border-color: #00a1d6 !important;
+  color: #fff !important;
+}
+.vd-cmb-del-msgbox .vd-cmb-del-msgbox__ok:hover {
+  background: #0090c2 !important;
+  border-color: #0090c2 !important;
+}
+.vd-cmb-del-msgbox .vd-cmb-del-msgbox__cancel {
+  border: none !important;
+  background: transparent !important;
+  color: #61666d !important;
+  font-size: 13px !important;
+  font-weight: 400 !important;
+  box-shadow: none !important;
+  padding-left: 8px !important;
+  padding-right: 8px !important;
+}
+.vd-cmb-del-msgbox .vd-cmb-del-msgbox__cancel:hover {
+  color: #00a1d6 !important;
+  background: transparent !important;
+}
