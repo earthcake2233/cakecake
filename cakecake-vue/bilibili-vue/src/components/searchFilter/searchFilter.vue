@@ -1,5 +1,12 @@
 <template>
-  <div class="filter-wrap" :class="{ 'filter-wrap--folded': !fold }">
+  <div
+    class="filter-wrap"
+    :class="{
+      'filter-wrap--folded': !fold && !viewOnly,
+      'filter-wrap--view-only': viewOnly
+    }"
+  >
+    <template v-if="!viewOnly">
     <ul class="filter-type clearfix order">
       <li
         v-for="opt in orderOptions"
@@ -38,6 +45,7 @@
       更多筛选
       <i class="arrow-down"></i>
     </a>
+    </template>
     <div class="switch-wrap">
       <button
         type="button"
@@ -108,6 +116,11 @@ export default {
     viewMode: {
       type: String,
       default: DEFAULT_SEARCH_VIDEO_VIEW
+    },
+    /** 仅展示网格/列表切换（综合搜索视频区） */
+    viewOnly: {
+      type: Boolean,
+      default: false
     }
   },
   emits: ["update:modelValue", "change", "view-change"],

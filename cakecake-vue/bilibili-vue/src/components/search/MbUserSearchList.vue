@@ -1,5 +1,5 @@
 <template>
-  <div class="mb-user-search">
+  <div class="mb-user-search" :class="{ 'mb-user-search--compact': compact }">
     <p v-if="isUserTab" class="mb-user-search__count">{{ totalLabel }}</p>
     <ul v-if="items.length" class="mb-user-search__list">
       <li
@@ -117,6 +117,11 @@ export default {
     isUserTab: {
       type: Boolean,
       default: false
+    },
+    /** 综合搜索内嵌：去掉卡片底部分割线 */
+    compact: {
+      type: Boolean,
+      default: false
     }
   },
   data() {
@@ -225,6 +230,13 @@ export default {
 
 .mb-user-search {
   padding-bottom: 16px;
+}
+.mb-user-search--compact {
+  padding-bottom: 0;
+  .mb-user-search__card {
+    border-bottom: none;
+    padding-bottom: 12px;
+  }
 }
 .mb-user-search__count {
   padding: 16px 0 8px;

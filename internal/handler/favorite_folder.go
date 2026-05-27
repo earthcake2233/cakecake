@@ -262,11 +262,13 @@ func (a *API) createFavoriteFolderMultipart(c *gin.Context, uid uint64) {
 			return
 		}
 		if url != "" {
-			row.CoverURL = url
 			if err := a.DB.Model(&row).Update("cover_url", url).Error; err != nil {
+				purgeFavoriteFolderCoverURL(a.Cfg, a.OSS, a.Log, url, uid, row.ID)
+				_ = a.DB.Delete(&row).Error
 				resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 				return
 			}
+			row.CoverURL = url
 		}
 	}
 	resp.OK(c, folderRowPayload(a.DB, &row))
@@ -435,6 +437,7 @@ func (a *API) updateFavoriteFolderMultipart(c *gin.Context, uid, folderID uint64
 		"description": desc,
 		"is_public":   isPublic,
 	}
+	var uploadedCoverURL string
 	if fh, err := c.FormFile("cover"); err == nil && fh != nil {
 		url, coverCode := a.uploadFavoriteFolderCover(uid, row.ID, fh)
 		if coverCode != 0 {
@@ -442,10 +445,14 @@ func (a *API) updateFavoriteFolderMultipart(c *gin.Context, uid, folderID uint64
 			return
 		}
 		if url != "" {
+			uploadedCoverURL = url
 			updates["cover_url"] = url
 		}
 	}
 	if err := a.DB.Model(&row).Updates(updates).Error; err != nil {
+		if uploadedCoverURL != "" {
+			purgeFavoriteFolderCoverURL(a.Cfg, a.OSS, a.Log, uploadedCoverURL, uid, row.ID)
+		}
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
@@ -485,6 +492,7 @@ func (a *API) DeleteFavoriteFolder(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
+	purgeFavoriteFolderOSSObjects(a.Cfg, a.OSS, a.Log, row)
 	resp.OK(c, gin.H{"deleted": true})
 }
 

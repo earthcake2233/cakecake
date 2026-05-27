@@ -2,7 +2,7 @@
 
 仿 B 站核心链路的个人学习项目（用户端品牌 **cakecake**）。后端 Go 模块名仍为 `minibili`，目录与部署脚本中亦保留 `minibili` 等历史命名。
 
-**能力概览**：JWT 登录、视频上传与异步转码（FFmpeg + RabbitMQ + OSS）、实时弹幕（WebSocket）、评论与通知、搜索（Elasticsearch 可选）、运营后台。
+**能力概览**：JWT 登录、视频/专栏投稿与审核、动态、关注与私信（WebSocket）、视频上传与异步转码（FFmpeg + RabbitMQ + OSS）、实时弹幕、评论与通知、搜索（Elasticsearch 可选）、AI 助手（DeepSeek 可选）、运营后台。
 
 ---
 

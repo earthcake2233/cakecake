@@ -8,16 +8,39 @@
         @change="onVideoFiltersChange"
         @view-change="videoViewMode = $event"
       />
-      <mb-user-search-list
-        v-if="showUserBlock"
-        :items="userItems"
-        :num-results="userNumResults"
-        :is-user-tab="isUserTab"
-      />
-      <mb-search-empty
-        v-else-if="userTabEmpty"
-        mode="empty-user"
-      />
+      <template v-if="isUserTab">
+        <mb-user-search-list
+          v-if="userItems.length"
+          :items="userItems"
+          :num-results="userNumResults"
+          :is-user-tab="true"
+        />
+        <mb-search-empty v-else mode="empty-user" />
+      </template>
+      <section
+        v-if="isAllTab && userItems.length"
+        class="mb-search-all-section"
+      >
+        <header class="mb-search-all-section__head">
+          <span class="mb-search-all-section__title">相关用户</span>
+          <router-link
+            v-if="userNumResults > userItems.length"
+            :to="{
+              path: '/search/upuser',
+              query: { keyword: $route.query.keyword }
+            }"
+            class="mb-search-all-section__more"
+          >
+            查看更多 {{ userNumResults }} 个用户 &gt;
+          </router-link>
+        </header>
+        <mb-user-search-list
+          :items="userItems"
+          :num-results="userNumResults"
+          :is-user-tab="false"
+          compact
+        />
+      </section>
       <mb-article-search-list
         v-else-if="isArticleTab && allResult.result"
         :items="allResult.result.article || []"
@@ -27,10 +50,25 @@
       />
       <mb-search-coming-soon v-else-if="isComingSoonTab" />
       <mb-search-empty
-        v-else-if="searchEmptyMode"
+        v-else-if="searchEmptyMode && !isAllTab"
         :mode="searchEmptyMode"
       />
-      <div v-else-if="showResultWrap" class="result-wrap clearfix">
+      <mb-search-empty
+        v-else-if="isAllTab && allTabEmptyMode"
+        :mode="allTabEmptyMode"
+      />
+      <div
+        v-if="showResultWrap"
+        class="result-wrap clearfix"
+        :class="{ 'result-wrap--all': isAllTab && userItems.length > 0 }"
+      >
+        <header
+          v-if="isAllTab && videoItems.length"
+          class="mb-search-all-section__head mb-search-all-section__head--video"
+          :class="{ 'mb-search-all-section__head--solo': !userItems.length }"
+        >
+          <span class="mb-search-all-section__title">相关视频</span>
+        </header>
         <ul
           class="bangumi-list all-class"
           v-if="allResult.result && allResult.result.media_bangumi && allResult.result.media_bangumi.length"
@@ -164,7 +202,7 @@
           :class="{ 'video-contain--list': isVideoListView }"
         >
           <li
-            v-for="(item, index) in allResult.result.video"
+            v-for="(item, index) in videoItems"
             :key="`allResult_result_video_${index}`"
             :class="['video', isVideoListView ? 'list' : 'matrix']"
           >
@@ -240,6 +278,24 @@
               </div>
             </div>
           </li>
+          <li
+            v-if="
+              isAllTab &&
+                allResult.top_tlist &&
+                allResult.top_tlist.video > videoItems.length
+            "
+            class="card-more"
+          >
+            共找到{{ allResult.top_tlist.video }}条相关视频，
+            <router-link
+              :to="{
+                path: '/search/video',
+                query: { keyword: $route.query.keyword }
+              }"
+              >点击查看</router-link
+            >
+            &gt;
+          </li>
         </ul>
       </div>
     </div>
@@ -303,15 +359,43 @@ export default {
       return SEARCH_COMING_SOON_ROUTES.has(this.$route.name);
     },
     showVideoFilters() {
-      return !this.isArticleTab && !this.isUserTab && !this.isComingSoonTab;
+      return this.isAllTab || this.$route.name === "searchVideo";
     },
     showResultWrap() {
+      if (this.isArticleTab || this.isUserTab || this.isComingSoonTab) {
+        return false;
+      }
+      if (this.searchEmptyMode) {
+        return false;
+      }
+      if (this.isAllTab) {
+        return this.videoItems.length > 0;
+      }
+      if (this.$route.name === "searchVideo") {
+        return this.videoItems.length > 0;
+      }
+      return true;
+    },
+    videoItems() {
       return (
-        !this.isArticleTab &&
-        !this.isUserTab &&
-        !this.isComingSoonTab &&
-        !this.searchEmptyMode
+        (this.allResult &&
+          this.allResult.result &&
+          this.allResult.result.video) ||
+        []
       );
+    },
+    allTabEmptyMode() {
+      if (!this.isAllTab) {
+        return "";
+      }
+      const st = this.allResult && this.allResult.search_status;
+      if (st === "unavailable" || st === "empty") {
+        return st;
+      }
+      if (!this.userItems.length && !this.videoItems.length) {
+        return "empty";
+      }
+      return "";
     },
     userTabEmpty() {
       return (
@@ -360,17 +444,6 @@ export default {
           this.allResult.result &&
           this.allResult.result.bili_user) ||
         []
-      );
-    },
-    showUserBlock() {
-      if (this.isUserTab) {
-        return this.userItems.length > 0;
-      }
-      return (
-        this.isAllTab &&
-        this.allResult &&
-        this.allResult.result &&
-        this.userItems.length > 0
       );
     },
     userNumResults() {
@@ -766,6 +839,60 @@ export default {
         color: $white;
       }
     }
+  }
+}
+.mb-search-all-section {
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+.mb-search-all-section__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 0 12px;
+  padding: 0 4px;
+}
+.result-wrap--all > .mb-search-all-section__head--video {
+  margin-top: 0;
+  padding-top: 20px;
+  border-top: 1px solid #e5e9ef;
+}
+.result-wrap--all > .mb-search-all-section__head--video.mb-search-all-section__head--solo {
+  border-top: none;
+  padding-top: 8px;
+}
+.result-wrap--all .video-contain--list > .video.list:first-child {
+  border-top: none;
+}
+.filter-wrap.filter-wrap--view-only {
+  padding: 0;
+  margin: 0;
+  border-bottom: none;
+  display: block;
+  width: auto;
+  min-height: 0;
+  .switch-wrap {
+    position: static;
+    top: auto;
+    right: auto;
+    z-index: auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .switch-item {
+    position: static;
+    margin: 0;
+  }
+}
+.mb-search-all-section__title {
+  @include sc(15px, #222);
+  font-weight: 600;
+}
+.mb-search-all-section__more {
+  @include sc(13px, $blue);
+  &:hover {
+    color: #00b5e5;
   }
 }
 .card-more {

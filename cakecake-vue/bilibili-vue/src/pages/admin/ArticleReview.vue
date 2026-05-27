@@ -47,24 +47,37 @@
             <el-tag :type="statusTagType(row.status)">{{ statusLabel(row.status) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="提交时间" min-width="168" show-overflow-tooltip>
-          <template #default="{ row }">{{ formatTime(row.created_at) }}</template>
-        </el-table-column>
-        <el-table-column label="操作" min-width="176" align="center">
+        <el-table-column label="提交时间" width="88" align="center" class-name="adm-col-time">
           <template #default="{ row }">
-            <el-button link type="primary" @click="openDetail(row)">详情</el-button>
-            <template v-if="row.status === 'pending_review'">
-              <el-button link type="success" @click="onApprove(row)">通过</el-button>
-              <el-button link type="danger" @click="openReject(row)">驳回</el-button>
-            </template>
-            <el-button
-              v-if="canDelete(row)"
-              link
-              type="danger"
-              @click="onDelete(row)"
-            >
-              删除
-            </el-button>
+            <div v-if="formatTimeParts(row.created_at)" class="adm-time-cell">
+              <span class="adm-time-cell__date">{{ formatTimeParts(row.created_at).date }}</span>
+              <span class="adm-time-cell__time">{{ formatTimeParts(row.created_at).time }}</span>
+            </div>
+            <span v-else>—</span>
+          </template>
+        </el-table-column>
+        <el-table-column
+          label="操作"
+          :width="actionColWidth"
+          align="center"
+          class-name="adm-col-actions"
+        >
+          <template #default="{ row }">
+            <div class="adm-row-actions">
+              <el-button link type="primary" @click="openDetail(row)">详情</el-button>
+              <template v-if="row.status === 'pending_review'">
+                <el-button link type="success" @click="onApprove(row)">通过</el-button>
+                <el-button link type="danger" @click="openReject(row)">驳回</el-button>
+              </template>
+              <el-button
+                v-if="canDelete(row)"
+                link
+                type="danger"
+                @click="onDelete(row)"
+              >
+                删除
+              </el-button>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -180,6 +193,13 @@ export default {
       rejectReason: ""
     };
   },
+  computed: {
+    actionColWidth() {
+      const wide =
+        this.statusFilter === "pending_review" || this.statusFilter === "all";
+      return wide ? 148 : 108;
+    }
+  },
   created() {
     this.load();
   },
@@ -238,11 +258,19 @@ export default {
       return st === "published" || st === "rejected";
     },
     formatTime(t) {
-      if (!t) return "—";
+      const p = this.formatTimeParts(t);
+      if (!p) return "—";
+      return `${p.date} ${p.time}`;
+    },
+    formatTimeParts(t) {
+      if (!t) return null;
       const d = new Date(t);
-      if (Number.isNaN(d.getTime())) return String(t);
+      if (Number.isNaN(d.getTime())) return null;
       const pad = (x) => String(x).padStart(2, "0");
-      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      return {
+        date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
+        time: `${pad(d.getHours())}:${pad(d.getMinutes())}`
+      };
     },
     async openDetail(row) {
       const body = await adminGetArticle(row.id);
@@ -313,6 +341,7 @@ export default {
   border: 1px solid #e3e5e7;
   border-radius: 8px;
   padding: 20px;
+  overflow: visible;
 }
 .adm-panel__head {
   display: flex;
@@ -359,12 +388,43 @@ export default {
 }
 .adm-table-wrap {
   width: 100%;
+  max-width: 100%;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
 .adm-article-table {
   width: 100%;
-  min-width: 800px;
+  table-layout: fixed;
+}
+.adm-article-table :deep(.adm-col-time .cell),
+.adm-article-table :deep(.adm-col-actions .cell) {
+  padding-left: 6px;
+  padding-right: 6px;
+}
+.adm-row-actions {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  white-space: nowrap;
+}
+.adm-row-actions :deep(.el-button.is-link) {
+  padding: 0 4px;
+  margin: 0;
+  height: auto;
+}
+.adm-time-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.35;
+  gap: 2px;
+  @include sc(12px, #61666d);
+}
+.adm-time-cell__date,
+.adm-time-cell__time {
+  white-space: nowrap;
 }
 .adm-thumb {
   width: 96px;

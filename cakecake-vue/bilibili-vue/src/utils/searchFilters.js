@@ -45,7 +45,7 @@ export const DEFAULT_VIDEO_FILTERS = {
 /** grid = 卡片矩阵；list = 行详情（缩略图左 + 文案右） */
 export const SEARCH_VIDEO_VIEW_GRID = "grid";
 export const SEARCH_VIDEO_VIEW_LIST = "list";
-export const DEFAULT_SEARCH_VIDEO_VIEW = SEARCH_VIDEO_VIEW_LIST;
+export const DEFAULT_SEARCH_VIDEO_VIEW = SEARCH_VIDEO_VIEW_GRID;
 
 export function videoFiltersToParams(filters) {
   const f = filters || DEFAULT_VIDEO_FILTERS;

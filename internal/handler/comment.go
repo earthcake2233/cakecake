@@ -3,6 +3,7 @@ package handler
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -585,6 +586,120 @@ func (a *API) clearCommentLike(uid, cid uint64, cm *model.Comment) (bool, error)
 	return true, nil
 }
 
+func mergeUniqueDisplayNames(names []string) []string {
+	seen := make(map[string]struct{}, len(names))
+	out := make([]string, 0, len(names))
+	for _, raw := range names {
+		s := strings.TrimSpace(raw)
+		if s == "" {
+			continue
+		}
+		if _, ok := seen[s]; ok {
+			continue
+		}
+		seen[s] = struct{}{}
+		out = append(out, s)
+	}
+	return out
+}
+
+func (a *API) likeNotifPayloadIsArticle(n *model.Notification) bool {
+	var pl struct {
+		LikeSubject string `json:"like_subject"`
+	}
+	_ = json.Unmarshal([]byte(n.PayloadJSON), &pl)
+	if strings.TrimSpace(pl.LikeSubject) == "article_comment" {
+		return true
+	}
+	var probe model.ArticleComment
+	return a.DB.First(&probe, n.RelatedID).Error == nil
+}
+
+func (a *API) likeAggTotalFromDB(commentID uint64, article bool) int {
+	var cnt int64
+	if article {
+		_ = a.DB.Model(&model.ArticleCommentLike{}).Where("comment_id = ?", commentID).Count(&cnt).Error
+	} else {
+		_ = a.DB.Model(&model.CommentLike{}).Where("comment_id = ?", commentID).Count(&cnt).Error
+	}
+	return int(cnt)
+}
+
+func (a *API) likeAggTopLikerNames(commentID uint64, article bool, limit int) []string {
+	names := make([]string, 0, limit)
+	if article {
+		var likes []model.ArticleCommentLike
+		_ = a.DB.Where("comment_id = ?", commentID).Order("id DESC").Limit(limit).Find(&likes).Error
+		for _, lk := range likes {
+			var u model.User
+			if a.DB.First(&u, lk.UserID).Error != nil {
+				continue
+			}
+			names = append(names, model.DisplayUsername(&u))
+		}
+	} else {
+		var likes []model.CommentLike
+		_ = a.DB.Where("comment_id = ?", commentID).Order("id DESC").Limit(limit).Find(&likes).Error
+		for _, lk := range likes {
+			var u model.User
+			if a.DB.First(&u, lk.UserID).Error != nil {
+				continue
+			}
+			names = append(names, model.DisplayUsername(&u))
+		}
+	}
+	return mergeUniqueDisplayNames(names)
+}
+
+// consolidateLikeAggregationNotifs merges duplicate inbox rows for the same comment (SPEC AC-11).
+func (a *API) consolidateLikeAggregationNotifs(recipientID, relatedID uint64) {
+	var rows []model.Notification
+	if err := a.DB.Where("recipient_id = ? AND type = ? AND related_id = ?",
+		recipientID, "like_aggregation", relatedID).
+		Order("id ASC").Find(&rows).Error; err != nil || len(rows) <= 1 {
+		return
+	}
+	keeper := rows[len(rows)-1]
+	isArticle := a.likeNotifPayloadIsArticle(&keeper)
+	allNames := make([]string, 0)
+	anyUnread := false
+	for _, r := range rows {
+		var names []string
+		_ = json.Unmarshal([]byte(r.SenderNamesJSON), &names)
+		allNames = append(allNames, names...)
+		if !r.IsRead {
+			anyUnread = true
+		}
+	}
+	allNames = mergeUniqueDisplayNames(allNames)
+	if len(allNames) == 0 {
+		allNames = a.likeAggTopLikerNames(relatedID, isArticle, 10)
+	}
+	b, _ := json.Marshal(allNames)
+	keeper.SenderNamesJSON = string(b)
+	keeper.TotalLikes = a.likeAggTotalFromDB(relatedID, isArticle)
+	keeper.IsRead = !anyUnread
+	_ = a.DB.Save(&keeper).Error
+	ids := make([]uint64, 0, len(rows)-1)
+	for i := 0; i < len(rows)-1; i++ {
+		ids = append(ids, rows[i].ID)
+	}
+	_ = a.DB.Where("id IN ?", ids).Delete(&model.Notification{}).Error
+}
+
+func (a *API) consolidateDuplicateLikeAggregations(recipientID uint64) {
+	var relatedIDs []uint64
+	_ = a.DB.Model(&model.Notification{}).
+		Select("related_id").
+		Where("recipient_id = ? AND type = ? AND related_id > 0", recipientID, "like_aggregation").
+		Group("related_id").
+		Having("COUNT(*) > 1").
+		Pluck("related_id", &relatedIDs).Error
+	for _, id := range relatedIDs {
+		a.consolidateLikeAggregationNotifs(recipientID, id)
+	}
+}
+
 func (a *API) upsertLikeNotification(cm model.Comment, likerName string) {
 	ownerID := cm.UserID
 	var muted int64
@@ -594,19 +709,20 @@ func (a *API) upsertLikeNotification(cm model.Comment, likerName string) {
 	if muted > 0 {
 		return
 	}
-	var n model.Notification
-	nq := a.DB.Where("recipient_id = ? AND type = ? AND related_id = ? AND is_read = ?",
-		ownerID, "like_aggregation", cm.ID, false).Limit(1)
-	nres := nq.Find(&n)
+	a.consolidateLikeAggregationNotifs(ownerID, cm.ID)
 	preview := cm.Content
 	r := []rune(preview)
 	if len(r) > 15 {
 		preview = string(r[:15])
 	}
-	if nres.Error != nil {
-		return
-	}
-	if nres.RowsAffected == 0 {
+	var n model.Notification
+	err := a.DB.Where("recipient_id = ? AND type = ? AND related_id = ?",
+		ownerID, "like_aggregation", cm.ID).
+		Order("id DESC").Limit(1).First(&n).Error
+	if err != nil {
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return
+		}
 		names, _ := json.Marshal([]string{likerName})
 		n = model.Notification{
 			RecipientID:     ownerID,
@@ -622,16 +738,12 @@ func (a *API) upsertLikeNotification(cm model.Comment, likerName string) {
 	}
 	var names []string
 	_ = json.Unmarshal([]byte(n.SenderNamesJSON), &names)
-	for _, x := range names {
-		if x == likerName {
-			return
-		}
-	}
-	names = append(names, likerName)
+	names = mergeUniqueDisplayNames(append(names, likerName))
 	b, _ := json.Marshal(names)
 	n.SenderNamesJSON = string(b)
-	n.TotalLikes++
+	n.TotalLikes = a.likeAggTotalFromDB(cm.ID, false)
 	n.CommentPreview = preview
+	n.IsRead = false
 	_ = a.DB.Save(&n).Error
 }
 
@@ -988,17 +1100,11 @@ func (a *API) upsertArticleCommentLikeNotification(cm model.ArticleComment, like
 	if muted > 0 {
 		return
 	}
-	var n model.Notification
-	nq := a.DB.Where("recipient_id = ? AND type = ? AND related_id = ? AND is_read = ?",
-		ownerID, "like_aggregation", cm.ID, false).Limit(1)
-	nres := nq.Find(&n)
+	a.consolidateLikeAggregationNotifs(ownerID, cm.ID)
 	preview := cm.Content
 	r := []rune(preview)
 	if len(r) > 15 {
 		preview = string(r[:15])
-	}
-	if nres.Error != nil {
-		return
 	}
 	artTitle := ""
 	artCover := ""
@@ -1018,7 +1124,14 @@ func (a *API) upsertArticleCommentLikeNotification(cm model.ArticleComment, like
 		"cover_url":     artCover,
 	})
 	payload := string(likePl)
-	if nres.RowsAffected == 0 {
+	var n model.Notification
+	err := a.DB.Where("recipient_id = ? AND type = ? AND related_id = ?",
+		ownerID, "like_aggregation", cm.ID).
+		Order("id DESC").Limit(1).First(&n).Error
+	if err != nil {
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return
+		}
 		names, _ := json.Marshal([]string{likerName})
 		n = model.Notification{
 			RecipientID:     ownerID,
@@ -1035,19 +1148,15 @@ func (a *API) upsertArticleCommentLikeNotification(cm model.ArticleComment, like
 	}
 	var names []string
 	_ = json.Unmarshal([]byte(n.SenderNamesJSON), &names)
-	for _, x := range names {
-		if x == likerName {
-			return
-		}
-	}
-	names = append(names, likerName)
+	names = mergeUniqueDisplayNames(append(names, likerName))
 	b, _ := json.Marshal(names)
 	n.SenderNamesJSON = string(b)
-	n.TotalLikes++
+	n.TotalLikes = a.likeAggTotalFromDB(cm.ID, true)
 	n.CommentPreview = preview
 	if strings.TrimSpace(n.PayloadJSON) == "" {
 		n.PayloadJSON = payload
 	}
+	n.IsRead = false
 	_ = a.DB.Save(&n).Error
 }
 
@@ -1143,6 +1252,9 @@ func (a *API) ListNotifications(c *gin.Context) {
 	if cat == "" {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
+	}
+	if cat == "like_aggregation" {
+		a.consolidateDuplicateLikeAggregations(uid)
 	}
 	limit := 30
 	curID, _ := strconv.ParseUint(c.Query("cursor"), 10, 64)

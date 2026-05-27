@@ -1684,7 +1684,8 @@ export async function mbCreateFavoriteFolder(input: {
     fd.append("cover", input.cover);
   }
   const r = await http.post("/api/v1/users/me/favorite-folders", fd, {
-    ...authAxiosOpts
+    ...authAxiosOpts,
+    timeout: 60000
   });
   return unwrap(r);
 }
@@ -1708,7 +1709,7 @@ export async function mbUpdateFavoriteFolder(
   const r = await http.put(
     `/api/v1/users/me/favorite-folders/${folderId}`,
     fd,
-    { ...authAxiosOpts }
+    { ...authAxiosOpts, timeout: 60000 }
   );
   return unwrap(r);
 }

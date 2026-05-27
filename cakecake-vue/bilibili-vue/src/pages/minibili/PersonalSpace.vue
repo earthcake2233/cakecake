@@ -3072,6 +3072,7 @@ import {
 } from "@/utils/minibiliRoutes";
 import { ElMessage } from "element-plus";
 import { showMbDarkToast } from "@/utils/mbToast";
+import { extractApiErrorMessage } from "@/utils/apiErrorMessage";
 import { levelIconUrl } from "@/utils/userLevel";
 import { personalSpaceZhCN } from "@/i18n/personalSpace.zh-CN";
 import {
@@ -4409,10 +4410,8 @@ export default {
           await this.loadCollectFavorites();
         }
       } catch (e) {
-        const msg =
-          (e && e.response && e.response.data && e.response.data.message) ||
-          "操作失败，请稍后重试";
-        ElMessage.error(String(msg));
+        await this.loadCollectFolders();
+        ElMessage.error(extractApiErrorMessage(e, "操作失败，请稍后重试"));
       } finally {
         this.collectFolderCreateSaving = false;
       }
