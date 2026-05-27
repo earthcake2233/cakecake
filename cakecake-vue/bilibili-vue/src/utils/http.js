@@ -1,11 +1,17 @@
 import axios from "axios";
 import { ElMessage } from "element-plus";
-import { getAccessToken } from "./authTokens";
+import { getAccessToken, getRefreshToken } from "./authTokens";
 import { invalidateMinibiliSessionFromHttp } from "./minibiliAuthSync";
 import {
+  ensureFreshAccessToken,
+  isAccessTokenExpired,
   refreshMinibiliAccessToken,
   shouldAttemptTokenRefresh
 } from "./minibiliTokenRefresh";
+
+function isAuthApiUrl(url) {
+  return /\/auth\/(login|refresh)\b/.test(String(url || ""));
+}
 import { extractApiErrorMessage } from "./apiErrorMessage";
 
 const isMinibili =
@@ -54,7 +60,7 @@ function shouldInvalidateMinibiliSession(err) {
 }
 
 service.interceptors.request.use(
-  config => {
+  async config => {
     /** FormData 必须由浏览器自动带 multipart boundary；勿沿用 application/json */
     if (config.data instanceof FormData && config.headers) {
       if (typeof config.headers.delete === "function") {
@@ -66,6 +72,10 @@ service.interceptors.request.use(
       }
     }
     if (isMinibili) {
+      const url = String(config.url || "");
+      if (!isAuthApiUrl(url) && getRefreshToken() && isAccessTokenExpired()) {
+        await ensureFreshAccessToken();
+      }
       const t = getAccessToken();
       if (t && !config.headers.Authorization) {
         config.headers.Authorization = `Bearer ${t}`;
@@ -84,7 +94,7 @@ service.interceptors.request.use(
 );
 
 service.interceptors.response.use(
-  response => {
+  async response => {
     const data = response.data;
     if (
       isMinibili &&
@@ -92,14 +102,30 @@ service.interceptors.response.use(
       typeof data.code === "number" &&
       data.code !== 0
     ) {
+      const errLike = {
+        config: response.config,
+        response,
+        minibiliApiCode: data.code
+      };
+      if (shouldAttemptTokenRefresh(errLike, response.config)) {
+        const ok = await refreshMinibiliAccessToken();
+        if (ok) {
+          response.config._mbTokenRefresh = true;
+          response.config.headers = response.config.headers || {};
+          response.config.headers.Authorization = `Bearer ${getAccessToken()}`;
+          return service(response.config);
+        }
+        if (shouldInvalidateMinibiliSession(errLike)) {
+          invalidateMinibiliSessionFromHttp();
+        }
+      }
       const msg = data.msg || "请求失败";
       /** 挂上 config / response，便于鉴权失败时统一登出 */
       return Promise.reject(
         Object.assign(new Error(msg), {
           config: response.config,
           response,
-          minibiliApiCode:
-            data && typeof data.code === "number" ? data.code : undefined
+          minibiliApiCode: data.code
         })
       );
     }

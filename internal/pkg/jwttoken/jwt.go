@@ -56,7 +56,7 @@ func (m *Manager) IssuePair(userID uint64) (access string, refresh string, token
 		TokenID:   tokenID,
 		Type:      claimTypeRefresh,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(now.Add(72 * time.Hour)),
+			ExpiresAt: jwt.NewNumericDate(now.Add(30 * 24 * time.Hour)),
 			IssuedAt:  jwt.NewNumericDate(now),
 		},
 	}

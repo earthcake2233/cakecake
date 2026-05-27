@@ -57,5 +57,5 @@ func VideoPlayDeltaKey(videoID uint64) string {
 	return fmt.Sprintf("%s%d", PrefixVideoPlayDelta, videoID)
 }
 
-// RefreshInvalidTTL matches refresh token lifetime (3 days).
-var RefreshInvalidTTL = 72 * time.Hour
+// RefreshInvalidTTL matches refresh token lifetime (30 days).
+var RefreshInvalidTTL = 30 * 24 * time.Hour

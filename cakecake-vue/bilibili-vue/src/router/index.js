@@ -4,7 +4,10 @@ import { ElMessageBox } from "element-plus";
 import { clearStuckPageOverlays } from "@/utils/clearPageOverlays";
 import { getAccessToken, getRefreshToken } from "@/utils/authTokens";
 import { isAdminLoggedIn } from "@/utils/adminAuth";
-import { refreshMinibiliAccessToken } from "@/utils/minibiliTokenRefresh";
+import {
+  isAccessTokenExpired,
+  refreshMinibiliAccessToken
+} from "@/utils/minibiliTokenRefresh";
 import { shouldRedirectVideoToNotFound } from "@/utils/notFoundRedirect";
 import {
   SITE_HOME_TITLE,
@@ -355,7 +358,7 @@ router.beforeEach(async (to, _from, next) => {
   const need = to.matched.some(
     r => r.meta && r.meta.requireMinibiliAuth === true
   );
-  if (need && !getAccessToken()) {
+  if (need && (!getAccessToken() || isAccessTokenExpired())) {
     if (getRefreshToken()) {
       const ok = await refreshMinibiliAccessToken();
       if (ok) {

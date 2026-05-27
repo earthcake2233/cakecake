@@ -12,6 +12,7 @@ import {
   getRefreshToken
 } from "./utils/authTokens";
 import {
+  installMinibiliTokenAutoRefresh,
   isAccessTokenExpired,
   refreshMinibiliAccessToken
 } from "./utils/minibiliTokenRefresh";
@@ -45,17 +46,20 @@ app.use(store);
 app.use(router);
 
 /** 有 refresh 时先续 access，避免首屏请求因 2h 过期 access 直接登出 */
-if (minibiliEnv && localStorage.getItem("signIn") === "1") {
-  const hasRefresh = !!getRefreshToken();
-  const needRefresh = !getAccessToken() || isAccessTokenExpired();
-  if (hasRefresh && needRefresh) {
-    void refreshMinibiliAccessToken().then(ok => {
-      if (ok) {
-        void store.dispatch("login/refreshMinibiliMe");
-      }
-    });
-  } else if (getAccessToken()) {
-    void store.dispatch("login/refreshMinibiliMe");
+if (minibiliEnv) {
+  installMinibiliTokenAutoRefresh();
+  if (localStorage.getItem("signIn") === "1") {
+    const hasRefresh = !!getRefreshToken();
+    const needRefresh = !getAccessToken() || isAccessTokenExpired();
+    if (hasRefresh && needRefresh) {
+      void refreshMinibiliAccessToken().then(ok => {
+        if (ok) {
+          void store.dispatch("login/refreshMinibiliMe");
+        }
+      });
+    } else if (getAccessToken()) {
+      void store.dispatch("login/refreshMinibiliMe");
+    }
   }
 }
 app.use(VueLazyload, {
