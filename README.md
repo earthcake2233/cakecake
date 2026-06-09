@@ -4,6 +4,29 @@
 
 **能力概览**：JWT 登录、视频/专栏投稿与审核、动态、关注与私信（WebSocket）、视频上传与异步转码（FFmpeg + RabbitMQ + OSS）、实时弹幕、评论与通知、搜索（Elasticsearch 可选）、AI 助手（DeepSeek 可选）、运营后台。
 
+## 界面截图
+
+> 截图文件放在 `docs/images/`，请将你的实际截图命名替换下方占位文件名。
+
+<table>
+  <tr>
+    <td align="center"><b>首页</b><br><img src="docs/images/homepage.png" alt="首页" width="400"/></td>
+    <td align="center"><b>视频播放（含弹幕）</b><br><img src="docs/images/video-player.png" alt="视频播放" width="400"/></td>
+  </tr>
+  <tr>
+    <td align="center"><b>搜索</b><br><img src="docs/images/search.png" alt="搜索" width="400"/></td>
+    <td align="center"><b>个人中心</b><br><img src="docs/images/profile.png" alt="个人中心" width="400"/></td>
+  </tr>
+  <tr>
+    <td align="center"><b>个人空间</b><br><img src="docs/images/personal-space.png" alt="个人空间" width="400"/></td>
+    <td align="center"><b>动态</b><br><img src="docs/images/dynamic.png" alt="动态" width="400"/></td>
+  </tr>
+  <tr>
+    <td align="center"><b>排行榜</b><br><img src="docs/images/ranking-list.png" alt="排行榜" width="400"/></td>
+    <td align="center"><b>消息中心</b><br><img src="docs/images/message-center.png" alt="消息中心" width="400"/></td>
+  </tr>
+</table>
+
 ---
 
 ## 文档索引
