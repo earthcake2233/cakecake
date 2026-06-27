@@ -12,6 +12,16 @@
   </a>
 </p>
 
+<p align="center">
+  <img src="https://img.shields.io/badge/Go-1.25-00a1d6?style=for-the-badge&logo=go" alt="Go">
+  <img src="https://img.shields.io/badge/Vue-3.5-00a1d6?style=for-the-badge&logo=vuedotjs" alt="Vue">
+  <img src="https://img.shields.io/badge/Vite-6-00a1d6?style=for-the-badge&logo=vite" alt="Vite">
+  <img src="https://img.shields.io/badge/MySQL-00a1d6?style=for-the-badge&logo=mysql" alt="MySQL">
+  <img src="https://img.shields.io/badge/Redis-00a1d6?style=for-the-badge&logo=redis" alt="Redis">
+  <img src="https://img.shields.io/badge/RabbitMQ-00a1d6?style=for-the-badge&logo=rabbitmq" alt="RabbitMQ">
+  <img src="https://img.shields.io/badge/ES-00a1d6?style=for-the-badge&logo=elasticsearch" alt="Elasticsearch">
+</p>
+
 **能力概览**：JWT 登录、视频/专栏投稿与审核、动态、关注与私信（WebSocket）、视频上传与异步转码（FFmpeg + RabbitMQ + OSS）、实时弹幕、评论与通知、搜索（Elasticsearch 可选）、AI 助手（DeepSeek 可选）、运营后台。
 
 ## 界面截图
