@@ -1,3 +1,10 @@
+<p align="center">
+  <strong><img src="https://img.shields.io/badge/🇨🇳中文-00a1d6?style=for-the-badge" alt="中文"></strong>
+  <a href="README_EN.md">
+    <img src="https://img.shields.io/badge/🇬🇧English-999999?style=for-the-badge" alt="English">
+  </a>
+</p>
+
 # cakecake
 
 仿 B 站核心链路的个人学习项目（用户端品牌 **cakecake**）。后端 Go 模块名仍为 `minibili`，目录与部署脚本中亦保留 `minibili` 等历史命名。
