@@ -260,7 +260,7 @@ flowchart LR
 | Layer                                  | Scope                         | Example                                                     |
 | -------------------------------------- | ----------------------------- | ----------------------------------------------------------- |
 | `internal/pkg/*`                       | Unit tests (table-driven)     | Username validation, BV id encoding, avatar path generation |
-| `internal/handler/*`                   | Unit tests (SQLite in-memory) | Auth flow, video draft CRUD                                 |
+| `internal/handler/*`                   | Unit tests (SQLite in-memory) | Auth flow, video draft CRUD, danmaku posting, comment cascade                                 |
 | `internal/handler/*` (integration tag) | Black-box against live server | Health check, video zone listing                            |
 | E2E                                    | Manual                        | Login → upload → view danmaku → search                      |
 
