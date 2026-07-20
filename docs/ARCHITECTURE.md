@@ -7,30 +7,22 @@ Cakecake is a full-stack video-sharing platform built with Go and Vue 3, designe
 ```mermaid
 graph TB
     Browser["Browser"]
-    Nginx["Nginx (:443)<br/>TLS termination · static files · reverse proxy"]
+    Nginx["Nginx (:443)"]
 
-    subgraph Frontend["Frontend"]
-        Vue["Vue 3 SPA<br/>Vite · TypeScript"]
-    end
+    Vue["Vue 3 SPA<br/>Vite · TypeScript"]
+    Gin["Go API Server (Gin) :8080"]
 
-    subgraph Backend["Go API Server (Gin) :8080"]
-        Gin["HTTP + WebSocket handlers"]
-    end
-
-    subgraph Data["Data Layer"]
-        MySQL[("MySQL<br/>persistence")]
-        Redis[("Redis<br/>cache / pub-sub")]
-        RMQ[("RabbitMQ<br/>message queue")]
-        OSS[("Alibaba OSS<br/>storage")]
-        ES[("Elasticsearch<br/>optional - search")]
-    end
-
-    DS["DeepSeek API<br/>AI chat"]
+    MySQL[("MySQL")]
+    Redis[("Redis")]
+    RMQ[("RabbitMQ")]
+    OSS[("Alibaba OSS")]
+    ES[("Elasticsearch<br/>optional")]
+    DS["DeepSeek API"]
 
     Browser -->|static assets| Nginx
     Browser -->|/api/v1| Nginx
-    Nginx -->|serve .html/.js/.css| Vue
-    Nginx -->|proxy /api/v1| Gin
+    Nginx -->|serve static files| Vue
+    Nginx -->|proxy API| Gin
     Gin --> MySQL
     Gin --> Redis
     Gin --> RMQ
@@ -83,22 +75,31 @@ Minibili/
 The danmaku (bullet comment) system is the most technically challenging module. It achieves sub-200ms end-to-end latency through a WebSocket + Redis Pub/Sub architecture.
 
 ```mermaid
-sequenceDiagram
-    participant S as Sender (Client B)
-    participant API as API Server 1
-    participant R as Redis Pub/Sub
-    participant API2 as API Server 2
-    participant V1 as Viewer (Client A)
-    participant V2 as Viewer (Client C)
+graph TB
+    Browser["Browser"]
+    Nginx["Nginx (:443)"]
 
-    S->>API: POST /videos/:id/danmaku<br/>(HTTP, JWT auth)
-    API->>API: Validate content, cooldown,<br/>sensitive words
-    API->>API: Save to MySQL,<br/>increment danmaku_count
-    API->>R: PUBLISH danmaku:fanout
-    R-->>API: fan-out
-    R-->>API2: fan-out
-    API->>V1: WebSocket broadcast (room)
-    API2->>V2: WebSocket broadcast (room)
+    Vue["Vue 3 SPA<br/>Vite · TypeScript"]
+    Gin["Go API Server (Gin) :8080"]
+
+    MySQL[("MySQL")]
+    Redis[("Redis")]
+    RMQ[("RabbitMQ")]
+    OSS[("Alibaba OSS")]
+    ES[("Elasticsearch<br/>optional")]
+    DS["DeepSeek API"]
+
+    Browser -->|static assets| Nginx
+    Browser -->|/api/v1| Nginx
+    Nginx -->|serve static files| Vue
+    Nginx -->|proxy API| Gin
+    Gin --> MySQL
+    Gin --> Redis
+    Gin --> RMQ
+    Gin --> OSS
+    Gin --> ES
+    Gin -->|HTTP| DS
+    RMQ -->|consume| Gin
 ```
 
 **Flow:**
@@ -125,29 +126,31 @@ sequenceDiagram
 ### 2. Async Video Transcode Pipeline
 
 ```mermaid
-sequenceDiagram
-    participant C as Creator (UP主)
-    participant API as API Server
-    participant DB as MySQL
-    participant RMQ as RabbitMQ
-    participant W as Worker (goroutine)
-    participant FF as FFmpeg
-    participant OSS as Alibaba OSS
+graph TB
+    Browser["Browser"]
+    Nginx["Nginx (:443)"]
 
-    C->>API: POST /videos (multipart/form-data)
-    API->>DB: INSERT video (status: processing)
-    API->>RMQ: PUBLISH TranscodeJob
-    API-->>C: 200 OK (video_id)
+    Vue["Vue 3 SPA<br/>Vite · TypeScript"]
+    Gin["Go API Server (Gin) :8080"]
 
-    RMQ->>W: CONSUME TranscodeJob
-    W->>FF: transcode → H.264 MP4
-    FF-->>W: out.mp4
-    W->>FF: screenshot frame 1 → cover.jpg
-    FF-->>W: cover.jpg
-    W->>OSS: UPLOAD videos/{id}.mp4
-    W->>OSS: UPLOAD covers/{id}.jpg
-    W->>DB: UPDATE video_url, cover_url, status=published
-    W->>W: Cleanup temp files
+    MySQL[("MySQL")]
+    Redis[("Redis")]
+    RMQ[("RabbitMQ")]
+    OSS[("Alibaba OSS")]
+    ES[("Elasticsearch<br/>optional")]
+    DS["DeepSeek API"]
+
+    Browser -->|static assets| Nginx
+    Browser -->|/api/v1| Nginx
+    Nginx -->|serve static files| Vue
+    Nginx -->|proxy API| Gin
+    Gin --> MySQL
+    Gin --> Redis
+    Gin --> RMQ
+    Gin --> OSS
+    Gin --> ES
+    Gin -->|HTTP| DS
+    RMQ -->|consume| Gin
 ```
 
 **Flow:**
@@ -191,12 +194,31 @@ sequenceDiagram
 ### 5. Hot Search
 
 ```mermaid
-flowchart LR
-    Q[Search queries<br/>ZINCRBY] --> RS[("Redis Sorted Set<br/>hot:search")]
-    RS --> T[Top N by score]
-    T --> M[Merge Engine]
-    DB[(Manual Ops DB<br/>pin / block /<br/>custom title / badge)] --> M
-    M --> L[Final ranked list<br/>max 20 items]
+graph TB
+    Browser["Browser"]
+    Nginx["Nginx (:443)"]
+
+    Vue["Vue 3 SPA<br/>Vite · TypeScript"]
+    Gin["Go API Server (Gin) :8080"]
+
+    MySQL[("MySQL")]
+    Redis[("Redis")]
+    RMQ[("RabbitMQ")]
+    OSS[("Alibaba OSS")]
+    ES[("Elasticsearch<br/>optional")]
+    DS["DeepSeek API"]
+
+    Browser -->|static assets| Nginx
+    Browser -->|/api/v1| Nginx
+    Nginx -->|serve static files| Vue
+    Nginx -->|proxy API| Gin
+    Gin --> MySQL
+    Gin --> Redis
+    Gin --> RMQ
+    Gin --> OSS
+    Gin --> ES
+    Gin -->|HTTP| DS
+    RMQ -->|consume| Gin
 ```
 
 - **Auto**: search queries increment Redis sorted set scores
