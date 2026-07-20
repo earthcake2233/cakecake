@@ -6,25 +6,38 @@ Cakecake is a full-stack video-sharing platform built with Go and Vue 3, designe
 
 ```mermaid
 graph TB
-    Nginx["Nginx (:443)<br/>TLS · static files · proxy"]
-    Vue["Vue 3 SPA<br/>(Vite) :8888"]
-    Gin["Go API Server<br/>(Gin) :8080"]
-    MySQL[("MySQL<br/>persistence")]
-    Redis[("Redis<br/>cache / pub-sub")]
-    RMQ[("RabbitMQ<br/>message queue")]
-    OSS[("Alibaba OSS<br/>storage")]
-    ES[("Elasticsearch<br/>optional - search")]
-    DS["DeepSeek<br/>AI chat API"]
+    Browser["Browser"]
+    Nginx["Nginx (:443)<br/>TLS termination · static files · reverse proxy"]
 
-    Nginx --> Vue
-    Nginx --> Gin
+    subgraph Frontend["Frontend"]
+        Vue["Vue 3 SPA<br/>Vite · TypeScript"]
+    end
+
+    subgraph Backend["Go API Server (Gin) :8080"]
+        Gin["HTTP + WebSocket handlers"]
+    end
+
+    subgraph Data["Data Layer"]
+        MySQL[("MySQL<br/>persistence")]
+        Redis[("Redis<br/>cache / pub-sub")]
+        RMQ[("RabbitMQ<br/>message queue")]
+        OSS[("Alibaba OSS<br/>storage")]
+        ES[("Elasticsearch<br/>optional - search")]
+    end
+
+    DS["DeepSeek API<br/>AI chat"]
+
+    Browser -->|static assets| Nginx
+    Browser -->|/api/v1| Nginx
+    Nginx -->|serve .html/.js/.css| Vue
+    Nginx -->|proxy /api/v1| Gin
     Gin --> MySQL
     Gin --> Redis
     Gin --> RMQ
     Gin --> OSS
     Gin --> ES
-    Gin --> DS
-    RMQ --> Gin
+    Gin -->|HTTP| DS
+    RMQ -->|consume| Gin
 ```
 
 ---
