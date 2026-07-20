@@ -75,31 +75,22 @@ Minibili/
 The danmaku (bullet comment) system is the most technically challenging module. It achieves sub-200ms end-to-end latency through a WebSocket + Redis Pub/Sub architecture.
 
 ```mermaid
-graph TB
-    Browser["Browser"]
-    Nginx["Nginx (:443)"]
+sequenceDiagram
+    participant S as Sender (Client B)
+    participant API as API Server 1
+    participant R as Redis Pub/Sub
+    participant API2 as API Server 2
+    participant V1 as Viewer (Client A)
+    participant V2 as Viewer (Client C)
 
-    Vue["Vue 3 SPA<br/>Vite · TypeScript"]
-    Gin["Go API Server (Gin) :8080"]
-
-    MySQL[("MySQL")]
-    Redis[("Redis")]
-    RMQ[("RabbitMQ")]
-    OSS[("Alibaba OSS")]
-    ES[("Elasticsearch<br/>optional")]
-    DS["DeepSeek API"]
-
-    Browser -->|static assets| Nginx
-    Browser -->|/api/v1| Nginx
-    Nginx -->|serve static files| Vue
-    Nginx -->|proxy API| Gin
-    Gin --> MySQL
-    Gin --> Redis
-    Gin --> RMQ
-    Gin --> OSS
-    Gin --> ES
-    Gin -->|HTTP| DS
-    RMQ -->|consume| Gin
+    S->>API: POST /videos/:id/danmaku<br/>(HTTP, JWT auth)
+    API->>API: Validate content, cooldown,<br/>sensitive words
+    API->>API: Save to MySQL,<br/>increment danmaku_count
+    API->>R: PUBLISH danmaku:fanout
+    R-->>API: fan-out
+    R-->>API2: fan-out
+    API->>V1: WebSocket broadcast (room)
+    API2->>V2: WebSocket broadcast (room)
 ```
 
 **Flow:**
@@ -114,43 +105,41 @@ graph TB
 
 **Key design decisions:**
 
-| Decision | Rationale |
-|----------|-----------|
-| Redis Pub/Sub for fan-out | Enables horizontal scaling — new replicas auto-receive broadcasts without shared state |
-| Per-video room map (`map[uint64]map[*websocket.Conn]struct{}`) | O(1) broadcast per room, no cross-room scanning |
-| SETNX cooldown over rate-limiter middleware | Cooldown is per-video-per-user, simpler than a generic token bucket |
-| No message persistence in Redis | Danmaku is ephemeral; MySQL is the source of truth for history |
+| Decision                                                       | Rationale                                                                              |
+| -------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| Redis Pub/Sub for fan-out                                      | Enables horizontal scaling — new replicas auto-receive broadcasts without shared state |
+| Per-video room map (`map[uint64]map[*websocket.Conn]struct{}`) | O(1) broadcast per room, no cross-room scanning                                        |
+| SETNX cooldown over rate-limiter middleware                    | Cooldown is per-video-per-user, simpler than a generic token bucket                    |
+| No message persistence in Redis                                | Danmaku is ephemeral; MySQL is the source of truth for history                         |
 
 ---
 
 ### 2. Async Video Transcode Pipeline
 
 ```mermaid
-graph TB
-    Browser["Browser"]
-    Nginx["Nginx (:443)"]
+sequenceDiagram
+    participant C as Creator (UP主)
+    participant API as API Server
+    participant DB as MySQL
+    participant RMQ as RabbitMQ
+    participant W as Worker (goroutine)
+    participant FF as FFmpeg
+    participant OSS as Alibaba OSS
 
-    Vue["Vue 3 SPA<br/>Vite · TypeScript"]
-    Gin["Go API Server (Gin) :8080"]
+    C->>API: POST /videos (multipart/form-data)
+    API->>DB: INSERT video (status: processing)
+    API->>RMQ: PUBLISH TranscodeJob
+    API-->>C: 200 OK (video_id)
 
-    MySQL[("MySQL")]
-    Redis[("Redis")]
-    RMQ[("RabbitMQ")]
-    OSS[("Alibaba OSS")]
-    ES[("Elasticsearch<br/>optional")]
-    DS["DeepSeek API"]
-
-    Browser -->|static assets| Nginx
-    Browser -->|/api/v1| Nginx
-    Nginx -->|serve static files| Vue
-    Nginx -->|proxy API| Gin
-    Gin --> MySQL
-    Gin --> Redis
-    Gin --> RMQ
-    Gin --> OSS
-    Gin --> ES
-    Gin -->|HTTP| DS
-    RMQ -->|consume| Gin
+    RMQ->>W: CONSUME TranscodeJob
+    W->>FF: transcode → H.264 MP4
+    FF-->>W: out.mp4
+    W->>FF: screenshot frame 1 → cover.jpg
+    FF-->>W: cover.jpg
+    W->>OSS: UPLOAD videos/{id}.mp4
+    W->>OSS: UPLOAD covers/{id}.jpg
+    W->>DB: UPDATE video_url, cover_url, status=published
+    W->>W: Cleanup temp files
 ```
 
 **Flow:**
@@ -164,11 +153,11 @@ graph TB
 
 **Failure classification:**
 
-| Type | Detection | Action |
-|------|-----------|--------|
-| Permanent | FFmpeg stderr contains known patterns (invalid codec, corrupt container) | Mark `failed`, store `fail_reason`, ack message |
-| Transient | Timeout, OSS network error, disk full | Re-queue with incremented `retry_count` |
-| Exhausted | `retry_count >= 3` | Mark `failed`, ack message |
+| Type      | Detection                                                                | Action                                         |
+| --------- | ------------------------------------------------------------------------ | ---------------------------------------------- |
+| Permanent | FFmpeg stderr contains known patterns (invalid codec, corrupt container) | Mark`failed`, store `fail_reason`, ack message |
+| Transient | Timeout, OSS network error, disk full                                    | Re-queue with incremented`retry_count`         |
+| Exhausted | `retry_count >= 3`                                                       | Mark`failed`, ack message                      |
 
 ---
 
@@ -194,31 +183,12 @@ graph TB
 ### 5. Hot Search
 
 ```mermaid
-graph TB
-    Browser["Browser"]
-    Nginx["Nginx (:443)"]
-
-    Vue["Vue 3 SPA<br/>Vite · TypeScript"]
-    Gin["Go API Server (Gin) :8080"]
-
-    MySQL[("MySQL")]
-    Redis[("Redis")]
-    RMQ[("RabbitMQ")]
-    OSS[("Alibaba OSS")]
-    ES[("Elasticsearch<br/>optional")]
-    DS["DeepSeek API"]
-
-    Browser -->|static assets| Nginx
-    Browser -->|/api/v1| Nginx
-    Nginx -->|serve static files| Vue
-    Nginx -->|proxy API| Gin
-    Gin --> MySQL
-    Gin --> Redis
-    Gin --> RMQ
-    Gin --> OSS
-    Gin --> ES
-    Gin -->|HTTP| DS
-    RMQ -->|consume| Gin
+flowchart LR
+    Q[Search queries<br/>ZINCRBY] --> RS[("Redis Sorted Set<br/>hot:search")]
+    RS --> T[Top N by score]
+    T --> M[Merge Engine]
+    DB[(Manual Ops DB<br/>pin / block /<br/>custom title / badge)] --> M
+    M --> L[Final ranked list<br/>max 20 items]
 ```
 
 - **Auto**: search queries increment Redis sorted set scores
@@ -238,26 +208,26 @@ graph TB
 
 ## Storage Strategy
 
-| Data type | Storage | Rationale |
-|-----------|---------|-----------|
-| User, video, comments, notifications, drafts | MySQL | Relational integrity, complex queries |
-| Video files, covers, avatars | Alibaba Cloud OSS | Scalable blob storage, CDN-ready |
-| Danmaku fan-out, play counts, cooldowns, Refresh Tokens | Redis | Low-latency ephemeral data |
-| Transcode jobs | RabbitMQ | Persistent, ack-based, exactly-once delivery |
-| Search indices | Elasticsearch | Inverted index, relevance scoring |
+| Data type                                               | Storage           | Rationale                                    |
+| ------------------------------------------------------- | ----------------- | -------------------------------------------- |
+| User, video, comments, notifications, drafts            | MySQL             | Relational integrity, complex queries        |
+| Video files, covers, avatars                            | Alibaba Cloud OSS | Scalable blob storage, CDN-ready             |
+| Danmaku fan-out, play counts, cooldowns, Refresh Tokens | Redis             | Low-latency ephemeral data                   |
+| Transcode jobs                                          | RabbitMQ          | Persistent, ack-based, exactly-once delivery |
+| Search indices                                          | Elasticsearch     | Inverted index, relevance scoring            |
 
 ---
 
 ## Key Design Decisions
 
-| Decision | Why |
-|----------|-----|
-| **Monolith over microservices (v1)** | Single developer, faster iteration. Code is organized by domain (`handler/`, `service/`, `worker/`) to enable future split into Kratos microservices. |
-| **Redis Pub/Sub over direct WebSocket fan-out** | Decouples broadcast from the HTTP handler. Multiple replicas subscribe to the same Redis channel, enabling horizontal scaling without shared memory. |
-| **RabbitMQ over Redis List for transcode** | RabbitMQ provides message persistence, consumer acknowledgments, and dead-lettering — critical for video processing where data loss is unacceptable. |
-| **GORM AutoMigrate over raw SQL migrations** | Simpler for a solo project. Tables are declared as Go structs, migrations run on startup. |
-| **ES optional, not mandatory** | Reduces onboarding friction. The search page degrades gracefully when ES is not configured. |
-| **bcrypt + dual-token JWT** | Industry standard for auth. Access/Refresh token pattern with Redis-managed refresh token rotation. |
+| Decision                                        | Why                                                                                                                                                   |
+| ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Monolith over microservices (v1)**            | Single developer, faster iteration. Code is organized by domain (`handler/`, `service/`, `worker/`) to enable future split into Kratos microservices. |
+| **Redis Pub/Sub over direct WebSocket fan-out** | Decouples broadcast from the HTTP handler. Multiple replicas subscribe to the same Redis channel, enabling horizontal scaling without shared memory.  |
+| **RabbitMQ over Redis List for transcode**      | RabbitMQ provides message persistence, consumer acknowledgments, and dead-lettering — critical for video processing where data loss is unacceptable.  |
+| **GORM AutoMigrate over raw SQL migrations**    | Simpler for a solo project. Tables are declared as Go structs, migrations run on startup.                                                             |
+| **ES optional, not mandatory**                  | Reduces onboarding friction. The search page degrades gracefully when ES is not configured.                                                           |
+| **bcrypt + dual-token JWT**                     | Industry standard for auth. Access/Refresh token pattern with Redis-managed refresh token rotation.                                                   |
 
 ---
 
@@ -287,12 +257,12 @@ graph TB
 
 ## Testing Strategy
 
-| Layer | Scope | Example |
-|-------|-------|---------|
-| `internal/pkg/*` | Unit tests (table-driven) | Username validation, BV id encoding, avatar path generation |
-| `internal/handler/*` | Unit tests (SQLite in-memory) | Auth flow, video draft CRUD |
-| `internal/handler/*` (integration tag) | Black-box against live server | Health check, video zone listing |
-| E2E | Manual | Login → upload → view danmaku → search |
+| Layer                                  | Scope                         | Example                                                     |
+| -------------------------------------- | ----------------------------- | ----------------------------------------------------------- |
+| `internal/pkg/*`                       | Unit tests (table-driven)     | Username validation, BV id encoding, avatar path generation |
+| `internal/handler/*`                   | Unit tests (SQLite in-memory) | Auth flow, video draft CRUD                                 |
+| `internal/handler/*` (integration tag) | Black-box against live server | Health check, video zone listing                            |
+| E2E                                    | Manual                        | Login → upload → view danmaku → search                      |
 
 ```bash
 go test ./... -count=1
