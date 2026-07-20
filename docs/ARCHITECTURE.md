@@ -192,7 +192,7 @@ flowchart LR
 ```
 
 - **Auto**: search queries increment Redis sorted set scores
-- **Manual**: admin dashboard supports pin, block, custom display title, badge (`hot`, `new`), time window (`start_at` / `end_at`)
+- **Manual**: admin dashboard supports pin, block, custom display title, badge (`hot`, `new`, `rec`)
 - **Merge**: manual items take priority, auto items fill remaining slots, blocked keywords filtered
 
 ---
