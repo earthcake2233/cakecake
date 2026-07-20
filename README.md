@@ -1,32 +1,37 @@
-<p align="center">
-  <strong><img src="https://img.shields.io/badge/🇨🇳中文-00a1d6?style=for-the-badge" alt="中文"></strong>
+﻿<p align="center">
+  <strong><img src="https://img.shields.io/badge/🇨🇳中文-00a1d6?style=flat-square" alt="中文"></strong>
   <a href="README_EN.md">
-    <img src="https://img.shields.io/badge/🇬🇧English-999999?style=for-the-badge" alt="English">
+    <img src="https://img.shields.io/badge/🇬🇧English-999999?style=flat-square" alt="English">
   </a>
 </p>
 
 # cakecake
 
-仿 B 站核心链路的个人学习项目（用户端品牌 **cakecake**）。后端 Go 模块名仍为 `minibili`，目录与部署脚本中亦保留 `minibili` 等历史命名。
+基于 Go + Vue3 全栈构建的仿 B 站视频分享社区，聚焦视频投稿、实时弹幕、多级评论、全文搜索、AI 助手等核心链路。前端品牌 **cakecake** · 后端模块沿用 `minibili`。
 
 <p align="center">
   <a href="https://chengzisoft.top/#/">
-    <img src="https://img.shields.io/badge/在线体验-chengzisoft.top-00a1d6?style=for-the-badge" alt="在线体验">
+    <img src="https://img.shields.io/badge/在线体验-chengzisoft.top-00a1d6?style=flat-square" alt="在线体验">
   </a>
   &nbsp;&nbsp;
   <a href="https://b23.tv/9VnJIWm">
-    <img src="https://img.shields.io/badge/演示视频-B站-00a1d6?style=for-the-badge&logo=bilibili" alt="B站演示">
+    <img src="https://img.shields.io/badge/演示视频-B站-00a1d6?style=flat-square&logo=bilibili" alt="B站演示">
   </a>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Go-1.25-00a1d6?style=for-the-badge&logo=go" alt="Go">
-  <img src="https://img.shields.io/badge/Vue-3.5-00a1d6?style=for-the-badge&logo=vuedotjs" alt="Vue">
-  <img src="https://img.shields.io/badge/Vite-6-00a1d6?style=for-the-badge&logo=vite" alt="Vite">
-  <img src="https://img.shields.io/badge/MySQL-00a1d6?style=for-the-badge&logo=mysql" alt="MySQL">
-  <img src="https://img.shields.io/badge/Redis-00a1d6?style=for-the-badge&logo=redis" alt="Redis">
-  <img src="https://img.shields.io/badge/RabbitMQ-00a1d6?style=for-the-badge&logo=rabbitmq" alt="RabbitMQ">
-  <img src="https://img.shields.io/badge/ES-00a1d6?style=for-the-badge&logo=elasticsearch" alt="Elasticsearch">
+  <img src="https://img.shields.io/badge/Go-1.25-00ADD8?style=flat-square&logo=go&logoColor=white" alt="Go">
+  <img src="https://img.shields.io/badge/Gin-009688?style=flat-square&logo=gin&logoColor=white" alt="Gin">
+  <img src="https://img.shields.io/badge/GORM-3776AB?style=flat-square&logo=go&logoColor=white" alt="GORM">
+  <img src="https://img.shields.io/badge/Vue-3.5-4FC08D?style=flat-square&logo=vuedotjs&logoColor=white" alt="Vue">
+  <img src="https://img.shields.io/badge/Vite-6-646CFF?style=flat-square&logo=vite&logoColor=white" alt="Vite">
+  <img src="https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript">
+  <img src="https://img.shields.io/badge/MySQL-4479A1?style=flat-square&logo=mysql&logoColor=white" alt="MySQL">
+  <img src="https://img.shields.io/badge/Redis-DC382D?style=flat-square&logo=redis&logoColor=white" alt="Redis">
+  <img src="https://img.shields.io/badge/RabbitMQ-FF6600?style=flat-square&logo=rabbitmq&logoColor=white" alt="RabbitMQ">
+  <img src="https://img.shields.io/badge/Elasticsearch-00BFB3?style=flat-square&logo=elasticsearch&logoColor=white" alt="Elasticsearch">
+  <img src="https://img.shields.io/badge/FFmpeg-007808?style=flat-square&logo=ffmpeg&logoColor=white" alt="FFmpeg">
+  <img src="https://img.shields.io/badge/WebSocket-010101?style=flat-square&logo=socket.io&logoColor=white" alt="WebSocket">
 </p>
 
 **能力概览**：JWT 登录、视频/专栏投稿与审核、动态、关注与私信（WebSocket）、视频上传与异步转码（FFmpeg + RabbitMQ + OSS）、实时弹幕、评论与通知、搜索（Elasticsearch 可选）、AI 助手（DeepSeek 可选）、运营后台。
