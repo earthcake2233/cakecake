@@ -69,6 +69,8 @@
 | [docs/manual-video-ingest.md](./docs/manual-video-ingest.md) | 运维 | 关闭网页上传时，本地 OSS + 手动写库发视频 |
 | [docs/ai-gateway.md](./docs/ai-gateway.md) | 运维 | AI 助手（DeepSeek）配置 |
 | [.github/workflows/deploy.yml](./.github/workflows/deploy.yml) | 运维 | 可选：GitHub Actions 构建并 SSH 部署 |
+| [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) | 全栈 / 面试 | 系统架构、核心模块设计、关键决策 |
+| [docs/ARCHITECTURE_EN.md](./docs/ARCHITECTURE_EN.md) | Full-stack / Interview | Architecture (English) |
 | [SPEC.md](./SPEC.md) | 开发 | 功能与验收规格 |
 | [Rule.md](./Rule.md) | 开发 | 工程红线 |
 | [Skill.md](./Skill.md) | 开发 | 标准操作（迁移、Token、WS 等） |

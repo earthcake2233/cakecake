@@ -71,6 +71,8 @@ A full-stack video-sharing community built with Go + Vue3, covering video upload
 | [docs/manual-video-ingest.md](./docs/manual-video-ingest.md) | DevOps | CLI video upload when web upload is disabled |
 | [docs/ai-gateway.md](./docs/ai-gateway.md) | DevOps | AI assistant (DeepSeek) configuration |
 | [.github/workflows/deploy.yml](./.github/workflows/deploy.yml) | DevOps | Optional GitHub Actions CI |
+| [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) | Full-stack / Interview | System architecture & design decisions (Chinese) |
+| [docs/ARCHITECTURE_EN.md](./docs/ARCHITECTURE_EN.md) | Full-stack / Interview | System architecture & design decisions |
 | [SPEC.md](./SPEC.md) | Developer | Feature specs & acceptance criteria |
 | [Rule.md](./Rule.md) | Developer | Engineering rules & conventions |
 | [Skill.md](./Skill.md) | Developer | Standard operations guide |
