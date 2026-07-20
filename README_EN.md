@@ -1,32 +1,37 @@
-<p align="center">
+﻿<p align="center">
   <a href="README.md">
-    <img src="https://img.shields.io/badge/🇨🇳中文-999999?style=for-the-badge" alt="中文">
+    <img src="https://img.shields.io/badge/🇨🇳中文-999999?style=flat-square" alt="中文">
   </a>
-  <strong><img src="https://img.shields.io/badge/🇬🇧English-00a1d6?style=for-the-badge" alt="English"></strong>
+  <strong><img src="https://img.shields.io/badge/🇬🇧English-00a1d6?style=flat-square" alt="English"></strong>
 </p>
 
 # cakecake 🍰
 
-A Bilibili clone (old version) built as a personal learning project. Frontend brand: **cakecake**. The Go module is still named `minibili` — legacy names are kept in the directory structure and deployment scripts.
+A full-stack video-sharing community built with Go + Vue3, covering video upload, real-time danmaku, nested comments, full-text search, AI assistant, and more. Frontend brand: **cakecake** · backend module: `minibili`.
 
 <p align="center">
   <a href="https://chengzisoft.top/#/">
-    <img src="https://img.shields.io/badge/Live Demo-chengzisoft.top-00a1d6?style=for-the-badge" alt="Live Demo">
+    <img src="https://img.shields.io/badge/Live Demo-chengzisoft.top-00a1d6?style=flat-square" alt="Live Demo">
   </a>
   &nbsp;&nbsp;
   <a href="https://b23.tv/9VnJIWm">
-    <img src="https://img.shields.io/badge/Demo Video-B站-00a1d6?style=for-the-badge&logo=bilibili" alt="Demo Video">
+    <img src="https://img.shields.io/badge/Demo Video-B站-00a1d6?style=flat-square&logo=bilibili" alt="Demo Video">
   </a>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Go-1.25-00a1d6?style=for-the-badge&logo=go" alt="Go">
-  <img src="https://img.shields.io/badge/Vue-3.5-00a1d6?style=for-the-badge&logo=vuedotjs" alt="Vue">
-  <img src="https://img.shields.io/badge/Vite-6-00a1d6?style=for-the-badge&logo=vite" alt="Vite">
-  <img src="https://img.shields.io/badge/MySQL-00a1d6?style=for-the-badge&logo=mysql" alt="MySQL">
-  <img src="https://img.shields.io/badge/Redis-00a1d6?style=for-the-badge&logo=redis" alt="Redis">
-  <img src="https://img.shields.io/badge/RabbitMQ-00a1d6?style=for-the-badge&logo=rabbitmq" alt="RabbitMQ">
-  <img src="https://img.shields.io/badge/ES-00a1d6?style=for-the-badge&logo=elasticsearch" alt="Elasticsearch">
+  <img src="https://img.shields.io/badge/Go-1.25-00ADD8?style=flat-square&logo=go&logoColor=white" alt="Go">
+  <img src="https://img.shields.io/badge/Gin-009688?style=flat-square&logo=gin&logoColor=white" alt="Gin">
+  <img src="https://img.shields.io/badge/GORM-3776AB?style=flat-square&logo=go&logoColor=white" alt="GORM">
+  <img src="https://img.shields.io/badge/Vue-3.5-4FC08D?style=flat-square&logo=vuedotjs&logoColor=white" alt="Vue">
+  <img src="https://img.shields.io/badge/Vite-6-646CFF?style=flat-square&logo=vite&logoColor=white" alt="Vite">
+  <img src="https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript">
+  <img src="https://img.shields.io/badge/MySQL-4479A1?style=flat-square&logo=mysql&logoColor=white" alt="MySQL">
+  <img src="https://img.shields.io/badge/Redis-DC382D?style=flat-square&logo=redis&logoColor=white" alt="Redis">
+  <img src="https://img.shields.io/badge/RabbitMQ-FF6600?style=flat-square&logo=rabbitmq&logoColor=white" alt="RabbitMQ">
+  <img src="https://img.shields.io/badge/Elasticsearch-00BFB3?style=flat-square&logo=elasticsearch&logoColor=white" alt="Elasticsearch">
+  <img src="https://img.shields.io/badge/FFmpeg-007808?style=flat-square&logo=ffmpeg&logoColor=white" alt="FFmpeg">
+  <img src="https://img.shields.io/badge/WebSocket-010101?style=flat-square&logo=socket.io&logoColor=white" alt="WebSocket">
 </p>
 
 **Capabilities**: JWT auth, video/article submission & review, feed & follow, private messaging (WebSocket), video upload & async transcoding (FFmpeg + RabbitMQ + OSS), real-time danmaku (bullet comments), comments & notifications, search (Elasticsearch optional), AI assistant (DeepSeek optional), admin dashboard.
