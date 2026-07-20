@@ -1,64 +1,65 @@
-# Cakecake Architecture
+﻿# Cakecake Architecture
 
 ## Overview
 
 Cakecake is a full-stack video-sharing platform built with Go and Vue 3, designed as a learning project that faithfully replicates Bilibili's core user-facing features. It serves as both a technical showcase and a hands-on study of real-world backend patterns — real-time messaging, async job processing, full-text search, and production deployment.
 
-~~~
-                    +---------------------------------------+
-                    |            Nginx (:443)               |
-                    |       TLS . static files . proxy      |
-                    +--+-------------------------------+----+
-                       |                               |
-              +--------v-------+              +--------v-------+
-              |   Vue 3 SPA    |              |  Go API Server |
-              |   (Vite)       |    /api/v1   |  (Gin) :8080   |
-              |   :8888 (dev)  <--------------+                |
-              +----------------+              +--+---+---+---+-+
-                                                 |   |   |   |
-     +-------------------------------------------+   |   |   +------------------+
-     |                                               |   |                      |
-+----v------+  +----------+  +---------+  +---------v-+ +--------v-------+  +--v-----------+
-|   MySQL    |  |  Redis   |  | RabbitMQ |  |  Alibaba  | | Elasticsearch  |  |   DeepSeek    |
-| persistence|  | cache /  |  | message  |  |    OSS    | | (optional)     |  |  AI chat API  |
-|            |  | pub-sub  |  |  queue   |  |  storage  | | full-text      |  |               |
-+------------+  +----------+  +---------+  +-----------+ +---------------+  +---------------+
-~~~
+```mermaid
+graph TB
+    Nginx["Nginx (:443)<br/>TLS · static files · proxy"]
+    Vue["Vue 3 SPA<br/>(Vite) :8888"]
+    Gin["Go API Server<br/>(Gin) :8080"]
+    MySQL[("MySQL<br/>persistence")]
+    Redis[("Redis<br/>cache / pub-sub")]
+    RMQ[("RabbitMQ<br/>message queue")]
+    OSS[("Alibaba OSS<br/>storage")]
+    ES[("Elasticsearch<br/>optional - search")]
+    DS["DeepSeek<br/>AI chat API"]
+
+    Nginx --> Vue
+    Nginx --> Gin
+    Gin --> MySQL
+    Gin --> Redis
+    Gin --> RMQ
+    Gin --> OSS
+    Gin --> ES
+    Gin --> DS
+    RMQ --> Gin
+```
 
 ---
 
 ## Directory Layout
 
-~~~
+```
 Minibili/
-+-- cmd/mini-bili/main.go        # Entrypoint: wires config, DB, routes
-+-- internal/
-|   +-- handler/                  # HTTP + WebSocket handlers (Gin routes)
-|   +-- service/                  # Business logic layer
-|   +-- model/                    # GORM models
-|   +-- middleware/               # JWT auth, admin auth
-|   +-- worker/                   # RabbitMQ consumers (transcode)
-|   +-- ws/                       # WebSocket hub (danmaku rooms, chat)
-|   +-- search/                   # Elasticsearch client, query builders
-|   +-- storage/                  # Alibaba Cloud OSS client
-|   +-- ffmpeg/                   # FFmpeg wrapper (transcode, screenshots)
-|   +-- aigateway/                # DeepSeek OpenAI-compatible client
-|   +-- queue/                    # RabbitMQ connection management
-|   +-- config/                   # Env loading, config struct
-|   +-- logger/                   # Zap logger setup
-|   +-- errcode/                  # Business error codes
-|   +-- pkg/                      # Utilities: JWT, BV id, IP location,
-|       +-- jwttoken/             #   sensitive words, markdown, avatar...
-|       +-- bvid/
-|       +-- sensitive/
-|       +-- ...
-+-- configs/                      # sensitive_words.txt, ip2region_v4.xdb
-+-- deploy/                       # Nginx conf, systemd unit, env template
-+-- docs/                         # Images, guides
-+-- cakecake-vue/bilibili-vue/    # Vue 3 + Vite + TypeScript frontend
-+-- go.mod                        # module minibili
-~~~
-
+├── cmd/mini-bili/main.go        # Entrypoint: wires config, DB, routes
+├── internal/
+│   ├── handler/                  # HTTP + WebSocket handlers (Gin routes)
+│   ├── service/                  # Business logic layer
+│   ├── model/                    # GORM models
+│   ├── middleware/               # JWT auth, admin auth
+│   ├── worker/                   # RabbitMQ consumers (transcode)
+│   ├── ws/                       # WebSocket hub (danmaku rooms, chat)
+│   ├── search/                   # Elasticsearch client, query builders
+│   ├── storage/                  # Alibaba Cloud OSS client
+│   ├── ffmpeg/                   # FFmpeg wrapper (transcode, screenshots)
+│   ├── aigateway/                # DeepSeek OpenAI-compatible client
+│   ├── queue/                    # RabbitMQ connection management
+│   ├── config/                   # Env loading, config struct
+│   ├── logger/                   # Zap logger setup
+│   ├── errcode/                  # Business error codes
+│   └── pkg/                      # Utilities: JWT, BV id, IP location,
+│       ├── jwttoken/             #   sensitive words, markdown, avatar...
+│       ├── bvid/
+│       ├── sensitive/
+│       └── ...
+├── configs/                      # sensitive_words.txt, ip2region_v4.xdb
+├── deploy/                       # Nginx conf, systemd unit, env template
+├── docs/                         # Images, guides
+├── cakecake-vue/bilibili-vue/    # Vue 3 + Vite + TypeScript frontend
+└── go.mod                        # module minibili
+```
 
 ---
 
@@ -66,81 +67,92 @@ Minibili/
 
 ### 1. Real-time Danmaku System
 
-The danmaku (bullet comment) system is the most technically challenging module. It achieves <200ms end-to-end latency through a WebSocket + Redis Pub/Sub architecture.
+The danmaku (bullet comment) system is the most technically challenging module. It achieves sub-200ms end-to-end latency through a WebSocket + Redis Pub/Sub architecture.
 
-~~~
-+----------+   WebSocket    +-------------------+   Redis Pub/Sub   +-------------------+
-| Client A <----------------+  API Server 1     <-------------------->  API Server 2     |
-| (viewer)  |               |  +-------------+  |                   |  +-------------+  |
-+----------+               |  |  ws.Hub     |  |                   |  |  ws.Hub     |  |
-                           |  |  +-------+  |  |                   |  |  +-------+  |  |
-+----------+  POST /danmaku |  |  |room 1 |  |  |                   |  |  |room 1 |  |  |
-| Client B +---------------->  |  | conns  |  |  |                   |  |  | conns  |  |  |
-| (sender)  |               |  |  +-------+  |  |                   |  |  +-------+  |  |
-+----------+               |  +-------------+  |                   |  +-------------+  |
-                           +-------------------+                   +-------------------+
-~~~
+```mermaid
+sequenceDiagram
+    participant S as Sender (Client B)
+    participant API as API Server 1
+    participant R as Redis Pub/Sub
+    participant API2 as API Server 2
+    participant V1 as Viewer (Client A)
+    participant V2 as Viewer (Client C)
+
+    S->>API: POST /videos/:id/danmaku<br/>(HTTP, JWT auth)
+    API->>API: Validate content, cooldown,<br/>sensitive words
+    API->>API: Save to MySQL,<br/>increment danmaku_count
+    API->>R: PUBLISH danmaku:fanout
+    R-->>API: fan-out
+    R-->>API2: fan-out
+    API->>V1: WebSocket broadcast (room)
+    API2->>V2: WebSocket broadcast (room)
+```
 
 **Flow:**
 
-1. Sender calls \POST /api/v1/videos/:id/danmaku\ (HTTP, JWT auth)
-2. Server validates content (length 1-100, color \#XXXXXX\, type scroll/top/bottom), checks 5-second cooldown (Redis \SETNX\), runs sensitive-word filter
-3. Danmaku saved to MySQL, video \danmaku_count\ incremented
-4. Payload published to Redis channel \danmaku:fanout5. Every server replica subscribes to that channel and calls \Hub.BroadcastRaw(videoID, body)6. \ws.Hub\ iterates all WebSocket connections in the target video room and writes the JSON message
-7. Viewers connect via \GET /api/v1/ws/danmaku?video_id=...\ — upgraded to WebSocket, joined into room, receive broadcasts in real-time
+1. Sender calls `POST /api/v1/videos/:id/danmaku` (HTTP, JWT auth)
+2. Server validates content (length 1-100, color `#XXXXXX`, type scroll/top/bottom), checks 5-second cooldown (Redis `SETNX`), runs sensitive-word filter
+3. Danmaku saved to MySQL, video `danmaku_count` incremented
+4. Payload published to Redis channel `danmaku:fanout`
+5. Every server replica subscribes to that channel and calls `Hub.BroadcastRaw(videoID, body)`
+6. `ws.Hub` iterates all WebSocket connections in the target video room and writes the JSON message
+7. Viewers connect via `GET /api/v1/ws/danmaku?video_id=...` — upgraded to WebSocket, joined into room, receive broadcasts in real-time
 
 **Key design decisions:**
 
 | Decision | Rationale |
 |----------|-----------|
 | Redis Pub/Sub for fan-out | Enables horizontal scaling — new replicas auto-receive broadcasts without shared state |
-| Per-video room map \map[uint64]map[*websocket.Conn]struct{}\ | O(1) broadcast per room, no cross-room scanning |
+| Per-video room map (`map[uint64]map[*websocket.Conn]struct{}`) | O(1) broadcast per room, no cross-room scanning |
 | SETNX cooldown over rate-limiter middleware | Cooldown is per-video-per-user, simpler than a generic token bucket |
 | No message persistence in Redis | Danmaku is ephemeral; MySQL is the source of truth for history |
-
 
 ---
 
 ### 2. Async Video Transcode Pipeline
 
-~~~
-+----------+   POST /videos    +------------------+   publish    +------------------+
-|  Creator  +------------------->  API Server       +-------------->  RabbitMQ         |
-|           |   multipart/form  |                   |  transcode   |  transcode       |
-+----------+                   |  status =         |  queue       |  queue           |
-                               |  processing       |              +--------+---------+
-                               +------------------+                       |
-                                                                          | consume
-+----------+                                                              |
-| Alibaba  <---- upload -----+                                            |
-|   OSS    |                  |                                   +--------v---------+
-|          |  videos/{id}.mp4 |                                  |  Worker           |
-|          |  covers/{id}.jpg |                                  |  (goroutine)      |
-+----------+                  |                                  |                   |
-                              |                                  |  1. FFmpeg        |
-                              |                                  |     transcode     |
-                              |                                  |  2. FFmpeg        |
-                              |                                  |     screenshot    |
-                              |                                  |  3. Upload OSS    |
-                              +----------------------------------+  4. Update DB     |
-                                                                 |     status        |
-                                                                 +-------------------+
-~~~
+```mermaid
+sequenceDiagram
+    participant C as Creator (UP主)
+    participant API as API Server
+    participant DB as MySQL
+    participant RMQ as RabbitMQ
+    participant W as Worker (goroutine)
+    participant FF as FFmpeg
+    participant OSS as Alibaba OSS
+
+    C->>API: POST /videos (multipart/form-data)
+    API->>DB: INSERT video (status: processing)
+    API->>RMQ: PUBLISH TranscodeJob
+    API-->>C: 200 OK (video_id)
+
+    RMQ->>W: CONSUME TranscodeJob
+    W->>FF: transcode → H.264 MP4
+    FF-->>W: out.mp4
+    W->>FF: screenshot frame 1 → cover.jpg
+    FF-->>W: cover.jpg
+    W->>OSS: UPLOAD videos/{id}.mp4
+    W->>OSS: UPLOAD covers/{id}.jpg
+    W->>DB: UPDATE video_url, cover_url, status=published
+    W->>W: Cleanup temp files
+```
 
 **Flow:**
 
-1. Creator uploads raw video + optional custom cover via \POST /api/v1/videos2. Server saves metadata (status: \processing\) to MySQL, stores raw file in temp dir
-3. Server publishes \TranscodeJob{VideoID, RawPath, CoverPath}\ to RabbitMQ \	ranscode\ queue
-4. Worker goroutine consumes the job, calls \fmpeg\ to transcode to H.264 MP4, takes a screenshot at frame 1, uploads both to OSS
-5. On success: updates \ideo_url\, \cover_url\, sets status to \published6. On failure: retries up to **3 times** with exponential backoff (30s, 60s, 90s). Permanent failures detected and marked \ailed\ with human-readable reason. Transient failures re-queued.
+1. Creator uploads raw video + optional custom cover via `POST /api/v1/videos`
+2. Server saves metadata (status: `processing`) to MySQL, stores raw file in temp dir
+3. Server publishes `TranscodeJob{VideoID, RawPath, CoverPath}` to RabbitMQ `transcode` queue
+4. Worker goroutine consumes the job, calls `ffmpeg` to transcode to H.264 MP4, takes a screenshot at frame 1, uploads both to OSS
+5. On success: updates `video_url`, `cover_url`, sets status to `published`
+6. On failure: retries up to **3 times** with exponential backoff (30s, 60s, 90s). Permanent failures detected and marked `failed` with human-readable reason. Transient failures re-queued.
 
 **Failure classification:**
 
 | Type | Detection | Action |
 |------|-----------|--------|
-| Permanent | FFmpeg stderr contains known patterns (invalid codec, corrupt container) | Mark \ailed\, store \ail_reason\, ack message |
-| Transient | Timeout, OSS network error, disk full | Re-queue with incremented etry_count\ |
-| Exhausted | etry_count >= 3\ | Mark \ailed\, ack message |
+| Permanent | FFmpeg stderr contains known patterns (invalid codec, corrupt container) | Mark `failed`, store `fail_reason`, ack message |
+| Transient | Timeout, OSS network error, disk full | Re-queue with incremented `retry_count` |
+| Exhausted | `retry_count >= 3` | Mark `failed`, ack message |
 
 ---
 
@@ -156,7 +168,7 @@ The danmaku (bullet comment) system is the most technically challenging module. 
 
 ### 4. Comment System
 
-- **2-level nesting**: root comment -> child -> grandchild. GORM preloads via `Preload("Children.Children")` for single-query tree assembly
+- **2-level nesting**: root comment → child → grandchild. GORM preloads via `Preload("Children.Children")` for single-query tree assembly
 - **Cascade delete**: deleting a parent recursively removes all descendants (enforced in handler, not via DB constraint)
 - **Creator moderation**: video owner can delete any comment; regular users can only delete their own
 - **Like/dislike**: toggle pattern — single-row existence check, insert or delete, atomic counter update
@@ -165,20 +177,13 @@ The danmaku (bullet comment) system is the most technically challenging module. 
 
 ### 5. Hot Search
 
-```
-Search queries ---- Redis Sorted Set ---- Top N keywords
-    (ZINCRBY)        hot:search           by score descending
-                           |
-            +--------------v---------------+
-            |     Merge Engine              |
-            |  +------------------------+  |
-            |  | Manual ops (DB)         |  +--- Final ranked list (max 20)
-            |  | . pin (force rank)      |  |
-            |  | . block (hide)          |  |
-            |  | . custom title / badge  |  |
-            |  | . time window           |  |
-            |  +------------------------+  |
-            +------------------------------+
+```mermaid
+flowchart LR
+    Q[Search queries<br/>ZINCRBY] --> RS[("Redis Sorted Set<br/>hot:search")]
+    RS --> T[Top N by score]
+    T --> M[Merge Engine]
+    DB[(Manual Ops DB<br/>pin / block /<br/>custom title / badge)] --> M
+    M --> L[Final ranked list<br/>max 20 items]
 ```
 
 - **Auto**: search queries increment Redis sorted set scores
@@ -225,22 +230,22 @@ Search queries ---- Redis Sorted Set ---- Top N keywords
 
 ```
 1. POST /api/v1/videos (multipart/form-data)
-   |-- JWT middleware validates token
-   |-- Handler validates file format (MP4/AVI/MKV/...)
-   |-- Saves raw file to TEMP_UPLOAD_DIR
-   |-- Inserts Video row (status: "processing")
-   +-- Publishes TranscodeJob to RabbitMQ
+   ├── JWT middleware validates token
+   ├── Handler validates file format (MP4/AVI/MKV/...)
+   ├── Saves raw file to TEMP_UPLOAD_DIR
+   ├── Inserts Video row (status: "processing")
+   └── Publishes TranscodeJob to RabbitMQ
 
 2. Worker consumes TranscodeJob
-   |-- FFmpeg: raw -> H.264 MP4 (out.mp4)
-   |-- FFmpeg: out.mp4 frame 1 -> cover.jpg (if no custom cover)
-   |-- OSS.UploadFile("videos/{id}.mp4", out.mp4)
-   |-- OSS.UploadFile("covers/{id}.jpg", cover.jpg)
-   |-- DB: UPDATE video SET video_url, cover_url, status
-   +-- Cleanup: remove temp files
+   ├── FFmpeg: raw → H.264 MP4 (out.mp4)
+   ├── FFmpeg: out.mp4 frame 1 → cover.jpg (if no custom cover)
+   ├── OSS.UploadFile("videos/{id}.mp4", out.mp4)
+   ├── OSS.UploadFile("covers/{id}.jpg", cover.jpg)
+   ├── DB: UPDATE video SET video_url, cover_url, status
+   └── Cleanup: remove temp files
 
-3. Client polls GET /videos/:id -> sees status transition
-   processing -> published (or failed with fail_reason)
+3. Client polls GET /videos/:id → sees status transition
+   processing → published (or failed with fail_reason)
 ```
 
 ---
@@ -252,7 +257,7 @@ Search queries ---- Redis Sorted Set ---- Top N keywords
 | `internal/pkg/*` | Unit tests (table-driven) | Username validation, BV id encoding, avatar path generation |
 | `internal/handler/*` | Unit tests (SQLite in-memory) | Auth flow, video draft CRUD |
 | `internal/handler/*` (integration tag) | Black-box against live server | Health check, video zone listing |
-| E2E | Manual | Login -> upload -> view danmaku -> search |
+| E2E | Manual | Login → upload → view danmaku → search |
 
 ```bash
 go test ./... -count=1
