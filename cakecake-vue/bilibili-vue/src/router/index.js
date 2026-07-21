@@ -303,6 +303,12 @@ const routes = [
         name: "adminAgent",
         component: () => import("@/pages/admin/AgentManage.vue"),
         meta: { title: "AI 角色 - 运营后台" }
+      },
+      {
+        path: "system-configs",
+        name: "adminSystemConfigs",
+        component: () => import("@/pages/admin/SystemConfigManage.vue"),
+        meta: { title: "运行时配置 - 运营后台" }
       }
     ]
   },

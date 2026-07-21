@@ -181,6 +181,14 @@ export function adminUploadAgentProfileAvatar(id, file) {
 }
 
 /** 主站首页轮播（公开接口） */
+export function adminListSystemConfigs() {
+  return adminHttp.get("/api/v1/admin/system-configs");
+}
+
+export function adminUpdateSystemConfigs(configs) {
+  return adminHttp.put("/api/v1/admin/system-configs", { configs });
+}
+
 export function getHomeBannersPublic() {
   if (!isMinibili) {
     return Promise.resolve({ code: 0, data: { items: [] } });

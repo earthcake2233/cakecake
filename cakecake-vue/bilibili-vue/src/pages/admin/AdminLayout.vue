@@ -56,6 +56,13 @@
         >
           AI 角色
         </router-link>
+        <router-link
+          :to="{ name: 'adminSystemConfigs' }"
+          class="adm-side__item"
+          active-class="adm-side__item--on"
+        >
+          运行时配置
+        </router-link>
       </aside>
       <main class="adm-main">
         <router-view />
