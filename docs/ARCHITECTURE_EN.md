@@ -1,4 +1,4 @@
-﻿# Cakecake Architecture
+# Cakecake Architecture
 
 ## Overview
 

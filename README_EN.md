@@ -1,4 +1,4 @@
-﻿<p align="center">
+<p align="center">
   <a href="README.md">
     <img src="https://img.shields.io/badge/🇨🇳中文-999999?style=flat-square" alt="中文">
   </a>
