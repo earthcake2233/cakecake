@@ -1,27 +1,28 @@
-﻿# Cakecake 系统架构
+﻿# Cakecake 绯荤粺鏋舵瀯
 
-## 概述
+## 姒傝堪
 
-Cakecake 是基于 Go + Vue 3 全栈构建的仿 B 站视频分享社区，聚焦视频投稿、实时弹幕、多级评论、全文搜索、AI 助手等核心链路。本文档面向面试和技术评审，梳理系统架构、核心模块设计、关键决策及数据流转。
+Cakecake 鏄熀浜?Go + Vue 3 鍏ㄦ爤鏋勫缓鐨勪豢 B 绔欒棰戝垎浜ぞ鍖猴紝鑱氱劍瑙嗛鎶曠銆佸疄鏃跺脊骞曘€佸绾ц瘎璁恒€佸叏鏂囨悳绱€丄I 鍔╂墜绛夋牳蹇冮摼璺€傛湰鏂囨。闈㈠悜闈㈣瘯鍜屾妧鏈瘎瀹★紝姊崇悊绯荤粺鏋舵瀯銆佹牳蹇冩ā鍧楄璁°€佸叧閿喅绛栧強鏁版嵁娴佽浆銆?
 
 ```mermaid
 graph TB
-    Browser["浏览器"]
+    Browser["娴忚鍣?]
     Nginx["Nginx (:443)"]
 
-    Vue["Vue 3 SPA<br/>Vite · TypeScript"]
+    Vue["Vue 3 SPA<br/>Vite 路 TypeScript"]
     Gin["Go API Server (Gin) :8080"]
 
     MySQL[("MySQL")]
     Redis[("Redis")]
     RMQ[("RabbitMQ")]
-    OSS[("阿里云 OSS")]
-    ES[("Elasticsearch<br/>可选")]
+    OSS[("闃块噷浜?OSS")]
+    ES[("Elasticsearch<br/>鍙€?)]
     DS["DeepSeek API"]
 
-    Browser -->|静态资源| Nginx
-    Browser -->|/api/v1| Nginx
-    Nginx -->|serve 静态文件| Vue
+    Browser -->|闈欐€佽祫婧恷 Nginx
+    RC["RuntimeConfig\n30绉?DB 杞"] -.-> Gin
+    Gin --> RC
+    RC --> MySQL
     Nginx -->|proxy API| Gin
     RL["Redis Token Bucket\nRate Limiter"] -.-> Gin
     Gin --> MySQL
@@ -35,97 +36,97 @@ graph TB
 
 ---
 
-## 项目结构
+## 椤圭洰缁撴瀯
 
 ```
 Minibili/
-├── cmd/mini-bili/main.go        # 入口：加载配置、初始化 DB、注册路由
-├── internal/
-│   ├── handler/                  # HTTP + WebSocket 处理器
-│   ├── service/                  # 业务逻辑层
-│   ├── model/                    # GORM 数据模型
-│   ├── middleware/               # JWT 鉴权、管理员鉴权、全局限流
-│   ├── worker/                   # RabbitMQ 消费者（转码）
-│   ├── ws/                       # WebSocket Hub（弹幕房间、私信）
-│   ├── search/                   # Elasticsearch 客户端与查询构建
-│   ├── storage/                  # 阿里云 OSS 客户端
-│   ├── ffmpeg/                   # FFmpeg 封装（转码、截帧）
-│   ├── aigateway/                # DeepSeek OpenAI 兼容客户端
-│   ├── queue/                    # RabbitMQ 连接管理
-│   ├── config/                   # 环境变量加载与配置结构体
-│   ├── logger/                   # Zap 日志初始化
-│   ├── errcode/                  # 业务错误码
-│   └── pkg/                      # 工具包：JWT、BV 号、IP 定位、敏感词、
-│       ├── jwttoken/             #   用户头像、等级、硬币、用户名校验...
-│       ├── bvid/
-│       ├── sensitive/
-│       └── ...
-├── configs/                      # sensitive_words.txt、ip2region_v4.xdb
-├── deploy/                       # Nginx 配置、systemd unit、生产环境变量模板
-├── docs/                         # 截图与指南
-├── cakecake-vue/bilibili-vue/    # Vue 3 + Vite + TypeScript 前端
-└── go.mod                        # module minibili
+鈹溾攢鈹€ cmd/mini-bili/main.go        # 鍏ュ彛锛氬姞杞介厤缃€佸垵濮嬪寲 DB銆佹敞鍐岃矾鐢?
+鈹溾攢鈹€ internal/
+鈹?  鈹溾攢鈹€ handler/                  # HTTP + WebSocket 澶勭悊鍣?
+鈹?  鈹溾攢鈹€ service/                  # 涓氬姟閫昏緫灞?
+鈹?  鈹溾攢鈹€ model/                    # GORM 鏁版嵁妯″瀷
+鈹?  鈹溾攢鈹€ middleware/               # JWT 閴存潈銆佺鐞嗗憳閴存潈銆佸叏灞€闄愭祦
+鈹?  鈹溾攢鈹€ worker/                   # RabbitMQ 娑堣垂鑰咃紙杞爜锛?
+鈹?  鈹溾攢鈹€ ws/                       # WebSocket Hub锛堝脊骞曟埧闂淬€佺淇★級
+鈹?  鈹溾攢鈹€ search/                   # Elasticsearch 瀹㈡埛绔笌鏌ヨ鏋勫缓
+鈹?  鈹溾攢鈹€ storage/                  # 闃块噷浜?OSS 瀹㈡埛绔?
+鈹?  鈹溾攢鈹€ ffmpeg/                   # FFmpeg 灏佽锛堣浆鐮併€佹埅甯э級
+鈹?  鈹溾攢鈹€ aigateway/                # DeepSeek OpenAI 鍏煎瀹㈡埛绔?
+鈹?  鈹溾攢鈹€ queue/                    # RabbitMQ 杩炴帴绠＄悊
+鈹?  鈹溾攢鈹€ config/                   # 鐜鍙橀噺鍔犺浇涓庨厤缃粨鏋勪綋
+鈹?  鈹溾攢鈹€ logger/                   # Zap 鏃ュ織鍒濆鍖?
+鈹?  鈹溾攢鈹€ errcode/                  # 涓氬姟閿欒鐮?
+鈹?  鈹斺攢鈹€ pkg/                      # 宸ュ叿鍖咃細JWT銆丅V 鍙枫€両P 瀹氫綅銆佹晱鎰熻瘝銆?
+鈹?      鈹溾攢鈹€ jwttoken/             #   鐢ㄦ埛澶村儚銆佺瓑绾с€佺‖甯併€佺敤鎴峰悕鏍￠獙...
+鈹?      鈹溾攢鈹€ bvid/
+鈹?      鈹溾攢鈹€ sensitive/
+鈹?      鈹斺攢鈹€ ...
+鈹溾攢鈹€ configs/                      # sensitive_words.txt銆乮p2region_v4.xdb
+鈹溾攢鈹€ deploy/                       # Nginx 閰嶇疆銆乻ystemd unit銆佺敓浜х幆澧冨彉閲忔ā鏉?
+鈹溾攢鈹€ docs/                         # 鎴浘涓庢寚鍗?
+鈹溾攢鈹€ cakecake-vue/bilibili-vue/    # Vue 3 + Vite + TypeScript 鍓嶇
+鈹斺攢鈹€ go.mod                        # module minibili
 ```
 
 ---
 
-## 核心模块
+## 鏍稿績妯″潡
 
-### 1. 实时弹幕系统
+### 1. 瀹炴椂寮瑰箷绯荤粺
 
-弹幕系统是整个项目技术难度最高的模块。通过 WebSocket + Redis Pub/Sub 架构实现端到端延迟低于 200ms。
+寮瑰箷绯荤粺鏄暣涓」鐩妧鏈毦搴︽渶楂樼殑妯″潡銆傞€氳繃 WebSocket + Redis Pub/Sub 鏋舵瀯瀹炵幇绔埌绔欢杩熶綆浜?200ms銆?
 
 ```mermaid
 sequenceDiagram
-    participant S as 发送者 (用户 B)
+    participant S as 鍙戦€佽€?(鐢ㄦ埛 B)
     participant API as API Server 1
     participant R as Redis Pub/Sub
     participant API2 as API Server 2
-    participant V1 as 观众 A
-    participant V2 as 观众 C
+    participant V1 as 瑙備紬 A
+    participant V2 as 瑙備紬 C
 
-    S->>API: POST /videos/:id/danmaku<br/>(HTTP, JWT 鉴权)
-    API->>API: 校验内容、冷却、敏感词
-    API->>API: 写入 MySQL<br/>danmaku_count +1
+    S->>API: POST /videos/:id/danmaku<br/>(HTTP, JWT 閴存潈)
+    API->>API: 鏍￠獙鍐呭銆佸喎鍗淬€佹晱鎰熻瘝
+    API->>API: 鍐欏叆 MySQL<br/>danmaku_count +1
     API->>R: PUBLISH danmaku:fanout
-    R-->>API: 广播到本机
-    R-->>API2: 广播到其他副本
-    API->>V1: WebSocket 推送 (房间内)
-    API2->>V2: WebSocket 推送 (房间内)
+    R-->>API: 骞挎挱鍒版湰鏈?
+    R-->>API2: 骞挎挱鍒板叾浠栧壇鏈?
+    API->>V1: WebSocket 鎺ㄩ€?(鎴块棿鍐?
+    API2->>V2: WebSocket 鎺ㄩ€?(鎴块棿鍐?
 ```
 
-**流程：**
+**娴佺▼锛?*
 
-1. 发送者调用 `POST /api/v1/videos/:id/danmaku`（HTTP，需 JWT 鉴权）
-2. 服务端校验内容（1~100 字符）、颜色（`#XXXXXX`）、类型（scroll/top/bottom），检查 5 秒冷却（Redis `SETNX`），敏感词过滤
-3. 弹幕写入 MySQL，视频 `danmaku_count` +1
-4. 将 JSON 载荷发布到 Redis 频道 `danmaku:fanout`
-5. 每个服务副本订阅该频道，收到消息后调用 `Hub.BroadcastRaw(videoID, body)` 向本地连接池广播
-6. `ws.Hub` 遍历目标视频房间的所有 WebSocket 连接，逐条写入 JSON 消息
-7. 观众通过 `GET /api/v1/ws/danmaku?video_id=...` 建立 WebSocket 连接，加入对应房间，实时接收弹幕
+1. 鍙戦€佽€呰皟鐢?`POST /api/v1/videos/:id/danmaku`锛圚TTP锛岄渶 JWT 閴存潈锛?
+2. 鏈嶅姟绔牎楠屽唴瀹癸紙1~100 瀛楃锛夈€侀鑹诧紙`#XXXXXX`锛夈€佺被鍨嬶紙scroll/top/bottom锛夛紝妫€鏌?5 绉掑喎鍗达紙Redis `SETNX`锛夛紝鏁忔劅璇嶈繃婊?
+3. 寮瑰箷鍐欏叆 MySQL锛岃棰?`danmaku_count` +1
+4. 灏?JSON 杞借嵎鍙戝竷鍒?Redis 棰戦亾 `danmaku:fanout`
+5. 姣忎釜鏈嶅姟鍓湰璁㈤槄璇ラ閬擄紝鏀跺埌娑堟伅鍚庤皟鐢?`Hub.BroadcastRaw(videoID, body)` 鍚戞湰鍦拌繛鎺ユ睜骞挎挱
+6. `ws.Hub` 閬嶅巻鐩爣瑙嗛鎴块棿鐨勬墍鏈?WebSocket 杩炴帴锛岄€愭潯鍐欏叆 JSON 娑堟伅
+7. 瑙備紬閫氳繃 `GET /api/v1/ws/danmaku?video_id=...` 寤虹珛 WebSocket 杩炴帴锛屽姞鍏ュ搴旀埧闂达紝瀹炴椂鎺ユ敹寮瑰箷
 
-**关键设计决策：**
+**鍏抽敭璁捐鍐崇瓥锛?*
 
-| 决策                                                            | 理由                                                       |
+| 鍐崇瓥                                                            | 鐞嗙敱                                                       |
 | --------------------------------------------------------------- | ---------------------------------------------------------- |
-| Redis Pub/Sub 做多副本广播                                      | 解耦广播逻辑，新副本自动接收消息，无需共享内存即可水平扩展 |
-| 按视频房间分连接池（`map[uint64]map[*websocket.Conn]struct{}`） | O(1) 房间广播，无跨房间扫描开销                            |
-| SETNX 做冷却而非全局限流中间件                                  | 冷却粒度是"每用户每视频"，比通用令牌桶更简洁               |
-| 弹幕不在 Redis 中持久化                                         | 弹幕是实时数据，MySQL 是历史唯一数据源                     |
+| Redis Pub/Sub 鍋氬鍓湰骞挎挱                                      | 瑙ｈ€﹀箍鎾€昏緫锛屾柊鍓湰鑷姩鎺ユ敹娑堟伅锛屾棤闇€鍏变韩鍐呭瓨鍗冲彲姘村钩鎵╁睍 |
+| 鎸夎棰戞埧闂村垎杩炴帴姹狅紙`map[uint64]map[*websocket.Conn]struct{}`锛?| O(1) 鎴块棿骞挎挱锛屾棤璺ㄦ埧闂存壂鎻忓紑閿€                            |
+| SETNX 鍋氬喎鍗磋€岄潪鍏ㄥ眬闄愭祦涓棿浠?                                 | 鍐峰嵈绮掑害鏄?姣忕敤鎴锋瘡瑙嗛"锛屾瘮閫氱敤浠ょ墝妗舵洿绠€娲?              |
+| 寮瑰箷涓嶅湪 Redis 涓寔涔呭寲                                         | 寮瑰箷鏄疄鏃舵暟鎹紝MySQL 鏄巻鍙插敮涓€鏁版嵁婧?                    |
 
 ---
 
-### 2. 视频异步转码流水线
+### 2. 瑙嗛寮傛杞爜娴佹按绾?
 
 ```mermaid
 sequenceDiagram
-    participant C as UP 主
+    participant C as UP 涓?
     participant API as API Server
     participant DB as MySQL
     participant RMQ as RabbitMQ
     participant W as Worker (goroutine)
     participant FF as FFmpeg
-    participant OSS as 阿里云 OSS
+    participant OSS as 闃块噷浜?OSS
 
     C->>API: POST /videos (multipart/form-data)
     API->>DB: INSERT video (status: processing)
@@ -133,140 +134,145 @@ sequenceDiagram
     API-->>C: 200 OK (video_id)
 
     RMQ->>W: CONSUME TranscodeJob
-    W->>FF: 转码 → H.264 MP4
+    W->>FF: 杞爜 鈫?H.264 MP4
     FF-->>W: out.mp4
-    W->>FF: 截取第 1 帧 → cover.jpg
+    W->>FF: 鎴彇绗?1 甯?鈫?cover.jpg
     FF-->>W: cover.jpg
     W->>OSS: UPLOAD videos/{id}.mp4
     W->>OSS: UPLOAD covers/{id}.jpg
     W->>DB: UPDATE video_url, cover_url, status=published
-    W->>W: 清理临时文件
+    W->>W: 娓呯悊涓存椂鏂囦欢
 ```
 
-**流程：**
+**娴佺▼锛?*
 
-1. UP 主上传原始视频 + 可选自定义封面 → `POST /api/v1/videos`
-2. 服务端写入 MySQL（status: `processing`），原始文件存入临时目录
-3. 投递 `TranscodeJob{VideoID, RawPath, CoverPath}` 到 RabbitMQ `transcode` 队列
-4. Worker 协程消费任务：FFmpeg 转 H.264 MP4 → 截取第 1 帧为封面 → 上传 OSS
-5. 成功：更新 `video_url`、`cover_url`，status → `published`
-6. 失败：最多重试 **3 次**，指数退避（30s → 60s → 90s）。永久性失败标记 `failed` 并记录可读原因，瞬时失败重新入队
+1. UP 涓讳笂浼犲師濮嬭棰?+ 鍙€夎嚜瀹氫箟灏侀潰 鈫?`POST /api/v1/videos`
+2. 鏈嶅姟绔啓鍏?MySQL锛坰tatus: `processing`锛夛紝鍘熷鏂囦欢瀛樺叆涓存椂鐩綍
+3. 鎶曢€?`TranscodeJob{VideoID, RawPath, CoverPath}` 鍒?RabbitMQ `transcode` 闃熷垪
+4. Worker 鍗忕▼娑堣垂浠诲姟锛欶Fmpeg 杞?H.264 MP4 鈫?鎴彇绗?1 甯т负灏侀潰 鈫?涓婁紶 OSS
+5. 鎴愬姛锛氭洿鏂?`video_url`銆乣cover_url`锛宻tatus 鈫?`published`
+6. 澶辫触锛氭渶澶氶噸璇?**3 娆?*锛屾寚鏁伴€€閬匡紙30s 鈫?60s 鈫?90s锛夈€傛案涔呮€уけ璐ユ爣璁?`failed` 骞惰褰曞彲璇诲師鍥狅紝鐬椂澶辫触閲嶆柊鍏ラ槦
 
-**失败分类：**
+**澶辫触鍒嗙被锛?*
 
-| 类型   | 检测方式                                         | 处理                                       |
+| 绫诲瀷   | 妫€娴嬫柟寮?                                        | 澶勭悊                                       |
 | ------ | ------------------------------------------------ | ------------------------------------------ |
-| 永久性 | FFmpeg stderr 匹配已知模式（非法编码、损坏文件） | 标记`failed`，存储 `fail_reason`，ack 消息 |
-| 瞬时性 | 超时、OSS 网络错误、磁盘满                       | 重试计数 +1，重新入队                      |
-| 耗尽   | `retry_count >= 3`                               | 标记`failed`，ack 消息                     |
+| 姘镐箙鎬?| FFmpeg stderr 鍖归厤宸茬煡妯″紡锛堥潪娉曠紪鐮併€佹崯鍧忔枃浠讹級 | 鏍囪`failed`锛屽瓨鍌?`fail_reason`锛宎ck 娑堟伅 |
+| 鐬椂鎬?| 瓒呮椂銆丱SS 缃戠粶閿欒銆佺鐩樻弧                       | 閲嶈瘯璁℃暟 +1锛岄噸鏂板叆闃?                     |
+| 鑰楀敖   | `retry_count >= 3`                               | 鏍囪`failed`锛宎ck 娑堟伅                     |
 
 ---
 
-### 3. 全文搜索（Elasticsearch）
+### 3. 鍏ㄦ枃鎼滅储锛圗lasticsearch锛?
 
-- **三个索引**：`videos`（标题、描述、标签、分区）、`articles`（标题、正文、分类）、`users`（昵称、用户名、签名）
-- **多字段权重**：视频 title^3, description^1.5；用户昵称支持 wildcard `query_string` 模糊匹配
-- **高亮**：返回 `<em class="keyword">命中词</em>` 片段
-- **排序**：默认（相关性）、发布日期、播放量、点赞数
-- **可选降级**：ES 未配置时搜索页提示"搜索服务未就绪"，不影响其他功能
-
----
-
-### 4. 评论系统
-
-- **2 级嵌套**：根评论 → 子评论 → 孙评论。GORM 通过 `Preload("Children.Children")` 单次查询组装评论树
-- **级联删除**：删除父评论时递归删除所有后代（应用层实现，不依赖数据库外键）
-- **UP 主管理**：视频作者可删除任意评论；普通用户仅可删除自己的评论
-- **点赞/踩**：toggle 模式——查询是否存在记录，插入或删除，原子更新计数器
+- **涓変釜绱㈠紩**锛歚videos`锛堟爣棰樸€佹弿杩般€佹爣绛俱€佸垎鍖猴級銆乣articles`锛堟爣棰樸€佹鏂囥€佸垎绫伙級銆乣users`锛堟樀绉般€佺敤鎴峰悕銆佺鍚嶏級
+- **澶氬瓧娈垫潈閲?*锛氳棰?title^3, description^1.5锛涚敤鎴锋樀绉版敮鎸?wildcard `query_string` 妯＄硦鍖归厤
+- **楂樹寒**锛氳繑鍥?`<em class="keyword">鍛戒腑璇?/em>` 鐗囨
+- **鎺掑簭**锛氶粯璁わ紙鐩稿叧鎬э級銆佸彂甯冩棩鏈熴€佹挱鏀鹃噺銆佺偣璧炴暟
+- **鍙€夐檷绾?*锛欵S 鏈厤缃椂鎼滅储椤垫彁绀?鎼滅储鏈嶅姟鏈氨缁?锛屼笉褰卞搷鍏朵粬鍔熻兘
 
 ---
 
-### 5. 热搜系统
+### 4. 璇勮绯荤粺
+
+- **2 绾у祵濂?*锛氭牴璇勮 鈫?瀛愯瘎璁?鈫?瀛欒瘎璁恒€侴ORM 閫氳繃 `Preload("Children.Children")` 鍗曟鏌ヨ缁勮璇勮鏍?
+- **绾ц仈鍒犻櫎**锛氬垹闄ょ埗璇勮鏃堕€掑綊鍒犻櫎鎵€鏈夊悗浠ｏ紙搴旂敤灞傚疄鐜帮紝涓嶄緷璧栨暟鎹簱澶栭敭锛?
+- **UP 涓荤鐞?*锛氳棰戜綔鑰呭彲鍒犻櫎浠绘剰璇勮锛涙櫘閫氱敤鎴蜂粎鍙垹闄よ嚜宸辩殑璇勮
+- **鐐硅禐/韪?*锛歵oggle 妯″紡鈥斺€旀煡璇㈡槸鍚﹀瓨鍦ㄨ褰曪紝鎻掑叆鎴栧垹闄わ紝鍘熷瓙鏇存柊璁℃暟鍣?
+
+---
+
+### 5. 鐑悳绯荤粺
 
 ```mermaid
 flowchart LR
-    Q[搜索关键词<br/>ZINCRBY] --> RS[("Redis Sorted Set<br/>hot:search")]
-    RS --> T[Top N 按 score 降序]
-    T --> M[合并引擎]
-    DB[(人工干预 DB<br/>置顶 / 屏蔽 /<br/>自定义标题 / 角标)] --> M
-    M --> L[最终榜单<br/>最多 20 条]
+    Q[鎼滅储鍏抽敭璇?br/>ZINCRBY] --> RS[("Redis Sorted Set<br/>hot:search")]
+    RS --> T[Top N 鎸?score 闄嶅簭]
+    T --> M[鍚堝苟寮曟搸]
+    DB[(浜哄伐骞查 DB<br/>缃《 / 灞忚斀 /<br/>鑷畾涔夋爣棰?/ 瑙掓爣)] --> M
+    M --> L[鏈€缁堟鍗?br/>鏈€澶?20 鏉
 ```
 
-- **自动**：用户搜索行为通过 Redis ZINCRBY 累计热度
-- **人工**：管理后台支持置顶、屏蔽、自定义展示词、角标（"热"、"新"）
-- **合并**：人工条目优先占位，自动条目填充剩余槽位，屏蔽词过滤
+- **鑷姩**锛氱敤鎴锋悳绱㈣涓洪€氳繃 Redis ZINCRBY 绱鐑害
+- **浜哄伐**锛氱鐞嗗悗鍙版敮鎸佺疆椤躲€佸睆钄姐€佽嚜瀹氫箟灞曠ず璇嶃€佽鏍囷紙"鐑?銆?鏂?锛?
+- **鍚堝苟**锛氫汉宸ユ潯鐩紭鍏堝崰浣嶏紝鑷姩鏉＄洰濉厖鍓╀綑妲戒綅锛屽睆钄借瘝杩囨护
 
 ---
 
-### 6. AI 助手（DeepSeek）
+### 6. AI 鍔╂墜锛圖eepSeek锛?
 
-- 封装 OpenAI 兼容客户端（`internal/aigateway/deepseek.go`）
-- 用户发起私信对话；管理员后台配置 Agent 角色（名称、头像、系统提示词）
-- 消息携带对话历史作为上下文，Agent 回复插入同一对话线程
-- Temperature: 0.7，超时: 90s，未启用流式（私信场景更简单可靠）
+- 灏佽 OpenAI 鍏煎瀹㈡埛绔紙`internal/aigateway/deepseek.go`锛?
+- 鐢ㄦ埛鍙戣捣绉佷俊瀵硅瘽锛涚鐞嗗憳鍚庡彴閰嶇疆 Agent 瑙掕壊锛堝悕绉般€佸ご鍍忋€佺郴缁熸彁绀鸿瘝锛?
+- 娑堟伅鎼哄甫瀵硅瘽鍘嗗彶浣滀负涓婁笅鏂囷紝Agent 鍥炲鎻掑叆鍚屼竴瀵硅瘽绾跨▼
+- Temperature: 0.7锛岃秴鏃? 90s锛屾湭鍚敤娴佸紡锛堢淇″満鏅洿绠€鍗曞彲闈狅級
 
 ---
 
-## 存储策略
+## 瀛樺偍绛栫暐
 
-| 数据类型                                | 存储          | 理由                           |
+| 鏁版嵁绫诲瀷                                | 瀛樺偍          | 鐞嗙敱                           |
 | --------------------------------------- | ------------- | ------------------------------ |
-| 用户、视频元数据、评论、通知、草稿      | MySQL         | 关系完整性、复杂查询           |
-| 视频文件、封面、头像                    | 阿里云 OSS    | 弹性扩容、CDN 就绪             |
-| 弹幕广播、播放计数、冷却、Refresh Token | Redis         | 低延迟、数据可丢失             |
-| 转码任务                                | RabbitMQ      | 持久化、ACK 确认、精确一次投递 |
-| 搜索索引                                | Elasticsearch | 倒排索引、相关性评分           |
+| 鐢ㄦ埛銆佽棰戝厓鏁版嵁銆佽瘎璁恒€侀€氱煡銆佽崏绋?     | MySQL         | 鍏崇郴瀹屾暣鎬с€佸鏉傛煡璇?          |
+| 瑙嗛鏂囦欢銆佸皝闈€佸ご鍍?                   | 闃块噷浜?OSS    | 寮规€ф墿瀹广€丆DN 灏辩华             |
+| 寮瑰箷骞挎挱銆佹挱鏀捐鏁般€佸喎鍗淬€丷efresh Token | Redis         | 浣庡欢杩熴€佹暟鎹彲涓㈠け             |
+| 杞爜浠诲姟                                | RabbitMQ      | 鎸佷箙鍖栥€丄CK 纭銆佺簿纭竴娆℃姇閫?|
+| 鎼滅储绱㈠紩                                | Elasticsearch | 鍊掓帓绱㈠紩銆佺浉鍏虫€ц瘎鍒?          |
 
 ---
 
-## 关键设计决策
+## 鍏抽敭璁捐鍐崇瓥
 
-| 决策                                                  | 理由                                                                                                                            |
+| 鍐崇瓥                                                  | 鐞嗙敱                                                                                                                            |
 | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| **v1 用单体而非微服务**                               | 单人开发，快速迭代。代码按领域分层（`handler/`、`service/`、`worker/`），为后续拆分为 Kratos 微服务预留空间                     |
-| **Redis Pub/Sub 做弹幕广播中继，而非 WebSocket 直发** | 解耦广播与 HTTP handler。多副本订阅同一 Redis 频道，无需共享内存即可水平扩展                                                    |
-| **转码用 RabbitMQ 而非 Redis List**                   | RabbitMQ 提供消息持久化、消费确认、死信队列——视频处理不可接受数据丢失                                                           |
-| **GORM AutoMigrate 而非 SQL 迁移文件**                | 单人项目简化操作，表结构通过 Go struct 声明，启动时自动建表                                                                     |
-| **ES 可选而非强制依赖**                               | 降低上手门槛，未配置时搜索页优雅降级                                                                                            |
-| **Redis 令牌桶做全局限流**                            | 保护列表、搜索、空间等公开接口不受突发/爬虫打垮；按 IP 维度限流；Lua 脚本保证令牌桶原子性；桶容量支持短时突发，速率限制稳态 QPS |
-| **bcrypt + 双 Token JWT**                             | 行业标准认证方案，Access/Refresh 双 Token + Redis 管理 Refresh Token 轮转                                                       |
+| **v1 鐢ㄥ崟浣撹€岄潪寰湇鍔?*                               | 鍗曚汉寮€鍙戯紝蹇€熻凯浠ｃ€備唬鐮佹寜棰嗗煙鍒嗗眰锛坄handler/`銆乣service/`銆乣worker/`锛夛紝涓哄悗缁媶鍒嗕负 Kratos 寰湇鍔￠鐣欑┖闂?                    |
+| **Redis Pub/Sub 鍋氬脊骞曞箍鎾腑缁э紝鑰岄潪 WebSocket 鐩村彂** | 瑙ｈ€﹀箍鎾笌 HTTP handler銆傚鍓湰璁㈤槄鍚屼竴 Redis 棰戦亾锛屾棤闇€鍏变韩鍐呭瓨鍗冲彲姘村钩鎵╁睍                                                    |
+| **杞爜鐢?RabbitMQ 鑰岄潪 Redis List**                   | RabbitMQ 鎻愪緵娑堟伅鎸佷箙鍖栥€佹秷璐圭‘璁ゃ€佹淇￠槦鍒椻€斺€旇棰戝鐞嗕笉鍙帴鍙楁暟鎹涪澶?                                                          |
+| **GORM AutoMigrate 鑰岄潪 SQL 杩佺Щ鏂囦欢**                | 鍗曚汉椤圭洰绠€鍖栨搷浣滐紝琛ㄧ粨鏋勯€氳繃 Go struct 澹版槑锛屽惎鍔ㄦ椂鑷姩寤鸿〃                                                                     |
+| **ES 鍙€夎€岄潪寮哄埗渚濊禆**                               | 闄嶄綆涓婃墜闂ㄦ锛屾湭閰嶇疆鏃舵悳绱㈤〉浼橀泤闄嶇骇                                                                                            |
+| **Redis 浠ょ墝妗跺仛鍏ㄥ眬闄愭祦**                            | 淇濇姢鍒楄〃銆佹悳绱€佺┖闂寸瓑鍏紑鎺ュ彛涓嶅彈绐佸彂/鐖櫕鎵撳灝锛涙寜 IP 缁村害闄愭祦锛汱ua 鑴氭湰淇濊瘉浠ょ墝妗跺師瀛愭€э紱妗跺閲忔敮鎸佺煭鏃剁獊鍙戯紝閫熺巼闄愬埗绋虫€?QPS |
+| **bcrypt + 鍙?Token JWT**                             | 琛屼笟鏍囧噯璁よ瘉鏂规锛孉ccess/Refresh 鍙?Token + Redis 绠＄悊 Refresh Token 杞浆                                                       |
 
 ---
 
-## 端到端数据流：视频投稿
+## 绔埌绔暟鎹祦锛氳棰戞姇绋?
 
 ```
 1. POST /api/v1/videos (multipart/form-data)
-   ├── JWT 中间件校验 Token
-   ├── Handler 校验文件格式 (MP4/AVI/MKV/...)
-   ├── 原始文件存入 TEMP_UPLOAD_DIR
-   ├── 写入 Video 记录 (status: "processing")
-   └── 投递 TranscodeJob 到 RabbitMQ
+   鈹溾攢鈹€ JWT 涓棿浠舵牎楠?Token
+   鈹溾攢鈹€ Handler 鏍￠獙鏂囦欢鏍煎紡 (MP4/AVI/MKV/...)
+   鈹溾攢鈹€ 鍘熷鏂囦欢瀛樺叆 TEMP_UPLOAD_DIR
+   鈹溾攢鈹€ 鍐欏叆 Video 璁板綍 (status: "processing")
+   鈹斺攢鈹€ 鎶曢€?TranscodeJob 鍒?RabbitMQ
 
-2. Worker 消费 TranscodeJob
-   ├── FFmpeg: 原始文件 → H.264 MP4 (out.mp4)
-   ├── FFmpeg: out.mp4 第 1 帧 → cover.jpg（无自定义封面时）
-   ├── OSS.UploadFile("videos/{id}.mp4", out.mp4)
-   ├── OSS.UploadFile("covers/{id}.jpg", cover.jpg)
-   ├── DB: UPDATE video SET video_url, cover_url, status
-   └── 清理临时文件
+2. Worker 娑堣垂 TranscodeJob
+   鈹溾攢鈹€ FFmpeg: 鍘熷鏂囦欢 鈫?H.264 MP4 (out.mp4)
+   鈹溾攢鈹€ FFmpeg: out.mp4 绗?1 甯?鈫?cover.jpg锛堟棤鑷畾涔夊皝闈㈡椂锛?
+   鈹溾攢鈹€ OSS.UploadFile("videos/{id}.mp4", out.mp4)
+   鈹溾攢鈹€ OSS.UploadFile("covers/{id}.jpg", cover.jpg)
+   鈹溾攢鈹€ DB: UPDATE video SET video_url, cover_url, status
+   鈹斺攢鈹€ 娓呯悊涓存椂鏂囦欢
 
-3. 客户端轮询 GET /videos/:id → 观察状态变化
-   processing → published（或 failed + fail_reason）
+3. 瀹㈡埛绔疆璇?GET /videos/:id 鈫?瑙傚療鐘舵€佸彉鍖?
+   processing 鈫?published锛堟垨 failed + fail_reason锛?
 ```
 
 ---
 
-## 测试策略
+## 娴嬭瘯绛栫暐
 
-| 层级                                    | 范围                      | 示例                                                |
+| 灞傜骇                                    | 鑼冨洿                      | 绀轰緥                                                |
 | --------------------------------------- | ------------------------- | --------------------------------------------------- |
-| `internal/pkg/*`                        | 单元测试（表驱动）        | 用户名校验、BV 号编解码、头像路径生成               |
-| `internal/handler/*`                    | 单元测试（SQLite 内存库） | 登录注册流程、视频草稿 CRUD、弹幕发布、评论级联删除 |
-| `internal/handler/*` (integration 标签) | 黑盒测试（连真实服务）    | 健康检查、视频分区列表                              |
-| E2E                                     | 手动                      | 登录 → 投稿 → 观看弹幕 → 搜索                       |
+| `internal/pkg/*`                        | 鍗曞厓娴嬭瘯锛堣〃椹卞姩锛?       | 鐢ㄦ埛鍚嶆牎楠屻€丅V 鍙风紪瑙ｇ爜銆佸ご鍍忚矾寰勭敓鎴?              |
+| `internal/handler/*`                    | 鍗曞厓娴嬭瘯锛圫QLite 鍐呭瓨搴擄級 | 鐧诲綍娉ㄥ唽娴佺▼銆佽棰戣崏绋?CRUD銆佸脊骞曞彂甯冦€佽瘎璁虹骇鑱斿垹闄?|
+| `internal/handler/*` (integration 鏍囩) | 榛戠洅娴嬭瘯锛堣繛鐪熷疄鏈嶅姟锛?   | 鍋ュ悍妫€鏌ャ€佽棰戝垎鍖哄垪琛?                             |
+| E2E                                     | 鎵嬪姩                      | 鐧诲綍 鈫?鎶曠 鈫?瑙傜湅寮瑰箷 鈫?鎼滅储                       |
 
 ```bash
 go test ./... -count=1
 go test -tags=integration ./internal/handler/... -count=1
 ```
+
+
+
+
+

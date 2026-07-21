@@ -1,4 +1,4 @@
-package middleware
+﻿package middleware
 
 import (
 	"fmt"
@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
 
+	"minibili/internal/config"
 	"minibili/internal/errcode"
 	"minibili/internal/pkg/resp"
 )
@@ -41,19 +42,27 @@ else
 end
 `
 
+var tokenBucketScriptSHA string
+var scriptLoadOnce sync.Once
+
+// RateLimiter implements an IP-based token bucket rate limiter backed by Redis.
+// When a RuntimeConfig is provided, rate/burst values are read dynamically per-request.
 type RateLimiter struct {
-	rdb   *redis.Client
-	rate  float64
-	burst int
-	sha   string
-	mu    sync.Mutex
+	rdb          *redis.Client
+	rc           *config.RuntimeConfig
+	defaultRate  float64
+	defaultBurst int
+	sha          string
+	mu           sync.Mutex
 }
 
-func NewRateLimiter(rdb *redis.Client, rate float64, burst int) *RateLimiter {
+// NewRateLimiter creates a RateLimiter. Pass an optional RuntimeConfig for dynamic tuning.
+func NewRateLimiter(rdb *redis.Client, rc *config.RuntimeConfig, defaultRate float64, defaultBurst int) *RateLimiter {
 	return &RateLimiter{
-		rdb:   rdb,
-		rate:  rate,
-		burst: burst,
+		rdb:          rdb,
+		rc:           rc,
+		defaultRate:  defaultRate,
+		defaultBurst: defaultBurst,
 	}
 }
 
@@ -73,10 +82,24 @@ func (rl *RateLimiter) loadScript() (string, error) {
 
 func (rl *RateLimiter) RateLimit() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// Check dynamic enabled flag
+		if rl.rc != nil && !rl.rc.GetBool("rate_limit_enabled", rl.defaultRate > 0) {
+			c.Next()
+			return
+		}
 		if strings.EqualFold(c.GetHeader("Upgrade"), "websocket") {
 			c.Next()
 			return
 		}
+
+		// Read dynamic rate/burst from RuntimeConfig
+		rate := rl.defaultRate
+		burst := rl.defaultBurst
+		if rl.rc != nil {
+			rate = rl.rc.GetFloat("rate_limit_rate", rate)
+			burst = rl.rc.GetInt("rate_limit_burst", burst)
+		}
+
 		ip := c.ClientIP()
 		key := "ratelimit:" + ip
 		now := time.Now().Unix()
@@ -85,7 +108,7 @@ func (rl *RateLimiter) RateLimit() gin.HandlerFunc {
 			c.Next()
 			return
 		}
-		result, err := rl.rdb.EvalSha(context.Background(), sha, []string{key}, rl.rate, rl.burst, now, 1).Result()
+		result, err := rl.rdb.EvalSha(context.Background(), sha, []string{key}, rate, burst, now, 1).Result()
 		if err != nil {
 			c.Next()
 			return

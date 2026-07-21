@@ -1,4 +1,4 @@
-package service
+﻿package service
 
 import (
 	"context"
@@ -28,10 +28,18 @@ type AgentService struct {
 	Sens    *sensitive.Filter
 	ChatHub *ws.ChatHub
 	Log     *zap.Logger
+	RC      *config.RuntimeConfig
 }
 
 func (s *AgentService) gatewayReady() bool {
-	return s != nil && s.Cfg != nil && s.Cfg.AgentEnabled && s.Gateway != nil && s.Gateway.LLM != nil &&
+	enabled := false
+	if s.RC != nil {
+		enabled = s.RC.GetBool("agent_enabled", s.Cfg != nil && s.Cfg.AgentEnabled)
+	}
+	if !enabled && s.Cfg != nil {
+		enabled = s.Cfg.AgentEnabled
+	}
+	return s != nil && enabled && s.Gateway != nil && s.Gateway.LLM != nil &&
 		strings.TrimSpace(s.Cfg.DeepSeekAPIKey) != ""
 }
 
@@ -41,14 +49,21 @@ func (s *AgentService) quotaKey(userID uint64) string {
 }
 
 func (s *AgentService) CheckQuota(ctx context.Context, userID uint64) bool {
-	if s == nil || s.Redis == nil || s.Cfg == nil || s.Cfg.AgentDailyQuota <= 0 {
+	if s == nil || s.Redis == nil || s.Cfg == nil {
+		return true
+	}
+	quota := s.Cfg.AgentDailyQuota
+	if s.RC != nil {
+		quota = s.RC.GetInt("agent_daily_quota", quota)
+	}
+	if quota <= 0 {
 		return true
 	}
 	n, err := s.Redis.Get(ctx, s.quotaKey(userID)).Int()
 	if err == redis.Nil {
 		return true
 	}
-	return err != nil || n < s.Cfg.AgentDailyQuota
+	return err != nil || n < quota
 }
 
 func (s *AgentService) IncrQuota(ctx context.Context, userID uint64) {
@@ -128,7 +143,7 @@ func (s *AgentService) PostAssistantMessage(conv *model.DmConversation, humanID 
 	preview := content
 	if utf8.RuneCountInString(preview) > 80 {
 		r := []rune(preview)
-		preview = string(r[:80]) + "…"
+		preview = string(r[:80]) + "..."
 	}
 	if err := tx.Model(conv).Updates(map[string]interface{}{
 		"last_message_at": now,
@@ -153,10 +168,25 @@ func (s *AgentService) PostAssistantMessage(conv *model.DmConversation, humanID 
 	return &msg, nil
 }
 
+func (s *AgentService) applyDynamicGatewayConfig() {
+	if s.Gateway == nil || s.RC == nil {
+		return
+	}
+	if v := s.RC.GetInt("agent_max_history", s.Gateway.MaxHistory); v > 0 {
+		s.Gateway.MaxHistory = v
+	}
+	if v := s.RC.Get("agent_history_ttl", ""); v != "" {
+		if d, err := time.ParseDuration(v); err == nil && d > 0 {
+			s.Gateway.HistoryTTL = d
+		}
+	}
+}
+
 func (s *AgentService) GenerateReply(ctx context.Context, conv *model.DmConversation, userText string) (string, error) {
 	if !s.gatewayReady() {
 		return "", fmt.Errorf("ai assistant is not configured")
 	}
+	s.applyDynamicGatewayConfig()
 	profile, err := s.profileForConversation(conv)
 	if err != nil {
 		return "", fmt.Errorf("ai assistant profile missing")
@@ -177,9 +207,16 @@ func (s *AgentService) GenerateReply(ctx context.Context, conv *model.DmConversa
 	s.Gateway.SystemPrompt = prompt
 	defer func() { s.Gateway.SystemPrompt = prev }()
 
-	timeout := s.Cfg.AgentRequestTimeout
-	if timeout <= 0 {
-		timeout = 90 * time.Second
+	timeout := 90 * time.Second
+	if s.Cfg != nil && s.Cfg.AgentRequestTimeout > 0 {
+		timeout = s.Cfg.AgentRequestTimeout
+	}
+	if s.RC != nil {
+		if v := s.RC.Get("agent_request_timeout", ""); v != "" {
+			if d, err := time.ParseDuration(v); err == nil && d > 0 {
+				timeout = d
+			}
+		}
 	}
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
@@ -209,7 +246,7 @@ func (s *AgentService) ResetConversation(ctx context.Context, conv *model.DmConv
 	preview := welcome
 	if utf8.RuneCountInString(preview) > 80 {
 		r := []rune(preview)
-		preview = string(r[:80]) + "…"
+		preview = string(r[:80]) + "..."
 	}
 	msg := model.DmMessage{
 		ConversationID: conv.ID,

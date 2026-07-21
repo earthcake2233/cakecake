@@ -1,10 +1,11 @@
-package main
+﻿package main
 
 import (
 	"context"
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -42,7 +43,7 @@ func main() {
 
 	ffmpeg.Init(cfg.FFprobePath, cfg.FFmpegPath)
 	if err := ffmpeg.CheckFFprobe(); err != nil {
-		log.Warn("ffprobe 不可用，视频上传将返回 40009，直至 PATH 或 FFPROBE_PATH 配置正确",
+		log.Warn("ffprobe 不可用，视频上传将返回 40009，直到 PATH 或 FFPROBE_PATH 配置正确",
 			zap.String("ffprobe", ffmpeg.FFprobeExe()),
 			zap.Error(err),
 		)
@@ -92,6 +93,22 @@ func main() {
 	if err := data.EnsureAgentProfiles(db, cfg, log); err != nil {
 		log.Warn("ensure agent profiles", zap.Error(err))
 	}
+
+	// Runtime config: seeded from env, periodically refreshed from DB.
+	runtimeCfg := config.NewRuntimeConfig(db, map[string]string{
+		"agent_enabled":        strconv.FormatBool(cfg.AgentEnabled),
+		"agent_daily_quota":    strconv.Itoa(cfg.AgentDailyQuota),
+		"agent_max_history":    strconv.Itoa(cfg.AgentMaxHistory),
+		"agent_history_ttl":    cfg.AgentHistoryTTL.String(),
+		"agent_request_timeout": cfg.AgentRequestTimeout.String(),
+		"rate_limit_enabled":   strconv.FormatBool(cfg.RateLimitEnabled),
+		"rate_limit_rate":      strconv.FormatFloat(cfg.RateLimitRate, 'f', -1, 64),
+		"rate_limit_burst":     strconv.Itoa(cfg.RateLimitBurst),
+	})
+	runtimeCtx, runtimeCancel := context.WithCancel(context.Background())
+	defer runtimeCancel()
+	runtimeCfg.Start(runtimeCtx)
+	log.Info("runtime config initialized")
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -174,24 +191,22 @@ func main() {
 	} else {
 		log.Info("ai gateway disabled (DEEPSEEK_API_KEY empty)")
 	}
-	var rl *middleware.RateLimiter
-	if cfg.RateLimitEnabled {
-		rl = middleware.NewRateLimiter(rdb, cfg.RateLimitRate, cfg.RateLimitBurst)
-		log.Info("rate limiter enabled",
-			zap.Float64("rate", cfg.RateLimitRate),
-			zap.Int("burst", cfg.RateLimitBurst),
-		)
-	}
+	// Always create the rate limiter middleware; dynamic config controls whether it blocks.
+	rl := middleware.NewRateLimiter(rdb, runtimeCfg, cfg.RateLimitRate, cfg.RateLimitBurst)
+	log.Info("rate limiter middleware mounted",
+		zap.Float64("default_rate", cfg.RateLimitRate),
+		zap.Int("default_burst", cfg.RateLimitBurst),
+	)
 	agentSvc := &service.AgentService{
 		Cfg: cfg, DB: db, Redis: rdb, Gateway: agentGW, Sens: sens,
-		ChatHub: chatHub, Log: log,
+		ChatHub: chatHub, Log: log, RC: runtimeCfg,
 	}
 
 	deps := &handler.Dependencies{
 		Cfg: cfg, DB: db, Redis: rdb, Log: log, Hub: hub, ChatHub: chatHub,
 		JWT: jm, Sens: sens, OSS: ossc, MQ: mq, ES: esc, Play: pc,
 		SearchHot: searchHot, DanmakuRelay: relay, IPLocate: ipLoc, Agent: agentSvc,
-		RateLimiter:  rl,
+		RateLimiter: rl, RuntimeCfg: runtimeCfg,
 	}
 	api := &handler.API{Dependencies: deps}
 

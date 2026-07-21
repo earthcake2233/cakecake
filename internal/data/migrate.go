@@ -1,4 +1,4 @@
-package data
+﻿package data
 
 import (
 	"database/sql"
@@ -41,6 +41,7 @@ func AutoMigrateAll(db *gorm.DB, lg *zap.Logger) error {
 		&model.DmConversation{},
 		&model.DmParticipant{},
 		&model.DmMessage{},
+		&model.SystemConfig{},
 		&model.AgentSettings{},
 		&model.AgentProfile{},
 		&model.Article{},

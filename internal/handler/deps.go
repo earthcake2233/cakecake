@@ -34,6 +34,7 @@ type Dependencies struct {
 	SearchHot    *service.SearchHotRecorder
 	DanmakuRelay *service.DanmakuRelay
 	IPLocate     *iplocate.Searcher
+	RuntimeCfg  *config.RuntimeConfig
 	RateLimiter  *middleware.RateLimiter
 	Agent        *service.AgentService
 }

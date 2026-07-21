@@ -97,6 +97,8 @@ func RegisterRoutes(r *gin.Engine, a *API, jwtm *jwttoken.Manager) {
 		admin.PUT("/agent-profiles/:id", a.AdminUpdateAgentProfile)
 		admin.DELETE("/agent-profiles/:id", a.AdminDeleteAgentProfile)
 		admin.POST("/agent-profiles/:id/avatar", a.AdminUploadAgentProfileAvatar)
+		admin.GET("/system-configs", a.AdminListSystemConfigs)
+		admin.PUT("/system-configs", a.AdminUpdateSystemConfig)
 	}
 
 	authd := r.Group("/api/v1")

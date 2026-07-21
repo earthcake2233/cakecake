@@ -1,4 +1,4 @@
-package middleware
+﻿package middleware
 
 import (
 	"net/http"
@@ -9,14 +9,13 @@ import (
 	"github.com/alicebob/miniredis/v2"
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
-
 )
 
 func setupTest(t *testing.T) (*RateLimiter, *gin.Engine) {
 	t.Helper()
 	s := miniredis.RunT(t)
 	rdb := redis.NewClient(&redis.Options{Addr: s.Addr()})
-	rl := NewRateLimiter(rdb, 10, 5)
+	rl := NewRateLimiter(rdb, nil, 10, 5)
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	r.Use(rl.RateLimit())
