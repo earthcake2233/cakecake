@@ -124,3 +124,13 @@
 | **R-DOC-2a** | **commit 时必须列出文档检查结果**                  | 每次 git commit 的 message 中，若涉及功能/接口/配置/依赖变更，必须在 body 中注明`Docs: <已检查的md文件列表>`，未写即视为违规。                                                                                                  |
 | **R-DOC-3**  | **ARCHITECTURE 中英文必须完全同步**                | 修改`docs/ARCHITECTURE.md`（英文）或 `docs/ARCHITECTURE_EN.md`（中文）任一文件时，必须同步更新另一文件，确保章节结构、图表（Mermaid）、表格、代码块完全一致，仅语言不同。禁止出现一方有某章节/某图表而另一方缺失的情况。        |
 | **R-DOC-4**  | **Git 提交信息必须使用英文**                       | `git commit -m` 的提交描述必须使用纯英文，遵循 conventional commits 格式（如 `feat:`、`fix:`、`docs:`、`refactor:`、`chore:` 等）。禁止在 commit message 中出现中文。                                                           |
+
+---
+
+### 十、测试规范
+
+| 编号       | 规则                                     | 说明                                                                                       |
+| :--------- | :--------------------------------------- | :----------------------------------------------------------------------------------------- |
+| **R-TEST-1** | **新增业务代码必须同步编写测试**         | 新增或修改 internal/handler/、internal/service/、internal/ws/、internal/pkg/ 下的业务逻辑时，必须在同一次 commit 中提供对应的单元测试。仅依赖外部服务（ES、RabbitMQ、OSS、第三方 API）的代码可豁免，但需在 commit message 中注明豁免原因。 |
+| **R-TEST-2** | **测试必须可独立运行且不依赖外部服务**   | 单元测试必须使用 SQLite 内存库（github.com/glebarez/sqlite）+ miniredis（github.com/alicebob/miniredis/v2）模拟依赖，禁止测试直连真实 MySQL/Redis/RabbitMQ。 |
+
