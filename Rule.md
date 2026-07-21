@@ -126,7 +126,6 @@
 | **R-DOC-2a** | **commit 时必须列出文档检查结果**                  | 每次 git commit 的 message 中，若涉及功能/接口/配置/依赖变更，必须在 body 中注明`Docs: <已检查的md文件列表>`，未写即视为违规。                                                                                                  |
 | **R-DOC-3**  | **ARCHITECTURE 中英文必须完全同步**                | 修改`docs/ARCHITECTURE.md`（英文）或 `docs/ARCHITECTURE_EN.md`（中文）任一文件时，必须同步更新另一文件，确保章节结构、图表（Mermaid）、表格、代码块完全一致，仅语言不同。禁止出现一方有某章节/某图表而另一方缺失的情况。        |
 | **R-DOC-4**  | **Git 提交信息必须使用英文**                       | `git commit -m` 的提交描述必须使用纯英文，遵循 conventional commits 格式（如 `feat:`、`fix:`、`docs:`、`refactor:`、`chore:` 等）。禁止在 commit message 中出现中文。                                                           |
-
 | **R-DOC-5**  | **新增环境变量必须同步写入 .env.example**        | 引入新的环境变量时，必须在同一次 commit 中在 `.env.example` 添加对应的注释说明和默认值。禁止只加代码读取逻辑而不更新模板文件。 |
 
 ---
