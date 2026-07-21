@@ -17,6 +17,7 @@ import (
 	"minibili/internal/data"
 	"minibili/internal/ffmpeg"
 	"minibili/internal/handler"
+	"minibili/internal/middleware"
 	"minibili/internal/logger"
 	"minibili/internal/pkg/iplocate"
 	"minibili/internal/pkg/jwttoken"
@@ -173,6 +174,14 @@ func main() {
 	} else {
 		log.Info("ai gateway disabled (DEEPSEEK_API_KEY empty)")
 	}
+	var rl *middleware.RateLimiter
+	if cfg.RateLimitEnabled {
+		rl = middleware.NewRateLimiter(rdb, cfg.RateLimitRate, cfg.RateLimitBurst)
+		log.Info("rate limiter enabled",
+			zap.Float64("rate", cfg.RateLimitRate),
+			zap.Int("burst", cfg.RateLimitBurst),
+		)
+	}
 	agentSvc := &service.AgentService{
 		Cfg: cfg, DB: db, Redis: rdb, Gateway: agentGW, Sens: sens,
 		ChatHub: chatHub, Log: log,
@@ -182,6 +191,7 @@ func main() {
 		Cfg: cfg, DB: db, Redis: rdb, Log: log, Hub: hub, ChatHub: chatHub,
 		JWT: jm, Sens: sens, OSS: ossc, MQ: mq, ES: esc, Play: pc,
 		SearchHot: searchHot, DanmakuRelay: relay, IPLocate: ipLoc, Agent: agentSvc,
+		RateLimiter:  rl,
 	}
 	api := &handler.API{Dependencies: deps}
 

@@ -23,6 +23,7 @@ graph TB
     Browser -->|/api/v1| Nginx
     Nginx -->|serve 静态文件| Vue
     Nginx -->|proxy API| Gin
+    RL["Redis Token Bucket\nRate Limiter"] -.-> Gin
     Gin --> MySQL
     Gin --> Redis
     Gin --> RMQ
@@ -43,7 +44,7 @@ Minibili/
 │   ├── handler/                  # HTTP + WebSocket 处理器
 │   ├── service/                  # 业务逻辑层
 │   ├── model/                    # GORM 数据模型
-│   ├── middleware/               # JWT 鉴权、管理员鉴权
+│   ├── middleware/               # JWT 鉴权、管理员鉴权、全局限流
 │   ├── worker/                   # RabbitMQ 消费者（转码）
 │   ├── ws/                       # WebSocket Hub（弹幕房间、私信）
 │   ├── search/                   # Elasticsearch 客户端与查询构建
@@ -220,14 +221,15 @@ flowchart LR
 
 ## 关键设计决策
 
-| 决策                                                  | 理由                                                                                                        |
-| ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| **v1 用单体而非微服务**                               | 单人开发，快速迭代。代码按领域分层（`handler/`、`service/`、`worker/`），为后续拆分为 Kratos 微服务预留空间 |
-| **Redis Pub/Sub 做弹幕广播中继，而非 WebSocket 直发** | 解耦广播与 HTTP handler。多副本订阅同一 Redis 频道，无需共享内存即可水平扩展                                |
-| **转码用 RabbitMQ 而非 Redis List**                   | RabbitMQ 提供消息持久化、消费确认、死信队列——视频处理不可接受数据丢失                                       |
-| **GORM AutoMigrate 而非 SQL 迁移文件**                | 单人项目简化操作，表结构通过 Go struct 声明，启动时自动建表                                                 |
-| **ES 可选而非强制依赖**                               | 降低上手门槛，未配置时搜索页优雅降级                                                                        |
-| **bcrypt + 双 Token JWT**                             | 行业标准认证方案，Access/Refresh 双 Token + Redis 管理 Refresh Token 轮转                                   |
+| 决策                                                  | 理由                                                                                                                            |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| **v1 用单体而非微服务**                               | 单人开发，快速迭代。代码按领域分层（`handler/`、`service/`、`worker/`），为后续拆分为 Kratos 微服务预留空间                     |
+| **Redis Pub/Sub 做弹幕广播中继，而非 WebSocket 直发** | 解耦广播与 HTTP handler。多副本订阅同一 Redis 频道，无需共享内存即可水平扩展                                                    |
+| **转码用 RabbitMQ 而非 Redis List**                   | RabbitMQ 提供消息持久化、消费确认、死信队列——视频处理不可接受数据丢失                                                           |
+| **GORM AutoMigrate 而非 SQL 迁移文件**                | 单人项目简化操作，表结构通过 Go struct 声明，启动时自动建表                                                                     |
+| **ES 可选而非强制依赖**                               | 降低上手门槛，未配置时搜索页优雅降级                                                                                            |
+| **Redis 令牌桶做全局限流**                            | 保护列表、搜索、空间等公开接口不受突发/爬虫打垮；按 IP 维度限流；Lua 脚本保证令牌桶原子性；桶容量支持短时突发，速率限制稳态 QPS |
+| **bcrypt + 双 Token JWT**                             | 行业标准认证方案，Access/Refresh 双 Token + Redis 管理 Refresh Token 轮转                                                       |
 
 ---
 
@@ -257,12 +259,12 @@ flowchart LR
 
 ## 测试策略
 
-| 层级                                    | 范围                      | 示例                                  |
-| --------------------------------------- | ------------------------- | ------------------------------------- |
-| `internal/pkg/*`                        | 单元测试（表驱动）        | 用户名校验、BV 号编解码、头像路径生成 |
-| `internal/handler/*`                    | 单元测试（SQLite 内存库） | 登录注册流程、视频草稿 CRUD、弹幕发布、评论级联删除           |
-| `internal/handler/*` (integration 标签) | 黑盒测试（连真实服务）    | 健康检查、视频分区列表                |
-| E2E                                     | 手动                      | 登录 → 投稿 → 观看弹幕 → 搜索         |
+| 层级                                    | 范围                      | 示例                                                |
+| --------------------------------------- | ------------------------- | --------------------------------------------------- |
+| `internal/pkg/*`                        | 单元测试（表驱动）        | 用户名校验、BV 号编解码、头像路径生成               |
+| `internal/handler/*`                    | 单元测试（SQLite 内存库） | 登录注册流程、视频草稿 CRUD、弹幕发布、评论级联删除 |
+| `internal/handler/*` (integration 标签) | 黑盒测试（连真实服务）    | 健康检查、视频分区列表                              |
+| E2E                                     | 手动                      | 登录 → 投稿 → 观看弹幕 → 搜索                       |
 
 ```bash
 go test ./... -count=1

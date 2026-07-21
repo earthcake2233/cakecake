@@ -6,6 +6,7 @@ import (
 	"gorm.io/gorm"
 
 	"minibili/internal/config"
+	"minibili/internal/middleware"
 	"minibili/internal/pkg/iplocate"
 	"minibili/internal/pkg/jwttoken"
 	"minibili/internal/pkg/sensitive"
@@ -33,6 +34,7 @@ type Dependencies struct {
 	SearchHot    *service.SearchHotRecorder
 	DanmakuRelay *service.DanmakuRelay
 	IPLocate     *iplocate.Searcher
+	RateLimiter  *middleware.RateLimiter
 	Agent        *service.AgentService
 }
 

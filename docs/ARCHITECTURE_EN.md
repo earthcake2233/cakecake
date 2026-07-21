@@ -23,6 +23,7 @@ graph TB
     Browser -->|/api/v1| Nginx
     Nginx -->|serve static files| Vue
     Nginx -->|proxy API| Gin
+    RL["Redis Token Bucket\nRate Limiter"] -.-> Gin
     Gin --> MySQL
     Gin --> Redis
     Gin --> RMQ
@@ -43,7 +44,7 @@ Minibili/
 │   ├── handler/                  # HTTP + WebSocket handlers (Gin routes)
 │   ├── service/                  # Business logic layer
 │   ├── model/                    # GORM models
-│   ├── middleware/               # JWT auth, admin auth
+│   ├── middleware/               # JWT auth, admin auth, global rate limit
 │   ├── worker/                   # RabbitMQ consumers (transcode)
 │   ├── ws/                       # WebSocket hub (danmaku rooms, chat)
 │   ├── search/                   # Elasticsearch client, query builders
@@ -257,12 +258,12 @@ flowchart LR
 
 ## Testing Strategy
 
-| Layer                                  | Scope                         | Example                                                     |
-| -------------------------------------- | ----------------------------- | ----------------------------------------------------------- |
-| `internal/pkg/*`                       | Unit tests (table-driven)     | Username validation, BV id encoding, avatar path generation |
-| `internal/handler/*`                   | Unit tests (SQLite in-memory) | Auth flow, video draft CRUD, danmaku posting, comment cascade                                 |
-| `internal/handler/*` (integration tag) | Black-box against live server | Health check, video zone listing                            |
-| E2E                                    | Manual                        | Login → upload → view danmaku → search                      |
+| Layer                                  | Scope                         | Example                                                       |
+| -------------------------------------- | ----------------------------- | ------------------------------------------------------------- |
+| `internal/pkg/*`                       | Unit tests (table-driven)     | Username validation, BV id encoding, avatar path generation   |
+| `internal/handler/*`                   | Unit tests (SQLite in-memory) | Auth flow, video draft CRUD, danmaku posting, comment cascade |
+| `internal/handler/*` (integration tag) | Black-box against live server | Health check, video zone listing                              |
+| E2E                                    | Manual                        | Login → upload → view danmaku → search                        |
 
 ```bash
 go test ./... -count=1

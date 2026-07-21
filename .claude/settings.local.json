@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh issue *)",
+      "Bash(winget install *)",
+      "Bash(npm install *)",
+      "Bash(gh --version)",
+      "Bash(where gh *)",
+      "Bash(powershell -Command \"Get-ChildItem -Path 'C:\\\\Program Files' -Recurse -Filter 'gh.exe' -ErrorAction SilentlyContinue | Select-Object -First 1 FullName\")",
+      "WebFetch(domain:github.com)",
+      "Bash(git clone *)"
+    ]
+  }
+}

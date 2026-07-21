@@ -70,6 +70,14 @@ type C struct {
 	AgentHistoryTTL    time.Duration
 	AgentDailyQuota    int
 	AgentRequestTimeout time.Duration
+
+	// RateLimitEnabled enables global IP-based token bucket rate limiter.
+	// Use RATE_LIMIT_ENABLED=1 to turn on (default off).
+	RateLimitEnabled bool
+	// RateLimitRate tokens refilled per second.
+	RateLimitRate float64
+	// RateLimitBurst max token capacity (burst allowance).
+	RateLimitBurst int
 }
 
 func getenv(key, def string) string {
@@ -96,6 +104,18 @@ func atoi(s string, def int) int {
 		return def
 	}
 	n, err := strconv.Atoi(s)
+	if err != nil {
+		return def
+	}
+	return n
+}
+
+func parseFloatEnv(key string, def float64) float64 {
+	s := strings.TrimSpace(os.Getenv(key))
+	if s == "" {
+		return def
+	}
+	n, err := strconv.ParseFloat(s, 64)
 	if err != nil {
 		return def
 	}
@@ -167,6 +187,9 @@ func Load() *C {
 		AgentMaxHistory:    atoi(os.Getenv("AGENT_MAX_HISTORY"), 20),
 		AgentHistoryTTL:    mustParseDuration(os.Getenv("AGENT_HISTORY_TTL"), 30*24*time.Hour),
 		AgentDailyQuota:    atoi(os.Getenv("AGENT_DAILY_QUOTA"), 80),
+		RateLimitEnabled: parseBoolEnv("RATE_LIMIT_ENABLED", false),
+		RateLimitRate:    parseFloatEnv("RATE_LIMIT_RATE", 20),
+		RateLimitBurst:    atoi(os.Getenv("RATE_LIMIT_BURST"), 50),
 		AgentRequestTimeout: mustParseDuration(os.Getenv("AGENT_REQUEST_TIMEOUT"), 90*time.Second),
 	}
 }

@@ -14,6 +14,9 @@ import (
 func RegisterRoutes(r *gin.Engine, a *API, jwtm *jwttoken.Manager) {
 	r.Use(corsMiddleware)
 	r.Use(logger.GinMiddleware(a.Log))
+	if a.RateLimiter != nil {
+		r.Use(a.RateLimiter.RateLimit())
+	}
 
 	r.GET("/api/v1/health", a.Health)
 

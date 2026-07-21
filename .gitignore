@@ -43,3 +43,6 @@ configs/ip2region_v4.xdb
 
 # ── Air live-reload temp ──
 tmp/
+
+# Build cache
+.gocache/
