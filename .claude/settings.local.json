@@ -8,7 +8,9 @@
       "Bash(where gh *)",
       "Bash(powershell -Command \"Get-ChildItem -Path 'C:\\\\Program Files' -Recurse -Filter 'gh.exe' -ErrorAction SilentlyContinue | Select-Object -First 1 FullName\")",
       "WebFetch(domain:github.com)",
-      "Bash(git clone *)"
+      "Bash(git clone *)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(file cakecake-vue/bilibili-vue/src/__tests__/*.ts cakecake-vue/bilibili-vue/src/__tests__/**/*.ts)"
     ]
   }
 }

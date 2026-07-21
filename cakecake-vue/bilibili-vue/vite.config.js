@@ -1,3 +1,4 @@
+﻿/// <reference types="vitest" />
 import { defineConfig, loadEnv } from "vite";
 import vue from "@vitejs/plugin-vue";
 import path from "path";
@@ -89,6 +90,12 @@ export default defineConfig(({ mode }) => {
       port: 8888,
       open: true,
       proxy
+    },
+    test: {
+      environment: "jsdom", testTimeout: 30000,
+      globals: true,
+      include: ["src/**/*.{test,spec}.{js,ts,jsx,tsx}"],
+      setupFiles: ["vitest.setup.js"]
     },
     build: {
       outDir: "dist",

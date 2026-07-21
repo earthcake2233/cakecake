@@ -91,6 +91,19 @@ src/
 
 ---
 
+## 测试
+
+```bash
+npm run test        # 50 个测试文件，496 个测试用例（Vitest + jsdom）
+npm run test:watch  # 监听模式
+npm run test:ui     # Vitest UI 仪表盘
+npm run coverage    # 覆盖率报告
+```
+
+测试覆盖 `utils/`、`store/`、`constants/`、部分 `components/` 和 `api/` 模块。
+
+---
+
 ## 依赖与锁文件
 
 请使用 **npm**（`package-lock.json`）。若不用 Yarn，可删除 `yarn.lock`，避免与 npm 锁文件混用。

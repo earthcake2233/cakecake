@@ -7,7 +7,8 @@ function count2(num) {
 }
 function count(num) {
   if (num < 60) {
-    return (num = "00:" + num);
+    num = "00:" + (num < 10 ? "0" + num : num);
+    return num;
   } else if (num >= 60 && num < 3600) {
     let m;
     Math.floor(num / 60) < 10
@@ -37,7 +38,7 @@ function timeChange(timestamp) {
     (date.getMonth() + 1 < 10
       ? "0" + (date.getMonth() + 1)
       : date.getMonth() + 1) + "-";
-  D = date.getDate() < 10 ? "0" + date.getDate() : date.getDate() + " ";
+  D = (date.getDate() < 10 ? "0" : "") + date.getDate();
   return Y + M + D;
 }
 //字符串转换

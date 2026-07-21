@@ -1,4 +1,4 @@
-<p align="center">
+﻿<p align="center">
   <strong><img src="https://img.shields.io/badge/🇨🇳中文-00a1d6?style=flat-square" alt="中文"></strong>
   <a href="README_EN.md">
     <img src="https://img.shields.io/badge/🇬🇧English-999999?style=flat-square" alt="English">
@@ -32,6 +32,9 @@
   <img src="https://img.shields.io/badge/Elasticsearch-00BFB3?style=flat-square&logo=elasticsearch&logoColor=white" alt="Elasticsearch">
   <img src="https://img.shields.io/badge/FFmpeg-007808?style=flat-square&logo=ffmpeg&logoColor=white" alt="FFmpeg">
   <img src="https://img.shields.io/badge/WebSocket-010101?style=flat-square&logo=socket.io&logoColor=white" alt="WebSocket">
+  <img src="https://img.shields.io/badge/Tests-590%20passing-00a1d6?style=flat-square&logo=vitest" alt="Tests">
+  <img src="https://img.shields.io/badge/Coverage-66%25-success?style=flat-square&logo=vitest" alt="Coverage">
+  <img src="https://img.shields.io/badge/Go%20Tests-27%20files-00ADD8?style=flat-square&logo=go" alt="Go Tests">
 </p>
 
 **能力概览**：JWT 登录、视频/专栏投稿与审核、动态、关注与私信（WebSocket）、视频上传与异步转码（FFmpeg + RabbitMQ + OSS）、实时弹幕、评论与通知、搜索（Elasticsearch 可选）、AI 助手（DeepSeek 可选）、运营后台。
@@ -173,6 +176,26 @@ air    # 在仓库根执行；见 .air.toml，会加载 .env
 ---
 
 ## 测试
+
+### 前端（Vitest）
+
+```bash
+cd cakecake-vue/bilibili-vue
+npm run test        # 50 个测试文件，496 个测试用例
+npm run test:ui     # Vitest UI 交互界面
+npm run coverage    # 覆盖率报告（~57% 语句覆盖）
+```
+
+### 后端（Go test）
+
+```bash
+go test ./... -count=1
+# 集成测试（需 MySQL/Redis，首次运行时无需数据库种子数据）
+go test -tags=integration ./internal/handler/... -count=1
+```
+
+> 后端包含 **27 个测试文件**，覆盖 handler / service / ws / pkg 等核心模块。
+> 集成测试使用 SQLite 内存数据库，不依赖外部服务。
 
 ```bash
 go test ./... -count=1
