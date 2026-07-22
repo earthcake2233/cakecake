@@ -35,24 +35,12 @@ jobs:
         working-directory: cakecake-vue/bilibili-vue
         run: npm run coverage
 
-      - name: Debug coverage output
-        working-directory: cakecake-vue/bilibili-vue
-        run: |-
-          echo "=== coverage dir ==="
-          ls -la coverage/ || echo "NO COVERAGE DIR"
-          echo "=== lcov.info ==="
-          ls -la coverage/lcov.info 2>/dev/null || echo "NO lcov.info"
-          echo "=== clover.xml ==="
-          ls -la coverage/clover.xml 2>/dev/null || echo "NO clover.xml"
-
-      - name: Upload frontend coverage to Codecov
+      - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
-          files: cakecake-vue/bilibili-vue/coverage/lcov.info
+          files: ./cakecake-vue/bilibili-vue/coverage/lcov.info
           flags: frontend
-          name: frontend-coverage
           fail_ci_if_error: true
-          slug: earthcake2233/cakecake
           verbose: true
 
   test-backend:
@@ -66,20 +54,13 @@ jobs:
           go-version-file: go.mod
 
       - name: Run Go tests with coverage
-        run: |-
+        run: |
           go test ./... -count=1 -coverprofile=coverage.out -covermode=atomic
 
-      - name: Debug coverage output
-        run: |-
-          echo "=== coverage.out ==="
-          ls -la coverage.out || echo "NO coverage.out"
-
-      - name: Upload backend coverage to Codecov
+      - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
-          files: coverage.out
+          files: ./coverage.out
           flags: backend
-          name: backend-coverage
           fail_ci_if_error: true
-          slug: earthcake2233/cakecake
           verbose: true
