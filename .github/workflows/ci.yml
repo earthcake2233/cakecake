@@ -32,11 +32,14 @@ jobs:
         run: npm run coverage
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v5.5.5
         with:
+          token: ${{ secrets.CODECOV_TOKEN }}
           directory: cakecake-vue/bilibili-vue/coverage
           flags: frontend
           name: frontend-coverage
+          fail_ci_if_error: true
+          verbose: true
 
   test-backend:
     runs-on: ubuntu-latest
@@ -53,8 +56,11 @@ jobs:
           go test ./... -count=1 -coverprofile=coverage.out -covermode=atomic
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v5.5.5
         with:
+          token: ${{ secrets.CODECOV_TOKEN }}
           files: coverage.out
           flags: backend
           name: backend-coverage
+          fail_ci_if_error: true
+          verbose: true
