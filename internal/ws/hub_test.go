@@ -1,4 +1,4 @@
-package ws
+﻿package ws
 
 import (
 	"encoding/json"
@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/require"
@@ -49,6 +50,17 @@ func TestHubMultipleRooms(t *testing.T) {
 	require.Equal(t, 0, h.RoomSize(2))
 }
 
+// waitRoom waits up to 3s for room to reach the expected size.
+func waitRoom(h *Hub, room uint64, expect int) bool {
+	for i := 0; i < 300; i++ {
+		if h.RoomSize(room) == expect {
+			return true
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	return false
+}
+
 func TestHubBroadcastJSON(t *testing.T) {
 	h := NewHub()
 
@@ -72,15 +84,7 @@ func TestHubBroadcastJSON(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	// Give the server time to register the connection
-	var ok bool
-	for i := 0; i < 50; i++ {
-		if h.RoomSize(42) == 1 {
-			ok = true
-			break
-		}
-	}
-	require.True(t, ok, "connection should be in room")
+	require.True(t, waitRoom(h, 42, 1), "connection should be in room 42")
 
 	payload := map[string]string{"type": "danmaku", "text": "hello"}
 	h.BroadcastJSON(42, payload)
@@ -115,12 +119,7 @@ func TestHubBroadcastRaw(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	for i := 0; i < 50; i++ {
-		if h.RoomSize(7) == 1 {
-			break
-		}
-	}
-	require.Equal(t, 1, h.RoomSize(7))
+	require.True(t, waitRoom(h, 7, 1), "connection should be in room 7")
 
 	h.BroadcastRaw(7, []byte(payload))
 	_, msg, err := conn.ReadMessage()
