@@ -1,0 +1,31 @@
+codecov:
+  require_ci_to_pass: true
+  notify:
+    wait_for_ci: true
+
+coverage:
+  status:
+    project:
+      default:
+        target: 70%
+        threshold: 2%
+        flags: [frontend, backend]
+    patch:
+      default:
+        target: 70%
+        threshold: 5%
+
+flags:
+  frontend:
+    paths:
+      - cakecake-vue/bilibili-vue/src/
+    carryforward: true
+  backend:
+    paths:
+      - internal/
+    carryforward: true
+
+comment:
+  layout: "header, diff, flags, components"
+  behavior: default
+  require_changes: false

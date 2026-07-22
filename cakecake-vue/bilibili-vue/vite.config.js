@@ -95,7 +95,12 @@ export default defineConfig(({ mode }) => {
       environment: "jsdom", testTimeout: 30000,
       globals: true,
       include: ["src/**/*.{test,spec}.{js,ts,jsx,tsx}"],
-      setupFiles: ["vitest.setup.js"]
+      setupFiles: ["vitest.setup.js"],
+      coverage: {
+        provider: "v8",
+        reporter: ["text", "lcov", "html"],
+        reportsDirectory: "coverage"
+      }
     },
     build: {
       outDir: "dist",

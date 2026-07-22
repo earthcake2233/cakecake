@@ -15,6 +15,10 @@
   </a>
   &nbsp;&nbsp;
   <a href="https://b23.tv/9VnJIWm">
+  </a>
+  &nbsp;&nbsp;
+  <a href="https://github.com/earthcake2233/cakecake/actions">
+    <img src="https://img.shields.io/github/actions/workflow/status/earthcake2233/cakecake/ci.yml?branch=main&style=flat-square&logo=github&label=CI" alt="CI">
     <img src="https://img.shields.io/badge/演示视频-B站-00a1d6?style=flat-square&logo=bilibili" alt="B站演示">
   </a>
 </p>
@@ -32,9 +36,9 @@
   <img src="https://img.shields.io/badge/Elasticsearch-00BFB3?style=flat-square&logo=elasticsearch&logoColor=white" alt="Elasticsearch">
   <img src="https://img.shields.io/badge/FFmpeg-007808?style=flat-square&logo=ffmpeg&logoColor=white" alt="FFmpeg">
   <img src="https://img.shields.io/badge/WebSocket-010101?style=flat-square&logo=socket.io&logoColor=white" alt="WebSocket">
-  <img src="https://img.shields.io/badge/Tests-700%20passing-00a1d6?style=flat-square&logo=vitest" alt="Tests">
-  <img src="https://img.shields.io/badge/Coverage-67%25-success?style=flat-square&logo=vitest" alt="Coverage">
-  <img src="https://img.shields.io/badge/Go%20Tests-27%20files-00ADD8?style=flat-square&logo=go" alt="Go Tests">
+  <img src="https://img.shields.io/badge/Tests-829%20passing-00a1d6?style=flat-square&logo=vitest" alt="Tests">
+  <a href="https://codecov.io/gh/earthcake2233/cakecake"><img src="https://img.shields.io/codecov/c/github/earthcake2233/cakecake?flag=frontend&style=flat-square&logo=codecov&label=Coverage" alt="Codecov"></a>
+  <a href="https://codecov.io/gh/earthcake2233/cakecake"><img src="https://img.shields.io/codecov/c/github/earthcake2233/cakecake?flag=backend&style=flat-square&logo=codecov&label=Go%20Coverage" alt="Codecov Backend"></a>
 </p>
 
 **能力概览**：JWT 登录、视频/专栏投稿与审核、动态、关注与私信（WebSocket）、视频上传与异步转码（FFmpeg + RabbitMQ + OSS）、实时弹幕、评论与通知、搜索（Elasticsearch 可选）、AI 助手（DeepSeek 可选）、运营后台。
@@ -181,9 +185,9 @@ air    # 在仓库根执行；见 .air.toml，会加载 .env
 
 ```bash
 cd cakecake-vue/bilibili-vue
-npm run test        # 50 个测试文件，496 个测试用例
+npm run test        # 77 个测试文件，829 个测试用例
 npm run test:ui     # Vitest UI 交互界面
-npm run coverage    # 覆盖率报告（~57% 语句覆盖）
+npm run coverage    # 覆盖率报告（~73% 语句覆盖）
 ```
 
 ### 后端（Go test）
