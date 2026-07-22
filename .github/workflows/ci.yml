@@ -38,10 +38,9 @@ jobs:
           curl -Os https://cli.codecov.io/latest/linux/codecov
           chmod +x codecov
           ./codecov --verbose upload-coverage \
-            --git-service github \
             --slug earthcake2233/cakecake \
-            --commit-sha ${{ github.sha }} \
             --branch main \
+            --sha "${{ github.sha }}" \
             --token "$CODECOV_TOKEN" \
             --file ./cakecake-vue/bilibili-vue/coverage/lcov.info \
             --flag frontend \
@@ -68,10 +67,9 @@ jobs:
           curl -Os https://cli.codecov.io/latest/linux/codecov
           chmod +x codecov
           ./codecov --verbose upload-coverage \
-            --git-service github \
             --slug earthcake2233/cakecake \
-            --commit-sha ${{ github.sha }} \
             --branch main \
+            --sha "${{ github.sha }}" \
             --token "$CODECOV_TOKEN" \
             --file ./coverage.out \
             --flag backend \
