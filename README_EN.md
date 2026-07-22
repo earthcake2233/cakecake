@@ -1,11 +1,11 @@
 ﻿<p align="center">
   <a href="README.md">
-    <img src="https://img.shields.io/badge/馃嚚馃嚦涓枃-999999?style=flat-square" alt="涓枃">
+    <img src="https://img.shields.io/badge/Chinese-999999?style=flat-square" alt="Chinese">
   </a>
-  <strong><img src="https://img.shields.io/badge/馃嚞馃嚙English-00a1d6?style=flat-square" alt="English"></strong>
+  <strong><img src="https://img.shields.io/badge/English-00a1d6?style=flat-square" alt="English"></strong>
 </p>
 
-# cakecake 馃嵃
+# cakecake 🍰
 
 A full-stack video-sharing community built with Go + Vue3, covering video upload, real-time danmaku, nested comments, full-text search, AI assistant, and more. Frontend brand: **cakecake** 路 backend module: `minibili`.
 
@@ -216,4 +216,5 @@ See **[deploy/DEPLOY.md](./deploy/DEPLOY.md)**. Optional **[GitHub Actions](./.g
 ## License
 
 [Non-Commercial License](./LICENSE) 鈥?personal/educational use permitted, commercial use prohibited.
+
 
