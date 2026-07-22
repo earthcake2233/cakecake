@@ -38,6 +38,7 @@ jobs:
       - name: Upload frontend coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
+          use_oidc: true
           directory: cakecake-vue/bilibili-vue/coverage
           flags: frontend
           name: frontend-coverage
@@ -61,6 +62,7 @@ jobs:
       - name: Upload backend coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
+          use_oidc: true
           files: coverage.out
           flags: backend
           name: backend-coverage
