@@ -32,14 +32,13 @@ jobs:
         run: npm run coverage
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: codecov/codecov-action@v4
         with:
+          token: ${{ secrets.CODECOV_TOKEN }}
           files: ./cakecake-vue/bilibili-vue/coverage/lcov.info
           flags: frontend
           fail_ci_if_error: true
-          token: ${{ secrets.CODECOV_TOKEN }}
+          verbose: true
 
   test-backend:
     runs-on: ubuntu-latest
@@ -56,11 +55,10 @@ jobs:
           go test ./... -count=1 -coverprofile=coverage.out -covermode=atomic
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: codecov/codecov-action@v4
         with:
+          token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage.out
           flags: backend
           fail_ci_if_error: true
-          token: ${{ secrets.CODECOV_TOKEN }}
+          verbose: true
