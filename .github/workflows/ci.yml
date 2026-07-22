@@ -1,4 +1,4 @@
-﻿name: CI
+name: CI
 
 on:
   push:
@@ -32,20 +32,12 @@ jobs:
         run: npm run coverage
 
       - name: Upload coverage to Codecov
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-        run: |
-          curl -Os https://cli.codecov.io/latest/linux/codecov
-          chmod +x codecov
-          ./codecov --verbose upload-coverage \
-            --git-service github \
-            --slug earthcake2233/cakecake \
-            --commit-sha ${{ github.sha }} \
-            --branch main \
-            --token "$CODECOV_TOKEN" \
-            --file ./cakecake-vue/bilibili-vue/coverage/lcov.info \
-            --flag frontend \
-            --fail-on-error
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./cakecake-vue/bilibili-vue/coverage/lcov.info
+          flags: frontend
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   test-backend:
     runs-on: ubuntu-latest
@@ -62,17 +54,9 @@ jobs:
           go test ./... -count=1 -coverprofile=coverage.out -covermode=atomic
 
       - name: Upload coverage to Codecov
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-        run: |
-          curl -Os https://cli.codecov.io/latest/linux/codecov
-          chmod +x codecov
-          ./codecov --verbose upload-coverage \
-            --git-service github \
-            --slug earthcake2233/cakecake \
-            --commit-sha ${{ github.sha }} \
-            --branch main \
-            --token "$CODECOV_TOKEN" \
-            --file ./coverage.out \
-            --flag backend \
-            --fail-on-error
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./coverage.out
+          flags: backend
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
