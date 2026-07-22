@@ -41,28 +41,20 @@ configs/ip2region_v4.xdb
 *.swp
 *.swo
 
-# ── Air live-reload temp ──
+# ── Build cache / coverage ──
 tmp/
-
-# Build cache
 .gocache/
 coverage/
+cov_out/
+covprofile
+coverage_total
 
-# Codecov CLI
+# ── Codecov ──
 codecov.exe
 coverage_test.out
 
-# Coverage profiles
-cov_out
+# ── Temp / debug scripts ──
 *.py
 !internal/**/write_test.py
-
-# Coverage profiles
-cov_out
-
-# Coverage profiles
-cov_out
-
-covprofile
-coverage_total
-cov_out
+!scripts/gen_*.py
+!cakecake-vue/bilibili-vue/scripts/*.py

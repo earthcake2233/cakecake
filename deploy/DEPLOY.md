@@ -47,7 +47,7 @@ Nginx（/opt/minibili/www 静态 + 反代 /api）
 
 **推荐做法（在你本机 Windows 构建，服务器只放静态文件）：**
 
-```powershell
+```bash
 cd D:\Minibili\cakecake-vue\bilibili-vue
 npm install
 cp .env.production.example .env.production   # 含 VITE_VIDEO_UPLOAD_DISABLED 等
@@ -65,12 +65,12 @@ npm run build
 
 CentOS 7 无需安装 Go，只上传 Linux 二进制即可。
 
-```powershell
+```bash
 cd D:\Minibili
-$env:GOPATH = "C:\gopath-empty"   # 避免与 GoLand GOPATH 冲突
-$env:GO111MODULE = "on"
-$env:GOOS = "linux"
-$env:GOARCH = "amd64"
+export GOPATH="C:\gopath-empty"   # 避免与 GoLand GOPATH 冲突
+export GO111MODULE="on"
+export GOOS="linux"
+export GOARCH="amd64"
 go build -ldflags="-s -w" -o mini-bili-linux ./cmd/mini-bili
 ```
 
@@ -93,13 +93,13 @@ sudo chown -R "$USER:$USER" /opt/minibili
 | `/opt/minibili/data/tmp/` | 上传与转码临时目录（可写） |
 | `/opt/minibili/www/` | 前端 `dist/` 解压到此 |
 
-从本机上传示例（PowerShell，按你的 IP 修改）：
+从本机上传示例（按你的 IP 修改）：
 
-```powershell
+```bash
 scp mini-bili-linux user@你的ECSIP:/opt/minibili/bin/mini-bili
-scp -r cakecake-vue\bilibili-vue\dist\* user@你的ECSIP:/opt/minibili/www/
+scp -r cakecake-vue/bilibili-vue/dist/* user@你的ECSIP:/opt/minibili/www/
 scp -r configs user@你的ECSIP:/opt/minibili/
-scp deploy\env.production.example user@你的ECSIP:/opt/minibili/.env
+scp deploy/env.production.example user@你的ECSIP:/opt/minibili/.env
 ```
 
 ---

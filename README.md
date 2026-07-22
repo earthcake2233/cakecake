@@ -1,4 +1,4 @@
-﻿<p align="center">
+<p align="center">
   <strong><img src="https://img.shields.io/badge/🇨🇳中文-00a1d6?style=flat-square" alt="中文"></strong>
   <a href="README_EN.md">
     <img src="https://img.shields.io/badge/🇬🇧English-999999?style=flat-square" alt="English">
@@ -204,7 +204,7 @@ go test -tags=integration ./internal/handler/... -count=1
 go test ./... -count=1
 
 # 对已部署服务的黑盒（未设 URL 则 Skip）
-# PowerShell: $env:MINIBILI_TEST_BASE_URL="http://127.0.0.1:8080"
+# Linux/macOS: export MINIBILI_TEST_BASE_URL="http://127.0.0.1:8080"
 go test -tags=integration ./internal/handler/... -count=1
 ```
 

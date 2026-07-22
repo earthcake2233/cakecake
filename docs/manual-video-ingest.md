@@ -17,16 +17,16 @@
 
 ## 1. 本机准备文件
 
-转码示例（PowerShell，路径按实际修改）：
+转码示例（路径按实际修改）：
 
-```powershell
+```bash
 ffmpeg -i 原片.mp4 -c:v libx264 -preset medium -crf 23 -c:a aac -movflags +faststart out.mp4
 ffmpeg -i out.mp4 -ss 00:00:01 -vframes 1 cover.jpg
 ```
 
 上传到 OSS（需安装 [ossutil](https://help.aliyun.com/document_detail/120075.html) 或使用控制台）：
 
-```powershell
+```bash
 ossutil cp out.mp4 oss://your-bucket/videos/42.mp4
 ossutil cp cover.jpg oss://your-bucket/covers/42.jpg
 ```
