@@ -221,3 +221,4 @@ go test -tags=integration ./internal/handler/... -count=1
 
 - 勿提交 `.env`、密钥与数据库密码。
 - 实现与 SPEC / Rule 冲突时，以 SPEC / Rule 为准。
+

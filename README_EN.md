@@ -1,13 +1,13 @@
-<p align="center">
+﻿<p align="center">
   <a href="README.md">
-    <img src="https://img.shields.io/badge/🇨🇳中文-999999?style=flat-square" alt="中文">
+    <img src="https://img.shields.io/badge/馃嚚馃嚦涓枃-999999?style=flat-square" alt="涓枃">
   </a>
-  <strong><img src="https://img.shields.io/badge/🇬🇧English-00a1d6?style=flat-square" alt="English"></strong>
+  <strong><img src="https://img.shields.io/badge/馃嚞馃嚙English-00a1d6?style=flat-square" alt="English"></strong>
 </p>
 
-# cakecake 🍰
+# cakecake 馃嵃
 
-A full-stack video-sharing community built with Go + Vue3, covering video upload, real-time danmaku, nested comments, full-text search, AI assistant, and more. Frontend brand: **cakecake** · backend module: `minibili`.
+A full-stack video-sharing community built with Go + Vue3, covering video upload, real-time danmaku, nested comments, full-text search, AI assistant, and more. Frontend brand: **cakecake** 路 backend module: `minibili`.
 
 <p align="center">
   <a href="https://chengzisoft.top/#/">
@@ -19,7 +19,7 @@ A full-stack video-sharing community built with Go + Vue3, covering video upload
   &nbsp;&nbsp;
   <a href="https://github.com/earthcake2233/cakecake/actions">
     <img src="https://img.shields.io/github/actions/workflow/status/earthcake2233/cakecake/ci.yml?branch=main&style=flat-square&logo=github&label=CI" alt="CI">
-    <img src="https://img.shields.io/badge/Demo Video-B站-00a1d6?style=flat-square&logo=bilibili" alt="Demo Video">
+    <img src="https://img.shields.io/badge/Demo Video-B绔?00a1d6?style=flat-square&logo=bilibili" alt="Demo Video">
   </a>
 </p>
 
@@ -90,13 +90,12 @@ A full-stack video-sharing community built with Go + Vue3, covering video upload
 
 ```
 Minibili/
-├── cmd/mini-bili/             # Go entrypoint
-├── internal/                  # handler / service / worker / ws …
-├── configs/                   # sensitive_words.txt; ip2region_v4.xdb (download manually, see .gitignore)
-├── deploy/                    # Nginx & systemd templates
-├── go.mod                     # module minibili
-└── cakecake-vue/
-    └── bilibili-vue/          # Vue 3 + Vite frontend (see subdirectory README)
+鈹溾攢鈹€ cmd/mini-bili/             # Go entrypoint
+鈹溾攢鈹€ internal/                  # handler / service / worker / ws 鈥?鈹溾攢鈹€ configs/                   # sensitive_words.txt; ip2region_v4.xdb (download manually, see .gitignore)
+鈹溾攢鈹€ deploy/                    # Nginx & systemd templates
+鈹溾攢鈹€ go.mod                     # module minibili
+鈹斺攢鈹€ cakecake-vue/
+    鈹斺攢鈹€ bilibili-vue/          # Vue 3 + Vite frontend (see subdirectory README)
 ```
 
 `bilibili-vue/go.mod` is isolated from the root module to prevent `go test ./...` from scanning `node_modules`.
@@ -129,7 +128,7 @@ npm run dev                   # http://localhost:8888
 
 - Homepage loads, API goes through `/api/v1` (Vite proxy to `127.0.0.1:8080`)
 - Login / Register: `#/minibili/login`, `#/minibili/register`
-- Invalid routes or missing videos → `#/404`
+- Invalid routes or missing videos 鈫?`#/404`
 
 Frontend details: **[bilibili-vue/README.md](./cakecake-vue/bilibili-vue/README.md)**
 
@@ -144,7 +143,7 @@ Frontend details: **[bilibili-vue/README.md](./cakecake-vue/bilibili-vue/README.
 | **MySQL** | Persistence |
 | **Redis** | Play counts, danmaku cooldown, Refresh Token |
 | **RabbitMQ** | Transcoding queue (required by spec, cannot be replaced with Redis List) |
-| **Elasticsearch** (optional) | Full-text search — shows "not available" if unconfigured |
+| **Elasticsearch** (optional) | Full-text search 鈥?shows "not available" if unconfigured |
 | **FFmpeg / ffprobe** | Transcoding & cover thumbnail extraction |
 | **Alibaba Cloud OSS** | `videos/`, `covers/`, etc. |
 
@@ -152,7 +151,7 @@ Frontend details: **[bilibili-vue/README.md](./cakecake-vue/bilibili-vue/README.
 
 ## Backend Configuration
 
-Copy [`.env.example`](./.env.example) → `.env` and configure at minimum:
+Copy [`.env.example`](./.env.example) 鈫?`.env` and configure at minimum:
 
 - `JWT_SECRET`, `MYSQL_DSN`
 - `REDIS_*`, `RABBITMQ_URL`
@@ -160,7 +159,7 @@ Copy [`.env.example`](./.env.example) → `.env` and configure at minimum:
 - `SENSITIVE_WORDS_FILE`
 - `TEMP_UPLOAD_DIR`
 - `ELASTICSEARCH_*` (optional; also supports OpenSearch / Bonsai)
-- `VIDEO_UPLOAD_DISABLED` (optional — disables browser upload while keeping metadata submission)
+- `VIDEO_UPLOAD_DISABLED` (optional 鈥?disables browser upload while keeping metadata submission)
 
 ### Air hot-reload (optional)
 
@@ -216,4 +215,5 @@ See **[deploy/DEPLOY.md](./deploy/DEPLOY.md)**. Optional **[GitHub Actions](./.g
 
 ## License
 
-[Non-Commercial License](./LICENSE) — personal/educational use permitted, commercial use prohibited.
+[Non-Commercial License](./LICENSE) 鈥?personal/educational use permitted, commercial use prohibited.
+

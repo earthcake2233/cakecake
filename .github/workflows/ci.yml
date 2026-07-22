@@ -34,10 +34,12 @@ jobs:
       - name: Upload frontend coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
+          token: ${{ secrets.CODECOV_TOKEN }}
           directory: cakecake-vue/bilibili-vue/coverage
           flags: frontend
           name: frontend-coverage
           fail_ci_if_error: false
+          slug: earthcake2233/cakecake
 
   test-backend:
     runs-on: ubuntu-latest
@@ -56,7 +58,9 @@ jobs:
       - name: Upload backend coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
+          token: ${{ secrets.CODECOV_TOKEN }}
           files: coverage.out
           flags: backend
           name: backend-coverage
           fail_ci_if_error: false
+          slug: earthcake2233/cakecake
