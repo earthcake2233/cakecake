@@ -14,11 +14,11 @@
     <img src="https://img.shields.io/badge/在线体验-chengzisoft.top-00a1d6?style=flat-square" alt="在线体验">
   </a>
   &nbsp;&nbsp;
-  <a href="https://b23.tv/9VnJIWm">
-  </a>
-  &nbsp;&nbsp;
   <a href="https://github.com/earthcake2233/cakecake/actions">
     <img src="https://img.shields.io/github/actions/workflow/status/earthcake2233/cakecake/ci.yml?branch=main&style=flat-square&logo=github&label=CI" alt="CI">
+  </a>
+  &nbsp;&nbsp;
+  <a href="https://b23.tv/9VnJIWm">
     <img src="https://img.shields.io/badge/演示视频-B站-00a1d6?style=flat-square&logo=bilibili" alt="B站演示">
   </a>
 </p>
@@ -221,4 +221,5 @@ go test -tags=integration ./internal/handler/... -count=1
 
 - 勿提交 `.env`、密钥与数据库密码。
 - 实现与 SPEC / Rule 冲突时，以 SPEC / Rule 为准。
+
 

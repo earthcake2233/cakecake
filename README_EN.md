@@ -14,12 +14,12 @@ A full-stack video-sharing community built with Go + Vue3, covering video upload
     <img src="https://img.shields.io/badge/Live Demo-chengzisoft.top-00a1d6?style=flat-square" alt="Live Demo">
   </a>
   &nbsp;&nbsp;
-  <a href="https://b23.tv/9VnJIWm">
-  </a>
-  &nbsp;&nbsp;
   <a href="https://github.com/earthcake2233/cakecake/actions">
     <img src="https://img.shields.io/github/actions/workflow/status/earthcake2233/cakecake/ci.yml?branch=main&style=flat-square&logo=github&label=CI" alt="CI">
-    <img src="https://img.shields.io/badge/Demo Video-B绔?00a1d6?style=flat-square&logo=bilibili" alt="Demo Video">
+  </a>
+  &nbsp;&nbsp;
+  <a href="https://b23.tv/9VnJIWm">
+    <img src="https://img.shields.io/badge/Demo%20Video-Bilibili-00a1d6?style=flat-square&logo=bilibili" alt="Demo Video">
   </a>
 </p>
 
