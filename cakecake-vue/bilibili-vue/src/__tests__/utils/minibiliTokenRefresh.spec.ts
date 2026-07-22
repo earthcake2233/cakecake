@@ -1,4 +1,10 @@
-import { describe, it, expect, beforeEach, vi, afterAll } from "vitest";
+﻿import { describe, it, expect, beforeEach, vi, afterAll } from "vitest";
+
+vi.hoisted(() => {
+  vi.stubEnv("VITE_MINIBILI_API", "true");
+  vi.stubEnv("VITE_REMOTE_API_BASE", "");
+});
+
 import {
   isAccessTokenExpired,
   shouldAttemptTokenRefresh,
@@ -26,8 +32,6 @@ describe("minibiliTokenRefresh", () => {
   beforeEach(() => {
     localStorage.clear();
     vi.clearAllMocks();
-    vi.stubEnv("VITE_MINIBILI_API", "true");
-    vi.stubEnv("VITE_REMOTE_API_BASE", "");
   });
   afterAll(() => vi.unstubAllEnvs());
   

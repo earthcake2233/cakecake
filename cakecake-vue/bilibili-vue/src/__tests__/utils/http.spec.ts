@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest";
+﻿import { describe, it, expect, vi, beforeAll, beforeEach, afterAll } from "vitest";
 
 var mockAxiosInstance;
 var mockCreate = vi.fn(function(cfg) {
@@ -20,11 +20,15 @@ vi.mock("@/utils/authTokens", function() { return { getAccessToken: vi.fn(), get
 var reqHandler, resSuccess, resError;
 
 beforeAll(async function() {
+  vi.stubEnv("VITE_MINIBILI_API", "true");
+  vi.stubEnv("VITE_REMOTE_API_BASE", "");
   await import("@/utils/http");
   reqHandler = mockAxiosInstance.interceptors.request.use.mock.calls[0][0];
   resSuccess = mockAxiosInstance.interceptors.response.use.mock.calls[0][0];
   resError = mockAxiosInstance.interceptors.response.use.mock.calls[0][1];
 });
+
+afterAll(() => vi.unstubAllEnvs());
 
 it("creates axios instance with correct config", function() {
   expect(mockCreate).toHaveBeenCalledWith({ withCredentials: false, baseURL: "", timeout: 15000 });
