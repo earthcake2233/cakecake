@@ -31,15 +31,21 @@ jobs:
         working-directory: cakecake-vue/bilibili-vue
         run: npm run coverage
 
-      - name: Upload frontend coverage
+      - name: Upload coverage to Codecov
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
         run: |
-          curl -Os https://uploader.codecov.io/latest/linux/codecov
+          curl -Os https://cli.codecov.io/latest/linux/codecov
           chmod +x codecov
-          ./codecov \
-            -t "${{ secrets.CODECOV_TOKEN }}" \
-            -f ./cakecake-vue/bilibili-vue/coverage/lcov.info \
-            -F frontend \
-            -Z \
+          ./codecov upload-coverage \
+            --git-service github \
+            --slug earthcake2233/cakecake \
+            --commit-sha ${{ github.sha }} \
+            --branch main \
+            --token "$CODECOV_TOKEN" \
+            --file ./cakecake-vue/bilibili-vue/coverage/lcov.info \
+            --flag frontend \
+            --fail-on-error \
             --verbose
 
   test-backend:
@@ -56,13 +62,19 @@ jobs:
         run: |
           go test ./... -count=1 -coverprofile=coverage.out -covermode=atomic
 
-      - name: Upload backend coverage
+      - name: Upload coverage to Codecov
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
         run: |
-          curl -Os https://uploader.codecov.io/latest/linux/codecov
+          curl -Os https://cli.codecov.io/latest/linux/codecov
           chmod +x codecov
-          ./codecov \
-            -t "${{ secrets.CODECOV_TOKEN }}" \
-            -f ./coverage.out \
-            -F backend \
-            -Z \
+          ./codecov upload-coverage \
+            --git-service github \
+            --slug earthcake2233/cakecake \
+            --commit-sha ${{ github.sha }} \
+            --branch main \
+            --token "$CODECOV_TOKEN" \
+            --file ./coverage.out \
+            --flag backend \
+            --fail-on-error \
             --verbose
