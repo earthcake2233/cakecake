@@ -37,8 +37,8 @@ A full-stack video-sharing community built with Go + Vue3, covering video upload
   <img src="https://img.shields.io/badge/FFmpeg-007808?style=flat-square&logo=ffmpeg&logoColor=white" alt="FFmpeg">
   <img src="https://img.shields.io/badge/WebSocket-010101?style=flat-square&logo=socket.io&logoColor=white" alt="WebSocket">
   <img src="https://img.shields.io/badge/Tests-829%20passing-00a1d6?style=flat-square&logo=vitest" alt="Tests">
-  <a href="https://codecov.io/gh/earthcake2233/cakecake"><img src="https://img.shields.io/codecov/c/github/earthcake2233/cakecake?flag=frontend&style=flat-square&logo=codecov&label=Coverage" alt="Codecov"></a>
-  <img src="https://img.shields.io/badge/Go%20Tests-27%20files-00ADD8?style=flat-square&logo=go" alt="Go Tests">
+  <a href="https://codecov.io/gh/earthcake2233/cakecake"><img src="https://img.shields.io/codecov/c/github/earthcake2233/cakecake?flag=frontend&style=flat-square&logo=codecov&label=Vue%20Coverage" alt="Codecov"></a>
+  <a href="https://codecov.io/gh/earthcake2233/cakecake"><img src="https://img.shields.io/codecov/c/github/earthcake2233/cakecake?flag=backend&style=flat-square&logo=codecov&label=Go%20Coverage" alt="Codecov Backend"></a>
 </p>
 
 **Capabilities**: JWT auth, video/article submission & review, feed & follow, private messaging (WebSocket), video upload & async transcoding (FFmpeg + RabbitMQ + OSS), real-time danmaku (bullet comments), comments & notifications, search (Elasticsearch optional), AI assistant (DeepSeek optional), admin dashboard.
