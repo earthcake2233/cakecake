@@ -53,15 +53,16 @@ codecov.exe
 coverage_test.out
 
 # Coverage profiles
-coverage_total
 cov_out
 *.py
 !internal/**/write_test.py
 
 # Coverage profiles
-coverage_total
 cov_out
 
 # Coverage profiles
+cov_out
+
+covprofile
 coverage_total
 cov_out
