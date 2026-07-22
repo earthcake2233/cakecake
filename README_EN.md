@@ -36,7 +36,6 @@ A full-stack video-sharing community built with Go + Vue3, covering video upload
   <img src="https://img.shields.io/badge/Elasticsearch-00BFB3?style=flat-square&logo=elasticsearch&logoColor=white" alt="Elasticsearch">
   <img src="https://img.shields.io/badge/FFmpeg-007808?style=flat-square&logo=ffmpeg&logoColor=white" alt="FFmpeg">
   <img src="https://img.shields.io/badge/WebSocket-010101?style=flat-square&logo=socket.io&logoColor=white" alt="WebSocket">
-  <img src="https://img.shields.io/badge/Tests-829%20passing-00a1d6?style=flat-square&logo=vitest" alt="Tests">
   <a href="https://codecov.io/gh/earthcake2233/cakecake"><img src="https://img.shields.io/codecov/c/github/earthcake2233/cakecake?flag=frontend&style=flat-square&logo=codecov&label=Vue%20Coverage" alt="Codecov"></a>
   <a href="https://codecov.io/gh/earthcake2233/cakecake"><img src="https://img.shields.io/codecov/c/github/earthcake2233/cakecake?flag=backend&style=flat-square&logo=codecov&label=Go%20Coverage" alt="Codecov Backend"></a>
 </p>
