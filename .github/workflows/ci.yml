@@ -31,14 +31,16 @@ jobs:
         working-directory: cakecake-vue/bilibili-vue
         run: npm run coverage
 
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./cakecake-vue/bilibili-vue/coverage/lcov.info
-          flags: frontend
-          fail_ci_if_error: true
-          verbose: true
+      - name: Upload frontend coverage
+        run: |
+          curl -Os https://uploader.codecov.io/latest/linux/codecov
+          chmod +x codecov
+          ./codecov \
+            -t "${{ secrets.CODECOV_TOKEN }}" \
+            -f ./cakecake-vue/bilibili-vue/coverage/lcov.info \
+            -F frontend \
+            -Z \
+            --verbose
 
   test-backend:
     runs-on: ubuntu-latest
@@ -54,11 +56,13 @@ jobs:
         run: |
           go test ./... -count=1 -coverprofile=coverage.out -covermode=atomic
 
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./coverage.out
-          flags: backend
-          fail_ci_if_error: true
-          verbose: true
+      - name: Upload backend coverage
+        run: |
+          curl -Os https://uploader.codecov.io/latest/linux/codecov
+          chmod +x codecov
+          ./codecov \
+            -t "${{ secrets.CODECOV_TOKEN }}" \
+            -f ./coverage.out \
+            -F backend \
+            -Z \
+            --verbose
