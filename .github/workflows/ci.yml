@@ -32,14 +32,12 @@ jobs:
         run: npm run coverage
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./cakecake-vue/bilibili-vue/coverage/lcov.info
-          flags: frontend
-          name: frontend-coverage
-          fail_ci_if_error: true
-          verbose: true
+        run: |
+          curl -Os https://cli.codecov.io/latest/linux/codecov
+          chmod +x codecov
+          ./codecov --verbose create-commit             --slug earthcake2233/cakecake             --sha "${{ github.sha }}"             --ci-passed true             --token "${{ secrets.CODECOV_TOKEN }}"
+          ./codecov --verbose upload-coverage             --slug earthcake2233/cakecake             --sha "${{ github.sha }}"             --token "${{ secrets.CODECOV_TOKEN }}"             --file ./cakecake-vue/bilibili-vue/coverage/lcov.info             --flag frontend
+          ./codecov --verbose create-report             --slug earthcake2233/cakecake             --sha "${{ github.sha }}"             --token "${{ secrets.CODECOV_TOKEN }}"
 
   test-backend:
     runs-on: ubuntu-latest
@@ -56,11 +54,9 @@ jobs:
           go test ./... -count=1 -coverprofile=coverage.out -covermode=atomic
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./coverage.out
-          flags: backend
-          name: backend-coverage
-          fail_ci_if_error: true
-          verbose: true
+        run: |
+          curl -Os https://cli.codecov.io/latest/linux/codecov
+          chmod +x codecov
+          ./codecov --verbose create-commit             --slug earthcake2233/cakecake             --sha "${{ github.sha }}"             --ci-passed true             --token "${{ secrets.CODECOV_TOKEN }}"
+          ./codecov --verbose upload-coverage             --slug earthcake2233/cakecake             --sha "${{ github.sha }}"             --token "${{ secrets.CODECOV_TOKEN }}"             --file ./coverage.out             --flag backend
+          ./codecov --verbose create-report             --slug earthcake2233/cakecake             --sha "${{ github.sha }}"             --token "${{ secrets.CODECOV_TOKEN }}"
