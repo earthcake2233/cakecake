@@ -32,8 +32,8 @@
   <img src="https://img.shields.io/badge/Elasticsearch-00BFB3?style=flat-square&logo=elasticsearch&logoColor=white" alt="Elasticsearch">
   <img src="https://img.shields.io/badge/FFmpeg-007808?style=flat-square&logo=ffmpeg&logoColor=white" alt="FFmpeg">
   <img src="https://img.shields.io/badge/WebSocket-010101?style=flat-square&logo=socket.io&logoColor=white" alt="WebSocket">
-  <img src="https://img.shields.io/badge/Tests-671%20passing-00a1d6?style=flat-square&logo=vitest" alt="Tests">
-  <img src="https://img.shields.io/badge/Coverage-66%25-success?style=flat-square&logo=vitest" alt="Coverage">
+  <img src="https://img.shields.io/badge/Tests-700%20passing-00a1d6?style=flat-square&logo=vitest" alt="Tests">
+  <img src="https://img.shields.io/badge/Coverage-67%25-success?style=flat-square&logo=vitest" alt="Coverage">
   <img src="https://img.shields.io/badge/Go%20Tests-27%20files-00ADD8?style=flat-square&logo=go" alt="Go Tests">
 </p>
 
