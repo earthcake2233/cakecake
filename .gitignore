@@ -56,5 +56,5 @@ coverage_test.out
 # ── Temp / debug scripts ──
 *.py
 !internal/**/write_test.py
-!scripts/gen_*.py
+!scripts/*.py
 !cakecake-vue/bilibili-vue/scripts/*.py

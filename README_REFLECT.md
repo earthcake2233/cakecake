@@ -351,6 +351,27 @@ src/pages/admin/SystemConfigManage.vue
 | Rule.md 章节编号错乱 | 编辑时误把章节内容粘贴到文件头部 | 提交前 Select-String 验证章节标题顺序，确保连续 |
 | .gitignore 中 cov_out 重复 3 次 | 多次修改 .gitignore 追加同类规则时未去重 | 清理 .gitignore，按功能分组，同类规则只保留一条 |
 | Makefile 中文乱码 | 文件保存为非 UTF-8 编码或 BOM 问题 | 用 Python pathlib.Path.write_text(encoding='utf-8') 写入确保 UTF-8 无 BOM |
+## 2026-07-23：Markdown 写入格式规范化 + 中文编码脚本化
+
+### 动机
+
+反复出现两个问题：1）PowerShell 下 inline Python 含中文必乱码（`python -c "..."` 走系统代码页截断 UTF-8）；2）AI 程序化编辑 Markdown 表格时新增行掉出表格（插到 `---` 节分隔符之后）。REFLECT 记录不足以防止重犯，需要可执行方案。
+
+### 实现
+
+- **scripts/safe_write.py** — 通过 base64 参数安全写入 UTF-8 文件，完全绕过 PowerShell 编码问题
+- **scripts/validate_md_tables.py** — 扫描全部 `.md` 文件的表格，检查：表格连续性（无 `---` 打断）、列数匹配、pipe 符号完整性
+- **R-DOC-9** — 禁止 `python -c "..."` 含中文，必须用文件执行
+- **R-DOC-10** — 改完 Markdown 表格后必须运行 `validate_md_tables.py` 校验
+
+### 采坑记录
+
+#### AI 行为 / 工具链
+
+| 问题 | 原因 | 解决 |
+|------|------|------|
+| Markdown 表格新增行掉出表格（如 R-DOC-9 被 --- 隔开） | 程序化插入行时定位在 `---` 节分隔符之后而非之前 | 插入表格行前先找到该节的 `---` 结束标记，插入到 ***前面***；插入后立即重读验证整表连续性。另新增 R-DOC-10 + validate_md_tables.py 硬检查 |
+
 ### 当前状态
 
 - 仓库 total: 15.76% 覆盖率，193 文件（含零覆盖的框架/配置类文件）
