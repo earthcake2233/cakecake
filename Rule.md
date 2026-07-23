@@ -1,7 +1,7 @@
 ## Mini-Bili v1.0 工程规则（Rule）
 
 **版本**：v1.0
-**最后更新**：2026-07-22
+**最后更新**：2026-07-23
 **依赖文档**：Mini-Bili v1.0 SPEC
 
 
@@ -148,11 +148,9 @@
 | **R-DOC-3**  | **ARCHITECTURE 中英文必须完全同步**                | 修改`docs/ARCHITECTURE.md`（英文）或 `docs/ARCHITECTURE_EN.md`（中文）任一文件时，必须同步更新另一文件，确保章节结构、图表（Mermaid）、表格、代码块完全一致，仅语言不同。禁止出现一方有某章节/某图表而另一方缺失的情况。        |
 | **R-DOC-4**  | **Git 提交信息必须使用英文**                       | `git commit -m` 的提交描述必须使用纯英文，遵循 conventional commits 格式（如 `feat:`、`fix:`、`docs:`、`refactor:`、`chore:` 等）。禁止在 commit message 中出现中文。                                                           |
 | **R-DOC-5**  | **新增环境变量必须同步写入 .env.example**        | 引入新的环境变量时，必须在同一次 commit 中在 `.env.example` 添加对应的注释说明和默认值。禁止只加代码读取逻辑而不更新模板文件。 |
-| **R-DOC-6** | **中文编码检查**|
-| **R-DOC-7** | **修改 .md 文档必须更新头部元数据并校验关联** | 每次修改任何 `.md` 文件（包括但不限于 Rule.md、Skill.md、README*.md、SPEC.md、docs/*.md）后，必须：1. 更新文件头部 `**版本**`/`**最后更新**`/`**依赖文档**` 中的日期和引用；2. 检查被修改文档中引用的其他文档是否存在、路径是否正确、章节是否对应；3. 若新增/删除/重命名了某条 Rule/Skill/文档，需同步更新所有文档中的交叉引用。此三条缺一不可，在 commit message 中注明 `Docs-checked:` 列表。 | | 每次向代码文件写入中文后、提交前，必须使用 Python 扫描全项目检查是否遗留 BOM、U+FFFD、截断中文等编码问题。使用 Python 的 `pathlib` 读写含中文文件（`Path.read_text(encoding='utf-8')` / `write_text(...)`），避免平台编码差异导致截断或 BOM 问题。 |
-
-
-
+| **R-DOC-6** | **中文编码检查** | 每次向代码文件写入中文后、提交前，必须使用 Python 扫描全项目检查是否遗留 BOM、U+FFFD、截断中文等编码问题。使用 Python 的 `pathlib` 读写含中文文件（`Path.read_text(encoding="utf-8")` / `write_text(...)`），避免平台编码差异导致截断或 BOM 问题。 |
+| **R-DOC-7** | **修改 .md 文档必须更新头部元数据并校验关联** | 每次修改任何 `.md` 文件（包括但不限于 Rule.md、Skill.md、README*.md、SPEC.md、docs/*.md）后，必须：1. 更新文件头部 `**版本**`/`**最后更新**`/`**依赖文档**` 中的日期和引用；2. 检查被修改文档中引用的其他文档是否存在、路径是否正确、章节是否对应；3. 若新增/删除/重命名了某条 Rule/Skill/文档，需同步更新所有文档中的交叉引用。此三条缺一不可，在 commit message 中注明 `Docs-checked:` 列表。 |
+| **R-DOC-8** | **必须记录踩坑 / 技术难题经验** | 每次遇到并解决技术难题后，必须在 `README_REFLECT.md` 的「采坑记录」中新增条目。需包含：问题现象 → 根本原因 → 解决方案。必须覆盖以下场景：Windows 环境兼容问题（BOM、CRLF、反引号转义）、Go 测试框架陷阱（nil pointer、mock 配置遗漏）、CI 集成故障（Codecov 参数/延迟）、跨平台命令差异（PowerShell vs bash）。目标是为团队积累可检索的故障排查手册。 |
 ---
 
 ### 十、测试规范

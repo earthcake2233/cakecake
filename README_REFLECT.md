@@ -315,13 +315,43 @@ src/pages/admin/SystemConfigManage.vue
 
 ### 采坑记录
 
+#### Codecov / CI
+
 | 问题 | 原因 | 解决 |
 |------|------|------|
-| 手动 curl 下载 CLI + 传参上传后 Codecov 无记录 | `--git-service github` 对 `upload-coverage` 是无效参数 | 改用 `codecov-action@v5.5.5` 处理三步流程 |
-| 上传后 upload 状态卡在 `started` 不处理 | Codecov 免费计划异步处理队列有约 2 小时延迟 | 等队列跑完或升级付费计划 |
-| `codecov-action@v5` 浮动标签导致行为变化 | `@v5` 是新版本，内部从 bash uploader 换成了 CLI | 锁定 `@v5.5.5` 具体版本 |
-| CODECOV_TOKEN 可选但 create-commit 仍需认证 | CLI v11 的 `create-commit` 无 `--ci-passed` 参数 | 直接传 token 并通过 `fail_ci_if_error: true` 暴露错误 |
+| 手动 curl 下载 CLI + 传参上传后 Codecov 无记录 | --git-service github 对 upload-coverage 是无效参数 | 改用 codecov-action@v5.5.5 处理三步流程 |
+| 上传后 upload 状态卡在 started 不处理 | Codecov 免费计划异步处理队列有约 2 小时延迟 | 等队列跑完或升级付费计划 |
+| codecov-action@v5 浮动标签导致行为变化 | @v5 是新版本，内部从 bash uploader 换成了 CLI | 锁定 @v5.5.5 具体版本 |
+| CODECOV_TOKEN 可选但 create-commit 仍需认证 | CLI v11 的 create-commit 无 --ci-passed 参数 | 直接传 token 并通过 ail_ci_if_error: true 暴露错误 |
 
+#### Windows 开发环境
+
+| 问题 | 原因 | 解决 |
+|------|------|------|
+| Go 测试文件中 ` json:\"...\" ` struct tag 丢失 | PowerShell 用反引号（）做转义字符，通过 @""@ heredoc 或管道传字符串时反引号被消耗 | 用 Python 脚本写入文件，或使用 .NET 的 WriteAllText 直接写入字节 |
+| Go build cache 报 Access is denied | Windows 文件锁或权限问题导致 cache 文件损坏 | Remove-Item C:\Users\15072\AppData\Local\go-build -Recurse -Force 删除缓存目录后重建 |
+| go test -coverprofile=file 未生成 profile | test 失败退出码非 0 时不写 profile 文件 | 用 cmd /c "go test ... 2>&1" 绕开 PowerShell 的退出码处理，或单独执行 go test -coverprofile |
+| Set-Content 写入 UTF-8 文件带 BOM（\xEF\xBB\xBF） | PowerShell 默认对 UTF-8 添加 BOM，Go 编译器报错 | 用 [System.IO.File]::WriteAllText(path, content, [System.Text.UTF8Encoding]::new(False)) 写入无 BOM 的 UTF-8 |
+| CRLF/LF 行尾导致 go vet 报错或 Git 警告 | Windows 上 Git 自动转换 CRLF，Go 工具链期望 LF | 设置 .gitattributes 或提交前 git add 时 Git 自动转换 |
+| inline Python 脚本在 PowerShell 中引号/反斜杠被转义 | PowerShell 的双引号字符串内 \" 和 \\ 有特殊含义 | 复杂脚本写到 .py 文件后用 python file.py 执行，避免 inline |
+
+#### Go 测试
+
+| 问题 | 原因 | 解决 |
+|------|------|------|
+| handler 测试中 Redis 未设置导致 nil pointer dereference | admin handler 的 AdminRefresh 等函数直接调用 .Redis.Exists()，测试未提供 Redis | 在 
+ewTestAPI 中引入 miniredis，即使 handler 不直接使用 Redis 也要初始化 |
+| gatewayReady() 在 nil receiver 上调用时 panic | 方法体在 s != nil 检查前访问了 s.RC | 将 nil 检查移到方法体最前面，或在测试中避免直接调用 nil 对象的方法 |
+| gent_enabled 未设置导致 gatewayReady() 总是返回 false | config.C{} 的 AgentEnabled 默认为 alse，测试中未显式设为 	rue | 测试所有与 gatewayReady() 相关的调用时，必须同时设置 AgentEnabled: true |
+| 覆盖率统计包含零覆盖的框架文件拉低整体 | go test ./... 会统计所有包，包括仅含 migration/seed 的数据层 | 用 go test -coverprofile 配合 -coverpkg 聚焦业务包，或单独统计各包 |
+
+#### Git / 文档
+
+| 问题 | 原因 | 解决 |
+|------|------|------|
+| Rule.md 章节编号错乱（十一出现在最上方） | 编辑时误把章节内容粘贴到文件头部，导致编号顺序断裂 | 提交前 Select-String 验证章节标题顺序，确保 一→十二 连续 |
+| .gitignore 中 cov_out 重复 3 次 | 多次修改 .gitignore 追加同类规则时未去重 | 清理 .gitignore，按功能分组，同类规则只保留一条 |
+| Makefile 中文乱码 | 文件保存为非 UTF-8 编码或 BOM 问题 | 用 Python pathlib.Path.write_text(encoding='utf-8') 写入确保 UTF-8 无 BOM |
 ### 当前状态
 
 - 仓库 total: 15.76% 覆盖率，193 文件（含零覆盖的框架/配置类文件）
