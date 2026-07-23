@@ -2,6 +2,9 @@ package service
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -12,6 +15,7 @@ import (
 	"gorm.io/gorm"
 
 	"minibili/internal/aigateway"
+	"minibili/internal/aigateway/toolkit"
 	"minibili/internal/config"
 	"minibili/internal/data"
 	"minibili/internal/model"
@@ -21,14 +25,15 @@ import (
 
 // AgentService runs AI assistant replies for agent DM threads.
 type AgentService struct {
-	Cfg     *config.C
-	DB      *gorm.DB
-	Redis   *redis.Client
-	Gateway *aigateway.Gateway
-	Sens    *sensitive.Filter
-	ChatHub *ws.ChatHub
-	Log     *zap.Logger
-	RC      *config.RuntimeConfig
+	Cfg        *config.C
+	DB         *gorm.DB
+	Redis      *redis.Client
+	Gateway    *aigateway.Gateway
+	Sens       *sensitive.Filter
+	ChatHub    *ws.ChatHub
+	Log        *zap.Logger
+	RC         *config.RuntimeConfig
+	ToolExec   toolkit.Executor
 }
 
 func (s *AgentService) gatewayReady() bool {
@@ -182,6 +187,82 @@ func (s *AgentService) applyDynamicGatewayConfig() {
 	}
 }
 
+// enabledTools builds the tool enabled map from RuntimeConfig.
+func (s *AgentService) enabledTools() map[string]bool {
+	m := make(map[string]bool)
+	for _, name := range toolkit.AllToolNames() {
+		enabled := true
+		if s.RC != nil {
+			key := "tool_" + name + "_enabled"
+			enabled = s.RC.GetBool(key, true)
+		}
+		m[name] = enabled
+	}
+	return m
+}
+
+// generateTraceID creates a short unique trace identifier.
+func generateTraceID() string {
+	b := make([]byte, 4)
+	rand.Read(b)
+	return hex.EncodeToString(b)
+}
+
+func (s *AgentService) setupToolCallbacks(traceID string, humanID uint64) {
+	if s.Gateway == nil || s.ChatHub == nil {
+		return
+	}
+	s.Gateway.OnToolCallStart = func(tid, spanID, parentSpanID, toolName string, argsJSON json.RawMessage) {
+		var args interface{}
+		json.Unmarshal(argsJSON, &args)
+		payload := map[string]interface{}{
+			"trace_id":        tid,
+			"span_id":         spanID,
+			"parent_span_id":  parentSpanID,
+			"tool_name":       toolName,
+			"arguments":       args,
+			"started_at":      time.Now().Format(time.RFC3339),
+		}
+		s.ChatHub.PushJSON(humanID, map[string]interface{}{
+			"type": "tool_call_start",
+			"body": payload,
+		})
+	}
+	s.Gateway.OnToolCallEnd = func(tid, spanID, toolName string, durationMs int64, resultSummary string) {
+		payload := map[string]interface{}{
+			"trace_id":       tid,
+			"span_id":        spanID,
+			"tool_name":      toolName,
+			"duration_ms":    durationMs,
+			"result_summary": resultSummary,
+		}
+		s.ChatHub.PushJSON(humanID, map[string]interface{}{
+			"type": "tool_call_end",
+			"body": payload,
+		})
+	}
+	s.Gateway.OnToolResultData = func(tid, spanID, toolName string, items json.RawMessage) {
+		payload := map[string]interface{}{
+			"trace_id":  tid,
+			"span_id":   spanID,
+			"tool_name": toolName,
+			"items":     items,
+		}
+		s.ChatHub.PushJSON(humanID, map[string]interface{}{
+			"type": "tool_result_data",
+			"body": payload,
+		})
+	}
+}
+
+func (s *AgentService) clearToolCallbacks() {
+	if s.Gateway != nil {
+		s.Gateway.OnToolCallStart = nil
+		s.Gateway.OnToolCallEnd = nil
+		s.Gateway.OnToolResultData = nil
+	}
+}
+
 func (s *AgentService) GenerateReply(ctx context.Context, conv *model.DmConversation, userText string) (string, error) {
 	if !s.gatewayReady() {
 		return "", fmt.Errorf("ai assistant is not configured")
@@ -220,7 +301,22 @@ func (s *AgentService) GenerateReply(ctx context.Context, conv *model.DmConversa
 	}
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	reply, err := s.Gateway.CompleteUserTurn(ctx, conv.ID, userText)
+
+	// Decide whether to use tools
+	useTools := s.ToolExec != nil && len(toolkit.DefineTools(s.enabledTools())) > 0
+
+	var reply string
+	if useTools {
+		traceID := generateTraceID()
+		s.setupToolCallbacks(traceID, conv.UserLow)
+		defer s.clearToolCallbacks()
+
+		tools := toolkit.DefineTools(s.enabledTools())
+		s.Gateway.ToolExec = s.ToolExec
+		reply, err = s.Gateway.CompleteUserTurnWithTools(ctx, conv.ID, userText, tools, traceID)
+	} else {
+		reply, err = s.Gateway.CompleteUserTurn(ctx, conv.ID, userText)
+	}
 	if err != nil {
 		return "", err
 	}

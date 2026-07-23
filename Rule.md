@@ -182,3 +182,12 @@
 | **R-CLEAN-3** | **提交前安全检查** | `git add -A` 前检查变更文件是否含硬编码密钥/令牌（`CODECOV_TOKEN=`, `password=`, `secret=`）、`.env` 文件、个人凭证、>10MB 大文件、二进制文件。发现即排除并告知用户。 |
 | **R-CLEAN-4** | **用户确认后提交** | `git add -A` -> `git status --short` 展示变更摘要（增删行数、文件数、关键变更）-> **等待用户确认** -> `git commit` + `git push`。commit message 遵循 conventional commits 格式（`test:`/`feat:`/`fix:`/`chore:`）。 |
 | **R-CLEAN-5** | **严禁提交敏感内容** | 严禁将任何 token、密钥、密码、`.env` 文件、IDE 配置目录（`.idea/`/`.vscode/`/`.cursor/`）、`node_modules/` 提交到版本控制。如误暂存敏感文件，立即 `git rm --cached` 并更新 `.gitignore`。 |
+---
+
+### 十三、AI Gateway / Function Calling
+
+| 编号 | 规则 | 说明 |
+| :--- | :--- | :--- |
+| **R-DOC-11** | **修改 AI Gateway 后必须运行 go vet + 相关单测** | 每次修改 `internal/aigateway/` 或 `internal/aigateway/toolkit/` 下的代码后，必须运行 `go vet ./internal/aigateway/...` 和 `go test ./internal/aigateway/...`，防止 tool calling 循环逻辑被破坏。 |
+| **R-DOC-12** | **新增 Tool 时必须同步更新定义 + 实现** | 新增平台工具时，必须同步修改 `toolkit/tools.go` 的 `definition()` 和 `toolkit/platform.go` 的 `Execute()` switch 分支，确保定义与实现不脱节。 |
+| **R-DOC-13** | **Tool 入参和出参必须经过敏感词过滤** | `PlatformExecutor.Execute()` 在 switch 前对 args 做敏感词检查，每个工具实现方法返回前对结果做敏感词检查。 |

@@ -30,7 +30,11 @@ func EnsureAgentProfiles(db *gorm.DB, cfg *config.C, lg *zap.Logger) error {
 	var n int64
 	_ = db.Model(&model.AgentProfile{}).Count(&n).Error
 	if n > 0 {
-		return backfillDmAgentProfileIDs(db, lg)
+		// migrateAgentSystemPrompt updates existing profile to use the new natural prompt style.
+	if err := migrateAgentSystemPrompt(db, lg); err != nil {
+		return err
+	}
+	return backfillDmAgentProfileIDs(db, lg)
 	}
 
 	displayName := defaultAgentDisplayName
@@ -78,6 +82,10 @@ func EnsureAgentProfiles(db *gorm.DB, cfg *config.C, lg *zap.Logger) error {
 	}
 	if lg != nil {
 		lg.Info("default agent profile created", zap.Uint64("profile_id", p.ID), zap.Uint64("bot_user_id", botID))
+	}
+	// migrateAgentSystemPrompt updates existing profile to use the new natural prompt style.
+	if err := migrateAgentSystemPrompt(db, lg); err != nil {
+		return err
 	}
 	return backfillDmAgentProfileIDs(db, lg)
 }
@@ -434,4 +442,34 @@ func ensureDmParticipants(db *gorm.DB, convID, humanID, botID uint64) {
 			}).Error
 		}
 	}
+}
+
+
+// migrateAgentSystemPrompt patches the default profile's system prompt to the new natural style.
+func migrateAgentSystemPrompt(db *gorm.DB, lg *zap.Logger) error {
+	oldPrompt := `你是 cakecake 站内 AI 助手「cakecake AI」。你帮助用户了解本站功能：视频观看、弹幕、投稿、私信、个人空间、收藏与历史等。
+回答请简洁、友好，使用中文。不要编造不存在的接口或功能；不确定时请诚实说明并给出合理建议。`
+	newPrompt := `你是 cakecake 站内 AI 助手。帮助用户了解本站功能。
+回答风格要求：
+- 说人话，自然口语化，像朋友聊天一样
+- 不要用任何 emoji 表情符号
+- 不要用夸张语气、不要营销号腔
+- 简洁直接，普通用户看得懂
+- 不要编造不存在的功能
+- 不确定时诚实说不知道`
+	var profiles []model.AgentProfile
+	if err := db.Where("slug = ?", "default").Find(&profiles).Error; err != nil {
+		return err
+	}
+	for _, p := range profiles {
+		if p.SystemPrompt == oldPrompt || p.SystemPrompt == "" {
+			if err := db.Model(&model.AgentProfile{}).Where("id = ?", p.ID).Update("system_prompt", newPrompt).Error; err != nil {
+				return err
+			}
+			if lg != nil {
+				lg.Info("migrated default agent system prompt", zap.Uint64("profile_id", p.ID))
+			}
+		}
+	}
+	return nil
 }

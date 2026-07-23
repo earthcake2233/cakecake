@@ -156,12 +156,8 @@
           </div>
           <template v-for="(grp, gi) in chatMessageGroups" :key="'g' + gi">
             <div class="msg-chat-time">{{ grp.label }}</div>
-            <div
-              v-for="m in grp.messages"
-              :key="m.id"
-              class="msg-chat-row"
-              :class="{ 'msg-chat-row--mine': m.is_mine }"
-            >
+            <template v-for="m in grp.messages" :key="m.id">
+            <div class="msg-chat-row" :class="{ 'msg-chat-row--mine': m.is_mine }">
               <img
                 class="msg-chat-face"
                 :src="m.face"
@@ -171,7 +167,49 @@
               />
               <div class="msg-chat-bubble">{{ m.content }}</div>
             </div>
+            <div v-if="m.toolActivities.length" class="msg-tool-activities">
+              <div v-for="act in m.toolActivities" :key="act.span_id" class="msg-tool-activity">
+                <span class="msg-tool-activity__status">{{ act.status === "running" ? "↻" : "✓" }}</span>
+                <span class="msg-tool-activity__name">{{ act.tool_name }}</span>
+                <span v-if="act.duration_ms" class="msg-tool-activity__dur">{{ act.duration_ms }}ms</span>
+              </div>
+            </div>
+            <div v-if="Object.keys(m.toolResultData).length" class="msg-tool-results">
+              <template v-for="(items, spanId) in m.toolResultData" :key="spanId">
+                <div v-for="(item, ii) in items" :key="ii" class="msg-result-card">
+                  <template v-if="item.cover || item.cover_url">
+                    <img class="msg-result-card__cover" :src="item.cover || item.cover_url" />
+                    <div class="msg-result-card__body">
+                      <div class="msg-result-card__title">{{ item.title }}</div>
+                      <div class="msg-result-card__meta">
+                        {{ item.author || item.uploader_name || item.uploader || "unknown" }}
+                        &middot; {{ formatPlayCount(item.play_count || item.plays || 0) }}
+                      </div>
+                    </div>
+                  </template>
+                  <template v-else-if="item.user_name">
+                    <img class="msg-result-card__avatar" :src="item.user_avatar || defaultFace" />
+                    <div class="msg-result-card__body">
+                      <div class="msg-result-card__content">{{ item.content }}</div>
+                      <div class="msg-result-card__meta">{{ item.user_name }} &middot; {{ item.like_count || 0 }}赞</div>
+                    </div>
+                  </template>
+                  <template v-else>
+                    <div class="msg-result-card__content">{{ item.content }}</div>
+                    <div class="msg-result-card__meta">{{ item.user_name || "匿名" }}</div>
+                  </template>
+                </div>
+              </template>
+            </div>
           </template>
+          </template>
+          <div v-if="chatAwaitingAgent && _liveToolActs.length" class="msg-tool-activities msg-tool-activities--live">
+            <div v-for="act in _liveToolActs" :key="act.span_id" class="msg-tool-activity">
+              <span class="msg-tool-activity__status">{{ act.status === "running" ? "?" : "?" }}</span>
+              <span class="msg-tool-activity__name">{{ act.tool_name }}</span>
+              <span v-if="act.duration_ms" class="msg-tool-activity__dur">{{ act.duration_ms }}ms</span>
+            </div>
+          </div>
           <div
             v-if="chatAwaitingAgent"
             class="msg-chat-loading msg-chat-loading--typing"
@@ -373,8 +411,12 @@ export default {
       deletingConvId: 0,
       resettingAgent: false,
       chatDraft: "",
+      _pendingResultData: {},
+      _pendingToolActs: [],
       chatWs: null,
-      _chatWsRetryTimer: null
+      _chatWsRetryTimer: null,
+      _liveToolActs: [],
+      _wsReconnectAttempts: 0,
     };
   },
   computed: {
@@ -423,7 +465,9 @@ export default {
           id: raw.id,
           content: raw.content,
           face: raw.sender_avatar || defaultFace,
-          is_mine: isMine
+          is_mine: isMine,
+          toolActivities: raw._toolActivities || JSON.parse(sessionStorage.getItem('mb_tool_acts_' + (raw.conversation_id || this.selectedConvId) + '_' + raw.id) || '[]'),
+          toolResultData: raw._toolResultData || JSON.parse(sessionStorage.getItem('mb_tool_results_' + (raw.conversation_id || this.selectedConvId) + '_' + raw.id) || '{}')
         };
         if (label !== curLabel) {
           flush();
@@ -611,10 +655,10 @@ export default {
       this.applyConversationPatch(conv);
     },
     connectChatWs() {
+      this.disconnectChatWs();
       const token = getAccessToken();
       const url = mbWsChatUrl(token);
       if (!url) return;
-      this.disconnectChatWs();
       const ws = new WebSocket(url);
       this.chatWs = ws;
       ws.onmessage = ev => {
@@ -625,12 +669,18 @@ export default {
           /* ignore */
         }
       };
+      ws.onopen = () => {
+        this._wsReconnectAttempts = 0;
+      };
       ws.onclose = () => {
-        this.chatWs = null;
-        if (this._chatWsRetryTimer) clearTimeout(this._chatWsRetryTimer);
-        this._chatWsRetryTimer = setTimeout(() => {
-          if (getAccessToken()) this.connectChatWs();
-        }, 3000);
+        if (this.chatWs !== ws) return;
+        this._wsReconnectAttempts++;
+        const delay = Math.min(1000 * Math.pow(2, this._wsReconnectAttempts - 1), 30000);
+        const jitter = Math.floor(Math.random() * 1000);
+        this._chatWsRetryTimer = setTimeout(() => this.connectChatWs(), delay + jitter);
+      };
+      ws.onerror = () => {
+        ws.close();
       };
     },
     disconnectChatWs() {
@@ -638,8 +688,12 @@ export default {
         clearTimeout(this._chatWsRetryTimer);
         this._chatWsRetryTimer = null;
       }
+      this._wsReconnectAttempts = 0;
       if (this.chatWs) {
         try {
+          this.chatWs.onclose = null;
+          this.chatWs.onerror = null;
+          this.chatWs.onmessage = null;
           this.chatWs.close();
         } catch {
           /* ignore */
@@ -648,8 +702,43 @@ export default {
       }
     },
     onChatWsPayload(data) {
+      if (data.type === "tool_call_start" && data.body) {
+        this._pendingToolActs.push({ ...data.body, status: "running" }); this._liveToolActs.push({ ...data.body, status: "running" });
+        return;
+      }
+      if (data.type === "tool_call_end" && data.body) {
+        const idx = this._pendingToolActs.findIndex(t => t.span_id === data.body.span_id);
+        if (idx >= 0) {
+          this._pendingToolActs[idx] = { ...this._pendingToolActs[idx], ...data.body, status: "done" }; this._liveToolActs[idx] = { ...this._liveToolActs[idx], ...data.body, status: "done" };
+        } else {
+          this._pendingToolActs.push({ ...data.body, status: "done" }); this._liveToolActs.push({ ...data.body, status: "done" });
+        }
+        return;
+      }
+      if (data.type === "tool_result_data" && data.body) {
+        this._pendingResultData[data.body.span_id] = data.body.items;
+        return;
+      }
       if (!data || typeof data !== "object") return;
       if (data.type === "dm_message" && data.message) {
+        if (this._pendingToolActs.length) {
+          // Mark any tools still "running" as "done" (dm_message means LLM finished processing all results)
+          this._pendingToolActs.forEach(t => { if (t.status === "running") t.status = "done"; });
+          data.message._toolActivities = [...this._pendingToolActs];
+          data.message._toolResultData = { ...this._pendingResultData };
+          // Finalize any remaining running tools before clear
+          this._liveToolActs.forEach(t => { if (t.status === "running") t.status = "done"; });
+          this._pendingToolActs = []; this._liveToolActs = [];
+          this._pendingResultData = {};
+          try {
+            var msgId = data.message && data.message.id;
+            var convId = data.message && data.message.conversation_id;
+            if (msgId != null && convId != null) {
+              sessionStorage.setItem("mb_tool_acts_" + convId + "_" + msgId, JSON.stringify(data.message._toolActivities || []));
+              sessionStorage.setItem("mb_tool_results_" + convId + "_" + msgId, JSON.stringify(data.message._toolResultData || {}));
+            }
+          } catch (e) { /* ignore */ }
+        }
         this.upsertConversationFromMessage(data.message);
         this.appendMessageIfNew(data.message);
       } else if (data.type === "dm_conversation" && data.conversation) {
@@ -812,6 +901,11 @@ export default {
         this.blacklistSubmitting = false;
       }
     },
+    formatPlayCount(n) {
+      if (n >= 10000) return (n / 10000).toFixed(1) + "万";
+      if (n >= 1000) return (n / 1000).toFixed(1) + "千";
+      return String(n);
+    },
     async sendChatMessage() {
       const text = this.chatDraftTrimmed;
       if (
@@ -823,6 +917,9 @@ export default {
         return;
       }
       const awaitAgent = this.selectedIsAgent;
+      if (awaitAgent && (!this.chatWs || this.chatWs.readyState !== WebSocket.OPEN)) {
+        this.connectChatWs();
+      }
       this.chatPosting = true;
       try {
         const msg = await mbPostDmMessage(this.selectedConvId, text);

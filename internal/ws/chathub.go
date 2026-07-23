@@ -11,6 +11,10 @@ import (
 type ChatHub struct {
 	mu    sync.RWMutex
 	users map[uint64]map[*websocket.Conn]struct{}
+
+	// connLocks protects concurrent writes to each connection.
+	// gorilla/websocket does not allow concurrent writes.
+	connLocks sync.Map
 }
 
 // NewChatHub creates an empty chat hub.
@@ -31,6 +35,7 @@ func (h *ChatHub) Join(userID uint64, c *websocket.Conn) {
 		h.users[userID] = m
 	}
 	m[c] = struct{}{}
+	h.connLocks.Store(c, &sync.Mutex{})
 }
 
 // Leave removes a connection for a user.
@@ -42,6 +47,7 @@ func (h *ChatHub) Leave(userID uint64, c *websocket.Conn) {
 	defer h.mu.Unlock()
 	if m, ok := h.users[userID]; ok {
 		delete(m, c)
+		h.connLocks.Delete(c)
 		if len(m) == 0 {
 			delete(h.users, userID)
 		}
@@ -70,9 +76,15 @@ func (h *ChatHub) PushRaw(userID uint64, data []byte) {
 	}
 	h.mu.RUnlock()
 	for _, c := range conns {
+		// Serialize writes per-connection to avoid concurrent write panic.
+		l, _ := h.connLocks.LoadOrStore(c, &sync.Mutex{})
+		l.(*sync.Mutex).Lock()
 		if err := c.WriteMessage(websocket.TextMessage, data); err != nil {
 			h.Leave(userID, c)
 			_ = c.Close()
+			l.(*sync.Mutex).Unlock()
+		} else {
+			l.(*sync.Mutex).Unlock()
 		}
 	}
 }

@@ -13,8 +13,14 @@ const defaultAgentDisplayName = "cakecake AI"
 const defaultAgentSign = "站内 AI 助手"
 const defaultAgentWelcome = "你好，我是 cakecake AI 助手。可以问我站内功能、投稿与观看相关问题～"
 
-const defaultAgentSystemPrompt = `你是 cakecake 站内 AI 助手「cakecake AI」。你帮助用户了解本站功能：视频观看、弹幕、投稿、私信、个人空间、收藏与历史等。
-回答请简洁、友好，使用中文。不要编造不存在的接口或功能；不确定时请诚实说明并给出合理建议。`
+const defaultAgentSystemPrompt = `你是 cakecake 站内 AI 助手。帮助用户了解本站功能。
+回答风格要求：
+- 说人话，自然口语化，像朋友聊天一样
+- 不！要！用！任！何！emoji！表情符号
+- 不要用夸张语气、不要营销号腔
+- 简洁直接，普通用户看得懂
+- 不要编造不存在的功能
+- 不确定时诚实说不知道`
 
 // EnsureDefaultAgentSettings creates the singleton settings row when missing.
 func EnsureDefaultAgentSettings(db *gorm.DB, lg *zap.Logger) error {

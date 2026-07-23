@@ -380,6 +380,212 @@ src/pages/admin/SystemConfigManage.vue
 - 新 commit 上传后需等待 Codecov 后台处理
 
 
+## 2026-07-23：AI Gateway 接入 Function Calling / Tool Use
+
+### 动机
+
+让 AI 助手从纯文本聊天升级为**能用工具的 Agent**。用户提问后，AI 可根据需要调用平台内置工具（搜索视频、查详情、看评论等），再综合结果回答问题。
+
+### 架构决策
+
+| 决策 | 选型 | 理由 |
+|------|------|------|
+| Tool 定义位置 | `internal/aigateway/toolkit/` 独立子包 | 解耦，后续 MCP Server 可复用同一套 Executor |
+| 执行模式 | 多轮工具链，最多 5 轮 | 模型可连续调多个工具，兼顾灵活性与安全性 |
+| History 策略 | 全量存（含 tool_call/tool_result 中间消息） | 保证上下文完整，避免模型在后续对话中重复调用 |
+| 前端展示 | 聊天气泡间内嵌 Trace 行 | 用户可感知工具调用过程，无 emoji，现代感 |
+| WebSocket 协议 | `tool_call_start` / `tool_call_end` 新类型 | 与最终回复解耦，前端独立渲染 |
+| trace_id | UUID 前 8 位，贯穿日志 + 前端 | 面试亮点：同一 trace_id 既写 Zap 日志又推前端 |
+
+### 采坑记录
+
+| 问题 | 原因 | 解决 |
+|------|------|------|
+| PowerShell 写 Go 文件时反引号转义 | Go struct tag 用反引号，PowerShell 也用反引号转义 | 用 `[char]0x60` 变量存反引号，配合字符串拼接写入 |
+| DeepSeek function calling 格式差异 | 初期不确定 DeepSeek 是否完全兼容 OpenAI tool format | 已验证：DeepSeek 使用与 OpenAI 完全相同的 `tools`/`tool_calls` 格式 |
+| search 返回类型不匹配 | `search.Client.SearchAll` 返回 `AllResult`，字段名与预期不同 | `res.Result.Video` 获得 `[]VideoHit`，`v.Aid` 为视频 ID |
+| `ChatHub` 无 `BroadcastJSON` 方法 | 错误调用了不存在的方法 | 改用 `PushJSON(userID, v)` 推送给指定用户 |
+
+## 2026-07-23：AI Gateway 接入 Function Calling / Tool Use
+
+### 动机
+
+让 AI 助手从纯文本聊天升级为**能用工具的 Agent**。用户提问后，AI 可根据需要调用平台内置工具（搜索视频、查详情、看评论等），再综合结果回答问题。
+
+### 架构决策
+
+| 决策 | 选型 | 理由 |
+|------|------|------|
+| Tool 定义位置 | `internal/aigateway/toolkit/` 独立子包 | 解耦，后续 MCP Server 可复用同一套 Executor |
+| 执行模式 | 多轮工具链，最多 5 轮 | 模型可连续调多个工具，兼顾灵活性与安全性 |
+| History 策略 | 全量存（含 tool_call/tool_result 中间消息） | 保证上下文完整，避免模型在后续对话中重复调用 |
+| 前端展示 | 聊天气泡间内嵌 Trace 行 | 用户可感知工具调用过程，无 emoji，现代感 |
+| WebSocket 协议 | `tool_call_start` / `tool_call_end` 新类型 | 与最终回复解耦，前端独立渲染 |
+| trace_id | UUID 前 8 位，贯穿日志 + 前端 | 面试亮点：同一 trace_id 既写 Zap 日志又推前端 |
+
+### 采坑记录
+
+| 问题 | 原因 | 解决 |
+|------|------|------|
+| PowerShell 写 Go 文件时反引号转义 | Go struct tag 用反引号，PowerShell 也用反引号转义 | 用 `[char]0x60` 变量存反引号，配合字符串拼接写入 |
+| DeepSeek function calling 格式差异 | 初期不确定 DeepSeek 是否完全兼容 OpenAI tool format | 已验证：DeepSeek 使用与 OpenAI 完全相同的 `tools`/`tool_calls` 格式 |
+| search 返回类型不匹配 | `search.Client.SearchAll` 返回 `AllResult`，字段名与预期不同 | `res.Result.Video` 获得 `[]VideoHit`，`v.Aid` 为视频 ID |
+| `ChatHub` 无 `BroadcastJSON` 方法 | 错误调用了不存在的方法 | 改用 `PushJSON(userID, v)` 推送给指定用户 |
+
+### 2026-07-23：Tool Result 前端卡片展示 + WebSocket 并发写入崩溃排查
+
+### 动机
+
+工具调用结果只以纯文本摘要传到前端，用户看不到视频封面、评论头像、弹幕时间点等结构化信息。需要：
+1. **后端**：工具返回时附带结构化字段（封面、作者、用户信息）
+2. **前端**：工具调用气泡（持久展示）+ 结构化结果卡片（AI 回复内联）
+3. **修复运行时崩溃**：AI 对话中偶发 `panic: concurrent write to websocket connection`
+
+### 实现
+
+**后端**（`internal/aigateway/toolkit/platform.go`）：
+
+- `searchVideos` / `getTrending`：增加 `cover_url`、`uploader_name`
+- `getVideoComments`：增加 `user_name`、`user_avatar`
+- `getVideoDanmaku`：增加 `user_name`
+- `getVideoDetail`：格式统一为 `{"items": [...]}`
+
+**后端**（`internal/aigateway/gateway.go` + `internal/service/agent.go`）：
+
+- 新增 `OnToolResultData` 回调，工具返回结果含 `items` 字段时触发
+- 发送 `tool_result_data` WS 事件
+
+**前端**（`MbDmChatPanel.vue`）：
+
+- 新增 `_pendingToolActs` / `_pendingResultData` 数据缓冲
+- `onChatWsPayload` 处理 `tool_call_start` / `tool_call_end` / `tool_result_data` 事件
+- AI 回复消息携带 `_toolActivities` + `_toolResultData` 字段
+- 在 AI 气泡上方渲染工具调用活动行（↻ / ✓ + 耗时）
+- 在 AI 气泡下方渲染结构化结果卡片（视频封面列表、评论/弹幕列表）
+
+**WebSocket 并发写入修复**（`internal/ws/chathub.go`）：
+
+- 给每个 `*websocket.Conn` 绑定 `*sync.Mutex`（存 `sync.Map`）
+- `PushRaw` 写入前 Lock，写入后 Unlock，彻底杜绝并发写入 panic
+
+### 采坑记录
+
+| 问题 | 原因 | 解决 |
+|------|------|------|
+| WebSocket 并发写入 panic: `concurrent write to websocket connection` | `executeToolCalls` 用 goroutine 并发执行多个工具，各 goroutine 的 `OnToolCallStart` / `OnToolCallEnd` / `OnToolResultData` 回调都调用 `PushJSON` → `PushRaw` → `c.WriteMessage`，gorilla/websocket 禁止并发写同一个连接 | 给每个 `*websocket.Conn` 绑定 `sync.Mutex`，`PushRaw` 写入前 Lock 后 Unlock |
+| `m` 在模板中不在作用域内 | Vue 3 中 `v-for="m in grp.messages"` 作用于 `<div>` 及其子元素，工具活动/结果卡片是该 `<div>` 的同级元素，`m` 不暴露给同级 | 用内层 `<template v-for="m in grp.messages" :key="m.id">` 包裹消息气泡 + 工具块 |
+| Vue SFC 解析错误 `Unexpected token, expected ","` | `data()` 中 `_pendingResultData: {}` 漏了尾逗号 | 补逗号 |
+| PowerShell 不支持 heredoc | 多次尝试 `python << 'EOF'` 失败，PowerShell 无此语法 | 改由 Node.js MCP 写 Python/JS 脚本到文件再执行，或用 `python -c` + base64 |
+| `lines.splice` 插入偏移计算失误 | 插入 34 行后忘记原元素位置已偏移，把工具块插入到 `</template>` 之后而非之前 | 调试时逐段打印数组状态验证 |
+| `onChatWsPayload` 方法被错误嵌入 `ws.onmessage` | 搜索 `onChatWsPayload(data)` 找到了 `this.onChatWsPayload(data);` 调用行而非函数定义行，把定义体替换进了调用位置 | 加 `!lines[i].includes("this.")` 排除调用行，准确定位函数定义 |
+| CRLF vs LF 行尾不一致 | `git show` 输出是 LF，而项目用 CRLF，多次替换后混用导致编译错误 | 最终统一用 `lines.join("\r\n")` 输出 |
+| `};,` 语法错误 | 方法体内 `ws.onmessage = ev => { ... };` 末尾加了分号后又加逗号，JS 对象方法间不能用分号 | 保持原文的 `};}`, 然后在方法间用 `},` |
+
+### 与 Minibili.md 的对照
+
+- **「AI 助手不仅仅是聊」**：本次实现了完整的工具执行链路 + 前端感知展示，面试时可从 WS 协议设计 → 并发写入锁 → 前端卡片渲染完整展开
+- **「用工具的核心痛点」**：并发写入 panic 是真实线上问题，面试中聊 `gorilla/websocket` 的并发模型是个加分点
+
+### 二次修复：WS 重连 + 工具链持久化 + 实时展示（2026-07-23 续）
+
+工具卡片上线后用户反馈三个问题：
+
+1. **搜索偶尔卡死**：一直显示"AI 正在输入..."，刷新才显示回复
+2. **工具调用不可见**：直到 AI 回复到达前用户不知道在发生什么
+3. **刷新丢失工具链**：刷新页面后消息在，但工具调用气泡和结果卡片全部消失
+
+#### 根因分析
+
+| 问题 | 根因 | 修复 |
+|------|------|------|
+| "AI 正在输入..." 永久卡死 | `connectChatWs()` 只设了 `ws.onmessage`，`onclose` / `onerror` 全都没设。后端重启或网络抖动后 WS 永久断开，所有 `tool_call_*` / `dm_message` 事件全部丢失，前端 `chatAwaitingAgent` 一直 true（120s 超时后才清） | 添加 `ws.onclose` / `onerror` 处理器，指数退避重连 1s→2s→4s→...→30s；发送前检查连接状态，断连时自动触发重连 |
+| 工具调用对用户不可见 | `_pendingToolActs` 只在下一条 `dm_message` WS 事件到达时才附着到消息对象上。如果 WS 先断连后重连，`dm_message` 和 `tool_call_*` 事件可能在两条不同的 WS 连接上到达，导致工具链永久丢失 | 新增独立实时缓冲区 `_liveToolActs`，`tool_call_start` 立即推入，在 AI 打字提示上方独立区域展示（黄色背景卡片），用户即刻可见 |
+| 刷新后工具链丢失 | `_toolActivities` / `_toolResultData` 只存在 Vue 组件内存中，REST API `ListDmMessages` 不返回这些字段，HTTP 加载的消息对象上没有工具数据 | `dm_message` 到达时将工具链写入 `sessionStorage`（key: `mb_tool_acts_{convId}_{msgId}`）；`chatMessageGroups` 计算时优先从 `sessionStorage` 读取，回退到 `raw._toolActivities` |
+
+#### 更深的教训
+
+1. **WS 通信模式比 HTTP 脆弱得多**，HTTP 失败可以简单重试，WS 断开后所有状态（pending tool calls、等待中的回复）全部丢失。前端的首要防御不是优雅地处理 WS 消息，而是**确保 WS 不断**。
+2. **工具调用是一个「有状态过程」**，不能把全部信息放在一条最终消息上。应该让每个工具调用事件自包含、可独立展示、可独立恢复。
+3. **持久化不只在服务端**。前端 `sessionStorage` 是零成本的前置缓存，能解决绝大多数"刷新丢状态"的问题。不应该每个字段都等后端加接口。
+
+#### 后续建议
+
+- 服务端在 HTTP `ListDmMessages` 响应中附加工具数据，彻底消除对 `sessionStorage` 的依赖
+- 前端 WS 连接状态可视化（连接中/已断开/重连中），让用户感知到网络状态
+- 考虑 `WebSocket heartbeat` 机制，更快发现断连
+
+### 三次修复：工具状态错误显示 ↻ 转圈（2026-07-23 续二）
+
+修复 WS 重连后用户反馈新问题：消息下方的工具活动列表里有些工具持线显示 ↻（运行中），但结果卡片已经渲染出来了。
+
+#### 根因
+
+`tool_call_end` 和 `dm_message` 在竞争同一把 WebSocket 写锁。后端 `executeToolCalls` 用 goroutine 并发执行工具，每个 goroutine 调用 `OnToolCallEnd` → `PushJSON` → `PushRaw`（加锁写 WebSocket）。而 `dm_message` 在 `CompleteUserTurnWithTools` 返回后在 handler goroutine 中同样调用 `PushJSON` → `PushRaw`（竞争同一把锁）。
+
+由于 Go goroutine 调度不确定性，`dm_message` 可能在部分工具 goroutine 的 `tool_call_end` 获取到锁之前就拿到了锁并写入 WS，导致前端收到的事件顺序为：
+
+```
+tool_call_end A → dm_message → tool_call_end B → tool_call_end C
+```
+
+此时前端 `_pendingToolActs` 中 B 和 C 还是 "running" 状态就被附着到了消息上。
+
+#### 修复
+
+在 `dm_message` 到达时，遍历 `_pendingToolActs` 将所有仍为 "running" 的项标记为 "done"。这是安全的——`dm_message` 到达意味着 LLM 已经拿到了所有工具的结果，所有工具事实上已经完成。
+
+```javascript
+this._pendingToolActs.forEach(t => { if (t.status === "running") t.status = "done"; });
+```
+
+#### 教训
+
+1. **WebSocket 不是事务性通道**。即使后端在函数返回前发了所有事件，goroutine 间的锁竞争会导致接收端顺序与发送端顺序不同。
+2. **状态机的前端状态需要容错**。`dm_message` 是「本轮处理已结束」的强信号，应当以此为准修正所有中间状态。
+3. **更好的方案**：后端用单线程的事件队列序列化所有 WS 事件，彻底消除乱序可能。
+
+
+### 当前状态
+
+- 仓库 total: 15.76% 覆盖率，193 文件（含零覆盖的框架/配置类文件）
+- 前端: ~73% 语句覆盖，77 测试文件
+- 后端: ~71% 综合覆盖，27 测试文件
+- 新 commit 上传后需等待 Codecov 后台处理
+
+
+## 2026-07-23：AI Gateway 接入 Function Calling / Tool Use
+
+### 动机
+
+让 AI 助手从纯文本聊天升级为**能用工具的 Agent**。用户提问后，AI 可根据需要调用平台内置工具（搜索视频、查详情、看评论等），再综合结果回答问题。
+
+### 架构决策
+
+| 决策 | 选型 | 理由 |
+|------|------|------|
+| Tool 定义位置 | `internal/aigateway/toolkit/` 独立子包 | 解耦，后续 MCP Server 可复用同一套 Executor |
+| 执行模式 | 多轮工具链，最多 5 轮 | 模型可连续调多个工具，兼顾灵活性与安全性 |
+| History 策略 | 全量存（含 tool_call/tool_result 中间消息） | 保证上下文完整，避免模型在后续对话中重复调用 |
+| 前端展示 | 聊天气泡间内嵌 Trace 行 | 用户可感知工具调用过程，无 emoji，现代感 |
+| WebSocket 协议 | `tool_call_start` / `tool_call_end` 新类型 | 与最终回复解耦，前端独立渲染 |
+| trace_id | UUID 前 8 位，贯穿日志 + 前端 | 面试亮点：同一 trace_id 既写 Zap 日志又推前端 |
+
+### 采坑记录
+
+| 问题 | 原因 | 解决 |
+|------|------|------|
+| PowerShell 写 Go 文件时反引号转义 | Go struct tag 用反引号，PowerShell 也用反引号转义 | 用 `[char]0x60` 变量存反引号，配合字符串拼接写入 |
+| DeepSeek function calling 格式差异 | 初期不确定 DeepSeek 是否完全兼容 OpenAI tool format | 已验证：DeepSeek 使用与 OpenAI 完全相同的 `tools`/`tool_calls` 格式 |
+| search 返回类型不匹配 | `search.Client.SearchAll` 返回 `AllResult`，字段名与预期不同 | `res.Result.Video` 获得 `[]VideoHit`，`v.Aid` 为视频 ID |
+| `ChatHub` 无 `BroadcastJSON` 方法 | 错误调用了不存在的方法 | 改用 `PushJSON(userID, v)` 推送给指定用户 |
+
+### 当前状态
+
+- 仓库 total: 15.76% 覆盖率，193 文件（含零覆盖的框架/配置类文件）
+- 前端: ~73% 语句覆盖，77 测试文件
+- 后端: ~71% 综合覆盖，27 测试文件
+- 新 commit 上传后需等待 Codecov 后台处理
+
 ## 后续展望
 
 - **Redis Stream / 消费组**：若弹幕量级继续增长，可引入消费组做削峰填谷，或将 WebSocket 网关拆为独立进程。

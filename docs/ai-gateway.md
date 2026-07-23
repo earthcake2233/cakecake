@@ -50,3 +50,105 @@ Vue MbDmChatPanel
 - `internal/service/agent.go` — 编排、配额、落库
 - `internal/handler/dm.go` — agent 会话分支
 - `internal/data/agent_seed.go` — 系统用户与会话初始化
+## Tool Use / Function Calling
+
+### 架构
+
+```text
+User Message
+   → AgentService.GenerateReply
+     → Gateway.CompleteUserTurnWithTools (最多 5 轮)
+       → LLM.CompleteWithTools(messages, tools)
+       → finish_reason == "tool_calls"?
+         → Toolkit.ExecuteToolCalls (并行执行)
+         → Push tool_call_start/end via WebSocket
+         → Append tool results → loop back to LLM
+       → finish_reason == "stop"?
+         → Persist full history (含 tool 中间消息) → Redis
+         → Return text reply → WebSocket push
+```
+
+### 新增 WebSocket 协议
+
+**tool_call_start** — 开始执行某个工具
+```json
+{
+  "type": "tool_call_start",
+  "body": {
+    "trace_id": "a1b2c3d4",
+    "span_id": "a1b2c3d4-t0",
+    "parent_span_id": "a1b2c3d4",
+    "tool_name": "search_videos",
+    "arguments": { "keyword": "golang" },
+    "started_at": "2026-07-23T10:00:00Z"
+  }
+}
+```
+
+**tool_call_end** — 工具执行完成
+```json
+{
+  "type": "tool_call_end",
+  "body": {
+    "trace_id": "a1b2c3d4",
+    "span_id": "a1b2c3d4-t0",
+    "tool_name": "search_videos",
+    "duration_ms": 42,
+    "result_summary": "found 3 results"
+  }
+}
+```
+
+**tool_result_data** — 工具返回的结构化结果数据（用于前端渲染卡片）
+```json
+{
+  "type": "tool_result_data",
+  "body": {
+    "trace_id": "a1b2c3d4",
+    "span_id": "a1b2c3d4-t0",
+    "tool_name": "search_videos",
+    "items": [
+      {
+        "id": 1,
+        "title": "某科学的超电磁炮",
+        "author": "earthcake",
+        "plays": 32,
+        "cover": "https://...",
+        "duration": "5:24"
+      }
+    ]
+  }
+}
+```
+
+前端在收到 `tool_call_start` / `tool_call_end` 后，会收到对应的 `tool_result_data`。前端将 `items` 数组渲染为视频卡片、评论卡片或弹幕列表。
+
+### 已定义工具
+
+| Tool | 参数 | 说明 |
+|------|------|------|
+| `search_videos` | `keyword`(必填), `page`, `page_size` | 关键词搜索视频，优先走 ES，回退 DB LIKE |
+| `get_video_detail` | `video_id`(必填) | 视频详情 + UP 主信息 + 标签 |
+| `get_trending` | `limit` | 热门视频排行榜（按播放量） |
+| `get_video_comments` | `video_id`(必填), `page`, `page_size` | 视频评论列表 |
+| `get_video_danmaku` | `video_id`(必填), `limit` | 视频弹幕样本 |
+
+### Admin 开关
+
+每个工具可通过 RuntimeConfig 独立启用/禁用，key 格式：`tool_{name}_enabled`，默认 true。
+
+| key | 说明 |
+|-----|------|
+| `tool_search_videos_enabled` | 搜索视频 |
+| `tool_get_video_detail_enabled` | 视频详情 |
+| `tool_get_trending_enabled` | 排行榜 |
+| `tool_get_video_comments_enabled` | 评论 |
+| `tool_get_video_danmaku_enabled` | 弹幕 |
+
+### 面试可强调的点
+
+1. **Tool Schema 设计**：每个 tool 的 description 写详细，parameters 标注 required，帮助模型准确选择
+2. **多轮编排**：5 轮上限 + 超限降级，防止死循环
+3. **并行执行**：同轮 tool_calls 用 goroutine 并行执行，提升响应速度
+4. **防滥用三层**：配额检查 → 敏感词入参/出参过滤 → 每工具独立 RuntimeConfig 开关
+5. **trace_id 贯穿**：同一 trace_id 既写 Zap 日志又推前端，后端调试和前端展示共用同一链路 ID

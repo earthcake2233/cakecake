@@ -14,6 +14,7 @@ import (
 	"go.uber.org/zap"
 
 	"minibili/internal/aigateway"
+	"minibili/internal/aigateway/toolkit"
 	"minibili/internal/config"
 	"minibili/internal/data"
 	"minibili/internal/ffmpeg"
@@ -200,6 +201,7 @@ func main() {
 	agentSvc := &service.AgentService{
 		Cfg: cfg, DB: db, Redis: rdb, Gateway: agentGW, Sens: sens,
 		ChatHub: chatHub, Log: log, RC: runtimeCfg,
+		ToolExec: &toolkit.PlatformExecutor{DB: db, ES: esc, Sens: sens},
 	}
 
 	deps := &handler.Dependencies{
