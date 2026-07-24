@@ -455,15 +455,21 @@ func migrateAgentSystemPrompt(db *gorm.DB, lg *zap.Logger) error {
 - 简洁直接，普通用户看得懂
 - 不要编造不存在的功能
 - 不确定时诚实说不知道`
-	// Force-update all "default" profiles regardless of current prompt text.
-	// Different deployments may have custom prompts ("cakecake AI", "Minibili AI", etc.),
-	// so checking old prompt text is unreliable.
-	result := db.Model(&model.AgentProfile{}).Where("slug = ?", "default").Update("system_prompt", newPrompt)
+	// 1. Update ALL agent profiles (not just "default" slug)
+	result := db.Model(&model.AgentProfile{}).Where("1 = 1").Update("system_prompt", newPrompt)
 	if result.Error != nil {
 		return result.Error
 	}
 	if result.RowsAffected > 0 && lg != nil {
-		lg.Info("migrated default agent system prompt", zap.Int64("rows", result.RowsAffected))
+		lg.Info("migrated agent profiles system prompt", zap.Int64("rows", result.RowsAffected))
+	}
+	// 2. Also update the singleton agent_settings table
+	stResult := db.Model(&model.AgentSettings{}).Where("id = ?", model.AgentSettingsRowID).Update("system_prompt", newPrompt)
+	if stResult.Error != nil {
+		return stResult.Error
+	}
+	if stResult.RowsAffected > 0 && lg != nil {
+		lg.Info("migrated agent settings system prompt", zap.Int64("rows", stResult.RowsAffected))
 	}
 	return nil
 }

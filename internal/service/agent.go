@@ -340,11 +340,15 @@ func stripEmoji(s string) string {
 			continue
 		case r >= 0x2600 && r <= 0x27BF: // Misc symbols
 			continue
+		case r >= 0x2300 && r <= 0x23FF: // Miscellaneous technical (including ⏰ etc.)
+			continue
+		case r >= 0x2500 && r <= 0x25FF: // Box drawing / geometric shapes (including ◕ etc.)
+			continue
+		case r >= 0x2B00 && r <= 0x2BFF: // Miscellaneous symbols and arrows
+			continue
 		case r >= 0xFE00 && r <= 0xFE0F: // Variation selectors
 			continue
 		case r >= 0x1F1E0 && r <= 0x1F1FF: // Flags
-			continue
-		case r >= 0x2702 && r <= 0x27B0: // Dingbats
 			continue
 		case r >= 0x1F600 && r <= 0x1F64F: // Emoticons
 			continue
@@ -353,6 +357,10 @@ func stripEmoji(s string) string {
 		case r >= 0x1F900 && r <= 0x1F9FF: // Supplemental symbols
 			continue
 		case r >= 0x200D: // Zero-width joiner
+			continue
+		case r == 0xFFFD: // Replacement character
+			continue
+		case r >= 0x3000 && r <= 0x303F: // CJK Symbols and Punctuation (some decorative chars)
 			continue
 		default:
 			b.WriteRune(r)
