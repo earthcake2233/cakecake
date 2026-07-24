@@ -329,6 +329,38 @@ func (s *AgentService) GenerateReply(ctx context.Context, conv *model.DmConversa
 }
 
 // ResetConversation clears chat history and seeds a fresh welcome message.
+
+// stripEmoji removes common emoji characters from a string.
+func stripEmoji(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	for _, r := range s {
+		switch {
+		case r >= 0x1F300 && r <= 0x1F9FF: // Misc symbols, emoticons, etc.
+			continue
+		case r >= 0x2600 && r <= 0x27BF: // Misc symbols
+			continue
+		case r >= 0xFE00 && r <= 0xFE0F: // Variation selectors
+			continue
+		case r >= 0x1F1E0 && r <= 0x1F1FF: // Flags
+			continue
+		case r >= 0x2702 && r <= 0x27B0: // Dingbats
+			continue
+		case r >= 0x1F600 && r <= 0x1F64F: // Emoticons
+			continue
+		case r >= 0x1F680 && r <= 0x1F6FF: // Transport
+			continue
+		case r >= 0x1F900 && r <= 0x1F9FF: // Supplemental symbols
+			continue
+		case r >= 0x200D: // Zero-width joiner
+			continue
+		default:
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
 func (s *AgentService) ResetConversation(ctx context.Context, conv *model.DmConversation, humanID uint64) (*model.DmMessage, error) {
 	if s == nil || s.DB == nil || conv == nil || humanID == 0 {
 		return nil, fmt.Errorf("agent service not ready")
