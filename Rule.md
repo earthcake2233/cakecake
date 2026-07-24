@@ -190,4 +190,12 @@
 | :--- | :--- | :--- |
 | **R-DOC-11** | **修改 AI Gateway 后必须运行 go vet + 相关单测** | 每次修改 `internal/aigateway/` 或 `internal/aigateway/toolkit/` 下的代码后，必须运行 `go vet ./internal/aigateway/...` 和 `go test ./internal/aigateway/...`，防止 tool calling 循环逻辑被破坏。 |
 | **R-DOC-12** | **新增 Tool 时必须同步更新定义 + 实现** | 新增平台工具时，必须同步修改 `toolkit/tools.go` 的 `definition()` 和 `toolkit/platform.go` 的 `Execute()` switch 分支，确保定义与实现不脱节。 |
-| **R-DOC-13** | **Tool 入参和出参必须经过敏感词过滤** | `PlatformExecutor.Execute()` 在 switch 前对 args 做敏感词检查，每个工具实现方法返回前对结果做敏感词检查。 |
+| **R-DOC-13** | **Tool 入参和出参必须经过敏感词过滤** | `PlatformExecutor.Execute()` 在 switch 前对 args 做敏感词检查，每个工具实现方法返回前对结果做敏感词检查。 |---
+
+### 十四、本地验证
+
+| 编号 | 规则 | 说明 |
+| :--- | :--- | :--- |
+| **R-VERIFY-1** | **修改后必须本地测试通过才能 push** | 任何代码修改（前端/后端/文档）push 到 GitHub 前，必须先在本地完成验证：后端运行 `go build ./...` + `go vet ./...` + 相关 `go test`，前端运行 `npm run build`。验证失败不允许 push。 |
+| **R-VERIFY-2** | **绕过验证属于违规** | 如果本地测试环境有问题导致无法编译/测试，必须先修复环境，禁止以"环境问题"为由跳过验证直接 push。 |
+| **R-VERIFY-3** | **PR 前运行全套测试** | 提 PR 前运行 `go test ./... -count=1` 确保全部测试通过，不以 "仅改了一行" 为由跳过。 |
