@@ -1,14 +1,14 @@
-package toolkit
+﻿package toolkit
 
 import "minibili/internal/aigateway"
 
 // Tool names (constants for admin registry keys).
 const (
-	ToolSearchVideos    = "search_videos"
-	ToolGetVideoDetail  = "get_video_detail"
-	ToolGetTrending     = "get_trending"
+	ToolSearchVideos     = "search_videos"
+	ToolGetVideoDetail   = "get_video_detail"
+	ToolGetTrending      = "get_trending"
 	ToolGetVideoComments = "get_video_comments"
-	ToolGetVideoDanmaku = "get_video_danmaku"
+	ToolGetVideoDanmaku  = "get_video_danmaku"
 )
 
 // AllToolNames returns all defined tool names.
@@ -90,8 +90,8 @@ func definition(name string) aigateway.ToolDef {
 				Name:        ToolGetVideoComments,
 				Description: "Get comments for a specific video. Returns a list of comments with author, content, and like count.",
 				Parameters: Object(map[string]interface{}{
-					"video_id": I("The unique video ID (required)."),
-					"page":     I("Page number. Default 1."),
+					"video_id":  I("The unique video ID (required)."),
+					"page":      I("Page number. Default 1."),
 					"page_size": I("Comments per page. Max 20. Default 10."),
 				}, "video_id"),
 			},
@@ -112,3 +112,4 @@ func definition(name string) aigateway.ToolDef {
 		return aigateway.ToolDef{}
 	}
 }
+

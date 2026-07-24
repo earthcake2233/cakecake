@@ -43,4 +43,8 @@ type DmMessage struct {
 	Role           string `gorm:"size:16;not null;default:''"`
 	Content        string `gorm:"size:500;not null"`
 	CreatedAt      time.Time `gorm:"index"`
+	// ToolActivities stores JSON array of tool call activities (name, status, duration, etc.)
+	ToolActivities  string `gorm:"type:text"`
+	// ToolResultData stores JSON object of tool result items keyed by span_id
+	ToolResultData  string `gorm:"type:text"`
 }

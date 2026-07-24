@@ -666,6 +666,7 @@
   padding: 6px 0 6px 44px;
 }
 .msg-result-card {
+  position: relative;
   display: flex;
   gap: 10px;
   background: #fff;
@@ -721,4 +722,22 @@
   color: #9499a0;
   line-height: 16px;
   margin-top: 2px;
+}
+.msg-result-card__badge {
+  position: absolute;
+  top: -1px;
+  left: -1px;
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 8px 0 8px 0;
+  color: #fff;
+  line-height: 16px;
+  font-weight: 500;
+  z-index: 1;
+}
+.msg-result-card__badge--comment {
+  background: #00a1d6;
+}
+.msg-result-card__badge--danmaku {
+  background: #f25d8e;
 }

@@ -34,7 +34,7 @@ func (a *API) runAgentReply(humanID uint64, conv *model.DmConversation, userText
 			a.pushAgentFallback(humanID, conv, "今日 AI 对话次数已达上限，请明天再试。")
 			return
 		}
-		reply, err := a.Agent.GenerateReply(ctx, conv, userText)
+		result, err := a.Agent.GenerateReply(ctx, conv, userText)
 		if err != nil {
 			a.Log.Warn("agent generate", zap.Uint64("conv", conv.ID), zap.Error(err))
 			msg := "AI 助手暂时不可用，请稍后再试。"
@@ -51,7 +51,7 @@ func (a *API) runAgentReply(humanID uint64, conv *model.DmConversation, userText
 			return
 		}
 		a.Agent.IncrQuota(ctx, humanID)
-		msg, err := a.Agent.PostAssistantMessage(conv, humanID, reply)
+		msg, err := a.Agent.PostAssistantMessage(conv, humanID, result.Content, string(result.ToolActivities), string(result.ToolResultData))
 		if err != nil {
 			a.Log.Error("agent persist reply", zap.Error(err))
 			return

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -24,6 +25,13 @@ import (
 )
 
 // AgentService runs AI assistant replies for agent DM threads.
+// GenerateReplyResult holds the AI reply along with tool call metadata for persistence.
+type GenerateReplyResult struct {
+	Content         string          `json:"content"`
+	ToolActivities  json.RawMessage `json:"tool_activities,omitempty"`
+	ToolResultData  json.RawMessage `json:"tool_result_data,omitempty"`
+}
+
 type AgentService struct {
 	Cfg        *config.C
 	DB         *gorm.DB
@@ -114,7 +122,7 @@ func (s *AgentService) profileForConversation(conv *model.DmConversation) (*mode
 	return data.GetAgentProfileByBotUserID(s.DB, conv.UserHigh)
 }
 
-func (s *AgentService) PostAssistantMessage(conv *model.DmConversation, humanID uint64, content string) (*model.DmMessage, error) {
+func (s *AgentService) PostAssistantMessage(conv *model.DmConversation, humanID uint64, content string, extra ...string) (*model.DmMessage, error) {
 	if s == nil || s.DB == nil || conv == nil {
 		return nil, fmt.Errorf("agent service not ready")
 	}
@@ -133,11 +141,19 @@ func (s *AgentService) PostAssistantMessage(conv *model.DmConversation, humanID 
 		content = string(r[:500])
 	}
 	now := time.Now()
+	toolActivities := ""
+	toolResultData := ""
+	if len(extra) >= 2 {
+		toolActivities = extra[0]
+		toolResultData = extra[1]
+	}
 	msg := model.DmMessage{
 		ConversationID: conv.ID,
 		SenderID:       botID,
 		Role:           "assistant",
 		Content:        content,
+		ToolActivities: toolActivities,
+		ToolResultData: toolResultData,
 		CreatedAt:      now,
 	}
 	tx := s.DB.Begin()
@@ -263,29 +279,30 @@ func (s *AgentService) clearToolCallbacks() {
 	}
 }
 
-func (s *AgentService) GenerateReply(ctx context.Context, conv *model.DmConversation, userText string) (string, error) {
+func (s *AgentService) GenerateReply(ctx context.Context, conv *model.DmConversation, userText string) (*GenerateReplyResult, error) {
 	if !s.gatewayReady() {
-		return "", fmt.Errorf("ai assistant is not configured")
+		return nil, fmt.Errorf("ai assistant is not configured")
 	}
 	s.applyDynamicGatewayConfig()
 	profile, err := s.profileForConversation(conv)
 	if err != nil {
-		return "", fmt.Errorf("ai assistant profile missing")
+		return nil, fmt.Errorf("ai assistant profile missing")
 	}
 	if !profile.Enabled {
-		return "", fmt.Errorf("ai assistant is disabled")
+		return nil, fmt.Errorf("ai assistant is disabled")
 	}
 	if s.Sens != nil {
 		if err := s.Sens.Check(userText); err != nil {
-			return "", fmt.Errorf("message contains sensitive words")
+			return nil, fmt.Errorf("message contains sensitive words")
 		}
 	}
-	prompt := strings.TrimSpace(profile.SystemPrompt)
-	if prompt == "" {
-		return "", fmt.Errorf("empty system prompt")
+	profilePrompt := strings.TrimSpace(profile.SystemPrompt)
+	if profilePrompt == "" {
+		return nil, fmt.Errorf("empty system prompt")
 	}
+	globalPrompt := data.GetGlobalSystemPrompt(s.DB)
 	prev := s.Gateway.SystemPrompt
-	s.Gateway.SystemPrompt = prompt
+	s.Gateway.SystemPrompt = globalPrompt + "\n\n" + profilePrompt
 	defer func() { s.Gateway.SystemPrompt = prev }()
 
 	timeout := 90 * time.Second
@@ -306,10 +323,56 @@ func (s *AgentService) GenerateReply(ctx context.Context, conv *model.DmConversa
 	useTools := s.ToolExec != nil && len(toolkit.DefineTools(s.enabledTools())) > 0
 
 	var reply string
+	// Collect tool data for persistence
+	var toolActs []map[string]interface{}
+	var toolResults = make(map[string]json.RawMessage)
+	var mu sync.Mutex
+
 	if useTools {
 		traceID := generateTraceID()
 		s.setupToolCallbacks(traceID, conv.UserLow)
 		defer s.clearToolCallbacks()
+
+		// Wrap callbacks to also collect data for persistence
+		if s.Gateway.OnToolCallStart != nil {
+			orig := s.Gateway.OnToolCallStart
+			s.Gateway.OnToolCallStart = func(tid, spanID, parentSpanID, toolName string, argsJSON json.RawMessage) {
+				orig(tid, spanID, parentSpanID, toolName, argsJSON)
+				mu.Lock()
+				toolActs = append(toolActs, map[string]interface{}{
+					"trace_id":   tid,
+					"span_id":    spanID,
+					"tool_name":  toolName,
+					"status":     "running",
+				})
+				mu.Unlock()
+			}
+		}
+		if s.Gateway.OnToolCallEnd != nil {
+			orig := s.Gateway.OnToolCallEnd
+			s.Gateway.OnToolCallEnd = func(tid, spanID, toolName string, durationMs int64, resultSummary string) {
+				orig(tid, spanID, toolName, durationMs, resultSummary)
+				mu.Lock()
+				for i := range toolActs {
+					if toolActs[i]["span_id"] == spanID {
+						toolActs[i]["status"] = "done"
+						toolActs[i]["duration_ms"] = durationMs
+						toolActs[i]["result_summary"] = resultSummary
+						break
+					}
+				}
+				mu.Unlock()
+			}
+		}
+		if s.Gateway.OnToolResultData != nil {
+			orig := s.Gateway.OnToolResultData
+			s.Gateway.OnToolResultData = func(tid, spanID, toolName string, items json.RawMessage) {
+				orig(tid, spanID, toolName, items)
+				mu.Lock()
+				toolResults[spanID] = items
+				mu.Unlock()
+			}
+		}
 
 		tools := toolkit.DefineTools(s.enabledTools())
 		s.Gateway.ToolExec = s.ToolExec
@@ -318,57 +381,31 @@ func (s *AgentService) GenerateReply(ctx context.Context, conv *model.DmConversa
 		reply, err = s.Gateway.CompleteUserTurn(ctx, conv.ID, userText)
 	}
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	if s.Sens != nil {
 		if err := s.Sens.Check(reply); err != nil {
-			return "抱歉，我无法生成该内容的回复，请换个方式提问。", nil
+			return &GenerateReplyResult{Content: "???????????????????????"}, nil
 		}
 	}
-	return reply, nil
-}
 
-// ResetConversation clears chat history and seeds a fresh welcome message.
-
-// stripEmoji removes common emoji characters from a string.
-func stripEmoji(s string) string {
-	var b strings.Builder
-	b.Grow(len(s))
-	for _, r := range s {
-		switch {
-		case r >= 0x1F300 && r <= 0x1F9FF: // Misc symbols, emoticons, etc.
-			continue
-		case r >= 0x2600 && r <= 0x27BF: // Misc symbols
-			continue
-		case r >= 0x2300 && r <= 0x23FF: // Miscellaneous technical (including ⏰ etc.)
-			continue
-		case r >= 0x2500 && r <= 0x25FF: // Box drawing / geometric shapes (including ◕ etc.)
-			continue
-		case r >= 0x2B00 && r <= 0x2BFF: // Miscellaneous symbols and arrows
-			continue
-		case r >= 0xFE00 && r <= 0xFE0F: // Variation selectors
-			continue
-		case r >= 0x1F1E0 && r <= 0x1F1FF: // Flags
-			continue
-		case r >= 0x1F600 && r <= 0x1F64F: // Emoticons
-			continue
-		case r >= 0x1F680 && r <= 0x1F6FF: // Transport
-			continue
-		case r >= 0x1F900 && r <= 0x1F9FF: // Supplemental symbols
-			continue
-		case r >= 0x200D: // Zero-width joiner
-			continue
-		case r == 0xFFFD: // Replacement character
-			continue
-		case r >= 0x3000 && r <= 0x303F: // CJK Symbols and Punctuation (some decorative chars)
-			continue
-		default:
-			b.WriteRune(r)
+	result := &GenerateReplyResult{Content: reply}
+	if len(toolActs) > 0 {
+		if b, e := json.Marshal(toolActs); e == nil {
+			result.ToolActivities = b
 		}
 	}
-	return b.String()
+	if len(toolResults) > 0 {
+		rm := make(map[string]json.RawMessage)
+		for k, v := range toolResults {
+			rm[k] = v
+		}
+		if b, e := json.Marshal(rm); e == nil {
+			result.ToolResultData = b
+		}
+	}
+	return result, nil
 }
-
 func (s *AgentService) ResetConversation(ctx context.Context, conv *model.DmConversation, humanID uint64) (*model.DmMessage, error) {
 	if s == nil || s.DB == nil || conv == nil || humanID == 0 {
 		return nil, fmt.Errorf("agent service not ready")

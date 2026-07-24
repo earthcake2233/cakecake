@@ -1,4 +1,4 @@
-package toolkit
+﻿package toolkit
 
 import (
 	"context"
@@ -310,6 +310,7 @@ func (p *PlatformExecutor) getVideoComments(ctx context.Context, raw json.RawMes
 	}
 	type item struct {
 		ID         uint64 `json:"id"`
+		VideoID    uint64 `json:"video_id"`
 		Content    string `json:"content"`
 		LikeCount  uint64 `json:"like_count"`
 		UserName   string `json:"user_name"`
@@ -327,7 +328,7 @@ func (p *PlatformExecutor) getVideoComments(ctx context.Context, raw json.RawMes
 			userAvatar = u.AvatarURL
 		}
 		items = append(items, item{
-			ID: c.ID, Content: truncateStr(c.Content, 100),
+			ID: c.ID, VideoID: args.VideoID, Content: truncateStr(c.Content, 100),
 			LikeCount: c.LikeCount, UserName: userName, UserAvatar: userAvatar,
 		})
 	}
@@ -365,6 +366,7 @@ func (p *PlatformExecutor) getVideoDanmaku(ctx context.Context, raw json.RawMess
 		userIDs = append(userIDs, d.UserID)
 	}
 	userMap := make(map[uint64]string)
+	avatarMap := make(map[uint64]string)
 	if len(userIDs) > 0 {
 		var users []model.User
 		p.DB.WithContext(ctx).Where("id IN ?", userIDs).Find(&users)
@@ -374,14 +376,17 @@ func (p *PlatformExecutor) getVideoDanmaku(ctx context.Context, raw json.RawMess
 				name = n
 			}
 			userMap[u.ID] = name
+			avatarMap[u.ID] = u.AvatarURL
 		}
 	}
 	type item struct {
 		Content   string  `json:"content"`
+		VideoID   uint64  `json:"video_id"`
 		VideoTime float64 `json:"video_time"`
 		Type      string  `json:"type"`
 		Color     string  `json:"color"`
 		UserName  string  `json:"user_name"`
+		UserAvatar string  `json:"user_avatar"`
 	}
 	items := make([]item, 0, len(danmakus))
 	for _, d := range danmakus {
@@ -389,9 +394,11 @@ func (p *PlatformExecutor) getVideoDanmaku(ctx context.Context, raw json.RawMess
 		if userName == "" {
 			userName = "匿名"
 		}
+		userAvatar, _ := avatarMap[d.UserID]
 		items = append(items, item{
-			Content: d.Content, VideoTime: d.VideoTime,
+			Content: d.Content, VideoID: args.VideoID, VideoTime: d.VideoTime,
 			Type: d.Type, Color: d.Color, UserName: userName,
+			UserAvatar: userAvatar,
 		})
 	}
 	b, _ := json.Marshal(map[string]interface{}{"items": items})

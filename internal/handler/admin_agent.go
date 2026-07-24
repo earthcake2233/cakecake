@@ -1,4 +1,4 @@
-package handler
+﻿package handler
 
 import (
 	"encoding/json"
@@ -27,7 +27,7 @@ func (a *API) adminAgentMeta() gin.H {
 	}
 }
 
-func adminAgentProfilePayload(p *model.AgentProfile) gin.H {
+func adminAgentProfilePayload(p *model.AgentProfile, globalPrompt string) gin.H {
 	if p == nil {
 		return gin.H{}
 	}
@@ -44,6 +44,7 @@ func adminAgentProfilePayload(p *model.AgentProfile) gin.H {
 		"sort_order":        p.SortOrder,
 		"enabled":           p.Enabled,
 		"updated_at":        p.UpdatedAt.Format("2006-01-02 15:04:05"),
+		"global_system_prompt": globalPrompt,
 	}
 }
 
@@ -54,9 +55,10 @@ func (a *API) AdminListAgentProfiles(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
+	gp := data.GetGlobalSystemPrompt(a.DB)
 	items := make([]gin.H, 0, len(list))
 	for i := range list {
-		items = append(items, adminAgentProfilePayload(&list[i]))
+		items = append(items, adminAgentProfilePayload(&list[i], gp))
 	}
 	out := a.adminAgentMeta()
 	out["items"] = items
@@ -172,7 +174,7 @@ func (a *API) AdminCreateAgentProfile(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	resp.OK(c, adminAgentProfilePayload(&p))
+	resp.OK(c, adminAgentProfilePayload(&p, data.GetGlobalSystemPrompt(a.DB)))
 }
 
 // AdminUpdateAgentProfile PUT /api/v1/admin/agent-profiles/:id
@@ -231,7 +233,7 @@ func (a *API) AdminUpdateAgentProfile(c *gin.Context) {
 	if a.Agent != nil {
 		a.Agent.ReloadProfiles()
 	}
-	resp.OK(c, adminAgentProfilePayload(p))
+	resp.OK(c, adminAgentProfilePayload(p, data.GetGlobalSystemPrompt(a.DB)))
 }
 
 // AdminDeleteAgentProfile DELETE /api/v1/admin/agent-profiles/:id — soft disable.
@@ -295,7 +297,7 @@ func (a *API) AdminUploadAgentProfileAvatar(c *gin.Context) {
 		purgeAgentAvatarOSS(a.Cfg, a.OSS, a.Log, oldAvatar)
 	}
 	_ = data.SyncAgentProfile(a.DB, p)
-	resp.OK(c, gin.H{"avatar_url": url, "profile": adminAgentProfilePayload(p)})
+	resp.OK(c, gin.H{"avatar_url": url, "profile": adminAgentProfilePayload(p, data.GetGlobalSystemPrompt(a.DB))})
 }
 
 func (a *API) uploadAgentProfileAvatarToOSS(fh *multipart.FileHeader, slug string) (string, int) {
@@ -409,3 +411,4 @@ func (a *API) AdminUploadAgentAvatar(c *gin.Context) {
 	c.Params = append(c.Params, gin.Param{Key: "id", Value: strconv.FormatUint(list[0].ID, 10)})
 	a.AdminUploadAgentProfileAvatar(c)
 }
+

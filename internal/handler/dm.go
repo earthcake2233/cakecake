@@ -95,14 +95,16 @@ func (a *API) dmFormatMessage(m *model.DmMessage, senderName, senderAvatar strin
 		role = "user"
 	}
 	return gin.H{
-		"id":              m.ID,
-		"conversation_id": m.ConversationID,
-		"sender_id":       m.SenderID,
-		"sender_name":     senderName,
-		"sender_avatar":   senderAvatar,
-		"content":         m.Content,
-		"role":            role,
-		"created_at":      m.CreatedAt.Format("2006-01-02 15:04:05"),
+		"id":                m.ID,
+		"conversation_id":   m.ConversationID,
+		"sender_id":         m.SenderID,
+		"sender_name":       senderName,
+		"sender_avatar":     senderAvatar,
+		"content":           m.Content,
+		"role":              role,
+		"tool_activities":   m.ToolActivities,
+		"tool_result_data":  m.ToolResultData,
+		"created_at":        m.CreatedAt.Format("2006-01-02 15:04:05"),
 	}
 }
 

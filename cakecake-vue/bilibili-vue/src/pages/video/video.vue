@@ -184,10 +184,12 @@
               </router-link>
             </div>
             <VideoPlayerBox
+              ref="playerBox"
               v-else
               v-model:wide-mode="playerWide"
               :hot-title="pageTitle"
               :media-src="mbPlayerMediaSrc"
+              :seek-to="_seekTime"
               :minibili-video-id="mbNumericId != null ? mbNumericId : 0"
               :minibili-danmaku-closed="!!(apiDetail && apiDetail.danmaku_closed)"
               :danmaku-catalog="mbDanmakuCatalog"
@@ -1152,6 +1154,7 @@ export default {
       mbDanmakuCatalog: [],
       mbDanmakuWsHint: "",
       _mbDmWs: null,
+      _seekTime: 0,
       playerWide: false,
       /** 侧栏「正在看」：Mini-Bili 下为真实人数（详情 + WS）；非 MB 见 sideWatchingDisplay */
       watching: 0,
@@ -1760,9 +1763,18 @@ export default {
         this.alsoLikedVideos = [];
         this.alsoCarouselIndex = 0;
       }
+      this._seekTime = 0;
+      var tq = Number(this.$route.query.t);
+      if (Number.isFinite(tq) && tq > 0) this._seekTime = tq;
       this.syncTitle();
       this.syncMinibiliDetail();
       this.syncMbDanmakuWs();
+    },
+    "$route.query.t": {
+      handler(t) {
+        var tq = Number(t);
+        if (Number.isFinite(tq) && tq > 0) this._seekTime = tq;
+      }
     },
     mbLoggedIn(v, oldV) {
       if (!this.isMb) {
@@ -1792,6 +1804,8 @@ export default {
   mounted() {
     this.syncTitle();
     this.syncMinibiliDetail();
+    var tq = Number(this.$route.query.t);
+    if (Number.isFinite(tq) && tq > 0) { this._seekTime = tq; } else { this._seekTime = 0; }
     if (this.isMb) {
       void this.refreshMinibiliMe().catch(() => {});
     }

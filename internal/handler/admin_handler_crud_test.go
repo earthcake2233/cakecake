@@ -1,4 +1,4 @@
-package handler
+﻿package handler
 
 import (
 	"encoding/json"
@@ -46,7 +46,7 @@ func TestAdminAgentProfilePayload(t *testing.T) {
 		WelcomeMessagesJSON: `["Hello!","How can I help?"]`,
 		SortOrder: 1, Enabled: true, UpdatedAt: now,
 	}
-	out := adminAgentProfilePayload(p)
+	out := adminAgentProfilePayload(p, "")
 	require.Equal(t, uint64(1), out["id"])
 	require.Equal(t, "assistant", out["slug"])
 	require.Equal(t, uint64(100), out["bot_user_id"])
@@ -60,13 +60,13 @@ func TestAdminAgentProfilePayload(t *testing.T) {
 }
 
 func TestAdminAgentProfilePayload_Nil(t *testing.T) {
-	out := adminAgentProfilePayload(nil)
+	out := adminAgentProfilePayload(nil, "")
 	require.Equal(t, gin.H{}, out)
 }
 
 func TestAdminAgentProfilePayload_EmptyWelcome(t *testing.T) {
 	p := &model.AgentProfile{ID: 1, Slug: "test", WelcomeMessagesJSON: "[]", UpdatedAt: time.Now()}
-	out := adminAgentProfilePayload(p)
+	out := adminAgentProfilePayload(p, "")
 	require.Equal(t, []string{}, out["welcome_messages"])
 }
 
@@ -151,3 +151,4 @@ func TestAdminCreateBanner_DBError(t *testing.T) {
 	require.Equal(t, http.StatusInternalServerError, w.Code)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
+

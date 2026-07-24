@@ -13,11 +13,11 @@ A full-stack video-sharing community built with Go + Vue3, covering video upload
   <a href="https://chengzisoft.top/#/">
     <img src="https://img.shields.io/badge/Live Demo-chengzisoft.top-00a1d6?style=flat-square" alt="Live Demo">
   </a>
-  &nbsp;&nbsp;
+    
   <a href="https://github.com/earthcake2233/cakecake/actions">
     <img src="https://img.shields.io/github/actions/workflow/status/earthcake2233/cakecake/ci.yml?branch=main&style=flat-square&logo=github&label=CI" alt="CI">
   </a>
-  &nbsp;&nbsp;
+    
   <a href="https://b23.tv/9VnJIWm">
     <img src="https://img.shields.io/badge/Demo%20Video-Bilibili-00a1d6?style=flat-square&logo=bilibili" alt="Demo Video">
   </a>
@@ -48,6 +48,9 @@ A full-stack video-sharing community built with Go + Vue3, covering video upload
 
 <table>
   <tr>
+    <td align="center" colspan="2"><b> AI Assistant — Structured Tool Results</b><br><img src="docs/images/ai-chat-structured-results.png" alt="AI Chat Structured Results" width="500"/></td>
+  </tr>
+  <tr>
     <td align="center"><b>Home</b><br><img src="docs/images/homepage.png" alt="Home" width="400"/></td>
     <td align="center"><b>Video Player (with danmaku)</b><br><img src="docs/images/video-player.png" alt="Video Player" width="400"/></td>
   </tr>
@@ -69,19 +72,19 @@ A full-stack video-sharing community built with Go + Vue3, covering video upload
 
 ## Documentation
 
-| Document | Audience | Description |
-|----------|----------|-------------|
-| **This file** | Full-stack / Backend | Setup, API conventions, testing |
-| [cakecake-vue/bilibili-vue/README.md](./cakecake-vue/bilibili-vue/README.md) | Frontend | Installation, env vars, dev/build |
-| [deploy/DEPLOY.md](./deploy/DEPLOY.md) | DevOps | Production deployment (Nginx, systemd, OSS, ES) |
-| [docs/manual-video-ingest.md](./docs/manual-video-ingest.md) | DevOps | CLI video upload when web upload is disabled |
-| [docs/ai-gateway.md](./docs/ai-gateway.md) | DevOps | AI assistant (DeepSeek) configuration |
-| [.github/workflows/deploy.yml](./.github/workflows/deploy.yml) | DevOps | Optional GitHub Actions CI |
-| [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) | Full-stack / Interview | System architecture & design decisions (Chinese) |
-| [docs/ARCHITECTURE_EN.md](./docs/ARCHITECTURE_EN.md) | Full-stack / Interview | System architecture & design decisions |
-| [SPEC.md](./SPEC.md) | Developer | Feature specs & acceptance criteria |
-| [Rule.md](./Rule.md) | Developer | Engineering rules & conventions |
-| [Skill.md](./Skill.md) | Developer | Standard operations guide |
+| Document                                                                     | Audience               | Description                                      |
+| ---------------------------------------------------------------------------- | ---------------------- | ------------------------------------------------ |
+| **This file**                                                                | Full-stack / Backend   | Setup, API conventions, testing                  |
+| [cakecake-vue/bilibili-vue/README.md](./cakecake-vue/bilibili-vue/README.md) | Frontend               | Installation, env vars, dev/build                |
+| [deploy/DEPLOY.md](./deploy/DEPLOY.md)                                       | DevOps                 | Production deployment (Nginx, systemd, OSS, ES)  |
+| [docs/manual-video-ingest.md](./docs/manual-video-ingest.md)                 | DevOps                 | CLI video upload when web upload is disabled     |
+| [docs/ai-gateway.md](./docs/ai-gateway.md)                                   | DevOps                 | AI assistant (DeepSeek) configuration            |
+| [.github/workflows/deploy.yml](./.github/workflows/deploy.yml)               | DevOps                 | Optional GitHub Actions CI                       |
+| [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)                               | Full-stack / Interview | System architecture & design decisions (Chinese) |
+| [docs/ARCHITECTURE_EN.md](./docs/ARCHITECTURE_EN.md)                         | Full-stack / Interview | System architecture & design decisions           |
+| [SPEC.md](./SPEC.md)                                                         | Developer              | Feature specs & acceptance criteria              |
+| [Rule.md](./Rule.md)                                                         | Developer              | Engineering rules & conventions                  |
+| [Skill.md](./Skill.md)                                                       | Developer              | Standard operations guide                        |
 
 ---
 
@@ -135,16 +138,16 @@ Frontend details: **[bilibili-vue/README.md](./cakecake-vue/bilibili-vue/README.
 
 ## Dependencies
 
-| Component | Purpose |
-|-----------|---------|
-| **Go** 1.22+ (`go.mod` currently 1.25) | Backend |
-| **Node.js** + **npm** | Frontend (npm only, don't mix with yarn) |
-| **MySQL** | Persistence |
-| **Redis** | Play counts, danmaku cooldown, Refresh Token |
-| **RabbitMQ** | Transcoding queue (required by spec, cannot be replaced with Redis List) |
-| **Elasticsearch** (optional) | Full-text search 鈥?shows "not available" if unconfigured |
-| **FFmpeg / ffprobe** | Transcoding & cover thumbnail extraction |
-| **Alibaba Cloud OSS** | `videos/`, `covers/`, etc. |
+| Component                              | Purpose                                                                  |
+| -------------------------------------- | ------------------------------------------------------------------------ |
+| **Go** 1.22+ (`go.mod` currently 1.25) | Backend                                                                  |
+| **Node.js** + **npm**                  | Frontend (npm only, don't mix with yarn)                                 |
+| **MySQL**                              | Persistence                                                              |
+| **Redis**                              | Play counts, danmaku cooldown, Refresh Token                             |
+| **RabbitMQ**                           | Transcoding queue (required by spec, cannot be replaced with Redis List) |
+| **Elasticsearch** (optional)           | Full-text search 鈥?shows "not available" if unconfigured                |
+| **FFmpeg / ffprobe**                   | Transcoding & cover thumbnail extraction                                 |
+| **Alibaba Cloud OSS**                  | `videos/`, `covers/`, etc.                                               |
 
 ---
 
@@ -215,5 +218,3 @@ See **[deploy/DEPLOY.md](./deploy/DEPLOY.md)**. Optional **[GitHub Actions](./.g
 ## License
 
 [Non-Commercial License](./LICENSE) 鈥?personal/educational use permitted, commercial use prohibited.
-
-

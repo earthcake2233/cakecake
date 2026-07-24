@@ -1,4 +1,4 @@
-package data
+﻿package data
 
 import (
 	"crypto/rand"
@@ -30,11 +30,7 @@ func EnsureAgentProfiles(db *gorm.DB, cfg *config.C, lg *zap.Logger) error {
 	var n int64
 	_ = db.Model(&model.AgentProfile{}).Count(&n).Error
 	if n > 0 {
-		// migrateAgentSystemPrompt updates existing profile to use the new natural prompt style.
-	if err := migrateAgentSystemPrompt(db, lg); err != nil {
-		return err
-	}
-	return backfillDmAgentProfileIDs(db, lg)
+		return backfillDmAgentProfileIDs(db, lg)
 	}
 
 	displayName := defaultAgentDisplayName
@@ -83,10 +79,6 @@ func EnsureAgentProfiles(db *gorm.DB, cfg *config.C, lg *zap.Logger) error {
 	if lg != nil {
 		lg.Info("default agent profile created", zap.Uint64("profile_id", p.ID), zap.Uint64("bot_user_id", botID))
 	}
-	// migrateAgentSystemPrompt updates existing profile to use the new natural prompt style.
-	if err := migrateAgentSystemPrompt(db, lg); err != nil {
-		return err
-	}
 	return backfillDmAgentProfileIDs(db, lg)
 }
 
@@ -129,6 +121,7 @@ func findOrCreateLegacyBotUser(db *gorm.DB, cfg *config.C, displayName, sign, av
 	}
 	return u.ID, nil
 }
+
 
 func backfillDmAgentProfileIDs(db *gorm.DB, lg *zap.Logger) error {
 	var profiles []model.AgentProfile
@@ -213,7 +206,7 @@ func PickWelcomeMessage(p *model.AgentProfile) string {
 	return list[n.Int64()]
 }
 
-// EnsureAgentConversationForProfile creates a user↔bot thread for one persona.
+// EnsureAgentConversationForProfile creates a user鈫攂ot thread for one persona.
 func EnsureAgentConversationForProfile(db *gorm.DB, humanID uint64, profile *model.AgentProfile) (*model.DmConversation, bool, error) {
 	if db == nil || profile == nil || humanID == 0 || profile.BotUserID == 0 || humanID == profile.BotUserID {
 		return nil, false, fmt.Errorf("invalid agent conversation")
@@ -445,31 +438,5 @@ func ensureDmParticipants(db *gorm.DB, convID, humanID, botID uint64) {
 }
 
 
-// migrateAgentSystemPrompt patches the default profile's system prompt to the new natural style.
-func migrateAgentSystemPrompt(db *gorm.DB, lg *zap.Logger) error {
-	newPrompt := `你是 cakecake 站内 AI 助手。帮助用户了解本站功能。
-回答风格要求：
-- 说人话，自然口语化，像朋友聊天一样
-- 不要用任何 emoji 表情符号
-- 不要用夸张语气、不要营销号腔
-- 简洁直接，普通用户看得懂
-- 不要编造不存在的功能
-- 不确定时诚实说不知道`
-	// 1. Update ALL agent profiles (not just "default" slug)
-	result := db.Model(&model.AgentProfile{}).Where("1 = 1").Update("system_prompt", newPrompt)
-	if result.Error != nil {
-		return result.Error
-	}
-	if result.RowsAffected > 0 && lg != nil {
-		lg.Info("migrated agent profiles system prompt", zap.Int64("rows", result.RowsAffected))
-	}
-	// 2. Also update the singleton agent_settings table
-	stResult := db.Model(&model.AgentSettings{}).Where("id = ?", model.AgentSettingsRowID).Update("system_prompt", newPrompt)
-	if stResult.Error != nil {
-		return stResult.Error
-	}
-	if stResult.RowsAffected > 0 && lg != nil {
-		lg.Info("migrated agent settings system prompt", zap.Int64("rows", stResult.RowsAffected))
-	}
-	return nil
-}
+
+

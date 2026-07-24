@@ -63,3 +63,10 @@ coverage_test.out
 *.profile
 cover_full
 _cov_analyze.py
+  
+# Temp/scratch files  
+_patch_*  
+_fix_*.py  
+_restore_*  
+gen_png.*  
+defaultface.* 

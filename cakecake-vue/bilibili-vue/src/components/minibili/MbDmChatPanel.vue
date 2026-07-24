@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="mb-dm-chat msg-main__split">
     <div class="msg-col-msg">
       <div class="msg-col-msg__hint">最近消息</div>
@@ -176,7 +176,7 @@
             </div>
             <div v-if="Object.keys(m.toolResultData).length" class="msg-tool-results">
               <template v-for="(items, spanId) in m.toolResultData" :key="spanId">
-                <div v-for="(item, ii) in items" :key="ii" class="msg-result-card">
+                <div v-for="(item, ii) in items" :key="ii" class="msg-result-card" @click.stop="goToItem(item)">
                   <template v-if="item.cover || item.cover_url">
                     <img class="msg-result-card__cover" :src="item.cover || item.cover_url" />
                     <div class="msg-result-card__body">
@@ -187,8 +187,17 @@
                       </div>
                     </div>
                   </template>
-                  <template v-else-if="item.user_name">
-                    <img class="msg-result-card__avatar" :src="item.user_avatar || defaultFace" />
+                  <template v-else-if="item.user_name && item.type">
+                    <span class="msg-result-card__badge msg-result-card__badge--danmaku">弹幕</span>
+                    <img class="msg-result-card__avatar" :src="item.user_avatar || defaultFace" @error="onAvatarError" />
+                    <div class="msg-result-card__body">
+                      <div class="msg-result-card__content">{{ item.content }}</div>
+                      <div class="msg-result-card__meta">{{ item.user_name }} &middot; {{ formatVideoTime(item.video_time) }}</div>
+                    </div>
+                  </template>
+                  <template v-else-if="item.user_name && !item.type">
+                    <span class="msg-result-card__badge msg-result-card__badge--comment">评论</span>
+                    <img class="msg-result-card__avatar" :src="item.user_avatar || defaultFace" @error="onAvatarError" />
                     <div class="msg-result-card__body">
                       <div class="msg-result-card__content">{{ item.content }}</div>
                       <div class="msg-result-card__meta">{{ item.user_name }} &middot; {{ item.like_count || 0 }}赞</div>
@@ -466,8 +475,8 @@ export default {
           content: raw.content,
           face: raw.sender_avatar || defaultFace,
           is_mine: isMine,
-          toolActivities: raw._toolActivities || JSON.parse(sessionStorage.getItem('mb_tool_acts_' + (raw.conversation_id || this.selectedConvId) + '_' + raw.id) || '[]'),
-          toolResultData: raw._toolResultData || JSON.parse(sessionStorage.getItem('mb_tool_results_' + (raw.conversation_id || this.selectedConvId) + '_' + raw.id) || '{}')
+          toolActivities: raw.tool_activities ? JSON.parse(raw.tool_activities) : (raw._toolActivities || []),
+          toolResultData: raw.tool_result_data ? JSON.parse(raw.tool_result_data) : (raw._toolResultData || {})
         };
         if (label !== curLabel) {
           flush();
@@ -730,14 +739,7 @@ export default {
           this._liveToolActs.forEach(t => { if (t.status === "running") t.status = "done"; });
           this._pendingToolActs = []; this._liveToolActs = [];
           this._pendingResultData = {};
-          try {
-            var msgId = data.message && data.message.id;
-            var convId = data.message && data.message.conversation_id;
-            if (msgId != null && convId != null) {
-              sessionStorage.setItem("mb_tool_acts_" + convId + "_" + msgId, JSON.stringify(data.message._toolActivities || []));
-              sessionStorage.setItem("mb_tool_results_" + convId + "_" + msgId, JSON.stringify(data.message._toolResultData || {}));
-            }
-          } catch (e) { /* ignore */ }
+          // Data is now persisted in DB by backend, no need for sessionStorage
         }
         this.upsertConversationFromMessage(data.message);
         this.appendMessageIfNew(data.message);
@@ -901,10 +903,37 @@ export default {
         this.blacklistSubmitting = false;
       }
     },
+    goToItem(item) {
+      var path;
+      var q = {};
+      if (item.cover || item.cover_url) {
+        var vid1 = item.id || item.video_id;
+        if (vid1) path = "/video/" + vid1;
+      } else if (item.type) {
+        var vid2 = item.video_id;
+        if (vid2) { path = "/video/" + vid2; q.t = item.video_time || 0; }
+      } else {
+        var vid3 = item.video_id;
+        if (vid3) { path = "/video/" + vid3; q.mb_cid = item.id; }
+      }
+      if (!path) return;
+      this.$router.push({ path: path, query: q }).catch(function(e) {});
+    },
+    formatVideoTime(sec) {
+      if (sec == null || sec === undefined) return "";
+      var m = Math.floor(sec / 60);
+      var s = Math.floor(sec % 60);
+      return m + ":" + String(s).padStart(2, "0");
+    },
     formatPlayCount(n) {
       if (n >= 10000) return (n / 10000).toFixed(1) + "万";
       if (n >= 1000) return (n / 1000).toFixed(1) + "千";
       return String(n);
+    },
+    onAvatarError(e) {
+      if (e.target.src !== defaultFace) {
+        e.target.src = defaultFace;
+      }
     },
     async sendChatMessage() {
       const text = this.chatDraftTrimmed;

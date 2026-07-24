@@ -619,6 +619,11 @@ export default {
       type: Array,
       default: () => []
     },
+    /** 跳转到指定时间（秒），用于弹幕点击跳转 */
+    seekTo: {
+      type: Number,
+      default: 0
+    },
     /** Mini-Bili：UP 关闭弹幕后禁止发送（与接口 40304 一致） */
     minibiliDanmakuClosed: {
       type: Boolean,
@@ -666,6 +671,7 @@ export default {
       danmuHex: "#FFFFFF",
       playing: false,
       duration: 1,
+      _pendingSeek: 0,
       currentTime: 0,
       bufferPct: 0,
       muted: false,
@@ -811,7 +817,7 @@ export default {
   },
   watch: {
     loopEnabled(v) {
-      const el = this.$refs.videoRef;
+        var v = this.$refs.videoRef;
       if (el) el.loop = v;
     },
     videoSrc() {
@@ -820,6 +826,21 @@ export default {
       this.currentTime = 0;
       this.bufferPct = 0;
       this.dmResetEngine();
+      // 视频源切换后若有待跳转时间则延迟 seek
+      if (this._pendingSeek > 0) {
+        var self = this;
+        var checkAndSeek = function() {
+          var v = self.$refs.videoRef;
+          if (v && v.readyState > 0) {
+            v.currentTime = self._pendingSeek;
+            self._pendingSeek = 0;
+            v.play().catch(function() {});
+          } else {
+            setTimeout(checkAndSeek, 300);
+          }
+        };
+        setTimeout(checkAndSeek, 200);
+      }
       this.$nextTick(() => {
         const v = this.$refs.videoRef;
         if (v) {
@@ -835,9 +856,20 @@ export default {
     minibiliVideoId() {
       this.dmResetEngine();
       this.mbDailyWatchReported = false;
+      this._pendingSeek = 0;
     },
     minibiliDanmakuMode() {
       if (!this.minibiliDanmakuMode) this.dmResetEngine();
+    },
+    seekTo(t) {
+      if (t > 0) {
+        this._pendingSeek = t;
+        // 如果视频已加载直接跳转，否则由 videoSrc watcher 处理
+        var v = this.$refs.videoRef;
+        if (v && v.readyState > 0) {
+          v.currentTime = t;
+        }
+      }
     },
     danmakuCatalog: {
       handler() {
@@ -865,6 +897,8 @@ export default {
     this.fsHandlerBound = true;
     this.dmInitResizeObserver();
     this.dmStartRaf();
+    // 初始加载时从 seekTo 取出待跳转时间
+    if (this.seekTo > 0) this._pendingSeek = this.seekTo;
   },
   beforeUnmount() {
     if (this.danmuLeaveTimer) clearTimeout(this.danmuLeaveTimer);
@@ -944,6 +978,16 @@ export default {
         this.bufferPct = Math.min(100, (100 * end) / v.duration);
       } catch {
         this.bufferPct = 0;
+      }
+    },
+    _doSeek(t) {
+      var v = this.$refs.videoRef;
+      if (!v) return;
+      if (v.readyState > 0) {
+        v.currentTime = t;
+        v.play().catch(function() {});
+      } else {
+        v.addEventListener("loadedmetadata", function() { v.currentTime = t; v.play().catch(function() {}); }, { once: true });
       }
     },
     togglePlay() {

@@ -519,6 +519,74 @@ this._pendingToolActs.forEach(t => { if (t.status === "running") t.status = "don
 3. **更好的方案**：后端用单线程的事件队列序列化所有 WS 事件，彻底消除乱序可能。
 
 
+## 2026-07-24 — 弹幕结构化结果头像修复
+
+### 问题
+前端弹幕（danmaku）结构化结果卡片中，用户头像一直显示为破损图片（broken image icon），而评论（comment）卡片头像正常显示。
+
+### 根因分析
+1. **后端 `getVideoDanmaku` 未填充 `user_avatar`**：虽然 item struct 已定义 `UserAvatar` 字段，但在构建 items 时未从数据库查询并赋值，导致 JSON 响应始终返回 `"user_avatar":""`。
+2. **前端缺少图片加载失败兜底**：`defaultFace` SVG data URL 作为 `||` 回退理论上应生效，但缺少 `@error` 事件兜底，部分浏览器或特定环境下 data URL SVG 渲染失败后无后备方案。
+
+### 对比 `getVideoComments`
+评论接口正确实现了头像查询：
+- 使用 `userMap := make(map[uint64]*model.User)` 存储完整 User 对象
+- `userAvatar = u.AvatarURL` 赋值
+- 构建 items 时传入 `UserAvatar: userAvatar`
+
+### 修复
+1. **后端** (`internal/aigateway/toolkit/platform.go`):
+   - 新增 `avatarMap := make(map[uint64]string)` 并行存储用户头像 URL
+   - 在用户查询循环中填充 `avatarMap[u.ID] = u.AvatarURL`
+   - 构建 danmaku items 时传入 `UserAvatar: userAvatar`
+2. **前端** (`MbDmChatPanel.vue`):
+   - 为头像 `<img>` 添加 `@error="onAvatarError"` 事件处理
+   - `onAvatarError` 方法在图片加载失败时将 `src` 替换为 `defaultFace` SVG data URL
+
+### 教训
+- 「相同的 template 分支、评论正常弹幕异常」应优先排查 **数据源** 而非渲染层
+- Go 结构体中定义了字段但不赋值，JSON 序列化后为空字符串 `""`，在前端 `||` 表达式中空字符串为 falsy 所以理论上回退应生效——但图片 loading 失败仍需要 `@error` 作为最终防线
+- 多层兜底策略：真实 URL → `||` 默认值 → `@error` 兜底
+
+
+## 2026-07-24 - 弹幕点击跳转时序修复（Vue 组件挂载时序 bug）
+
+### 问题
+
+点击弹幕结构化结果卡片跳转到视频播放页后，视频不会跳转到弹幕指定的播放时间点。但先点击侧栏推荐视频切换到其他视频，再回退回来，跳转却正常。
+
+### 根因分析
+
+这是 **Vue 组件生命周期与异步数据加载之间的时序 bug**，涉及三个环节的断裂：
+
+**环节一：VideoPlayerBox 首次挂载时 seekTo watcher 不触发**
+
+Vue 3 的 watch 默认不带 immediate: true，只在响应式数据变化时触发。组件首次挂载时 seekTo prop 已经有值，但对 watcher 来说没有从旧值变成新值的过程，所以 watcher 函数体完全不执行。_pendingSeek 保持初始值 0。
+
+**环节二：videoSrc 异步加载后才变化**
+
+video.vue 的 aidParam watcher 调用 syncMinibiliDetail()（async），该函数发起 HTTP 请求获取视频详情。在此期间 media-src prop 为空字符串，VideoPlayerBox 使用 fallback demoSrc。等到 API 响应返回后才设置真实 media-src，videoSrc watcher 触发，但此时 _pendingSeek 为 0（环节一未设置），seek 条件判断失败。
+
+**环节三：aidParam watcher 不响应仅 query 变化**
+
+当在相同视频 ID 下通过 ?t=seconds 导航（从侧栏回退回来），aidParam 没有变化（aid 参数相同），其 watcher 不触发。没有独立的 watcher 监听 route.query.t，_seekTime 不会更新。
+
+### 修复（3 处变更）
+
+| 文件 | 变更 |
+|------|------|
+| video.vue | 新增 "$route.query.t" watcher，当仅 query 变化时更新 _seekTime |
+| VideoPlayerBox.vue mounted() | 添加 if (this.seekTo > 0) this._pendingSeek = this.seekTo（首次挂载时赋值） |
+| VideoPlayerBox.vue seekTo watcher | 仅设 _pendingSeek + 视频已加载时直接 currentTime；不再调用 _doSeek |
+| VideoPlayerBox.vue videoSrc watcher | 成功 seek 后 _pendingSeek = 0 清理（防残留） |
+| VideoPlayerBox.vue minibiliVideoId watcher | 添加 _pendingSeek = 0（视频 ID 切换时清理） |
+
+### 教训
+
+1. **Vue watch 默认不立即执行**。需要首次挂载时处理的 prop 必须在 mounted() 中额外赋值，或使用 immediate: true（注意 immediate watcher 在 beforeMount 阶段触发，此时 refs 不可用）。
+2. **异步数据流转的时序断点**。一个 prop 的变化可能依赖另一个 prop 的异步加载结果。必须确保在异步完成前中间状态正确持有待消费的值（_pendingSeek）。
+3. **Vue Router query 参数变化不触发 route param watcher**。aidParam computed 只依赖 route.params.aid，不依赖 route.query。需要独立的 watcher。
+4. **测试建议**：手动测试至少覆盖三种场景——（1）从其他页面首次导航到视频页（mount 场景）；（2）同一视频页内 query 变化；（3）不同视频间切换后回退。
 ## 当前状态
 
 - 仓库 total: 15.76% 覆盖率，193 文件（含零覆盖的框架/配置类文件）
@@ -534,3 +602,5 @@ this._pendingToolActs.forEach(t => { if (t.status === "running") t.status = "don
 - **Kratos 微服务拆分**：v1.0 的领域分层（`handler/` → `service/` → `dao/`）已预留拆分空间，后续可按需拆出用户/视频/弹幕/评论服务。
 - **E2E 自动化测试**：当前 E2E 为手动，可引入 Playwright 做端到端回归验证。
 - **前端测试补充**：当前测试集中在后端，Vue 组件层（弹幕渲染、发布表单）尚缺自动化测试覆盖。
+---
+

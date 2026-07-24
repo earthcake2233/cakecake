@@ -1,4 +1,4 @@
-<p align="center">
+﻿<p align="center">
   <strong><img src="https://img.shields.io/badge/🇨🇳中文-00a1d6?style=flat-square" alt="中文"></strong>
   <a href="README_EN.md">
     <img src="https://img.shields.io/badge/🇬🇧English-999999?style=flat-square" alt="English">
@@ -13,11 +13,11 @@
   <a href="https://chengzisoft.top/#/">
     <img src="https://img.shields.io/badge/在线体验-chengzisoft.top-00a1d6?style=flat-square" alt="在线体验">
   </a>
-  &nbsp;&nbsp;
+    
   <a href="https://github.com/earthcake2233/cakecake/actions">
     <img src="https://img.shields.io/github/actions/workflow/status/earthcake2233/cakecake/ci.yml?branch=main&style=flat-square&logo=github&label=CI" alt="CI">
   </a>
-  &nbsp;&nbsp;
+    
   <a href="https://b23.tv/9VnJIWm">
     <img src="https://img.shields.io/badge/演示视频-B站-00a1d6?style=flat-square&logo=bilibili" alt="B站演示">
   </a>
@@ -46,6 +46,9 @@
 
 <table>
   <tr>
+    <td align="center" colspan="2"><b> AI 智能助手 — 结构化工具结果展示</b><br><img src="docs/images/ai-chat-structured-results.png" alt="AI 聊天结构化结果" width="500"/></td>
+  </tr>
+  <tr>
     <td align="center"><b>首页</b><br><img src="docs/images/homepage.png" alt="首页" width="400"/></td>
     <td align="center"><b>视频播放（含弹幕）</b><br><img src="docs/images/video-player.png" alt="视频播放" width="400"/></td>
   </tr>
@@ -67,19 +70,19 @@
 
 ## 文档索引
 
-| 文档 | 读者 | 说明 |
-|------|------|------|
-| **本文** | 全栈 / 后端 | 环境、后端启动、API 约定、测试 |
-| [cakecake-vue/bilibili-vue/README.md](./cakecake-vue/bilibili-vue/README.md) | 前端 | 安装、环境变量、开发 / 构建 |
-| [deploy/DEPLOY.md](./deploy/DEPLOY.md) | 运维 | 生产部署（Nginx、systemd、OSS、ES） |
-| [docs/manual-video-ingest.md](./docs/manual-video-ingest.md) | 运维 | 关闭网页上传时，本地 OSS + 手动写库发视频 |
-| [docs/ai-gateway.md](./docs/ai-gateway.md) | 运维 | AI 助手（DeepSeek）配置 |
-| [.github/workflows/deploy.yml](./.github/workflows/deploy.yml) | 运维 | 可选：GitHub Actions 构建并 SSH 部署 |
-| [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) | 全栈 / 面试 | 系统架构、核心模块设计、关键决策 |
-| [docs/ARCHITECTURE_EN.md](./docs/ARCHITECTURE_EN.md) | Full-stack / Interview | Architecture (English) |
-| [SPEC.md](./SPEC.md) | 开发 | 功能与验收规格 |
-| [Rule.md](./Rule.md) | 开发 | 工程红线 |
-| [Skill.md](./Skill.md) | 开发 | 标准操作（迁移、Token、WS 等） |
+| 文档                                                                         | 读者                   | 说明                                      |
+| ---------------------------------------------------------------------------- | ---------------------- | ----------------------------------------- |
+| **本文**                                                                     | 全栈 / 后端            | 环境、后端启动、API 约定、测试            |
+| [cakecake-vue/bilibili-vue/README.md](./cakecake-vue/bilibili-vue/README.md) | 前端                   | 安装、环境变量、开发 / 构建               |
+| [deploy/DEPLOY.md](./deploy/DEPLOY.md)                                       | 运维                   | 生产部署（Nginx、systemd、OSS、ES）       |
+| [docs/manual-video-ingest.md](./docs/manual-video-ingest.md)                 | 运维                   | 关闭网页上传时，本地 OSS + 手动写库发视频 |
+| [docs/ai-gateway.md](./docs/ai-gateway.md)                                   | 运维                   | AI 助手（DeepSeek）配置                   |
+| [.github/workflows/deploy.yml](./.github/workflows/deploy.yml)               | 运维                   | 可选：GitHub Actions 构建并 SSH 部署      |
+| [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)                               | 全栈 / 面试            | 系统架构、核心模块设计、关键决策          |
+| [docs/ARCHITECTURE_EN.md](./docs/ARCHITECTURE_EN.md)                         | Full-stack / Interview | Architecture (English)                    |
+| [SPEC.md](./SPEC.md)                                                         | 开发                   | 功能与验收规格                            |
+| [Rule.md](./Rule.md)                                                         | 开发                   | 工程红线                                  |
+| [Skill.md](./Skill.md)                                                       | 开发                   | 标准操作（迁移、Token、WS 等）            |
 
 ---
 
@@ -134,16 +137,16 @@ npm run dev                   # http://localhost:8888
 
 ## 环境依赖
 
-| 组件 | 用途 |
-|------|------|
-| **Go** 1.22+（`go.mod` 当前 1.25） | 后端 |
-| **Node.js** + **npm** | 前端（请用 npm，勿与 yarn 混用锁文件） |
-| **MySQL** | 持久化 |
-| **Redis** | 播放计数、弹幕冷却、Refresh Token 等 |
-| **RabbitMQ** | 转码队列（规格要求，不可用 Redis List 替代） |
-| **Elasticsearch**（可选） | 全文搜索；未配置则搜索页提示未就绪 |
-| **FFmpeg / ffprobe** | 转码与封面截帧；Windows + Air 建议在 `.env` 设 `FFPROBE_PATH` / `FFMPEG_PATH` 绝对路径 |
-| **阿里云 OSS** | `videos/`、`covers/` 等（见 SPEC） |
+| 组件                               | 用途                                                                                  |
+| ---------------------------------- | ------------------------------------------------------------------------------------- |
+| **Go** 1.22+（`go.mod` 当前 1.25） | 后端                                                                                  |
+| **Node.js** + **npm**              | 前端（请用 npm，勿与 yarn 混用锁文件）                                                |
+| **MySQL**                          | 持久化                                                                                |
+| **Redis**                          | 播放计数、弹幕冷却、Refresh Token 等                                                  |
+| **RabbitMQ**                       | 转码队列（规格要求，不可用 Redis List 替代）                                          |
+| **Elasticsearch**（可选）          | 全文搜索；未配置则搜索页提示未就绪                                                    |
+| **FFmpeg / ffprobe**               | 转码与封面截帧；Windows + Air 建议在`.env` 设 `FFPROBE_PATH` / `FFMPEG_PATH` 绝对路径 |
+| **阿里云 OSS**                     | `videos/`、`covers/` 等（见 SPEC）                                                    |
 
 ---
 
@@ -220,5 +223,3 @@ go test -tags=integration ./internal/handler/... -count=1
 
 - 勿提交 `.env`、密钥与数据库密码。
 - 实现与 SPEC / Rule 冲突时，以 SPEC / Rule 为准。
-
-
