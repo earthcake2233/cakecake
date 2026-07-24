@@ -1,4 +1,4 @@
-﻿package usercoin
+package usercoin
 
 import (
 	"testing"
@@ -59,34 +59,7 @@ func TestCreatorShareTenths(t *testing.T) {
 }
 
 func TestRecordLedgerAt_SkipsOnZeroDelta(t *testing.T) {
-	// Should return nil immediately when deltaTenths == 0 without touching DB
 	if err := RecordLedgerAt(nil, 1, 0, "test_reason", 0, time.Now()); err != nil {
 		t.Errorf("RecordLedgerAt with delta=0 should skip; got %v", err)
 	}
-}
-
-// DB-dependent functions are skipped
-
-func TestAddTenths_Skipped(t *testing.T) {
-	t.Skip("requires DB")
-}
-
-func TestGrantDailyLoginCoin_Skipped(t *testing.T) {
-	t.Skip("requires DB")
-}
-
-func TestSpendWholeCoins_Skipped(t *testing.T) {
-	t.Skip("requires DB")
-}
-
-func TestSpendOnVideoCoin_Skipped(t *testing.T) {
-	t.Skip("requires DB")
-}
-
-func TestSpendOnArticleCoin_Skipped(t *testing.T) {
-	t.Skip("requires DB")
-}
-
-func TestRecordLedger_Skipped(t *testing.T) {
-	t.Skip("requires DB")
 }

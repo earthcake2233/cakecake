@@ -58,3 +58,8 @@ coverage_test.out
 !internal/**/write_test.py
 !scripts/*.py
 !cakecake-vue/bilibili-vue/scripts/*.py
+
+# Coverage profiles
+*.profile
+cover_full
+_cov_analyze.py

@@ -1,0 +1,22 @@
+# Codecov configuration
+# See https://docs.codecov.com/docs/codecovyml-reference
+coverage:
+  status:
+    project:
+      default:
+        target: auto
+        threshold: 5%
+    patch:
+      default:
+        target: auto
+        threshold: 50%
+
+ignore:
+  - "**/*_test.go"
+  - "cmd/**"
+  - "**/mocks/**"
+
+comment:
+  layout: "reach, diff, flags, files"
+  behavior: default
+  require_changes: false
