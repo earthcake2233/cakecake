@@ -209,3 +209,10 @@
 | 编号 | 规则 | 说明 |
 | :--- | :--- | :--- |
 | **R-DOC-14** | **README_REFLECT.md 的"当前状态"与"后续展望"必须放在末尾** | README_REFLECT.md 中各 dated 条目按时间倒序排列（最新的在最前面），但"当前状态"和"后续展望"两个总览性章节必须放在文档最后，不得插入在 dated 条目之间。新增条目时注意不破坏此顺序。 |
+
+### 十六、文件编码规范
+
+| 编号 | 规则 | 说明 |
+| :--- | :--- | :--- |
+| **R-ENCODE-1** | **禁止 Go 源文件包含 UTF-8 BOM** | Go 编译器不接受 BOM（Byte Order Mark）头。必须使用 `pip install -r scripts/check_bom.py` 检测所有 `.go` 文件。文件写入必须使用 `scripts/safe_write.py`（自动剥离 BOM），严禁使用 `Set-Content` 直接写入 `.go` 文件。 |
+| **R-ENCODE-2** | **提交前运行 BOM 检查** | `python scripts/check_bom.py` 扫描 `internal/` 和 `cmd/` 下所有 `.go` 文件。若发现 BOM 文件，使用 `--fix` 修复后重新提交。CI `go build` 步骤也会拒绝 BOM 文件。 |

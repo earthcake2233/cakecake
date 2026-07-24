@@ -28,6 +28,9 @@ def main():
         content = sys.stdin.read()
 
     out_path = pathlib.Path(args.output)
+    # Strip UTF-8 BOM if present (Go compiler rejects BOM)
+    if content.startswith("\ufeff"):
+        content = content.lstrip("\ufeff")
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(content, args.encoding)
     h = hashlib.sha256(content.encode(args.encoding)).hexdigest()[:16]
