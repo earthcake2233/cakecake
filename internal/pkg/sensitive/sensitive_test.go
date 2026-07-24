@@ -1,4 +1,4 @@
-﻿package sensitive
+package sensitive
 
 import (
 	"os"

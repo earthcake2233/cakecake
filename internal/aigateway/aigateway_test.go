@@ -1,4 +1,4 @@
-﻿package aigateway
+package aigateway
 
 import (
 	"context"

@@ -1,4 +1,4 @@
-﻿package dailyreward
+package dailyreward
 
 import (
 	"testing"

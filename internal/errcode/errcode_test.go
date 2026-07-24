@@ -1,4 +1,4 @@
-﻿package errcode
+package errcode
 
 import (
 	"testing"

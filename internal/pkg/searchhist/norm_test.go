@@ -1,4 +1,4 @@
-﻿package searchhist
+package searchhist
 
 import (
 	"testing"

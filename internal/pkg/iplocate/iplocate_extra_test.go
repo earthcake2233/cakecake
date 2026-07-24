@@ -1,4 +1,4 @@
-﻿package iplocate
+package iplocate
 
 import (
 	"testing"

@@ -1,4 +1,4 @@
-﻿package coverval
+package coverval
 
 import (
 	"mime/multipart"

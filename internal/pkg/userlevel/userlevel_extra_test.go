@@ -1,4 +1,4 @@
-﻿package userlevel
+package userlevel
 
 import (
 	"testing"

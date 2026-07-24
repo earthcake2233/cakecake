@@ -1,4 +1,4 @@
-﻿package model_test
+package model_test
 
 import (
 	"encoding/json"

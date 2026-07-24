@@ -1,4 +1,4 @@
-﻿package cursor
+package cursor
 
 import (
 	"testing"

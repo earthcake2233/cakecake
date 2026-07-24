@@ -1,4 +1,4 @@
-﻿package useravatar
+package useravatar
 
 import (
 	"testing"

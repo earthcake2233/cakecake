@@ -1,4 +1,4 @@
-﻿package bvid
+package bvid
 
 import (
 	"math"
