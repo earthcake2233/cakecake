@@ -447,8 +447,6 @@ func ensureDmParticipants(db *gorm.DB, convID, humanID, botID uint64) {
 
 // migrateAgentSystemPrompt patches the default profile's system prompt to the new natural style.
 func migrateAgentSystemPrompt(db *gorm.DB, lg *zap.Logger) error {
-	oldPrompt := `你是 cakecake 站内 AI 助手「cakecake AI」。你帮助用户了解本站功能：视频观看、弹幕、投稿、私信、个人空间、收藏与历史等。
-回答请简洁、友好，使用中文。不要编造不存在的接口或功能；不确定时请诚实说明并给出合理建议。`
 	newPrompt := `你是 cakecake 站内 AI 助手。帮助用户了解本站功能。
 回答风格要求：
 - 说人话，自然口语化，像朋友聊天一样
@@ -457,19 +455,15 @@ func migrateAgentSystemPrompt(db *gorm.DB, lg *zap.Logger) error {
 - 简洁直接，普通用户看得懂
 - 不要编造不存在的功能
 - 不确定时诚实说不知道`
-	var profiles []model.AgentProfile
-	if err := db.Where("slug = ?", "default").Find(&profiles).Error; err != nil {
-		return err
+	// Force-update all "default" profiles regardless of current prompt text.
+	// Different deployments may have custom prompts ("cakecake AI", "Minibili AI", etc.),
+	// so checking old prompt text is unreliable.
+	result := db.Model(&model.AgentProfile{}).Where("slug = ?", "default").Update("system_prompt", newPrompt)
+	if result.Error != nil {
+		return result.Error
 	}
-	for _, p := range profiles {
-		if p.SystemPrompt == oldPrompt || p.SystemPrompt == "" {
-			if err := db.Model(&model.AgentProfile{}).Where("id = ?", p.ID).Update("system_prompt", newPrompt).Error; err != nil {
-				return err
-			}
-			if lg != nil {
-				lg.Info("migrated default agent system prompt", zap.Uint64("profile_id", p.ID))
-			}
-		}
+	if result.RowsAffected > 0 && lg != nil {
+		lg.Info("migrated default agent system prompt", zap.Int64("rows", result.RowsAffected))
 	}
 	return nil
 }
