@@ -189,7 +189,7 @@
                   </template>
                   <template v-else-if="item.user_name && item.type">
                     <span class="msg-result-card__badge msg-result-card__badge--danmaku">弹幕</span>
-                    <img class="msg-result-card__avatar" :src="item.user_avatar || defaultFace" @error="onAvatarError" />
+                    <img class="msg-result-card__avatar" :src="item.user_avatar || defaultAvatarSvg" @error="onAvatarError" />
                     <div class="msg-result-card__body">
                       <div class="msg-result-card__content">{{ item.content }}</div>
                       <div class="msg-result-card__meta">{{ item.user_name }} &middot; {{ formatVideoTime(item.video_time) }}</div>
@@ -197,7 +197,7 @@
                   </template>
                   <template v-else-if="item.user_name && !item.type">
                     <span class="msg-result-card__badge msg-result-card__badge--comment">评论</span>
-                    <img class="msg-result-card__avatar" :src="item.user_avatar || defaultFace" @error="onAvatarError" />
+                    <img class="msg-result-card__avatar" :src="item.user_avatar || defaultAvatarSvg" @error="onAvatarError" />
                     <div class="msg-result-card__body">
                       <div class="msg-result-card__content">{{ item.content }}</div>
                       <div class="msg-result-card__meta">{{ item.user_name }} &middot; {{ item.like_count || 0 }}赞</div>
@@ -370,6 +370,7 @@ import {
 } from "@/api/minibili";
 import { getAccessToken, getUserId } from "@/utils/authTokens";
 import defaultFace from "@/assets/akari.jpg";
+const defaultAvatarSvg = "data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2724%27 height=%2724%27 viewBox=%270 0 24 24%27 fill=%27%23ccc%27%3E%3Ccircle cx=%2712%27 cy=%278%27 r=%274%27/%3E%3Cpath d=%27M12 14c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5z%27/%3E%3C/svg%3E";
 import gochatIllus from "@/assets/gochat.png";
 import muteIcon from "@/assets/mute.png";
 import { refreshMessageUnread } from "@/utils/messageUnread";
@@ -931,8 +932,9 @@ export default {
       return String(n);
     },
     onAvatarError(e) {
-      if (e.target.src !== defaultFace) {
-        e.target.src = defaultFace;
+      if (!e.target._fallback) {
+        e.target._fallback = true;
+        e.target.src = "data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2724%27 height=%2724%27 viewBox=%270 0 24 24%27 fill=%27%23ccc%27%3E%3Ccircle cx=%2712%27 cy=%278%27 r=%274%27/%3E%3Cpath d=%27M12 14c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5z%27/%3E%3C/svg%3E";
       }
     },
     async sendChatMessage() {
