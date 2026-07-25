@@ -4,7 +4,7 @@
     <img src="https://img.shields.io/badge/🇬🇧English-999999?style=flat-square" alt="English">
   </a>
     
-  <a href="http://localhost:8080/swagger/index.html">
+  <a href="https://chengzisoft.top/swagger/index.html">
     <img src="https://img.shields.io/badge/API-Swagger-85EA2D?style=flat-square&logo=swagger" alt="API Docs">
   </a>
 </p>
