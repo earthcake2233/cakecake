@@ -142,6 +142,14 @@ type errCoverValidation struct{ code int }
 func (e errCoverValidation) Error() string { return "cover validation" }
 
 // SaveVideoDraft creates a draft video (multipart: file required unless VIDEO_UPLOAD_DISABLED).
+// SaveVideoDraft godoc
+// @Summary      Save video draft
+// @Description  Save a new video as draft without publishing
+// @Tags         Videos
+// @Produce      json
+// @Param        body body object{} true "Draft data"
+// @Success      200 {object} map[string]interface{}
+// @Router       /videos/draft [post]
 func (a *API) SaveVideoDraft(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -301,6 +309,15 @@ func (a *API) SaveVideoDraft(c *gin.Context) {
 }
 
 // UpdateVideoDraft updates metadata and optionally replaces file/cover on a draft.
+// UpdateVideoDraft godoc
+// @Summary      Update video draft
+// @Description  Update an existing video draft
+// @Tags         Videos
+// @Produce      json
+// @Param        id path int true "Video ID"
+// @Param        body body object{} true "Updated draft data"
+// @Success      200 {object} map[string]interface{}
+// @Router       /videos/{id}/draft [put]
 func (a *API) UpdateVideoDraft(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -458,6 +475,14 @@ func (a *API) UpdateVideoDraft(c *gin.Context) {
 }
 
 // PublishVideoDraft submits a draft for transcoding (F2).
+// PublishVideoDraft godoc
+// @Summary      Publish video draft
+// @Description  Publish a draft video to make it visible
+// @Tags         Videos
+// @Produce      json
+// @Param        id path int true "Video ID"
+// @Success      200 {object} map[string]interface{}
+// @Router       /videos/{id}/publish [post]
 func (a *API) PublishVideoDraft(c *gin.Context) {
 	if a.Cfg != nil && a.Cfg.VideoUploadDisabled {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeVideoUploadDisabled)
@@ -532,6 +557,16 @@ func videoStatusAllowsMediaReplace(st string) bool {
 }
 
 // ReplaceVideoMedia replaces the source file for failed/rejected videos: purge OSS, re-queue transcode.
+// ReplaceVideoMedia godoc
+// @Summary      Replace video media
+// @Description  Upload a new media file to replace existing video
+// @Tags         Videos
+// @Accept       multipart/form-data
+// @Produce      json
+// @Param        id path int true "Video ID"
+// @Param        file formData file true "New video file"
+// @Success      200 {object} map[string]interface{}
+// @Router       /videos/{id}/replace-media [post]
 func (a *API) ReplaceVideoMedia(c *gin.Context) {
 	if a.Cfg != nil && a.Cfg.VideoUploadDisabled {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeVideoUploadDisabled)
@@ -663,6 +698,14 @@ func (a *API) ReplaceVideoMedia(c *gin.Context) {
 }
 
 // GetMyVideoDraftSource streams the draft raw file for the uploader preview.
+// GetMyVideoDraftSource godoc
+// @Summary      Get draft source
+// @Description  Get the original uploaded source info for a draft video
+// @Tags         Videos
+// @Produce      json
+// @Param        id path int true "Video ID"
+// @Success      200 {object} map[string]interface{}
+// @Router       /users/me/videos/{id}/draft-source [get]
 func (a *API) GetMyVideoDraftSource(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {

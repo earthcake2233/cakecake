@@ -222,6 +222,14 @@ func (a *API) PostComment(c *gin.Context) {
 }
 
 // ApproveComment marks a comment visible under curated mode (video owner only).
+// ApproveComment godoc
+// @Summary      Approve a curated comment
+// @Description  Mark a comment as approved (uploader only)
+// @Tags         Comments
+// @Produce      json
+// @Param        id path int true "Comment ID"
+// @Success      200 {object} map[string]interface{}
+// @Router       /comments/{id}/approve [post]
 func (a *API) ApproveComment(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -268,6 +276,14 @@ func (a *API) ApproveComment(c *gin.Context) {
 }
 
 // IgnoreCuratedComment marks a pending curated comment as ignored by the video owner.
+// IgnoreCuratedComment godoc
+// @Summary      Ignore curated comment
+// @Description  Remove a comment from the curation review queue
+// @Tags         Comments
+// @Produce      json
+// @Param        id path int true "Comment ID"
+// @Success      200 {object} map[string]interface{}
+// @Router       /comments/{id}/ignore-curated [post]
 func (a *API) IgnoreCuratedComment(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -335,6 +351,16 @@ func (a *API) resolveCommentIPLocation(c *gin.Context) string {
 }
 
 // DeleteComment removes a subtree (F7, S-008).
+// DeleteComment godoc
+// @Summary      Delete a comment
+// @Description  Soft-delete a comment (uploader or its author)
+// @Tags         Comments
+// @Produce      json
+// @Param        id path int true "Comment ID"
+// @Success      200 {object} map[string]interface{}
+// @Failure      403 {object} map[string]interface{}
+// @Failure      404 {object} map[string]interface{}
+// @Router       /comments/{id} [delete]
 func (a *API) DeleteComment(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -413,6 +439,15 @@ func collectDescendantIDs(db *gorm.DB, root uint64) ([]uint64, error) {
 }
 
 // PinComment toggles the pinned root comment for a video (owner only, root comments only).
+// PinComment godoc
+// @Summary      Pin/unpin a comment
+// @Description  Toggle pin status for a comment (uploader only)
+// @Tags         Comments
+// @Produce      json
+// @Param        id path int true "Comment ID"
+// @Success      200 {object} map[string]interface{}
+// @Failure      403 {object} map[string]interface{}
+// @Router       /comments/{id}/pin [post]
 func (a *API) PinComment(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -470,6 +505,14 @@ func (a *API) PinComment(c *gin.Context) {
 }
 
 // ToggleLike toggles like on a comment (F9, S-010).
+// ToggleLike godoc
+// @Summary      Like/unlike a comment
+// @Description  Toggle like status on a comment
+// @Tags         Comments
+// @Produce      json
+// @Param        id path int true "Comment ID"
+// @Success      200 {object} map[string]interface{}
+// @Router       /comments/{id}/like [post]
 func (a *API) ToggleLike(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -521,6 +564,14 @@ func (a *API) ToggleLike(c *gin.Context) {
 }
 
 // ToggleDislike toggles dislike on a comment (no public count; mutually exclusive with like).
+// ToggleDislike godoc
+// @Summary      Dislike/undislike a comment
+// @Description  Toggle dislike status on a comment
+// @Tags         Comments
+// @Produce      json
+// @Param        id path int true "Comment ID"
+// @Success      200 {object} map[string]interface{}
+// @Router       /comments/{id}/dislike [post]
 func (a *API) ToggleDislike(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -1225,6 +1276,13 @@ func (a *API) notifyParentOnReply(videoID, replierUID uint64, reply *model.Comme
 }
 
 // UnreadSummary returns per-category unread counts (AC-12).
+// UnreadSummary godoc
+// @Summary      Get unread notification summary
+// @Description  Returns count of unread notifications grouped by category
+// @Tags         Notifications
+// @Produce      json
+// @Success      200 {object} map[string]interface{}
+// @Router       /notifications/unread-summary [get]
 func (a *API) UnreadSummary(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -1253,6 +1311,16 @@ func (a *API) UnreadSummary(c *gin.Context) {
 }
 
 // ListNotifications lists notifications for a category.
+// ListNotifications godoc
+// @Summary      List notifications
+// @Description  Get paginated list of notifications for the current user
+// @Tags         Notifications
+// @Produce      json
+// @Param        page query int false "Page number" default(1)
+// @Param        page_size query int false "Page size" default(20)
+// @Param        category query string false "Filter by category"
+// @Success      200 {object} map[string]interface{}
+// @Router       /notifications [get]
 func (a *API) ListNotifications(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -1626,6 +1694,14 @@ func (a *API) formatNotification(n model.Notification) gin.H {
 }
 
 // ListNotificationLikeLikers lists users who liked the comment for a like_aggregation inbox row (newest first).
+// ListNotificationLikeLikers godoc
+// @Summary      List likers of a notification
+// @Description  Get users who liked a comment that generated this notification
+// @Tags         Notifications
+// @Produce      json
+// @Param        id path int true "Notification ID"
+// @Success      200 {object} map[string]interface{}
+// @Router       /notifications/{id}/like-likers [get]
 func (a *API) ListNotificationLikeLikers(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -1747,6 +1823,14 @@ func enrichNotificationLikeLikerItems(db *gorm.DB, viewerID uint64, items []gin.
 }
 
 // MarkNotificationCategoryRead marks all unread rows in one inbox category (F9).
+// MarkNotificationCategoryRead godoc
+// @Summary      Mark notification category as read
+// @Description  Mark all notifications in a category as read
+// @Tags         Notifications
+// @Produce      json
+// @Param        body body object{category=string} true "Category to mark read"
+// @Success      200 {object} map[string]interface{}
+// @Router       /notifications/read-by-category [patch]
 func (a *API) MarkNotificationCategoryRead(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -1776,6 +1860,14 @@ func (a *API) MarkNotificationCategoryRead(c *gin.Context) {
 }
 
 // MarkNotificationsReadBatch marks multiple inbox rows read (F9: viewed in message center).
+// MarkNotificationsReadBatch godoc
+// @Summary      Mark multiple notifications as read
+// @Description  Mark a batch of notification IDs as read
+// @Tags         Notifications
+// @Produce      json
+// @Param        body body object{ids=array} true "Notification IDs"
+// @Success      200 {object} map[string]interface{}
+// @Router       /notifications/read-batch [patch]
 func (a *API) MarkNotificationsReadBatch(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -1816,6 +1908,14 @@ func (a *API) MarkNotificationsReadBatch(c *gin.Context) {
 
 // MarkNotificationRead marks one notification read (F9).
 // Idempotent: already-read rows still return OK (PATCH may affect 0 rows).
+// MarkNotificationRead godoc
+// @Summary      Mark notification as read
+// @Description  Mark a single notification as read
+// @Tags         Notifications
+// @Produce      json
+// @Param        id path int true "Notification ID"
+// @Success      200 {object} map[string]interface{}
+// @Router       /notifications/{id}/read [patch]
 func (a *API) MarkNotificationRead(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -1840,6 +1940,14 @@ func (a *API) MarkNotificationRead(c *gin.Context) {
 }
 
 // ToggleNotificationCommentLike toggles like on the comment behind a「回复我的」inbox row.
+// ToggleNotificationCommentLike godoc
+// @Summary      Like/unlike notification comment
+// @Description  Toggle like status on a comment via notification
+// @Tags         Notifications
+// @Produce      json
+// @Param        id path int true "Notification ID"
+// @Success      200 {object} map[string]interface{}
+// @Router       /notifications/{id}/comment-like [post]
 func (a *API) ToggleNotificationCommentLike(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -1869,6 +1977,15 @@ func (a *API) ToggleNotificationCommentLike(c *gin.Context) {
 }
 
 // PostNotificationCommentReply posts a reply to the comment behind a「回复我的」inbox row.
+// PostNotificationCommentReply godoc
+// @Summary      Reply to a comment via notification
+// @Description  Post a reply to a comment from the notification
+// @Tags         Notifications
+// @Produce      json
+// @Param        id path int true "Notification ID"
+// @Param        body body object{content=string} true "Reply content"
+// @Success      200 {object} map[string]interface{}
+// @Router       /notifications/{id}/comment-reply [post]
 func (a *API) PostNotificationCommentReply(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -1918,6 +2035,14 @@ func (a *API) PostNotificationCommentReply(c *gin.Context) {
 }
 
 // DeleteNotification removes one inbox row for the recipient (创作中心「删除该通知」).
+// DeleteNotification godoc
+// @Summary      Delete a notification
+// @Description  Remove a notification from the user inbox
+// @Tags         Notifications
+// @Produce      json
+// @Param        id path int true "Notification ID"
+// @Success      200 {object} map[string]interface{}
+// @Router       /notifications/{id} [delete]
 func (a *API) DeleteNotification(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -1957,6 +2082,14 @@ func (a *API) DeleteNotification(c *gin.Context) {
 }
 
 // MuteLikeNotification stops new like aggregation updates for the related comment (不再通知).
+// MuteLikeNotification godoc
+// @Summary      Mute like notifications
+// @Description  Stop receiving like notifications for a comment
+// @Tags         Notifications
+// @Produce      json
+// @Param        id path int true "Notification ID"
+// @Success      200 {object} map[string]interface{}
+// @Router       /notifications/{id}/mute-likes [post]
 func (a *API) MuteLikeNotification(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {

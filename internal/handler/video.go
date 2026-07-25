@@ -642,6 +642,15 @@ type updateMyVideoJSON struct {
 }
 
 // UpdateMyVideo updates title and description for the uploader's own video (any status).
+// UpdateMyVideo godoc
+// @Summary      Update video metadata
+// @Description  Update video title, description, or other metadata
+// @Tags         Videos
+// @Produce      json
+// @Param        id path int true "Video ID"
+// @Param        body body object{} true "Video metadata to update"
+// @Success      200 {object} map[string]interface{}
+// @Router       /videos/{id} [put]
 func (a *API) UpdateMyVideo(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -776,6 +785,15 @@ type videoPlaybackPatch struct {
 }
 
 // PatchVideoPlayback toggles comment area / danmaku posting for a published video (uploader only).
+// PatchVideoPlayback godoc
+// @Summary      Update video playback position
+// @Description  Save or update the playback progress for a video
+// @Tags         Videos
+// @Produce      json
+// @Param        id path int true "Video ID"
+// @Param        body body object{position=int} true "Playback position in seconds"
+// @Success      200 {object} map[string]interface{}
+// @Router       /videos/{id}/playback [patch]
 func (a *API) PatchVideoPlayback(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {

@@ -243,7 +243,7 @@ func main() {
 	}
 	r := gin.New()
 	r.Use(gin.Recovery())
-	handler.RegisterRoutes(r, api, jm)
+	handler.RegisterRoutes(r, api, jm, cfg.AppEnv)
 
 	go func() {
 		if err := r.Run(cfg.HTTPAddr); err != nil {

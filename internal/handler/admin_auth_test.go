@@ -79,7 +79,7 @@ func newTestAdminAPI(t *testing.T) (*API, *gin.Engine, *jwttoken.Manager) {
 		},
 	}
 	r := gin.New()
-	RegisterRoutes(r, api, jm)
+	RegisterRoutes(r, api, jm, "test")
 	return api, r, jm
 }
 

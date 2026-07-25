@@ -42,6 +42,14 @@ func unfollowBothWays(tx *gorm.DB, a, b uint64) error {
 }
 
 // BlockUser adds peer to the caller's blacklist and removes mutual follows.
+// BlockUser godoc
+// @Summary      Block/unblock a user
+// @Description  Toggle block status for a user
+// @Tags         Users
+// @Produce      json
+// @Param        userId path int true "User ID to block/unblock"
+// @Success      200 {object} map[string]interface{}
+// @Router       /users/{userId}/block [post]
 func (a *API) BlockUser(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {

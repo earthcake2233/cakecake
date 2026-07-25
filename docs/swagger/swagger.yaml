@@ -12,6 +12,92 @@ info:
   title: Mini-Bili API
   version: "1.0"
 paths:
+  /api/v1/ws/danmaku:
+    get:
+      description: WebSocket endpoint for real-time danmaku messages
+      responses:
+        "101":
+          description: Switching Protocols
+          schema:
+            type: string
+      summary: 'WebSocket: danmaku stream'
+      tags:
+      - WebSocket
+  /articles/{id}:
+    get:
+      description: Get full article content by ID
+      parameters:
+      - description: Article ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get article detail
+      tags:
+      - Articles
+  /articles/{id}/comments:
+    get:
+      description: Get paginated comments for an article
+      parameters:
+      - description: Article ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Page size
+        in: query
+        name: page_size
+        type: integer
+      - default: hot
+        description: Sort (hot,time)
+        in: query
+        name: sort
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: List article comments
+      tags:
+      - Articles
+  /articles/{id}/view:
+    post:
+      description: Increment the view count for an article
+      parameters:
+      - description: Article ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Record article view
+      tags:
+      - Articles
   /auth/login:
     post:
       consumes:
@@ -71,6 +157,302 @@ paths:
       summary: Refresh access token
       tags:
       - Auth
+  /comments/{id}:
+    delete:
+      description: Soft-delete a comment (uploader or its author)
+      parameters:
+      - description: Comment ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Delete a comment
+      tags:
+      - Comments
+  /comments/{id}/approve:
+    post:
+      description: Mark a comment as approved (uploader only)
+      parameters:
+      - description: Comment ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Approve a curated comment
+      tags:
+      - Comments
+  /comments/{id}/dislike:
+    post:
+      description: Toggle dislike status on a comment
+      parameters:
+      - description: Comment ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Dislike/undislike a comment
+      tags:
+      - Comments
+  /comments/{id}/ignore-curated:
+    post:
+      description: Remove a comment from the curation review queue
+      parameters:
+      - description: Comment ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Ignore curated comment
+      tags:
+      - Comments
+  /comments/{id}/like:
+    post:
+      description: Toggle like status on a comment
+      parameters:
+      - description: Comment ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Like/unlike a comment
+      tags:
+      - Comments
+  /comments/{id}/pin:
+    post:
+      description: Toggle pin status for a comment (uploader only)
+      parameters:
+      - description: Comment ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Pin/unpin a comment
+      tags:
+      - Comments
+  /dm/conversations:
+    get:
+      description: Get all direct message conversations for the current user
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: List DM conversations
+      tags:
+      - DM
+    post:
+      description: Start a new direct message conversation with another user
+      parameters:
+      - description: Other participant user ID
+        in: body
+        name: body
+        required: true
+        schema:
+          properties:
+            participant_id:
+              type: integer
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Create a DM conversation
+      tags:
+      - DM
+  /dm/conversations/{id}:
+    delete:
+      description: Remove a direct message conversation
+      parameters:
+      - description: Conversation ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Delete a DM conversation
+      tags:
+      - DM
+  /dm/conversations/{id}/messages:
+    get:
+      description: Get paginated messages for a DM conversation
+      parameters:
+      - description: Conversation ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 50
+        description: Page size
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: List messages in a conversation
+      tags:
+      - DM
+    post:
+      description: Post a new message to a DM conversation
+      parameters:
+      - description: Conversation ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Message content
+        in: body
+        name: body
+        required: true
+        schema:
+          properties:
+            content:
+              type: string
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Send a message in a conversation
+      tags:
+      - DM
+  /dm/conversations/{id}/reset:
+    post:
+      description: Clear the conversation history for an AI agent DM
+      parameters:
+      - description: Conversation ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Reset AI agent conversation
+      tags:
+      - DM
+  /dm/conversations/{id}/settings:
+    patch:
+      description: Update settings (e.g. agent config) for a conversation
+      parameters:
+      - description: Conversation ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Settings
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Update DM conversation settings
+      tags:
+      - DM
   /health:
     get:
       description: Server health check endpoint
@@ -112,6 +494,226 @@ paths:
       summary: List hot searches
       tags:
       - Search
+  /notifications:
+    get:
+      description: Get paginated list of notifications for the current user
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Page size
+        in: query
+        name: page_size
+        type: integer
+      - description: Filter by category
+        in: query
+        name: category
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: List notifications
+      tags:
+      - Notifications
+  /notifications/{id}:
+    delete:
+      description: Remove a notification from the user inbox
+      parameters:
+      - description: Notification ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Delete a notification
+      tags:
+      - Notifications
+  /notifications/{id}/comment-like:
+    post:
+      description: Toggle like status on a comment via notification
+      parameters:
+      - description: Notification ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Like/unlike notification comment
+      tags:
+      - Notifications
+  /notifications/{id}/comment-reply:
+    post:
+      description: Post a reply to a comment from the notification
+      parameters:
+      - description: Notification ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Reply content
+        in: body
+        name: body
+        required: true
+        schema:
+          properties:
+            content:
+              type: string
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Reply to a comment via notification
+      tags:
+      - Notifications
+  /notifications/{id}/like-likers:
+    get:
+      description: Get users who liked a comment that generated this notification
+      parameters:
+      - description: Notification ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: List likers of a notification
+      tags:
+      - Notifications
+  /notifications/{id}/mute-likes:
+    post:
+      description: Stop receiving like notifications for a comment
+      parameters:
+      - description: Notification ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Mute like notifications
+      tags:
+      - Notifications
+  /notifications/{id}/read:
+    patch:
+      description: Mark a single notification as read
+      parameters:
+      - description: Notification ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Mark notification as read
+      tags:
+      - Notifications
+  /notifications/read-batch:
+    patch:
+      description: Mark a batch of notification IDs as read
+      parameters:
+      - description: Notification IDs
+        in: body
+        name: body
+        required: true
+        schema:
+          properties:
+            ids:
+              type: array
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Mark multiple notifications as read
+      tags:
+      - Notifications
+  /notifications/read-by-category:
+    patch:
+      description: Mark all notifications in a category as read
+      parameters:
+      - description: Category to mark read
+        in: body
+        name: body
+        required: true
+        schema:
+          properties:
+            category:
+              type: string
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Mark notification category as read
+      tags:
+      - Notifications
+  /notifications/unread-summary:
+    get:
+      description: Returns count of unread notifications grouped by category
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get unread notification summary
+      tags:
+      - Notifications
   /search:
     get:
       description: Search videos, users, articles across the platform
@@ -142,6 +744,26 @@ paths:
       summary: Unified search
       tags:
       - Search
+  /search/suggest:
+    get:
+      description: Get auto-complete suggestions for search queries
+      parameters:
+      - description: Search prefix
+        in: query
+        name: q
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Search suggestions
+      tags:
+      - Search
   /space/{userId}:
     get:
       description: Get user public space by user ID
@@ -162,6 +784,126 @@ paths:
       summary: Get user public profile
       tags:
       - Users
+  /space/{userId}/article-favorites:
+    get:
+      description: Get paginated article favorites for a user space
+      parameters:
+      - description: User ID
+        in: path
+        name: userId
+        required: true
+        type: integer
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Page size
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: List user article favorites
+      tags:
+      - Articles
+  /space/{userId}/articles:
+    get:
+      description: Get paginated published articles for a user space
+      parameters:
+      - description: User ID
+        in: path
+        name: userId
+        required: true
+        type: integer
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Page size
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: List user articles
+      tags:
+      - Articles
+  /space/{userId}/dynamics:
+    get:
+      description: Get paginated dynamics for a user space
+      parameters:
+      - description: User ID
+        in: path
+        name: userId
+        required: true
+        type: integer
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Page size
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: List user dynamics
+      tags:
+      - Dynamics
+  /space/{userId}/videos:
+    get:
+      description: Get paginated published videos for a user space
+      parameters:
+      - description: User ID
+        in: path
+        name: userId
+        required: true
+        type: integer
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Page size
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: List user videos
+      tags:
+      - Users
   /stats/home:
     get:
       description: Get home page statistics
@@ -176,6 +918,61 @@ paths:
       summary: Home page stats
       tags:
       - Home
+  /user-dynamics/{id}:
+    get:
+      description: Get full content of a dynamic post
+      parameters:
+      - description: Dynamic ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get dynamic detail
+      tags:
+      - Dynamics
+  /user-dynamics/{id}/comments:
+    get:
+      description: Get paginated comments for a dynamic
+      parameters:
+      - description: Dynamic ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Page size
+        in: query
+        name: page_size
+        type: integer
+      - default: hot
+        description: Sort (hot,time)
+        in: query
+        name: sort
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: List dynamic comments
+      tags:
+      - Dynamics
   /users:
     post:
       consumes:
@@ -209,6 +1006,26 @@ paths:
       summary: Register new user
       tags:
       - Auth
+  /users/{userId}/block:
+    post:
+      description: Toggle block status for a user
+      parameters:
+      - description: User ID to block/unblock
+        in: path
+        name: userId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Block/unblock a user
+      tags:
+      - Users
   /users/me:
     get:
       description: Get authenticated user profile
@@ -223,6 +1040,467 @@ paths:
       summary: Get current user profile
       tags:
       - Users
+  /users/me/favorite-folders:
+    get:
+      description: Get all favorite folders for the current user
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: List my favorite folders
+      tags:
+      - Favorites
+    post:
+      description: Create a new folder for organizing favorites
+      parameters:
+      - description: Folder name
+        in: body
+        name: body
+        required: true
+        schema:
+          properties:
+            name:
+              type: string
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Create a favorite folder
+      tags:
+      - Favorites
+  /users/me/favorite-folders/{folderId}:
+    delete:
+      description: Remove a favorite folder (favorites inside are ungrouped)
+      parameters:
+      - description: Folder ID
+        in: path
+        name: folderId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Delete a favorite folder
+      tags:
+      - Favorites
+    put:
+      description: Update the name of a favorite folder
+      parameters:
+      - description: Folder ID
+        in: path
+        name: folderId
+        required: true
+        type: integer
+      - description: New folder name
+        in: body
+        name: body
+        required: true
+        schema:
+          properties:
+            name:
+              type: string
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Update a favorite folder
+      tags:
+      - Favorites
+  /users/me/favorite-folders/{folderId}/batch-remove:
+    post:
+      description: Remove multiple videos from a favorite folder at once
+      parameters:
+      - description: Folder ID
+        in: path
+        name: folderId
+        required: true
+        type: integer
+      - description: Video IDs to remove
+        in: body
+        name: body
+        required: true
+        schema:
+          properties:
+            video_ids:
+              type: array
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Batch remove videos from folder
+      tags:
+      - Favorites
+  /users/me/favorite-folders/{folderId}/invalid-favorites:
+    delete:
+      description: Remove references to deleted videos from a folder
+      parameters:
+      - description: Folder ID
+        in: path
+        name: folderId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Clear invalid favorites in folder
+      tags:
+      - Favorites
+  /users/me/follow-groups:
+    get:
+      description: Get all follow groups for current user
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: List my follow groups
+      tags:
+      - Users
+    post:
+      description: Create a new group to organize followed users
+      parameters:
+      - description: Group name
+        in: body
+        name: body
+        required: true
+        schema:
+          properties:
+            name:
+              type: string
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Create a follow group
+      tags:
+      - Users
+  /users/me/follow-groups/{groupId}:
+    delete:
+      description: Remove a follow group (members become ungrouped)
+      parameters:
+      - description: Group ID
+        in: path
+        name: groupId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Delete a follow group
+      tags:
+      - Users
+    put:
+      description: Rename a follow group
+      parameters:
+      - description: Group ID
+        in: path
+        name: groupId
+        required: true
+        type: integer
+      - description: New group name
+        in: body
+        name: body
+        required: true
+        schema:
+          properties:
+            name:
+              type: string
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Update a follow group
+      tags:
+      - Users
+  /users/me/follow-groups/{groupId}/members:
+    post:
+      description: Add a followed user to a group
+      parameters:
+      - description: Group ID
+        in: path
+        name: groupId
+        required: true
+        type: integer
+      - description: User ID to add
+        in: body
+        name: body
+        required: true
+        schema:
+          properties:
+            followee_id:
+              type: integer
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Add user to follow group
+      tags:
+      - Users
+  /users/me/follow-groups/{groupId}/members/{followeeId}:
+    delete:
+      description: Remove a followed user from their group assignment
+      parameters:
+      - description: Group ID
+        in: path
+        name: groupId
+        required: true
+        type: integer
+      - description: Followee User ID
+        in: path
+        name: followeeId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Remove user from follow group
+      tags:
+      - Users
+  /users/me/search-history:
+    get:
+      description: Get recent search history for current user
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get search history
+      tags:
+      - Search
+    post:
+      description: Append a keyword to search history
+      parameters:
+      - description: Search keyword
+        in: body
+        name: body
+        required: true
+        schema:
+          properties:
+            keyword:
+              type: string
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Add search history entry
+      tags:
+      - Search
+    put:
+      description: Replace the entire search history for current user
+      parameters:
+      - description: Search history items
+        in: body
+        name: body
+        required: true
+        schema:
+          type: array
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Replace search history
+      tags:
+      - Search
+  /users/me/videos/{id}/draft-source:
+    get:
+      description: Get the original uploaded source info for a draft video
+      parameters:
+      - description: Video ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get draft source
+      tags:
+      - Videos
+  /users/me/view-history:
+    get:
+      description: Get paginated video viewing history for current user
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Page size
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get view history
+      tags:
+      - Users
+  /users/me/view-history/settings:
+    get:
+      description: Get privacy/sharing settings for view history
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get view history settings
+      tags:
+      - Users
+  /users/me/watch-later:
+    delete:
+      description: Remove all videos from watch later list
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Clear watch later
+      tags:
+      - Videos
+    get:
+      description: Get paginated list of videos saved for later
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Page size
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: List watch later
+      tags:
+      - Videos
+  /users/me/watch-later/{id}/watched:
+    post:
+      description: Mark a specific watch later item as watched
+      parameters:
+      - description: Video ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Mark watch later as watched
+      tags:
+      - Videos
+  /users/me/watch-later/watched:
+    delete:
+      description: Remove already-watched videos from watch later
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Clear watched from watch later
+      tags:
+      - Videos
   /videos:
     get:
       description: Get paginated list of published videos
@@ -274,6 +1552,60 @@ paths:
             additionalProperties: true
             type: object
       summary: Get video detail
+      tags:
+      - Videos
+    put:
+      description: Update video title, description, or other metadata
+      parameters:
+      - description: Video ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Video metadata to update
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Update video metadata
+      tags:
+      - Videos
+  /videos/{id}/coin:
+    post:
+      description: Award coins to a video (1 or 2 coins)
+      parameters:
+      - description: Video ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Number of coins (1 or 2)
+        in: body
+        name: body
+        required: true
+        schema:
+          properties:
+            coins:
+              type: integer
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Coin a video
       tags:
       - Videos
   /videos/{id}/comments:
@@ -346,6 +1678,287 @@ paths:
       summary: Post a danmaku
       tags:
       - Danmaku
+  /videos/{id}/draft:
+    put:
+      description: Update an existing video draft
+      parameters:
+      - description: Video ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Updated draft data
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Update video draft
+      tags:
+      - Videos
+  /videos/{id}/favorite:
+    post:
+      description: Toggle favorite status on a video
+      parameters:
+      - description: Video ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Favorite/unfavorite a video
+      tags:
+      - Videos
+  /videos/{id}/favorite-folders:
+    put:
+      description: Replace all favorite folders for a video
+      parameters:
+      - description: Video ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Folder IDs
+        in: body
+        name: body
+        required: true
+        schema:
+          properties:
+            folder_ids:
+              type: array
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Set video favorite folders
+      tags:
+      - Videos
+  /videos/{id}/favorite-folders/{folderId}:
+    delete:
+      description: Remove a video from a specific favorite folder
+      parameters:
+      - description: Video ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Folder ID
+        in: path
+        name: folderId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Remove video from favorite folder
+      tags:
+      - Videos
+    post:
+      description: Add a video to a specific favorite folder
+      parameters:
+      - description: Video ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Folder ID
+        in: path
+        name: folderId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Add video to favorite folder
+      tags:
+      - Videos
+  /videos/{id}/favorite-folders/move:
+    put:
+      description: Move a video from one favorite folder to another
+      parameters:
+      - description: Video ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Move video between favorite folders
+      tags:
+      - Videos
+  /videos/{id}/favorite-picker:
+    get:
+      description: Get favorite folders for the video picker UI
+      parameters:
+      - description: Video ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get favorite folder picker
+      tags:
+      - Videos
+  /videos/{id}/playback:
+    patch:
+      description: Save or update the playback progress for a video
+      parameters:
+      - description: Video ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Playback position in seconds
+        in: body
+        name: body
+        required: true
+        schema:
+          properties:
+            position:
+              type: integer
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Update video playback position
+      tags:
+      - Videos
+  /videos/{id}/publish:
+    post:
+      description: Publish a draft video to make it visible
+      parameters:
+      - description: Video ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Publish video draft
+      tags:
+      - Videos
+  /videos/{id}/replace-media:
+    post:
+      consumes:
+      - multipart/form-data
+      description: Upload a new media file to replace existing video
+      parameters:
+      - description: Video ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: New video file
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Replace video media
+      tags:
+      - Videos
+  /videos/{id}/watch-later:
+    post:
+      description: Toggle watch later status for a video
+      parameters:
+      - description: Video ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Add/remove watch later
+      tags:
+      - Videos
+  /videos/draft:
+    post:
+      description: Save a new video as draft without publishing
+      parameters:
+      - description: Draft data
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Save video draft
+      tags:
+      - Videos
 schemes:
 - http
 securityDefinitions:

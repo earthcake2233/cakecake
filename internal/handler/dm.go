@@ -159,6 +159,13 @@ func (a *API) dmPushEvent(userID uint64, payload gin.H) {
 }
 
 // ListDmConversations returns recent 1:1 threads for the current user.
+// ListDmConversations godoc
+// @Summary      List DM conversations
+// @Description  Get all direct message conversations for the current user
+// @Tags         DM
+// @Produce      json
+// @Success      200 {object} map[string]interface{}
+// @Router       /dm/conversations [get]
 func (a *API) ListDmConversations(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -212,6 +219,14 @@ func (a *API) ListDmConversations(c *gin.Context) {
 }
 
 // CreateDmConversation finds or creates a thread with peer_id.
+// CreateDmConversation godoc
+// @Summary      Create a DM conversation
+// @Description  Start a new direct message conversation with another user
+// @Tags         DM
+// @Produce      json
+// @Param        body body object{participant_id=int} true "Other participant user ID"
+// @Success      200 {object} map[string]interface{}
+// @Router       /dm/conversations [post]
 func (a *API) CreateDmConversation(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -285,6 +300,14 @@ func (a *API) CreateDmConversation(c *gin.Context) {
 }
 
 // DeleteDmConversation hides the thread for the current user (does not delete peer's copy).
+// DeleteDmConversation godoc
+// @Summary      Delete a DM conversation
+// @Description  Remove a direct message conversation
+// @Tags         DM
+// @Produce      json
+// @Param        id path int true "Conversation ID"
+// @Success      200 {object} map[string]interface{}
+// @Router       /dm/conversations/{id} [delete]
 func (a *API) DeleteDmConversation(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -332,6 +355,14 @@ func (a *API) DeleteDmConversation(c *gin.Context) {
 }
 
 // ResetDmAgentConversation POST /api/v1/dm/conversations/:id/reset — clear AI chat history and restart.
+// ResetDmAgentConversation godoc
+// @Summary      Reset AI agent conversation
+// @Description  Clear the conversation history for an AI agent DM
+// @Tags         DM
+// @Produce      json
+// @Param        id path int true "Conversation ID"
+// @Success      200 {object} map[string]interface{}
+// @Router       /dm/conversations/{id}/reset [post]
 func (a *API) ResetDmAgentConversation(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -377,6 +408,15 @@ func (a *API) ResetDmAgentConversation(c *gin.Context) {
 }
 
 // PatchDmConversationSettings updates pin / mute for the current user's participant row.
+// PatchDmConversationSettings godoc
+// @Summary      Update DM conversation settings
+// @Description  Update settings (e.g. agent config) for a conversation
+// @Tags         DM
+// @Produce      json
+// @Param        id path int true "Conversation ID"
+// @Param        body body object{} true "Settings"
+// @Success      200 {object} map[string]interface{}
+// @Router       /dm/conversations/{id}/settings [patch]
 func (a *API) PatchDmConversationSettings(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -454,6 +494,16 @@ func (a *API) PatchDmConversationSettings(c *gin.Context) {
 }
 
 // ListDmMessages lists messages in a conversation (ASC by id).
+// ListDmMessages godoc
+// @Summary      List messages in a conversation
+// @Description  Get paginated messages for a DM conversation
+// @Tags         DM
+// @Produce      json
+// @Param        id path int true "Conversation ID"
+// @Param        page query int false "Page number" default(1)
+// @Param        page_size query int false "Page size" default(50)
+// @Success      200 {object} map[string]interface{}
+// @Router       /dm/conversations/{id}/messages [get]
 func (a *API) ListDmMessages(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -535,6 +585,15 @@ func (a *API) ListDmMessages(c *gin.Context) {
 }
 
 // PostDmMessage sends a message and pushes to participants via WebSocket.
+// PostDmMessage godoc
+// @Summary      Send a message in a conversation
+// @Description  Post a new message to a DM conversation
+// @Tags         DM
+// @Produce      json
+// @Param        id path int true "Conversation ID"
+// @Param        body body object{content=string} true "Message content"
+// @Success      200 {object} map[string]interface{}
+// @Router       /dm/conversations/{id}/messages [post]
 func (a *API) PostDmMessage(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {

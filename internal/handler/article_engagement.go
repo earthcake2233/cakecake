@@ -184,6 +184,16 @@ func (a *API) ListMyArticleFavorites(c *gin.Context) {
 }
 
 // ListUserArticleFavorites returns a user's public article favorites.
+// ListUserArticleFavorites godoc
+// @Summary      List user article favorites
+// @Description  Get paginated article favorites for a user space
+// @Tags         Articles
+// @Produce      json
+// @Param        userId path int true "User ID"
+// @Param        page query int false "Page number" default(1)
+// @Param        page_size query int false "Page size" default(20)
+// @Success      200 {object} map[string]interface{}
+// @Router       /space/{userId}/article-favorites [get]
 func (a *API) ListUserArticleFavorites(c *gin.Context) {
 	userID, err := strconv.ParseUint(c.Param("userId"), 10, 64)
 	if err != nil || userID == 0 {

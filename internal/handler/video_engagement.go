@@ -103,6 +103,14 @@ func loadPublishedVideo(a *API, vid uint64) (model.Video, bool) {
 }
 
 // ToggleVideoFavorite toggles the current user's favorite on a published video.
+// ToggleVideoFavorite godoc
+// @Summary      Favorite/unfavorite a video
+// @Description  Toggle favorite status on a video
+// @Tags         Videos
+// @Produce      json
+// @Param        id path int true "Video ID"
+// @Success      200 {object} map[string]interface{}
+// @Router       /videos/{id}/favorite [post]
 func (a *API) ToggleVideoFavorite(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -158,6 +166,14 @@ type setVideoFavoriteFoldersJSON struct {
 }
 
 // GetVideoFavoritePicker returns folders for the collect dialog on the video page.
+// GetVideoFavoritePicker godoc
+// @Summary      Get favorite folder picker
+// @Description  Get favorite folders for the video picker UI
+// @Tags         Videos
+// @Produce      json
+// @Param        id path int true "Video ID"
+// @Success      200 {object} map[string]interface{}
+// @Router       /videos/{id}/favorite-picker [get]
 func (a *API) GetVideoFavoritePicker(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -226,6 +242,15 @@ func folderIDsFromMap(m map[uint64]bool) []uint64 {
 }
 
 // SetVideoFavoriteFolders syncs which folders contain the video for the current user.
+// SetVideoFavoriteFolders godoc
+// @Summary      Set video favorite folders
+// @Description  Replace all favorite folders for a video
+// @Tags         Videos
+// @Produce      json
+// @Param        id path int true "Video ID"
+// @Param        body body object{folder_ids=array} true "Folder IDs"
+// @Success      200 {object} map[string]interface{}
+// @Router       /videos/{id}/favorite-folders [put]
 func (a *API) SetVideoFavoriteFolders(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -358,6 +383,15 @@ func (a *API) validateFolderOwned(uid, folderID uint64) bool {
 }
 
 // RemoveVideoFromFavoriteFolder removes the video from one folder (current-folder unfavorite).
+// RemoveVideoFromFavoriteFolder godoc
+// @Summary      Remove video from favorite folder
+// @Description  Remove a video from a specific favorite folder
+// @Tags         Videos
+// @Produce      json
+// @Param        id path int true "Video ID"
+// @Param        folderId path int true "Folder ID"
+// @Success      200 {object} map[string]interface{}
+// @Router       /videos/{id}/favorite-folders/{folderId} [delete]
 func (a *API) RemoveVideoFromFavoriteFolder(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -393,6 +427,15 @@ func (a *API) RemoveVideoFromFavoriteFolder(c *gin.Context) {
 }
 
 // AddVideoToFavoriteFolder copies the video into another folder.
+// AddVideoToFavoriteFolder godoc
+// @Summary      Add video to favorite folder
+// @Description  Add a video to a specific favorite folder
+// @Tags         Videos
+// @Produce      json
+// @Param        id path int true "Video ID"
+// @Param        folderId path int true "Folder ID"
+// @Success      200 {object} map[string]interface{}
+// @Router       /videos/{id}/favorite-folders/{folderId} [post]
 func (a *API) AddVideoToFavoriteFolder(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -448,6 +491,14 @@ type moveVideoFavoriteFolderJSON struct {
 }
 
 // MoveVideoFavoriteFolder moves the video from one folder to another.
+// MoveVideoFavoriteFolder godoc
+// @Summary      Move video between favorite folders
+// @Description  Move a video from one favorite folder to another
+// @Tags         Videos
+// @Produce      json
+// @Param        id path int true "Video ID"
+// @Success      200 {object} map[string]interface{}
+// @Router       /videos/{id}/favorite-folders/move [put]
 func (a *API) MoveVideoFavoriteFolder(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -534,6 +585,15 @@ type videoCoinJSON struct {
 }
 
 // PostVideoCoin adds 1 or 2 coins from the current user (max 2 per video; second visit adds 1 only).
+// PostVideoCoin godoc
+// @Summary      Coin a video
+// @Description  Award coins to a video (1 or 2 coins)
+// @Tags         Videos
+// @Produce      json
+// @Param        id path int true "Video ID"
+// @Param        body body object{coins=int} true "Number of coins (1 or 2)"
+// @Success      200 {object} map[string]interface{}
+// @Router       /videos/{id}/coin [post]
 func (a *API) PostVideoCoin(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -640,6 +700,14 @@ func (a *API) PostVideoCoin(c *gin.Context) {
 }
 
 // ToggleWatchLater toggles the current user's watch-later entry for a published video.
+// ToggleWatchLater godoc
+// @Summary      Add/remove watch later
+// @Description  Toggle watch later status for a video
+// @Tags         Videos
+// @Produce      json
+// @Param        id path int true "Video ID"
+// @Success      200 {object} map[string]interface{}
+// @Router       /videos/{id}/watch-later [post]
 func (a *API) ToggleWatchLater(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -680,6 +748,15 @@ func (a *API) ToggleWatchLater(c *gin.Context) {
 const watchLaterMaxItems = 100
 
 // ListMyWatchLater returns the caller's watch-later queue (newest first).
+// ListMyWatchLater godoc
+// @Summary      List watch later
+// @Description  Get paginated list of videos saved for later
+// @Tags         Videos
+// @Produce      json
+// @Param        page query int false "Page number" default(1)
+// @Param        page_size query int false "Page size" default(20)
+// @Success      200 {object} map[string]interface{}
+// @Router       /users/me/watch-later [get]
 func (a *API) ListMyWatchLater(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -767,6 +844,13 @@ func (a *API) ListMyWatchLater(c *gin.Context) {
 }
 
 // ClearMyWatchLater removes all watch-later entries for the current user.
+// ClearMyWatchLater godoc
+// @Summary      Clear watch later
+// @Description  Remove all videos from watch later list
+// @Tags         Videos
+// @Produce      json
+// @Success      200 {object} map[string]interface{}
+// @Router       /users/me/watch-later [delete]
 func (a *API) ClearMyWatchLater(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -781,6 +865,13 @@ func (a *API) ClearMyWatchLater(c *gin.Context) {
 }
 
 // ClearWatchedWatchLater removes watched entries from the user's watch-later queue.
+// ClearWatchedWatchLater godoc
+// @Summary      Clear watched from watch later
+// @Description  Remove already-watched videos from watch later
+// @Tags         Videos
+// @Produce      json
+// @Success      200 {object} map[string]interface{}
+// @Router       /users/me/watch-later/watched [delete]
 func (a *API) ClearWatchedWatchLater(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -795,6 +886,14 @@ func (a *API) ClearWatchedWatchLater(c *gin.Context) {
 }
 
 // MarkWatchLaterWatched marks a watch-later item as watched.
+// MarkWatchLaterWatched godoc
+// @Summary      Mark watch later as watched
+// @Description  Mark a specific watch later item as watched
+// @Tags         Videos
+// @Produce      json
+// @Param        id path int true "Video ID"
+// @Success      200 {object} map[string]interface{}
+// @Router       /users/me/watch-later/{id}/watched [post]
 func (a *API) MarkWatchLaterWatched(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {

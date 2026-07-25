@@ -24,6 +24,12 @@ var wsUpgrader = websocket.Upgrader{
 
 // ServeDanmaku upgrades to WebSocket (F6, S-011).
 // 已发布稿件：无 token 也可连接，用于实时弹幕与「正在看」计数；非空但非法 token 仍返回 auth_failed。
+// ServeDanmaku godoc
+// @Summary      WebSocket: danmaku stream
+// @Description  WebSocket endpoint for real-time danmaku messages
+// @Tags         WebSocket
+// @Success      101 {string} string "Switching Protocols"
+// @Router       /api/v1/ws/danmaku [get]
 func (a *API) ServeDanmaku(c *gin.Context) {
 	videoID, _ := strconv.ParseUint(c.Query("video_id"), 10, 64)
 	if videoID == 0 {

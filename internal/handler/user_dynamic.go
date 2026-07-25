@@ -68,6 +68,14 @@ func userDynamicReadPayload(d *model.UserDynamic, author *model.User, likedByMe 
 }
 
 // GetUserDynamic returns a single user dynamic for reading (public).
+// GetUserDynamic godoc
+// @Summary      Get dynamic detail
+// @Description  Get full content of a dynamic post
+// @Tags         Dynamics
+// @Produce      json
+// @Param        id path int true "Dynamic ID"
+// @Success      200 {object} map[string]interface{}
+// @Router       /user-dynamics/{id} [get]
 func (a *API) GetUserDynamic(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil || id == 0 {
@@ -525,6 +533,16 @@ func (a *API) ListMyDynamics(c *gin.Context) {
 }
 
 // ListUserPublishedDynamics lists a user's image/text dynamics (public).
+// ListUserPublishedDynamics godoc
+// @Summary      List user dynamics
+// @Description  Get paginated dynamics for a user space
+// @Tags         Dynamics
+// @Produce      json
+// @Param        userId path int true "User ID"
+// @Param        page query int false "Page number" default(1)
+// @Param        page_size query int false "Page size" default(20)
+// @Success      200 {object} map[string]interface{}
+// @Router       /space/{userId}/dynamics [get]
 func (a *API) ListUserPublishedDynamics(c *gin.Context) {
 	uid, err := strconv.ParseUint(c.Param("userId"), 10, 64)
 	if err != nil || uid == 0 {

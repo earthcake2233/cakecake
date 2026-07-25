@@ -60,7 +60,7 @@ func setupHandlerIntegrationDB(t *testing.T) (*API, *gin.Engine, string) {
 	}
 
 	r := gin.New()
-	RegisterRoutes(r, api, jm)
+	RegisterRoutes(r, api, jm, "test")
 
 	access, _, _, _ := jm.IssuePair(1)
 

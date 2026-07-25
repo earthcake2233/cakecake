@@ -121,6 +121,13 @@ func (a *API) trimSearchHistory(uid uint64) error {
 
 // GetMySearchHistory returns the caller's recent search keywords (newest first).
 // GET /api/v1/users/me/search-history
+// GetMySearchHistory godoc
+// @Summary      Get search history
+// @Description  Get recent search history for current user
+// @Tags         Search
+// @Produce      json
+// @Success      200 {object} map[string]interface{}
+// @Router       /users/me/search-history [get]
 func (a *API) GetMySearchHistory(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -142,6 +149,14 @@ type searchHistoryPutReq struct {
 
 // PutMySearchHistory replaces the caller's search history with the given keyword list.
 // PUT /api/v1/users/me/search-history
+// PutMySearchHistory godoc
+// @Summary      Replace search history
+// @Description  Replace the entire search history for current user
+// @Tags         Search
+// @Produce      json
+// @Param        body body array true "Search history items"
+// @Success      200 {object} map[string]interface{}
+// @Router       /users/me/search-history [put]
 func (a *API) PutMySearchHistory(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -189,6 +204,14 @@ type searchHistoryPostReq struct {
 
 // PostMySearchHistory records one search keyword (moves it to the top).
 // POST /api/v1/users/me/search-history
+// PostMySearchHistory godoc
+// @Summary      Add search history entry
+// @Description  Append a keyword to search history
+// @Tags         Search
+// @Produce      json
+// @Param        body body object{keyword=string} true "Search keyword"
+// @Success      200 {object} map[string]interface{}
+// @Router       /users/me/search-history [post]
 func (a *API) PostMySearchHistory(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {

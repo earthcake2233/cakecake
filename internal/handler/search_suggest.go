@@ -17,6 +17,14 @@ import (
 )
 
 // SearchSuggest GET /api/v1/search/suggest?term=xxx&limit=10
+// SearchSuggest godoc
+// @Summary      Search suggestions
+// @Description  Get auto-complete suggestions for search queries
+// @Tags         Search
+// @Produce      json
+// @Param        q query string true "Search prefix"
+// @Success      200 {object} map[string]interface{}
+// @Router       /search/suggest [get]
 func (a *API) SearchSuggest(c *gin.Context) {
 	term := strings.TrimSpace(c.Query("term"))
 	if term == "" {

@@ -155,6 +155,13 @@ func (a *API) uploadFavoriteFolderCover(uid, folderID uint64, fh *multipart.File
 }
 
 // ListMyFavoriteFolders returns the caller's favorite folders.
+// ListMyFavoriteFolders godoc
+// @Summary      List my favorite folders
+// @Description  Get all favorite folders for the current user
+// @Tags         Favorites
+// @Produce      json
+// @Success      200 {object} map[string]interface{}
+// @Router       /users/me/favorite-folders [get]
 func (a *API) ListMyFavoriteFolders(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -171,6 +178,14 @@ func (a *API) ListMyFavoriteFolders(c *gin.Context) {
 
 // CreateFavoriteFolder creates a new favorite folder for the caller.
 // Accepts application/json or multipart/form-data (title, description, is_public, optional cover).
+// CreateFavoriteFolder godoc
+// @Summary      Create a favorite folder
+// @Description  Create a new folder for organizing favorites
+// @Tags         Favorites
+// @Produce      json
+// @Param        body body object{name=string} true "Folder name"
+// @Success      200 {object} map[string]interface{}
+// @Router       /users/me/favorite-folders [post]
 func (a *API) CreateFavoriteFolder(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -354,6 +369,15 @@ func (a *API) loadUserFavoriteFolder(uid, folderID uint64) (model.FavoriteFolder
 }
 
 // UpdateFavoriteFolder updates folder metadata (json or multipart).
+// UpdateFavoriteFolder godoc
+// @Summary      Update a favorite folder
+// @Description  Update the name of a favorite folder
+// @Tags         Favorites
+// @Produce      json
+// @Param        folderId path int true "Folder ID"
+// @Param        body body object{name=string} true "New folder name"
+// @Success      200 {object} map[string]interface{}
+// @Router       /users/me/favorite-folders/{folderId} [put]
 func (a *API) UpdateFavoriteFolder(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -461,6 +485,14 @@ func (a *API) updateFavoriteFolderMultipart(c *gin.Context, uid, folderID uint64
 }
 
 // DeleteFavoriteFolder removes a non-default folder and its favorites.
+// DeleteFavoriteFolder godoc
+// @Summary      Delete a favorite folder
+// @Description  Remove a favorite folder (favorites inside are ungrouped)
+// @Tags         Favorites
+// @Produce      json
+// @Param        folderId path int true "Folder ID"
+// @Success      200 {object} map[string]interface{}
+// @Router       /users/me/favorite-folders/{folderId} [delete]
 func (a *API) DeleteFavoriteFolder(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -505,6 +537,14 @@ func (a *API) validateFolderOwnedByUser(uid, folderID uint64) bool {
 }
 
 // ClearInvalidFavoritesInFolder removes favorites whose videos are missing or not published.
+// ClearInvalidFavoritesInFolder godoc
+// @Summary      Clear invalid favorites in folder
+// @Description  Remove references to deleted videos from a folder
+// @Tags         Favorites
+// @Produce      json
+// @Param        folderId path int true "Folder ID"
+// @Success      200 {object} map[string]interface{}
+// @Router       /users/me/favorite-folders/{folderId}/invalid-favorites [delete]
 func (a *API) ClearInvalidFavoritesInFolder(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -576,6 +616,15 @@ type batchRemoveFavoritesJSON struct {
 }
 
 // BatchRemoveVideosFromFavoriteFolder removes multiple videos from one folder.
+// BatchRemoveVideosFromFavoriteFolder godoc
+// @Summary      Batch remove videos from folder
+// @Description  Remove multiple videos from a favorite folder at once
+// @Tags         Favorites
+// @Produce      json
+// @Param        folderId path int true "Folder ID"
+// @Param        body body object{video_ids=array} true "Video IDs to remove"
+// @Success      200 {object} map[string]interface{}
+// @Router       /users/me/favorite-folders/{folderId}/batch-remove [post]
 func (a *API) BatchRemoveVideosFromFavoriteFolder(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {

@@ -89,6 +89,17 @@ func (a *API) dynamicCommentsToJSON(list []model.DynamicComment, authorID, viewe
 }
 
 // ListDynamicComments returns comments for a user dynamic.
+// ListDynamicComments godoc
+// @Summary      List dynamic comments
+// @Description  Get paginated comments for a dynamic
+// @Tags         Dynamics
+// @Produce      json
+// @Param        id path int true "Dynamic ID"
+// @Param        page query int false "Page number" default(1)
+// @Param        page_size query int false "Page size" default(20)
+// @Param        sort query string false "Sort (hot,time)" default(hot)
+// @Success      200 {object} map[string]interface{}
+// @Router       /user-dynamics/{id}/comments [get]
 func (a *API) ListDynamicComments(c *gin.Context) {
 	did, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil || did == 0 {

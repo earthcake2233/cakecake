@@ -186,6 +186,15 @@ func (a *API) trimViewHistoryCombined(uid uint64) {
 }
 
 // ListMyViewHistory returns watch history for the personal-center page.
+// ListMyViewHistory godoc
+// @Summary      Get view history
+// @Description  Get paginated video viewing history for current user
+// @Tags         Users
+// @Produce      json
+// @Param        page query int false "Page number" default(1)
+// @Param        page_size query int false "Page size" default(20)
+// @Success      200 {object} map[string]interface{}
+// @Router       /users/me/view-history [get]
 func (a *API) ListMyViewHistory(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -410,6 +419,13 @@ func (a *API) ClearMyViewHistory(c *gin.Context) {
 }
 
 // GetMyViewHistorySettings returns whether history recording is paused.
+// GetMyViewHistorySettings godoc
+// @Summary      Get view history settings
+// @Description  Get privacy/sharing settings for view history
+// @Tags         Users
+// @Produce      json
+// @Success      200 {object} map[string]interface{}
+// @Router       /users/me/view-history/settings [get]
 func (a *API) GetMyViewHistorySettings(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {

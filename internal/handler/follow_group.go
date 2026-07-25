@@ -64,6 +64,13 @@ func followGroupPayload(db *gorm.DB, g *model.UserFollowGroup) gin.H {
 }
 
 // ListMyFollowGroups lists the caller's custom following groups.
+// ListMyFollowGroups godoc
+// @Summary      List my follow groups
+// @Description  Get all follow groups for current user
+// @Tags         Users
+// @Produce      json
+// @Success      200 {object} map[string]interface{}
+// @Router       /users/me/follow-groups [get]
 func (a *API) ListMyFollowGroups(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -93,6 +100,14 @@ func (a *API) ListMyFollowGroups(c *gin.Context) {
 }
 
 // CreateFollowGroup creates a custom following group for the caller.
+// CreateFollowGroup godoc
+// @Summary      Create a follow group
+// @Description  Create a new group to organize followed users
+// @Tags         Users
+// @Produce      json
+// @Param        body body object{name=string} true "Group name"
+// @Success      200 {object} map[string]interface{}
+// @Router       /users/me/follow-groups [post]
 func (a *API) CreateFollowGroup(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -138,6 +153,15 @@ func (a *API) CreateFollowGroup(c *gin.Context) {
 }
 
 // UpdateFollowGroup renames a custom following group for the caller.
+// UpdateFollowGroup godoc
+// @Summary      Update a follow group
+// @Description  Rename a follow group
+// @Tags         Users
+// @Produce      json
+// @Param        groupId path int true "Group ID"
+// @Param        body body object{name=string} true "New group name"
+// @Success      200 {object} map[string]interface{}
+// @Router       /users/me/follow-groups/{groupId} [put]
 func (a *API) UpdateFollowGroup(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -184,6 +208,14 @@ func (a *API) UpdateFollowGroup(c *gin.Context) {
 }
 
 // DeleteFollowGroup removes a custom group and its member links only (does not unfollow).
+// DeleteFollowGroup godoc
+// @Summary      Delete a follow group
+// @Description  Remove a follow group (members become ungrouped)
+// @Tags         Users
+// @Produce      json
+// @Param        groupId path int true "Group ID"
+// @Success      200 {object} map[string]interface{}
+// @Router       /users/me/follow-groups/{groupId} [delete]
 func (a *API) DeleteFollowGroup(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -284,6 +316,15 @@ func (a *API) ListFolloweeGroupIDs(c *gin.Context) {
 }
 
 // AddFollowGroupMember adds a followee into one of the caller's groups (must already follow them).
+// AddFollowGroupMember godoc
+// @Summary      Add user to follow group
+// @Description  Add a followed user to a group
+// @Tags         Users
+// @Produce      json
+// @Param        groupId path int true "Group ID"
+// @Param        body body object{followee_id=int} true "User ID to add"
+// @Success      200 {object} map[string]interface{}
+// @Router       /users/me/follow-groups/{groupId}/members [post]
 func (a *API) AddFollowGroupMember(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -327,6 +368,15 @@ func (a *API) AddFollowGroupMember(c *gin.Context) {
 }
 
 // RemoveFollowGroupMember removes a followee from one of the caller's groups.
+// RemoveFollowGroupMember godoc
+// @Summary      Remove user from follow group
+// @Description  Remove a followed user from their group assignment
+// @Tags         Users
+// @Produce      json
+// @Param        groupId path int true "Group ID"
+// @Param        followeeId path int true "Followee User ID"
+// @Success      200 {object} map[string]interface{}
+// @Router       /users/me/follow-groups/{groupId}/members/{followeeId} [delete]
 func (a *API) RemoveFollowGroupMember(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {

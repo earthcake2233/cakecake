@@ -95,7 +95,7 @@ func newTestAPIWithRuntimeCfg(t *testing.T) (*API, *gin.Engine, *jwttoken.Manage
 		},
 	}
 	r := gin.New()
-	RegisterRoutes(r, api, jm)
+	RegisterRoutes(r, api, jm, "test")
 	return api, r, jm
 }
 

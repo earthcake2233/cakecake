@@ -11,7 +11,7 @@ import (
 )
 
 // RegisterRoutes wires HTTP and WebSocket routes.
-func RegisterRoutes(r *gin.Engine, a *API, jwtm *jwttoken.Manager) {
+func RegisterRoutes(r *gin.Engine, a *API, jwtm *jwttoken.Manager, appEnv string) {
 	r.Use(corsMiddleware)
 	r.Use(logger.GinMiddleware(a.Log))
 	if a.RateLimiter != nil {
@@ -21,7 +21,7 @@ func RegisterRoutes(r *gin.Engine, a *API, jwtm *jwttoken.Manager) {
 	r.GET("/api/v1/health", a.Health)
 
 	// Swagger documentation
-	RegisterSwaggerRoutes(r)
+	RegisterSwaggerRoutes(r, appEnv)
 
 	pub := r.Group("/api/v1")
 	{

@@ -90,6 +90,16 @@ func (a *API) GetUserPublic(c *gin.Context) {
 }
 
 // ListUserPublishedVideos lists published videos for a user (public, no auth).
+// ListUserPublishedVideos godoc
+// @Summary      List user videos
+// @Description  Get paginated published videos for a user space
+// @Tags         Users
+// @Produce      json
+// @Param        userId path int true "User ID"
+// @Param        page query int false "Page number" default(1)
+// @Param        page_size query int false "Page size" default(20)
+// @Success      200 {object} map[string]interface{}
+// @Router       /space/{userId}/videos [get]
 func (a *API) ListUserPublishedVideos(c *gin.Context) {
 	uid, err := strconv.ParseUint(c.Param("userId"), 10, 64)
 	if err != nil || uid == 0 {

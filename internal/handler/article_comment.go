@@ -18,6 +18,17 @@ import (
 )
 
 // ListArticleComments returns flat comments for an article.
+// ListArticleComments godoc
+// @Summary      List article comments
+// @Description  Get paginated comments for an article
+// @Tags         Articles
+// @Produce      json
+// @Param        id path int true "Article ID"
+// @Param        page query int false "Page number" default(1)
+// @Param        page_size query int false "Page size" default(20)
+// @Param        sort query string false "Sort (hot,time)" default(hot)
+// @Success      200 {object} map[string]interface{}
+// @Router       /articles/{id}/comments [get]
 func (a *API) ListArticleComments(c *gin.Context) {
 	aid, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil || aid == 0 {

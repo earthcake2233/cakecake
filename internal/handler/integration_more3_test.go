@@ -42,7 +42,7 @@ func Test_FavoriteFolderCRUDMore(t *testing.T) {
 	v := seedVideo(t, api, u2.ID, "FF Video")
 	
 	// Create a folder
-	w := srve(r, areq("POST", "/api/v1/users/me/favorite-folders", tk, `{"name":"My Folder","public":true}`))
+	w := srve(r, areq("POST", "/api/v1/users/me/favorite-folders", tk, `{"title":"My Folder","is_public":true}`))
 	var fr struct {
 		Code int `json:"code"`
 		Data struct {
@@ -53,7 +53,7 @@ func Test_FavoriteFolderCRUDMore(t *testing.T) {
 	if fr.Code == 0 && fr.Data.ID > 0 {
 		fid := fr.Data.ID
 		// Update folder
-		srve(r, areq("PUT", fmt.Sprintf("/api/v1/users/me/favorite-folders/%d", fid), tk, `{"name":"Updated Folder","public":false}`))
+		srve(r, areq("PUT", fmt.Sprintf("/api/v1/users/me/favorite-folders/%d", fid), tk, `{"title":"Updated Folder","is_public":false}`))
 		// Add video to folder
 		srve(r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/favorite-folders/%d", v.ID, fid), tk, nil))
 		// Batch remove (empty list)
@@ -63,7 +63,7 @@ func Test_FavoriteFolderCRUDMore(t *testing.T) {
 	}
 	
 	// Create default folder for invalid favorites test
-	w2 := srve(r, areq("POST", "/api/v1/users/me/favorite-folders", tk, `{"name":"Another Folder"}`))
+	w2 := srve(r, areq("POST", "/api/v1/users/me/favorite-folders", tk, `{"title":"Another Folder"}`))
 	var fr2 struct { Code int `json:"code"`; Data struct { ID uint64 `json:"id"` } `json:"data"` }
 	json.Unmarshal(w2.Body.Bytes(), &fr2)
 	if fr2.Code == 0 && fr2.Data.ID > 0 {
@@ -116,7 +116,7 @@ func Test_VideoFavoriteFolders(t *testing.T) {
 	srve(r, areq("GET", fmt.Sprintf("/api/v1/videos/%d/favorite-picker", v.ID), tk, nil))
 	
 	// Create folder, then set video favorite folders
-	w := srve(r, areq("POST", "/api/v1/users/me/favorite-folders", tk, `{"name":"VFF Folder"}`))
+	w := srve(r, areq("POST", "/api/v1/users/me/favorite-folders", tk, `{"title":"VFF Folder"}`))
 	var fr struct { Code int `json:"code"`; Data struct { ID uint64 `json:"id"` } `json:"data"` }
 	json.Unmarshal(w.Body.Bytes(), &fr)
 	if fr.Code == 0 && fr.Data.ID > 0 {

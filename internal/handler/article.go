@@ -443,6 +443,14 @@ func (a *API) PutMyArticle(c *gin.Context) {
 }
 
 // GetArticle returns a published article for reading.
+// GetArticle godoc
+// @Summary      Get article detail
+// @Description  Get full article content by ID
+// @Tags         Articles
+// @Produce      json
+// @Param        id path int true "Article ID"
+// @Success      200 {object} map[string]interface{}
+// @Router       /articles/{id} [get]
 func (a *API) GetArticle(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil || id == 0 {
@@ -465,6 +473,14 @@ func (a *API) GetArticle(c *gin.Context) {
 }
 
 // PostArticleView increments view count (best-effort).
+// PostArticleView godoc
+// @Summary      Record article view
+// @Description  Increment the view count for an article
+// @Tags         Articles
+// @Produce      json
+// @Param        id path int true "Article ID"
+// @Success      200 {object} map[string]interface{}
+// @Router       /articles/{id}/view [post]
 func (a *API) PostArticleView(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil || id == 0 {
@@ -614,6 +630,16 @@ func (a *API) ListMyArticles(c *gin.Context) {
 }
 
 // ListUserPublishedArticles lists published articles in a user's space.
+// ListUserPublishedArticles godoc
+// @Summary      List user articles
+// @Description  Get paginated published articles for a user space
+// @Tags         Articles
+// @Produce      json
+// @Param        userId path int true "User ID"
+// @Param        page query int false "Page number" default(1)
+// @Param        page_size query int false "Page size" default(20)
+// @Success      200 {object} map[string]interface{}
+// @Router       /space/{userId}/articles [get]
 func (a *API) ListUserPublishedArticles(c *gin.Context) {
 	userID, err := strconv.ParseUint(c.Param("userId"), 10, 64)
 	if err != nil || userID == 0 {
