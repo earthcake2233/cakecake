@@ -398,7 +398,7 @@ export default {
   },
   data() {
     return {
-        defaultAvatarSvg: "data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2724%27 height=%2724%27 viewBox=%270 0 24 24%27 fill=%27%23ccc%27%3E%3Ccircle cx=%2712%27 cy=%278%27 r=%274%27/%3E%3Cpath d=%27M12 14c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5z%27/%3E%3C/svg%3E",
+        defaultAvatarSvg: defaultFace,
       gochatIllus,
       muteIcon,
       dmConversations: [],
