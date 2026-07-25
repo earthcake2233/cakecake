@@ -3,6 +3,10 @@
     <img src="https://img.shields.io/badge/Chinese-999999?style=flat-square" alt="Chinese">
   </a>
   <strong><img src="https://img.shields.io/badge/English-00a1d6?style=flat-square" alt="English"></strong>
+    
+  <a href="http://localhost:8080/swagger/index.html">
+    <img src="https://img.shields.io/badge/API-Swagger-85EA2D?style=flat-square&logo=swagger" alt="API Docs">
+  </a>
 </p>
 
 # cakecake 🍰

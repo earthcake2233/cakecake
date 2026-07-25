@@ -31,6 +31,13 @@ func bannerSlideURL(linkType, linkTarget string) string {
 }
 
 // ListHomeBanners GET /api/v1/home-banners — public carousel for homepage.
+// ListHomeBanners godoc
+// @Summary      List home banners
+// @Description  Get active home page banners
+// @Tags        Home
+// @Produce     json
+// @Success     200 {object} map[string]interface{}
+// @Router      /home-banners [get]
 func (a *API) ListHomeBanners(c *gin.Context) {
 	now := time.Now()
 	var rows []model.HomeBanner

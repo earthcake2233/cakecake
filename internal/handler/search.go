@@ -17,6 +17,16 @@ import (
 )
 
 // SearchAll implements GET /api/v1/search for the bilibili-vue search page.
+// SearchAll godoc
+// @Summary      Unified search
+// @Description  Search videos, users, articles across the platform
+// @Tags        Search
+// @Produce     json
+// @Param       keyword query string true "Search keyword"
+// @Param       page query int false "Page number" default(1)
+// @Param       page_size query int false "Page size" default(20)
+// @Success     200 {object} map[string]interface{}
+// @Router      /search [get]
 func (a *API) SearchAll(c *gin.Context) {
 	keyword := strings.TrimSpace(c.Query("keyword"))
 	if err := search.ValidateKeyword(keyword); err != nil {

@@ -1,4 +1,4 @@
-# ── Personal notes（本地私密，勿提交）──
+﻿# ── Personal notes（本地私密，勿提交）──
 Minibili.md
 README_REFLECT.md
 
@@ -55,6 +55,7 @@ coverage_test.out
 
 # ── Temp / debug scripts ──
 *.py
+!clean.py
 !internal/**/write_test.py
 !scripts/*.py
 !cakecake-vue/bilibili-vue/scripts/*.py
@@ -69,4 +70,10 @@ _patch_*
 _fix_*.py  
 _restore_*  
 gen_png.*  
-defaultface.* 
+defaultface.*
+.gopath/
+
+# Go temp files
+.gotmp/
+# Incident reports
+incident-*.md

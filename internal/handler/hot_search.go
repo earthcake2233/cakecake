@@ -16,6 +16,13 @@ import (
 
 // HotSearchList returns hot search keywords aggregated in Redis.
 // GET /api/v1/hot-search?limit=10
+// HotSearchList godoc
+// @Summary      List hot searches
+// @Description  Get current hot search list
+// @Tags        Search
+// @Produce     json
+// @Success     200 {object} map[string]interface{}
+// @Router      /hot-search [get]
 func (a *API) HotSearchList(c *gin.Context) {
 	limit := 10
 	if s := c.Query("limit"); s != "" {

@@ -1,4 +1,26 @@
+// Package main Mini-Bili API.
+//
+// @title           Mini-Bili API
+// @version         1.0
+// @description     Mini-Bili - 轻量级弹幕视频分享平台后端 API
+// @termsOfService  https://github.com/earthcake2233/cakecake/blob/main/LICENSE
+//
+// @contact.name   earthcake2233
+// @contact.url    https://github.com/earthcake2233
+//
+// @license.name  Custom Non-Commercial License
+// @license.url   https://github.com/earthcake2233/cakecake/blob/main/LICENSE
+//
+// @host           localhost:8080
+// @BasePath       /api/v1
+// @schemes        http
+//
+// @securityDefinitions.apikey  BearerAuth
+// @in                          header
+// @name                        Authorization
+// @description                 JWT Bearer token, e.g. "Bearer {token}"
 package main
+
 
 import (
 	"context"
@@ -30,6 +52,8 @@ import (
 	"minibili/internal/storage"
 	"minibili/internal/worker"
 	"minibili/internal/ws"
+
+	_ "minibili/docs/swagger"
 )
 
 func main() {

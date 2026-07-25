@@ -52,15 +52,28 @@ graph TD
 
 **推荐做法（在你本机 Windows 构建，服务器只放静态文件）：**
 
-```bash
+**Windows (PowerShell):**
+```powershell
 cd D:\Minibili\cakecake-vue\bilibili-vue
 npm install
-cp .env.production.example .env.production   # 含 VITE_VIDEO_UPLOAD_DISABLED 等
-
+copy .env.production.example .env.production
 npm run build
 ```
 
-将生成的 **`dist/`** 整个目录上传到服务器 `/opt/minibili/www/`。
+**Linux / macOS:**
+```bash
+cd cakecake-vue/bilibili-vue
+npm install
+cp .env.production.example .env.production
+npm run build
+```
+
+生成的 **`dist/`** 整个目录上传到服务器 `/opt/minibili/www/`。
+
+**跨平台 (requires GNU Make):**
+```bash
+make build-frontend
+```
 
 若必须在 Linux 上构建：使用 **Node 20 官方二进制**（非系统 yum 的 node 6），或 Docker `node:20-alpine` 仅用于 build，仍不必在 ECS 常驻 Node。
 
@@ -70,13 +83,26 @@ npm run build
 
 CentOS 7 无需安装 Go，只上传 Linux 二进制即可。
 
-```bash
+**Windows (PowerShell):**
+```powershell
 cd D:\Minibili
-export GOPATH="C:\gopath-empty"   # 避免与 GoLand GOPATH 冲突
-export GO111MODULE="on"
-export GOOS="linux"
-export GOARCH="amd64"
-go build -ldflags="-s -w" -o mini-bili-linux ./cmd/mini-bili
+$env:GOPATH="C:\gopath-empty"
+$env:GO111MODULE="on"
+$env:GOOS="linux"
+$env:GOARCH="amd64"
+go build -ldflags="-s -w" -o mini-bili-linux .\cmd\mini-bili
+```
+
+**Linux / macOS:**
+```bash
+cd /path/to/minibili
+GOPATH=/tmp/gopath-empty GO111MODULE=on GOOS=linux GOARCH=amd64 \
+  go build -ldflags="-s -w" -o mini-bili-linux ./cmd/mini-bili
+```
+
+**Cross-platform (requires GNU Make):**
+```bash
+make build-linux
 ```
 
 上传到服务器：`/opt/minibili/bin/mini-bili`，并 `chmod +x`。

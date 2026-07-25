@@ -54,6 +54,16 @@ type danmakuPost struct {
 }
 
 // PostDanmaku persists and broadcasts a danmaku (F5, S-007, S-014).
+// PostDanmaku godoc
+// @Summary      Post a danmaku
+// @Description  Post a danmaku (bullet comment) on a video
+// @Tags        Danmaku
+// @Accept      json
+// @Produce     json
+// @Param       id path int true "Video ID"
+// @Param       body body object{content=string,color=string,position=integer} true "Danmaku data"
+// @Success     200 {object} map[string]interface{}
+// @Router      /videos/{id}/danmaku [post]
 func (a *API) PostDanmaku(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {

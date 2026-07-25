@@ -20,6 +20,9 @@ func RegisterRoutes(r *gin.Engine, a *API, jwtm *jwttoken.Manager) {
 
 	r.GET("/api/v1/health", a.Health)
 
+	// Swagger documentation
+	RegisterSwaggerRoutes(r)
+
 	pub := r.Group("/api/v1")
 	{
 		pub.POST("/users", a.Register)

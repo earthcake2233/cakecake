@@ -16,6 +16,14 @@ import (
 )
 
 // GetUserPublic returns a minimal public profile for personal space (no auth).
+// GetUserPublic godoc
+// @Summary      Get user public profile
+// @Description  Get user public space by user ID
+// @Tags        Users
+// @Produce     json
+// @Param       userId path int true "User ID"
+// @Success     200 {object} map[string]interface{}
+// @Router      /space/{userId} [get]
 func (a *API) GetUserPublic(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("userId"), 10, 64)
 	if err != nil || id == 0 {

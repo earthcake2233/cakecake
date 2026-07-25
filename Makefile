@@ -1,4 +1,4 @@
-# MiniBili Makefile -- cross-platform build & test entry.
+﻿# MiniBili Makefile -- cross-platform build & test entry.
 #   Linux/macOS: make <target>
 #   Windows:     make <target>   (GNU Make required, uses cmd.exe)
 
@@ -43,17 +43,24 @@ clean:
 	python clean.py
 
 
+
+# Clean Go build cache from C: drive (prevents C: from filling up)
+clean-go-cache:
+	python scripts/clean_go_cache.py --system-only
 # -- Build ---------------------------------------------------------
 
 # Build Linux amd64 binary (cross-compile from any platform)
 build-linux:
 	$(GO) clean -cache
 	$(GO) build -ldflags="-s -w" -o mini-bili-linux ./cmd/mini-bili
+	python scripts/clean_go_cache.py --system-only
 
 # Export env vars for cross-compilation (must be env, not Make vars)
 build-linux: export GO111MODULE := on
 build-linux: export GOOS := linux
 build-linux: export GOARCH := amd64
+build-linux: export GOCACHE := $(CURDIR)/.gocache
+build-linux: export GOTMPDIR := $(CURDIR)/.gotmp
 build-linux: export GOPATH = $(TEMP)/gopath-clean
 
 # Build frontend production bundle

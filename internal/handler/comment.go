@@ -30,6 +30,17 @@ type commentPost struct {
 }
 
 // ListComments returns flat comments for a video (F7, F8).
+// ListComments godoc
+// @Summary      List video comments
+// @Description  Get paginated comments for a video
+// @Tags        Comments
+// @Produce     json
+// @Param       id path int true "Video ID"
+// @Param       page query int false "Page number" default(1)
+// @Param       page_size query int false "Page size" default(20)
+// @Param       sort query string false "Sort (hot,time)" default(hot)
+// @Success     200 {object} map[string]interface{}
+// @Router      /videos/{id}/comments [get]
 func (a *API) ListComments(c *gin.Context) {
 	vid, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil || vid == 0 {

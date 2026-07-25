@@ -38,6 +38,16 @@ type tokenPairResp struct {
 }
 
 // Register creates a new user (F1).
+// Register godoc
+// @Summary      Register new user
+// @Description  Create a new user account
+// @Tags         Auth
+// @Accept       json
+// @Produce      json
+// @Param        body body object{username=string,password=string} true "User credentials"
+// @Success      200 {object} map[string]interface{}
+// @Failure      400 {object} map[string]interface{}
+// @Router       /users [post]
 func (a *API) Register(c *gin.Context) {
 	var req registerReq
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -88,6 +98,16 @@ func (a *API) Register(c *gin.Context) {
 }
 
 // Login returns JWT pair (F1, Skill S-009).
+// Login godoc
+// @Summary      User login
+// @Description  Authenticate and get JWT tokens
+// @Tags        Auth
+// @Accept      json
+// @Produce     json
+// @Param       body body object{username=string,password=string} true "Login credentials"
+// @Success     200 {object} map[string]interface{}
+// @Failure     401 {object} map[string]interface{}
+// @Router      /auth/login [post]
 func (a *API) Login(c *gin.Context) {
 	var req loginReq
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -123,6 +143,15 @@ func (a *API) Login(c *gin.Context) {
 }
 
 // Refresh rotates refresh token (Skill S-009).
+// Refresh godoc
+// @Summary      Refresh access token
+// @Description  Refresh JWT access token using refresh token
+// @Tags        Auth
+// @Accept      json
+// @Produce     json
+// @Param       body body object{refresh_token=string} true "Refresh token"
+// @Success     200 {object} map[string]interface{}
+// @Router      /auth/refresh [post]
 func (a *API) Refresh(c *gin.Context) {
 	var req refreshReq
 	if err := c.ShouldBindJSON(&req); err != nil {

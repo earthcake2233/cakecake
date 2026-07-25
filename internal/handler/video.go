@@ -276,6 +276,17 @@ func saveUploadedFile(fh *multipart.FileHeader, dst string) error {
 
 // ListPublishedVideos is the home feed (F10, AC-4).
 // Query: limit, cursor, zone_parent, sort=hot|time, days=1|3|7|30, arc_type=0|1 (1=仅近期投稿).
+// ListPublishedVideos godoc
+// @Summary      List published videos
+// @Description  Get paginated list of published videos
+// @Tags        Videos
+// @Produce     json
+// @Param       page query int false "Page number" default(1)
+// @Param       page_size query int false "Page size" default(20)
+// @Param       zone query string false "Video zone slug"
+// @Param       sort query string false "Sort field (created_at,play_count)"
+// @Success     200 {object} map[string]interface{}
+// @Router      /videos [get]
 func (a *API) ListPublishedVideos(c *gin.Context) {
 	limit := 20
 	if s := c.Query("limit"); s != "" {
@@ -567,6 +578,14 @@ func (a *API) ListMyVideos(c *gin.Context) {
 }
 
 // GetVideo returns detail for playback page (F3, F4).
+// GetVideo godoc
+// @Summary      Get video detail
+// @Description  Get detailed video info by ID
+// @Tags        Videos
+// @Produce     json
+// @Param       id path int true "Video ID"
+// @Success     200 {object} map[string]interface{}
+// @Router      /videos/{id} [get]
 func (a *API) GetVideo(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil || id == 0 {

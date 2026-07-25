@@ -475,7 +475,7 @@ export default {
           content: raw.content,
           face: raw.sender_avatar || defaultFace,
           is_mine: isMine,
-          toolActivities: (function(){ var a = raw.tool_activities ? JSON.parse(raw.tool_activities) : (raw._toolActivities || []); a.forEach(function(t){ t.status = "done"; }); return a; })(),
+          toolActivities: raw.tool_activities ? JSON.parse(raw.tool_activities) : (raw._toolActivities || []),
           toolResultData: raw.tool_result_data ? JSON.parse(raw.tool_result_data) : (raw._toolResultData || {})
         };
         if (label !== curLabel) {

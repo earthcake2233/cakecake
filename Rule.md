@@ -1,4 +1,4 @@
-## Mini-Bili v1.0 工程规则（Rule）
+﻿## Mini-Bili v1.0 工程规则（Rule）
 
 **版本**：v1.0
 **最后更新**：2026-07-23
@@ -181,7 +181,7 @@
 
 | 编号 | 规则 | 说明 |
 | :--- | :--- | :--- |
-| **R-CLEAN-1** | **清理临时与调试文件** | 每次完成代码更新/测试编写后，删除 `_*.py`, `_fix*.py`, `_gen*.py`, `_debug*`, `fix_*.py`, `make_*.py`, `write_*.py`, `test_appender.py` 等调试/生成脚本。删除覆盖率临时产物 `cov_out`, `coverage_total`, `covprofile`, `coverage.out`。 |
+| **R-CLEAN-1** | **清理临时与调试文件** | 每次完成代码更新/测试编写后运行 `make clean`（调用 `clean.py`），自动删除 `_*.py`, `_fix*.py`, `_gen*.py`, `_debug*`, `fix_*.py`, `make_*.py`, `write_*.py`, `test_a*.py` 等临时文件。删除覆盖率临时产物 `cov_out`, `coverage_total`, `covprofile`, `coverage.out`。 |
 | **R-CLEAN-2** | **更新 .gitignore** | 清理后检查 `.gitignore` 是否需补充新出现的产物模式（新的覆盖率格式、脚本扩展名、构建缓存目录）。 |
 | **R-CLEAN-3** | **提交前安全检查** | `git add -A` 前检查变更文件是否含硬编码密钥/令牌（`CODECOV_TOKEN=`, `password=`, `secret=`）、`.env` 文件、个人凭证、>10MB 大文件、二进制文件。发现即排除并告知用户。 |
 | **R-CLEAN-4** | **用户确认后提交** | `git add -A` -> `git status --short` 展示变更摘要（增删行数、文件数、关键变更）-> **等待用户确认** -> `git commit` + `git push`。commit message 遵循 conventional commits 格式（`test:`/`feat:`/`fix:`/`chore:`）。 |
@@ -220,3 +220,13 @@
 | :--- | :--- | :--- |
 | **R-ENCODE-1** | **禁止 Go 源文件包含 UTF-8 BOM** | Go 编译器不接受 BOM（Byte Order Mark）头。必须使用 `pip install -r scripts/check_bom.py` 检测所有 `.go` 文件。文件写入必须使用 `scripts/safe_write.py`（自动剥离 BOM），严禁使用 `Set-Content` 直接写入 `.go` 文件。 |
 | **R-ENCODE-2** | **提交前运行 BOM 检查** | `python scripts/check_bom.py` 扫描 `internal/` 和 `cmd/` 下所有 `.go` 文件。若发现 BOM 文件，使用 `--fix` 修复后重新提交。CI `go build` 步骤也会拒绝 BOM 文件。 |
+
+---
+
+### 十二、构建与缓存清理
+
+| 编号 | 规则 | 说明 |
+| :--- | :--- | :--- |
+| **R-BUILD-1** | **跨平台编译必须走 Makefile** | 禁止手动在 PowerShell 逐条执行 $env:GOOS=linux + go build。必须统一使用 make build-linux，确保 GOCACHE/GOTMPDIR 环境变量被正确导出到 D 盘，防止写满 C 盘。 |
+| **R-BUILD-2** | **每次编译后必须清理 Go 缓存** | uild-linux target 的 recipe 末尾已内置 python scripts/clean_go_cache.py，自动删除 C 盘 Temp 下所有 go-*/gc-*/gm-* 目录以及 AppData\\Local\\go-build。开发者新增其他编译 target 时也必须手动调用本脚本。 |
+| **R-BUILD-3** | **禁止在 C 盘残留编译缓存** | GOCACHE 和 GOTMPDIR 必须指向 D 盘（当前设为 D:\\Minibili\\.gocache 和 D:\\Minibili\\.gotmp），这两条路径已在 .gitignore 中忽略。如果需要在本地临时改路径，改完后必须 python scripts/clean_go_cache.py --local-only 清理。 |

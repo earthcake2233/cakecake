@@ -108,6 +108,13 @@ func creatorUpInclusiveDays(first *time.Time) int {
 }
 
 // GetMe returns current user profile (F0).
+// GetMe godoc
+// @Summary      Get current user profile
+// @Description  Get authenticated user profile
+// @Tags        Users
+// @Produce     json
+// @Success     200 {object} map[string]interface{}
+// @Router      /users/me [get]
 func (a *API) GetMe(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {

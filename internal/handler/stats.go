@@ -8,6 +8,13 @@ import (
 )
 
 // HomeStats returns homepage sidebar metrics (online viewers + published video count).
+// HomeStats godoc
+// @Summary      Home page stats
+// @Description  Get home page statistics
+// @Tags        Home
+// @Produce     json
+// @Success     200 {object} map[string]interface{}
+// @Router      /stats/home [get]
 func (a *API) HomeStats(c *gin.Context) {
 	var published int64
 	if a.DB != nil {
