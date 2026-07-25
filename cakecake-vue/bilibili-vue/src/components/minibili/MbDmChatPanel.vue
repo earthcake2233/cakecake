@@ -475,8 +475,8 @@ export default {
           content: raw.content,
           face: raw.sender_avatar || defaultFace,
           is_mine: isMine,
-          toolActivities: raw.tool_activities ? JSON.parse(raw.tool_activities) : (raw._toolActivities || []),
-          toolResultData: raw.tool_result_data ? JSON.parse(raw.tool_result_data) : (raw._toolResultData || {})
+          toolActivities: raw._toolActivities ? raw._toolActivities : (raw.tool_activities ? JSON.parse(raw.tool_activities) : []),
+          toolResultData: raw._toolResultData ? raw._toolResultData : (raw.tool_result_data ? JSON.parse(raw.tool_result_data) : {})
         };
         if (label !== curLabel) {
           flush();
