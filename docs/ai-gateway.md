@@ -8,12 +8,17 @@
 
 ## 架构
 
-```text
-Vue MbDmChatPanel
-  → POST .../dm/.../messages
-  → Go handler（鉴权、落库、WS 推送用户消息）
-  → goroutine → internal/aigateway（DeepSeek HTTP）
-  → 助手消息落库 → ChatHub.PushJSON
+```mermaid
+sequenceDiagram
+    participant V as "Vue MbDmChatPanel"
+    participant Go as "Go Handler"
+    participant AI as "internal/aigateway"
+    participant WS as "ChatHub (WebSocket)"
+
+    V->>Go: POST .../dm/.../messages
+    Go->>Go: 鉴权、落库、WS 推送用户消息
+    Go-->>AI: goroutine → DeepSeek HTTP
+    AI-->>WS: 助手消息落库 → PushJSON
 ```
 
 ## 运营后台配置
@@ -54,18 +59,31 @@ Vue MbDmChatPanel
 
 ### 架构
 
-```text
-User Message
-   → AgentService.GenerateReply
-     → Gateway.CompleteUserTurnWithTools (最多 5 轮)
-       → LLM.CompleteWithTools(messages, tools)
-       → finish_reason == "tool_calls"?
-         → Toolkit.ExecuteToolCalls (并行执行)
-         → Push tool_call_start/end via WebSocket
-         → Append tool results → loop back to LLM
-       → finish_reason == "stop"?
-         → Persist full history (含 tool 中间消息) → Redis
-         → Return text reply → WebSocket push
+```mermaid
+flowchart TD
+    U[User Message]
+    AS[AgentService.GenerateReply]
+    GW[Gateway.CompleteUserTurnWithTools<br/>最多 5 轮]
+    LLM[LLM.CompleteWithTools]
+    TC{"finish_reason == 'tool_calls'?"}
+    TK[Toolkit.ExecuteToolCalls<br/>并行执行]
+    WS1["Push tool_call_start/end via WebSocket"]
+    LOOP["Append tool results, loop back to LLM"]
+    STOP{"finish_reason == 'stop'?"}
+    REDIS["Persist full history + tool messages to Redis"]
+    WS2["Return text reply via WebSocket push"]
+
+    U --> AS
+    AS --> GW
+    GW --> LLM
+    LLM --> TC
+    TC -->|Yes| TK
+    TK --> WS1
+    WS1 --> LOOP
+    LOOP --> LLM
+    LLM --> STOP
+    STOP -->|Yes| REDIS
+    REDIS --> WS2
 ```
 
 ### 新增 WebSocket 协议

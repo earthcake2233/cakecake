@@ -12,19 +12,24 @@
 
 ## 一、架构示意
 
-```
-浏览器
-   │ 80/443
-   ▼
-Nginx（/opt/minibili/www 静态 + 反代 /api）
-   │
-   ├─► mini-bili :8080（仅本机监听）
-   │      ├─ MySQL :3306
-   │      ├─ Redis :6379
-   │      ├─ RabbitMQ :5672（转码队列）
-   │      └─ OSS（外网）
-   │
-   └─► 腾讯云 ES Serverless（HTTPS，公网 + IP 白名单）
+```mermaid
+graph TD
+    Browser[浏览器]
+    Nginx["Nginx<br/>(/opt/minibili/www 静态 + 反代 /api)"]
+    App["mini-bili :8080<br/>(仅本机监听)"]
+    MySQL["(MySQL :3306)"]
+    Redis["(Redis :6379)"]
+    RMQ["(RabbitMQ :5672)<br/>转码队列"]
+    OSS["OSS（外网）"]
+    ES["腾讯云 ES Serverless<br/>HTTPS + IP 白名单"]
+
+    Browser -->|80/443| Nginx
+    Nginx --> App
+    App --> MySQL
+    App --> Redis
+    App --> RMQ
+    App --> OSS
+    Nginx --> ES
 ```
 
 ---
