@@ -165,7 +165,7 @@ func (g *Gateway) CompleteUserTurnWithTools(
 		if g.ToolExec == nil {
 			return "", fmt.Errorf("tool executor not configured")
 		}
-		toolMsgs := g.executeToolCalls(ctx, msg.ToolCalls, traceID)
+		toolMsgs := g.executeToolCalls(ctx, msg.ToolCalls, traceID, iter)
 		msgs = append(msgs, toolMsgs...)
 	}
 
@@ -173,7 +173,7 @@ func (g *Gateway) CompleteUserTurnWithTools(
 	return "抱歉，操作超时，请稍后重试或简化问题。", nil
 }
 
-func (g *Gateway) executeToolCalls(ctx context.Context, calls []ToolCall, traceID string) []ChatMessage {
+func (g *Gateway) executeToolCalls(ctx context.Context, calls []ToolCall, traceID string, round int) []ChatMessage {
 	type result struct {
 		msg ChatMessage
 	}
@@ -181,7 +181,7 @@ func (g *Gateway) executeToolCalls(ctx context.Context, calls []ToolCall, traceI
 
 	for i, call := range calls {
 		go func(idx int, tc ToolCall) {
-			spanID := fmt.Sprintf("%s-t%d", traceID, idx)
+			spanID := fmt.Sprintf("%s-r%d-t%d", traceID, round, idx)
 			parentSpanID := traceID
 
 			if g.OnToolCallStart != nil {
