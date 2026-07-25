@@ -1,6 +1,11 @@
 # MiniBili Makefile -- cross-platform build & test entry.
 #   Linux/macOS: make <target>
-#   Windows:     make <target>   (GNU Make required)
+#   Windows:     make <target>   (GNU Make required, uses cmd.exe)
+
+ifeq ($(OS),Windows_NT)
+SHELL := cmd.exe
+.SHELLFLAGS := /c
+endif
 
 .PHONY: all test test-backend test-frontend coverage coverage-backend coverage-frontend clean help
 
@@ -37,9 +42,35 @@ coverage: coverage-backend coverage-frontend
 clean:
 	python clean.py
 
+
+# -- Build ---------------------------------------------------------
+
+# Build Linux amd64 binary (cross-compile from any platform)
+build-linux:
+	$(GO) clean -cache
+	$(GO) build -ldflags="-s -w" -o mini-bili-linux ./cmd/mini-bili
+
+# Export env vars for cross-compilation (must be env, not Make vars)
+build-linux: export GO111MODULE := on
+build-linux: export GOOS := linux
+build-linux: export GOARCH := amd64
+build-linux: export GOPATH = $(TEMP)/gopath-clean
+
+# Build frontend production bundle
+build-frontend:
+	cd $(VUE_DIR) && $(NPM) install
+ifeq ($(OS),Windows_NT)
+	cd $(VUE_DIR) && copy /Y .env.production.example .env.production
+else
+	cd $(VUE_DIR) && cp .env.production.example .env.production
+endif
+	cd $(VUE_DIR) && $(NPM) run build
+
 # -- Help -----------------------------------------------------------
 
 help:
+	$(info   make build-linux      Cross-compile Go binary for Linux amd64)
+	$(info   make build-frontend    Build Vue production bundle)
 	$(info Usage:)
 	$(info   make test             Run all tests (backend + frontend))
 	$(info   make test-backend     Run Go tests only)
