@@ -1,4 +1,4 @@
-package handler
+﻿package handler
 
 import (
 	"encoding/json"
@@ -279,3 +279,176 @@ func TestGetMeSpacePrivacy_NoUser(t *testing.T) {
 	api.GetMeSpacePrivacy(c)
 	require.Equal(t, http.StatusUnauthorized, w.Code)
 }
+
+// ---------- queryIntDefault ----------
+
+func TestQueryIntDefault(t *testing.T) {
+	tests := []struct {
+		name string
+		s    string
+		def  int
+		want int
+	}{
+		{name: "empty string", s: "", def: 10, want: 10},
+		{name: "spaces", s: "  ", def: 5, want: 5},
+		{name: "valid number", s: "42", def: 1, want: 42},
+		{name: "valid number with spaces", s: "  7  ", def: 1, want: 7},
+		{name: "non-numeric", s: "abc", def: 99, want: 99},
+		{name: "negative", s: "-5", def: 1, want: -5},
+		{name: "zero", s: "0", def: 100, want: 0},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := queryIntDefault(tc.s, tc.def)
+			if got != tc.want {
+				t.Errorf("queryIntDefault(%q, %d) = %d, want %d", tc.s, tc.def, got, tc.want)
+			}
+		})
+	}
+}
+
+// ---------- previewCommentContent ----------
+
+func TestPreviewCommentContent(t *testing.T) {
+	tests := []struct {
+		name     string
+		s        string
+		maxRunes int
+		want     string
+	}{
+		{name: "empty string", s: "", maxRunes: 10, want: ""},
+		{name: "spaces only", s: "  ", maxRunes: 10, want: ""},
+		{name: "zero maxRunes", s: "hello", maxRunes: 0, want: ""},
+		{name: "negative maxRunes", s: "hello", maxRunes: -1, want: ""},
+		{name: "shorter than max", s: "hi", maxRunes: 10, want: "hi"},
+		{name: "equal to max", s: "12345", maxRunes: 5, want: "12345"},
+		{name: "longer than max", s: "hello world", maxRunes: 5, want: "hello\u2026"},
+		{name: "unicode truncation", s: "你好世界", maxRunes: 2, want: "你好\u2026"},
+		{name: "trimmed input", s: "  hello  ", maxRunes: 10, want: "hello"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := previewCommentContent(tc.s, tc.maxRunes)
+			if got != tc.want {
+				t.Errorf("previewCommentContent(%q, %d) = %q, want %q", tc.s, tc.maxRunes, got, tc.want)
+			}
+		})
+	}
+}
+
+// ---------- dynamicDisplayTitle ----------
+
+func TestDynamicDisplayTitle(t *testing.T) {
+	tests := []struct {
+		name string
+		d    *model.UserDynamic
+		want string
+	}{
+		{name: "nil dynamic", d: nil, want: ""},
+		{name: "has title", d: &model.UserDynamic{Title: "My Title"}, want: "My Title"},
+		{name: "title with spaces", d: &model.UserDynamic{Title: "  Spaced Title  "}, want: "Spaced Title"},
+		{name: "empty title, has content", d: &model.UserDynamic{Title: "", Content: "Some content here"}, want: "Some content here"},
+		{name: "long content truncated", d: &model.UserDynamic{Title: "", Content: "This is a very long content that should be truncated after forty characters"}, want: "This is a very long content that should \u2026"},
+		{name: "empty everything", d: &model.UserDynamic{Title: "", Content: ""}, want: "图文动态"},
+		{name: "spaces only in content", d: &model.UserDynamic{Title: "", Content: "   "}, want: "图文动态"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := dynamicDisplayTitle(tc.d)
+			if got != tc.want {
+				t.Errorf("dynamicDisplayTitle(%+v) = %q, want %q", tc.d, got, tc.want)
+			}
+		})
+	}
+}
+
+// ---------- dynamicCoverURL ----------
+
+func TestDynamicCoverURL(t *testing.T) {
+	tests := []struct {
+		name string
+		d    *model.UserDynamic
+		want string
+	}{
+		{name: "nil dynamic", d: nil, want: ""},
+		{name: "empty images json", d: &model.UserDynamic{ImagesJSON: ""}, want: ""},
+		{name: "empty array", d: &model.UserDynamic{ImagesJSON: "[]"}, want: ""},
+		{name: "single image", d: &model.UserDynamic{ImagesJSON: "[\"https://example.com/img.jpg\"]"}, want: "https://example.com/img.jpg"},
+		{name: "multiple images returns first", d: &model.UserDynamic{ImagesJSON: "[\"https://example.com/1.jpg\",\"https://example.com/2.jpg\"]"}, want: "https://example.com/1.jpg"},
+		{name: "invalid json", d: &model.UserDynamic{ImagesJSON: "not-json"}, want: ""},
+		{name: "whitespace jpg", d: &model.UserDynamic{ImagesJSON: "[\"  https://example.com/img.jpg  \"]"}, want: "https://example.com/img.jpg"},
+		{name: "empty strings in array", d: &model.UserDynamic{ImagesJSON: "[\"\",\"https://example.com/img.jpg\"]"}, want: "https://example.com/img.jpg"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := dynamicCoverURL(tc.d)
+			if got != tc.want {
+				t.Errorf("dynamicCoverURL(%+v) = %q, want %q", tc.d, got, tc.want)
+			}
+		})
+	}
+}
+
+// ---------- normalizeGender ----------
+
+
+// ---------- validProfileBirthday ----------
+
+func TestValidProfileBirthday(t *testing.T) {
+	tests := []struct {
+		name string
+		s    string
+		want bool
+	}{
+		{name: "empty", s: "", want: true},
+		{name: "valid date", s: "2000-01-01", want: true},
+		{name: "valid trimmed", s: "  2000-06-15  ", want: true},
+		{name: "min year", s: "1900-01-01", want: true},
+		{name: "max year", s: "2100-12-31", want: true},
+		{name: "invalid format", s: "01-01-2000", want: false},
+		{name: "too early year", s: "1899-12-31", want: false},
+		{name: "too late year", s: "2101-01-01", want: false},
+		{name: "not a date", s: "abc", want: false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := validProfileBirthday(tc.s)
+			if got != tc.want {
+				t.Errorf("validProfileBirthday(%q) = %v, want %v", tc.s, got, tc.want)
+			}
+		})
+	}
+}
+
+// ---------- creatorUpInclusiveDays ----------
+
+func TestCreatorUpInclusiveDays(t *testing.T) {
+	now := time.Now()
+	yesterday := now.Add(-24 * time.Hour)
+	twoDaysAgo := now.Add(-48 * time.Hour)
+	future := now.Add(24 * time.Hour)
+
+	tests := []struct {
+		name  string
+		first *time.Time
+		want  int
+	}{
+		{name: "nil first", first: nil, want: 0},
+		{name: "zero time", first: &time.Time{}, want: 0},
+		{name: "today", first: &now, want: 1},
+		{name: "yesterday", first: &yesterday, want: 2},
+		{name: "two days ago", first: &twoDaysAgo, want: 3},
+		{name: "future", first: &future, want: 1},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := creatorUpInclusiveDays(tc.first)
+			if got != tc.want {
+				t.Errorf("creatorUpInclusiveDays(%v) = %d, want %d", tc.first, got, tc.want)
+			}
+		})
+	}
+}
+
+// ---------- bannerImageExt ----------
+
