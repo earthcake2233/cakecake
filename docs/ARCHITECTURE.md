@@ -57,11 +57,7 @@ Minibili/
 │   ├── config/                   # 环境变量加载与配置结构体
 │   ├── logger/                   # Zap 日志初始化
 │   ├── errcode/                  # 业务错误码
-│   └── pkg/                      # 工具包：JWT、BV 号、IP 定位、敏感词、
-│       ├── jwttoken/             #   用户头像、等级、硬币、用户名校验...
-│       ├── bvid/
-│       ├── sensitive/
-│       └── ...
+│   └── pkg/                      # 工具包：JWT、BV 号、IP 定位、敏感词、头像、等级、硬币、用户名校验...
 ├── configs/                      # sensitive_words.txt、ip2region_v4.xdb
 ├── deploy/                       # Nginx 配置、systemd unit、生产环境变量模板
 ├── docs/                         # 截图与指南
@@ -237,24 +233,35 @@ flowchart LR
 
 ## 端到端数据流：视频投稿
 
-```
-1. POST /api/v1/videos (multipart/form-data)
-   ├── JWT 中间件校验 Token
-   ├── Handler 校验文件格式 (MP4/AVI/MKV/...)
-   ├── 原始文件存入 TEMP_UPLOAD_DIR
-   ├── 写入 Video 记录 (status: "processing")
-   └── 投递 TranscodeJob 到 RabbitMQ
+```mermaid
+flowchart TB
+    A["POST /api/v1/videos"]
+    B["JWT 验证 Token"]
+    C["Handler 验证文件"]
+    D["存入临时目录"]
+    E["写入 Video 记录"]
+    F["投递到 RabbitMQ"]
 
-2. Worker 消费 TranscodeJob
-   ├── FFmpeg: 原始文件 → H.264 MP4 (out.mp4)
-   ├── FFmpeg: out.mp4 第 1 帧 → cover.jpg（无自定义封面时）
-   ├── OSS.UploadFile("videos/{id}.mp4", out.mp4)
-   ├── OSS.UploadFile("covers/{id}.jpg", cover.jpg)
-   ├── DB: UPDATE video SET video_url, cover_url, status
-   └── 清理临时文件
+    G["Worker 消费转码"]
+    H["FFmpeg 转 H.264"]
+    I["FFmpeg 截封面"]
+    J["上传视频到 OSS"]
+    K["上传封面到 OSS"]
 
-3. 客户端轮询 GET /videos/:id → 观察状态变化
-   processing → published（或 failed + fail_reason）
+    L["DB 更新为 ready"]
+    M["删除临时文件"]
+    N["前端轮询状态"]
+    P["展示播放器"]
+
+    A --> B --> C --> D --> E --> F
+    F -.->|RabbitMQ| G
+    G --> H
+    H --> J
+    H --> I --> K
+    J --> L
+    K --> L
+    L --> M
+    L --> N --> P
 ```
 
 ---

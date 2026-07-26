@@ -1,4 +1,4 @@
-﻿<p align="center">
+<p align="center">
   <strong><img src="https://img.shields.io/badge/🇨🇳中文-00a1d6?style=flat-square" alt="中文"></strong>
   <a href="README_EN.md">
     <img src="https://img.shields.io/badge/🇬🇧English-999999?style=flat-square" alt="English">
@@ -93,14 +93,14 @@
 ## 仓库结构
 
 ```
-Minibili/                      # 仓库根（历史目录名）
-├── cmd/mini-bili/             # Go 入口
-├── internal/                  # handler / service / worker / ws …
-├── configs/                   # sensitive_words.txt；ip2region_v4.xdb 需自行下载（见 .gitignore）
-├── deploy/                    # Nginx、systemd 模板
-├── go.mod                     # module minibili
+Minibili/
+├── cmd/mini-bili/           # Go 入口
+├── internal/                # handler / service / worker / ws 等
+├── configs/                 # sensitive_words.txt、ip2region_v4.xdb
+├── deploy/                  # Nginx、systemd 模板
+├── go.mod                   # module minibili
 └── cakecake-vue/
-    └── bilibili-vue/          # Vue 3 + Vite 前端（见子目录 README）
+    └── bilibili-vue/        # Vue 3 + Vite 前端
 ```
 
 `bilibili-vue/go.mod` 与根模块隔离，避免根目录 `go test ./...` 扫到 `node_modules` 内的 Go 文件。

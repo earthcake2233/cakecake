@@ -46,25 +46,21 @@ Minibili/
 │   ├── handler/                  # HTTP + WebSocket handlers (Gin routes)
 │   ├── service/                  # Business logic layer
 │   ├── model/                    # GORM models
-│   ├── middleware/               # JWT auth, admin auth, global rate limit
-│   ├── worker/                   # RabbitMQ consumers (transcode)
-│   ├── ws/                       # WebSocket hub (danmaku rooms, chat)
-│   ├── search/                   # Elasticsearch client, query builders
+│   ├── middleware/               # JWT / admin auth, rate limiter
+│   ├── worker/                   # RabbitMQ consumer (transcode)
+│   ├── ws/                       # WebSocket Hub (danmaku rooms, DMs)
+│   ├── search/                   # Elasticsearch client & query builder
 │   ├── storage/                  # Alibaba Cloud OSS client
-│   ├── ffmpeg/                   # FFmpeg wrapper (transcode, screenshots)
+│   ├── ffmpeg/                   # FFmpeg wrapper (transcode, thumbnail)
 │   ├── aigateway/                # DeepSeek OpenAI-compatible client
-│   ├── queue/                    # RabbitMQ connection management
-│   ├── config/                   # Env loading, config struct
-│   ├── logger/                   # Zap logger setup
+│   ├── queue/                    # RabbitMQ connection manager
+│   ├── config/                   # Env-var loading & config struct
+│   ├── logger/                   # Zap logger init
 │   ├── errcode/                  # Business error codes
-│   └── pkg/                      # Utilities: JWT, BV id, IP location,
-│       ├── jwttoken/             #   sensitive words, markdown, avatar...
-│       ├── bvid/
-│       ├── sensitive/
-│       └── ...
+│   └── pkg/                      # Utilities: JWT, BV, IP, sensitive-words, avatar, level, coin...
 ├── configs/                      # sensitive_words.txt, ip2region_v4.xdb
-├── deploy/                       # Nginx conf, systemd unit, env template
-├── docs/                         # Images, guides
+├── deploy/                       # Nginx config, systemd unit, env template
+├── docs/                         # Screenshots and guides
 ├── cakecake-vue/bilibili-vue/    # Vue 3 + Vite + TypeScript frontend
 └── go.mod                        # module minibili
 ```
@@ -236,38 +232,33 @@ flowchart LR
 
 ## Data Flow: Video Upload (End-to-End)
 
-```
-1. POST /api/v1/videos (multipart/form-data)
-   ├── JWT middleware validates token
-   ├── Handler validates file format (MP4/AVI/MKV/...)
-   ├── Saves raw file to TEMP_UPLOAD_DIR
-   ├── Inserts Video row (status: "processing")
-   └── Publishes TranscodeJob to RabbitMQ
+```mermaid
+flowchart TB
+    A["POST /api/v1/videos"]
+    B["JWT validate Token"]
+    C["Handler validate file"]
+    D["Save to temp dir"]
+    E["Insert Video record"]
+    F["Enqueue to RabbitMQ"]
 
-2. Worker consumes TranscodeJob
-   ├── FFmpeg: raw → H.264 MP4 (out.mp4)
-   ├── FFmpeg: out.mp4 frame 1 → cover.jpg (if no custom cover)
-   ├── OSS.UploadFile("videos/{id}.mp4", out.mp4)
-   ├── OSS.UploadFile("covers/{id}.jpg", cover.jpg)
-   ├── DB: UPDATE video SET video_url, cover_url, status
-   └── Cleanup: remove temp files
+    G["Worker transcode"]
+    H["FFmpeg to H.264"]
+    I["FFmpeg extract cover"]
+    J["Upload video to OSS"]
+    K["Upload cover to OSS"]
 
-3. Client polls GET /videos/:id → sees status transition
-   processing → published (or failed with fail_reason)
-```
+    L["DB update to ready"]
+    M["Remove temp files"]
+    N["Frontend poll status"]
+    P["Show player"]
 
----
-
-## Testing Strategy
-
-| Layer                                  | Scope                         | Example                                                       |
-| -------------------------------------- | ----------------------------- | ------------------------------------------------------------- |
-| `internal/pkg/*`                       | Unit tests (table-driven)     | Username validation, BV id encoding, avatar path generation   |
-| `internal/handler/*`                   | Unit tests (SQLite in-memory) | Auth flow, video draft CRUD, danmaku posting, comment cascade |
-| `internal/handler/*` (integration tag) | Black-box against live server | Health check, video zone listing                              |
-| E2E                                    | Manual                        | Login → upload → view danmaku → search                        |
-
-```bash
-go test ./... -count=1
-go test -tags=integration ./internal/handler/... -count=1
+    A --> B --> C --> D --> E --> F
+    F -.->|RabbitMQ| G
+    G --> H
+    H --> J
+    H --> I --> K
+    J --> L
+    K --> L
+    L --> M
+    L --> N --> P
 ```

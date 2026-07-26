@@ -1,4 +1,4 @@
-﻿## Mini-Bili v1.0 工程规则（Rule）
+## Mini-Bili v1.0 工程规则（Rule）
 
 **版本**：v1.0
 **最后更新**：2026-07-23
@@ -153,7 +153,7 @@
 | **R-DOC-8** | **必须记录踩坑 / 技术难题经验** | 每次遇到并解决技术难题后，必须在 `README_REFLECT.md` 的「采坑记录」中新增条目。需包含：问题现象 → 根本原因 → 解决方案。适用场景包括但不限于：框架陷阱（如 Gin 中间件行为、GORM 查询限制）、语言特性误用（如 Go interface nil 判断、PowerShell 反引号逃逸）、架构失误（如服务间耦合、状态管理遗漏）、性能调优经验、跨平台兼容问题等。目标是为团队积累可检索的故障排查手册。 |
 | **R-DOC-9** | **含中文的 Python 脚本必须通过文件执行，禁止 inline -c** | 在 PowerShell 环境下，禁止使用 `python -c "..."` 方式执行包含中文/UTF-8 多字节字符的 Python 代码。必须采用以下任一方案：1. 使用 `scripts/safe_write.py --base64 <b64> --output <path>` 写入文件；2. 使用 .NET `[System.IO.File]::WriteAllBytes` 写 .py 文件后再执行；3. 将内容先写入临时文件再调用 `python <file>`。违反此规则是导致中文乱码的#1原因。 |
 | **R-DOC-10** | **修改 Markdown 表格后必须运行校验脚本** | 每次编辑含 Markdown 表格的 `.md` 文件后，提交前必须运行 `python scripts/validate_md_tables.py` 确保：无 `---` 打断表格连续性、无行列数不匹配、无漏掉 `|` 符号。以 `OK: all tables look clean` 为通过标准。 |
-| **R-DOC-11** | **架构图必须使用 Mermaid，禁止 text/ASCII** | 所有 `.md` 文件中的架构示意、流程说明、拓扑关系必须使用 ```mermaid 代码块（`graph`、`flowchart`、`sequenceDiagram` 等），禁止使用 ` ```text ` 或 ` ``` ` 纯文本绘制。风格统一参考 `docs/ARCHITECTURE.md`。违反此规则的 Markdown 文档视为格式违规，提交前必须修复。 |
+| **R-DOC-11** | **架构图规则：流程用 Mermaid，项目结构用 Text** | 流程说明、拓扑关系、数据流图必须使用 ````mermaid` 代码块（`flowchart`、`sequenceDiagram` 等）。项目目录结构树（如 `docs/ARCHITECTURE.md` 的项目结构）允许使用 ` ``` ` 纯文本树形图（`├──` / `└──`），更清晰且避免 Mermaid 渲染过窄问题。**禁止**使用 ` ```text ` 标注纯文本图为架构图。 |
 ---
 
 ### 十、测试规范
@@ -218,8 +218,8 @@
 
 | 编号 | 规则 | 说明 |
 | :--- | :--- | :--- |
-| **R-ENCODE-1** | **禁止 Go 源文件包含 UTF-8 BOM** | Go 编译器不接受 BOM（Byte Order Mark）头。必须使用 `pip install -r scripts/check_bom.py` 检测所有 `.go` 文件。文件写入必须使用 `scripts/safe_write.py`（自动剥离 BOM），严禁使用 `Set-Content` 直接写入 `.go` 文件。 |
-| **R-ENCODE-2** | **提交前运行 BOM 检查** | `python scripts/check_bom.py` 扫描 `internal/` 和 `cmd/` 下所有 `.go` 文件。若发现 BOM 文件，使用 `--fix` 修复后重新提交。CI `go build` 步骤也会拒绝 BOM 文件。 |
+| **R-ENCODE-1** | **禁止项目文件包含 UTF-8 BOM** | BOM（Byte Order Mark）会导致 Go 编译失败、Markdown 渲染异常等。必须使用 `python scripts/check_bom.py` 检测所有 `.go`、`.md`、`.yaml`、`.json`、`.py` 文件。脚本支持 `--fix` 自动修复和 `--path` 指定路径。文件写入必须使用 `scripts/safe_write.py`（自动剥离 BOM），严禁使用 `Set-Content` 直接写入文本文件。 |
+| **R-ENCODE-2** | **提交前运行 BOM 检查** | `python scripts/check_bom.py` 扫描 `internal/`、`cmd/`、`deploy/`、`scripts/`、`docs/` 下的文本文件（`.go`、`.md`、`.yaml`、`.json`、`.py`）及根目录 `.md` 文件。检查文件级 BOM 和内容中嵌入的 `\ufeff`。发现后用 `--fix` 修复后提交。 |
 
 ---
 

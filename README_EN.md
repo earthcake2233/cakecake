@@ -1,4 +1,4 @@
-﻿<p align="center">
+<p align="center">
   <a href="README.md">
     <img src="https://img.shields.io/badge/Chinese-999999?style=flat-square" alt="Chinese">
   </a>
@@ -94,15 +94,17 @@ A full-stack video-sharing community built with Go + Vue3, covering video upload
 
 ## Repository Structure
 
+
 ```
 Minibili/
-鈹溾攢鈹€ cmd/mini-bili/             # Go entrypoint
-鈹溾攢鈹€ internal/                  # handler / service / worker / ws 鈥?鈹溾攢鈹€ configs/                   # sensitive_words.txt; ip2region_v4.xdb (download manually, see .gitignore)
-鈹溾攢鈹€ deploy/                    # Nginx & systemd templates
-鈹溾攢鈹€ go.mod                     # module minibili
-鈹斺攢鈹€ cakecake-vue/
-    鈹斺攢鈹€ bilibili-vue/          # Vue 3 + Vite frontend (see subdirectory README)
+├── cmd/mini-bili/             # Go entrypoint
+├── internal/                  # handler / service / worker / ws ...
+├── deploy/                    # Nginx & systemd templates
+├── go.mod                     # module minibili
+└── cakecake-vue/
+    └── bilibili-vue/          # Vue 3 + Vite frontend (see subdirectory README)
 ```
+
 
 `bilibili-vue/go.mod` is isolated from the root module to prevent `go test ./...` from scanning `node_modules`.
 

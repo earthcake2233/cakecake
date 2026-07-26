@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """Clean Go build cache from C: drive after compilation.
 
 Usage:
