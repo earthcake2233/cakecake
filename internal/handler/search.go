@@ -1,7 +1,11 @@
-package handler
+﻿package handler
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -16,17 +20,14 @@ import (
 	"minibili/internal/search"
 )
 
-// SearchAll implements GET /api/v1/search for the bilibili-vue search page.
-// SearchAll godoc
-// @Summary      Unified search
-// @Description  Search videos, users, articles across the platform
-// @Tags        Search
-// @Produce     json
-// @Param       keyword query string true "Search keyword"
-// @Param       page query int false "Page number" default(1)
-// @Param       page_size query int false "Page size" default(20)
-// @Success     200 {object} map[string]interface{}
-// @Router      /search [get]
+const searchCacheTTL = 30 * time.Second
+
+func searchCacheKey(keyword, searchType, sort string, page, pageSize int) string {
+	h := sha256.Sum256([]byte(fmt.Sprintf("%s|%s|%s|%d|%d", keyword, searchType, sort, page, pageSize)))
+	return "search:cache:" + hex.EncodeToString(h[:])
+}
+
+// SearchAll implements GET /api/v1/search with Redis caching.
 func (a *API) SearchAll(c *gin.Context) {
 	keyword := strings.TrimSpace(c.Query("keyword"))
 	if err := search.ValidateKeyword(keyword); err != nil {
@@ -37,6 +38,8 @@ func (a *API) SearchAll(c *gin.Context) {
 	if uid, ok := middleware.UserID(c); ok {
 		viewer = uid
 	}
+
+	// Record hot search (best-effort, async)
 	if a.SearchHot != nil {
 		recCtx, recCancel := context.WithTimeout(c.Request.Context(), 500*time.Millisecond)
 		if err := a.SearchHot.Record(recCtx, viewer, c.ClientIP(), keyword); err != nil {
@@ -44,6 +47,7 @@ func (a *API) SearchAll(c *gin.Context) {
 		}
 		recCancel()
 	}
+
 	if a.ES == nil || !a.ES.Enabled() {
 		if strings.TrimSpace(a.Cfg.ElasticsearchURL) != "" {
 			resp.Err(c, http.StatusServiceUnavailable, errcode.CodeSearchUnavailable)
@@ -54,6 +58,7 @@ func (a *API) SearchAll(c *gin.Context) {
 		resp.OK(c, out)
 		return
 	}
+
 	highlight := c.Query("highlight") == "1" || strings.EqualFold(c.Query("highlight"), "true")
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
@@ -65,22 +70,50 @@ func (a *API) SearchAll(c *gin.Context) {
 		c.DefaultQuery("zone", ""),
 	)
 
-	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
-	defer cancel()
-	out, err := a.ES.SearchAll(ctx, search.SearchParams{
-		Keyword:   keyword,
-		Highlight: highlight,
-		Page:      page,
-		PageSize:  pageSize,
-		Type:      searchType,
-		Sort:      sort,
-		Video:     videoFilter,
-	})
-	if err != nil {
-		a.Log.Error("search all", zap.Error(err), zap.String("keyword", keyword))
-		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
-		return
+	// ── Redis cache lookup (skip for highlighted queries) ──
+	var out *search.AllResult
+	cacheHit := false
+	if !highlight && a.Redis != nil {
+		cacheKey := searchCacheKey(keyword, searchType, sort, page, pageSize)
+		if cached, err := a.Redis.Get(c.Request.Context(), cacheKey).Result(); err == nil && cached != "" {
+			if err := json.Unmarshal([]byte(cached), &out); err == nil {
+				cacheHit = true
+			}
+		}
 	}
+
+	// ── Cache miss: call Elasticsearch ──
+	if !cacheHit {
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+		defer cancel()
+		var err error
+		out, err = a.ES.SearchAll(ctx, search.SearchParams{
+			Keyword:   keyword,
+			Highlight: highlight,
+			Page:      page,
+			PageSize:  pageSize,
+			Type:      searchType,
+			Sort:      sort,
+			Video:     videoFilter,
+		})
+		if err != nil {
+			a.Log.Error("search all", zap.Error(err), zap.String("keyword", keyword))
+			resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
+			return
+		}
+
+		// Write to cache (async, best-effort)
+		if !highlight && a.Redis != nil {
+			if data, err := json.Marshal(out); err == nil {
+				cacheKey := searchCacheKey(keyword, searchType, sort, page, pageSize)
+				if err := a.Redis.Set(c.Request.Context(), cacheKey, string(data), searchCacheTTL).Err(); err != nil {
+					a.Log.Warn("search cache write", zap.Error(err))
+				}
+			}
+		}
+	}
+
+	// ── Viewer enrichment (always run, even on cache hit) ──
 	if len(out.Result.BiliUser) > 0 {
 		out.Result.BiliUser = search.EnrichUserHits(a.DB, viewer, out.Result.BiliUser)
 	}
@@ -102,6 +135,10 @@ func (a *API) SearchAll(c *gin.Context) {
 		} else {
 			out.SearchStatus = "ok"
 		}
+	}
+
+	if cacheHit {
+		a.Log.Debug("search cache hit", zap.String("keyword", keyword))
 	}
 	resp.OK(c, out)
 }

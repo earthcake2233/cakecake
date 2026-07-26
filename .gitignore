@@ -77,3 +77,12 @@ defaultface.*
 .gotmp/
 # Incident reports
 incident-*.md
+# ── Benchmark artifacts（原始压测数据，不提交）──
+docs/bench-data/
+docs/images/bench/
+
+# ── Benchmarks（个人压测资料，私有不提交）──
+scripts/bench/
+docs/benchmark.md
+docs/bench-data/
+docs/images/bench/
