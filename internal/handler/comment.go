@@ -408,7 +408,7 @@ func (a *API) DeleteComment(c *gin.Context) {
 		return
 	}
 	if approvedN > 0 {
-		if err := tx.Model(&model.Video{}).Where("id = ?", v.ID).UpdateColumn("comment_count", gorm.Expr("GREATEST(comment_count - ?, 0)", approvedN)).Error; err != nil {
+		if err := tx.Model(&model.Video{}).Where("id = ?", v.ID).UpdateColumn("comment_count", gorm.Expr("CASE WHEN comment_count - ? < 0 THEN 0 ELSE comment_count - ? END", approvedN, approvedN)).Error; err != nil {
 			tx.Rollback()
 			resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 			return
@@ -559,7 +559,7 @@ func (a *API) ToggleLike(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	_ = a.DB.Model(&cm).UpdateColumn("like_count", gorm.Expr("GREATEST(like_count - ?, 0)", 1)).Error
+	_ = a.DB.Model(&cm).UpdateColumn("like_count", gorm.Expr("CASE WHEN like_count - ? < 0 THEN 0 ELSE like_count - ? END", 1, 1)).Error
 	resp.OK(c, gin.H{"liked": false})
 }
 
@@ -643,7 +643,7 @@ func (a *API) clearCommentLike(uid, cid uint64, cm *model.Comment) (bool, error)
 		return false, err
 	}
 	if cm != nil {
-		_ = a.DB.Model(cm).UpdateColumn("like_count", gorm.Expr("GREATEST(like_count - ?, 0)", 1)).Error
+		_ = a.DB.Model(cm).UpdateColumn("like_count", gorm.Expr("CASE WHEN like_count - ? < 0 THEN 0 ELSE like_count - ? END", 1, 1)).Error
 	}
 	return true, nil
 }

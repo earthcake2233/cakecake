@@ -225,7 +225,7 @@ func (a *API) ToggleDanmakuLike(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	_ = a.DB.Model(&d).UpdateColumn("like_count", gorm.Expr("GREATEST(like_count - ?, 0)", 1)).Error
+	_ = a.DB.Model(&d).UpdateColumn("like_count", gorm.Expr("CASE WHEN like_count - ? < 0 THEN 0 ELSE like_count - ? END", 1, 1)).Error
 	var dm model.Danmaku
 	_ = a.DB.First(&dm, did).Error
 	resp.OK(c, gin.H{"liked": false, "like_count": dm.LikeCount})

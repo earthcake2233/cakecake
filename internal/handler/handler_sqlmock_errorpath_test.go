@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
@@ -157,13 +158,16 @@ func TestPostVideoViewHistory_Unauthorized(t *testing.T) {
 }
 
 func TestPostVideoViewHistory_BadParam(t *testing.T) {
-	gormDB, _ := newMockGORM(t)
+	gormDB, mock := newMockGORM(t)
 	api := newMockAPISimple(t, gormDB)
+	mock.ExpectQuery("SELECT `id`,`view_history_paused` FROM `users` WHERE").
+		WillReturnRows(sqlmock.NewRows([]string{"id", "view_history_paused"}).AddRow(1, false))
 	c, w := newMockGinCtx(t, http.MethodPost, "/api/v1/videos/abc/view-history", nil)
 	c.Set("user_id", uint64(1))
 	c.Params = gin.Params{{Key: "id", Value: "abc"}}
 	api.PostVideoViewHistory(c)
 	require.Equal(t, http.StatusBadRequest, w.Code)
+	require.NoError(t, mock.ExpectationsWereMet())
 }
 
 func TestListMyViewHistory_Unauthorized(t *testing.T) {
@@ -258,14 +262,16 @@ func TestPostArticleCoin_BadParam(t *testing.T) {
 
 
 // USER DYNAMIC
-func TestGetUserDynamic_Unauthorized(t *testing.T) {
-	gormDB, _ := newMockGORM(t)
+func TestGetUserDynamic_NotFound(t *testing.T) {
+	gormDB, mock := newMockGORM(t)
 	api := newMockAPISimple(t, gormDB)
+	mock.ExpectQuery("SELECT .+ FROM `user_dynamics` WHERE").
+		WillReturnRows(sqlmock.NewRows([]string{"id"}))
 	c, w := newMockGinCtx(t, http.MethodGet, "/api/v1/dynamics/1", nil)
-	c.Set("user_id", uint64(1))
 	c.Params = gin.Params{{Key: "id", Value: "1"}}
 	api.GetUserDynamic(c)
-	require.Equal(t, http.StatusUnauthorized, w.Code)
+	require.Equal(t, http.StatusNotFound, w.Code)
+	require.NoError(t, mock.ExpectationsWereMet())
 }
 
 func TestGetUserDynamic_BadParam(t *testing.T) {
@@ -452,13 +458,16 @@ func TestPostArticleComment_BadParam(t *testing.T) {
 }
 
 func TestPostArticleComment_BadJSON(t *testing.T) {
-	gormDB, _ := newMockGORM(t)
+	gormDB, mock := newMockGORM(t)
 	api := newMockAPISimple(t, gormDB)
+	mock.ExpectQuery("SELECT .+ FROM `articles` WHERE").
+		WillReturnRows(sqlmock.NewRows([]string{"id", "author_id", "status", "comments_closed"}).AddRow(1, 1, "published", false))
 	c, w := newMockGinCtx(t, http.MethodPost, "/api/v1/articles/1/comments", []byte("not json"))
 	c.Set("user_id", uint64(1))
 	c.Params = gin.Params{{Key: "id", Value: "1"}}
 	api.PostArticleComment(c)
 	require.Equal(t, http.StatusBadRequest, w.Code)
+	require.NoError(t, mock.ExpectationsWereMet())
 }
 
 func TestDeleteArticleComment_Unauthorized(t *testing.T) {

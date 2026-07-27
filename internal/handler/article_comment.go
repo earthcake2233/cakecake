@@ -349,7 +349,7 @@ func (a *API) ToggleArticleCommentLike(c *gin.Context) {
 		return
 	}
 	_ = a.DB.Delete(&like).Error
-	_ = a.DB.Model(&cm).UpdateColumn("like_count", gorm.Expr("GREATEST(like_count - ?, 0)", 1)).Error
+	_ = a.DB.Model(&cm).UpdateColumn("like_count", gorm.Expr("CASE WHEN like_count - ? < 0 THEN 0 ELSE like_count - ? END", 1, 1)).Error
 	resp.OK(c, gin.H{"liked": false})
 }
 
@@ -382,7 +382,7 @@ func (a *API) ToggleArticleCommentDislike(c *gin.Context) {
 			resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 			return
 		}
-		_ = a.DB.Model(&cm).UpdateColumn("like_count", gorm.Expr("GREATEST(like_count - ?, 0)", 1)).Error
+		_ = a.DB.Model(&cm).UpdateColumn("like_count", gorm.Expr("CASE WHEN like_count - ? < 0 THEN 0 ELSE like_count - ? END", 1, 1)).Error
 		resp.OK(c, gin.H{"disliked": true})
 		return
 	}
@@ -510,7 +510,7 @@ func (a *API) DeleteArticleComment(c *gin.Context) {
 		}
 		if approvedN > 0 {
 			return tx.Model(&model.Article{}).Where("id = ?", art.ID).
-				UpdateColumn("comment_count", gorm.Expr("GREATEST(comment_count - ?, 0)", approvedN)).Error
+				UpdateColumn("comment_count", gorm.Expr("CASE WHEN comment_count - ? < 0 THEN 0 ELSE comment_count - ? END", approvedN, approvedN)).Error
 		}
 		return nil
 	}); err != nil {

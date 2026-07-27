@@ -183,7 +183,7 @@ func (a *API) DeleteDanmaku(c *gin.Context) {
 		return
 	}
 	if err := tx.Model(&model.Video{}).Where("id = ?", v.ID).
-		UpdateColumn("danmaku_count", gorm.Expr("GREATEST(danmaku_count - ?, 0)", 1)).Error; err != nil {
+		UpdateColumn("danmaku_count", gorm.Expr("CASE WHEN danmaku_count - ? < 0 THEN 0 ELSE danmaku_count - ? END", 1, 1)).Error; err != nil {
 		tx.Rollback()
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return

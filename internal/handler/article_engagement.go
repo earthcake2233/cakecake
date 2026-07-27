@@ -46,7 +46,7 @@ func (a *API) ToggleArticleFavorite(c *gin.Context) {
 			return
 		}
 		_ = a.DB.Model(&model.Article{}).Where("id = ?", aid).
-			UpdateColumn("fav_count", gorm.Expr("GREATEST(fav_count - ?, 0)", 1)).Error
+			UpdateColumn("fav_count", gorm.Expr("CASE WHEN fav_count - ? < 0 THEN 0 ELSE fav_count - ? END", 1, 1)).Error
 		var art model.Article
 		_ = a.DB.First(&art, aid).Error
 		resp.OK(c, gin.H{"favorited": false, "fav_count": art.FavCount})

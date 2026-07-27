@@ -54,6 +54,6 @@ func (a *API) ToggleVideoLike(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	_ = a.DB.Model(&model.Video{}).Where("id = ?", vid).UpdateColumn("like_count", gorm.Expr("GREATEST(like_count - ?, 0)", 1)).Error
+	_ = a.DB.Model(&model.Video{}).Where("id = ?", vid).UpdateColumn("like_count", gorm.Expr("CASE WHEN like_count - ? < 0 THEN 0 ELSE like_count - ? END", 1, 1)).Error
 	resp.OK(c, gin.H{"liked": false})
 }

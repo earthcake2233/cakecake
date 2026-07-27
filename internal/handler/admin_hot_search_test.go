@@ -57,6 +57,10 @@ func TestAdminUpdateHotSearchOp_Success(t *testing.T) {
 		WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectCommit()
 
+	mock.ExpectQuery("SELECT .+ FROM `hot_search_ops` WHERE").
+		WillReturnRows(mock.NewRows([]string{"id","keyword","op_type","display_title","sort_order","enabled","pin_rank"}).
+			AddRow(1, "test", "pin", "Old", 1, true, 0))
+
 	api.AdminUpdateHotSearchOp(c)
 	require.Equal(t, http.StatusOK, w.Code)
 	require.NoError(t, mock.ExpectationsWereMet())
@@ -84,6 +88,9 @@ func TestAdminPreviewHotSearch_Success(t *testing.T) {
 	api := newMockAPISimple(t, gormDB)
 	c, w := newMockGinCtx(t, "GET", "/api/v1/admin/hot-search-ops/preview", nil)
 	c.Set("admin_id", uint64(1))
+
+	mock.ExpectQuery("SELECT .+ FROM `hot_search_display_layouts`").
+		WillReturnRows(sqlmock.NewRows([]string{"id"}))
 
 	mock.ExpectQuery("SELECT .+ FROM `hot_search_ops`").
 		WillReturnRows(sqlmock.NewRows([]string{"id","keyword","display_title","enabled","pin_rank"}).

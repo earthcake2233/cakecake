@@ -153,7 +153,7 @@ func (a *API) ToggleVideoFavorite(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	_ = a.DB.Model(&model.Video{}).Where("id = ?", vid).UpdateColumn("fav_count", gorm.Expr("GREATEST(fav_count - ?, 0)", 1)).Error
+	_ = a.DB.Model(&model.Video{}).Where("id = ?", vid).UpdateColumn("fav_count", gorm.Expr("CASE WHEN fav_count - ? < 0 THEN 0 ELSE fav_count - ? END", 1, 1)).Error
 	var v model.Video
 	_ = a.DB.First(&v, vid).Error
 	resp.OK(c, gin.H{"favorited": false, "fav_count": v.FavCount})
@@ -345,7 +345,7 @@ func (a *API) SetVideoFavoriteFolders(c *gin.Context) {
 	if !wasFavorited && willFavorited {
 		_ = a.DB.Model(&model.Video{}).Where("id = ?", vid).UpdateColumn("fav_count", gorm.Expr("fav_count + ?", 1)).Error
 	} else if wasFavorited && !willFavorited {
-		_ = a.DB.Model(&model.Video{}).Where("id = ?", vid).UpdateColumn("fav_count", gorm.Expr("GREATEST(fav_count - ?, 0)", 1)).Error
+		_ = a.DB.Model(&model.Video{}).Where("id = ?", vid).UpdateColumn("fav_count", gorm.Expr("CASE WHEN fav_count - ? < 0 THEN 0 ELSE fav_count - ? END", 1, 1)).Error
 	}
 	var v model.Video
 	_ = a.DB.First(&v, vid).Error
@@ -370,7 +370,7 @@ func (a *API) syncVideoFavCountAfterUserChange(vid uint64, before, after int64) 
 			UpdateColumn("fav_count", gorm.Expr("fav_count + ?", 1)).Error
 	} else if before > 0 && after == 0 {
 		_ = a.DB.Model(&model.Video{}).Where("id = ?", vid).
-			UpdateColumn("fav_count", gorm.Expr("GREATEST(fav_count - ?, 0)", 1)).Error
+			UpdateColumn("fav_count", gorm.Expr("CASE WHEN fav_count - ? < 0 THEN 0 ELSE fav_count - ? END", 1, 1)).Error
 	}
 }
 

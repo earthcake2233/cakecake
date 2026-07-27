@@ -411,7 +411,7 @@ func (a *API) ToggleDynamicLike(c *gin.Context) {
 		return
 	}
 	_ = a.DB.Model(&model.UserDynamic{}).Where("id = ?", did).
-		UpdateColumn("like_count", gorm.Expr("GREATEST(like_count - ?, 0)", 1)).Error
+		UpdateColumn("like_count", gorm.Expr("CASE WHEN like_count - ? < 0 THEN 0 ELSE like_count - ? END", 1, 1)).Error
 	resp.OK(c, gin.H{"liked": false, "like_count_delta": -1})
 }
 

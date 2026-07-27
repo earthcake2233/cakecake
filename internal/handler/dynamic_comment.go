@@ -388,7 +388,7 @@ func (a *API) DeleteDynamicComment(c *gin.Context) {
 		}
 		if approvedN > 0 {
 			return tx.Model(&model.UserDynamic{}).Where("id = ?", cm.DynamicID).
-				UpdateColumn("comment_count", gorm.Expr("GREATEST(comment_count - ?, 0)", approvedN)).Error
+				UpdateColumn("comment_count", gorm.Expr("CASE WHEN comment_count - ? < 0 THEN 0 ELSE comment_count - ? END", approvedN, approvedN)).Error
 		}
 		return nil
 	}); err != nil {
@@ -450,7 +450,7 @@ func (a *API) toggleDynamicCommentReaction(c *gin.Context, like bool) {
 			return
 		}
 		_ = a.DB.Model(&model.DynamicComment{}).Where("id = ?", cid).
-			UpdateColumn("like_count", gorm.Expr("GREATEST(like_count - ?, 0)", 1)).Error
+			UpdateColumn("like_count", gorm.Expr("CASE WHEN like_count - ? < 0 THEN 0 ELSE like_count - ? END", 1, 1)).Error
 		resp.OK(c, gin.H{"liked": false})
 		return
 	}
@@ -458,7 +458,7 @@ func (a *API) toggleDynamicCommentReaction(c *gin.Context, like bool) {
 	if res := a.DB.Where("user_id = ? AND comment_id = ?", uid, cid).Limit(1).Find(&existing); res.Error == nil && res.RowsAffected > 0 {
 		_ = a.DB.Delete(&existing).Error
 		_ = a.DB.Model(&model.DynamicComment{}).Where("id = ?", cid).
-			UpdateColumn("like_count", gorm.Expr("GREATEST(like_count - ?, 0)", 1)).Error
+			UpdateColumn("like_count", gorm.Expr("CASE WHEN like_count - ? < 0 THEN 0 ELSE like_count - ? END", 1, 1)).Error
 	}
 	var dk model.DynamicCommentDislike
 	res := a.DB.Where("user_id = ? AND comment_id = ?", uid, cid).Limit(1).Find(&dk)

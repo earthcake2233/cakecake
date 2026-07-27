@@ -80,7 +80,7 @@ func TestDeleteComment_Mock_Success(t *testing.T) {
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec("DELETE.*notifications").
 		WillReturnResult(sqlmock.NewResult(0, 0))
-	mock.ExpectExec("GREATEST").
+	mock.ExpectExec("CASE WHEN").
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
 
