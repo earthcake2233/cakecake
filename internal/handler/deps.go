@@ -37,6 +37,9 @@ type Dependencies struct {
 	RuntimeCfg  *config.RuntimeConfig
 	RateLimiter  *middleware.RateLimiter
 	Agent        *service.AgentService
+
+	// hotRecCh buffers SearchHot.Record requests (async, best-effort).
+	hotRecCh chan<- hotRecordReq
 }
 
 // API exposes HTTP handlers.

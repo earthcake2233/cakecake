@@ -235,6 +235,7 @@ func main() {
 		RateLimiter: rl, RuntimeCfg: runtimeCfg,
 	}
 	api := &handler.API{Dependencies: deps}
+	api.InitHotRecorder(64)
 
 	if cfg.AppEnv == "development" {
 		gin.SetMode(gin.DebugMode)

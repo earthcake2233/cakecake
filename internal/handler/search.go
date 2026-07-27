@@ -20,6 +20,33 @@ import (
 	"minibili/internal/search"
 )
 
+
+// hotRecordReq is a fire-and-forget hot search record request.
+type hotRecordReq struct {
+	userID    uint64
+	clientIP  string
+	keyword   string
+}
+
+// InitHotRecorder starts a background worker to asynchronously record hot searches.
+// Call once during app startup after SearchHot is initialized.
+func (a *API) InitHotRecorder(buffer int) {
+	if a.SearchHot == nil {
+		return
+	}
+	ch := make(chan hotRecordReq, buffer)
+	a.hotRecCh = ch
+	go func() {
+		for req := range ch {
+			ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+			err := a.SearchHot.Record(ctx, req.userID, req.clientIP, req.keyword)
+			if err != nil {
+				a.Log.Warn("async hot record", zap.Error(err), zap.String("keyword", req.keyword))
+			}
+			cancel()
+		}
+	}()
+}
 const searchCacheTTL = 30 * time.Second
 
 func searchCacheKey(keyword, searchType, sort string, page, pageSize int) string {
@@ -39,13 +66,13 @@ func (a *API) SearchAll(c *gin.Context) {
 		viewer = uid
 	}
 
-	// Record hot search (best-effort, async)
-	if a.SearchHot != nil {
-		recCtx, recCancel := context.WithTimeout(c.Request.Context(), 500*time.Millisecond)
-		if err := a.SearchHot.Record(recCtx, viewer, c.ClientIP(), keyword); err != nil {
-			a.Log.Warn("record search hot", zap.Error(err), zap.String("keyword", keyword))
+	// Record hot search (async, fire-and-forget via channel)
+	if a.hotRecCh != nil {
+		select {
+		case a.hotRecCh <- hotRecordReq{userID: viewer, clientIP: c.ClientIP(), keyword: keyword}:
+		default:
+			a.Log.Warn("hot record channel full, dropping")
 		}
-		recCancel()
 	}
 
 	if a.ES == nil || !a.ES.Enabled() {
