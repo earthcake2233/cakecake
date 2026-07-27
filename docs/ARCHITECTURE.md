@@ -75,21 +75,38 @@ Minibili/
 
 ```mermaid
 sequenceDiagram
+    participant V as 观众
+    participant WS as WebSocket Handler
+    participant H as 本地 Hub (writePump)
     participant S as 发送者 (用户 B)
-    participant API as API Server 1
+    participant API as API Server
+    participant DB as MySQL
     participant R as Redis Pub/Sub
-    participant API2 as API Server 2
-    participant V1 as 观众 A
-    participant V2 as 观众 C
 
-    S->>API: POST /videos/:id/danmaku<br/>(HTTP, JWT 鉴权)
-    API->>API: 校验内容、冷却、敏感词
-    API->>API: 写入 MySQL<br/>danmaku_count +1
+    Note over V,WS: 连接阶段 (current_time)
+    V->>WS: WebSocket 连接<br/>(video_id + current_time)
+    WS->>WS: 批量加载用户<br/>(N+1 消除)
+    WS->>WS: 按时间窗 [T-10s, T+2s]<br/>加载历史弹幕
+    WS->>V: 推送历史弹幕
+
+    Note over S,R: 发送弹幕
+    S->>API: POST 发送弹幕<br/>(HTTP + JWT)
+    API->>API: 校验冷却 + 敏感词
+    API->>DB: 写入 MySQL
     API->>R: PUBLISH danmaku:fanout
-    R-->>API: 广播到本机
-    R-->>API2: 广播到其他副本
-    API->>V1: WebSocket 推送 (房间内)
-    API2->>V2: WebSocket 推送 (房间内)
+
+    Note over R,WS: 广播阶段 (write pump)
+    R-->>WS: 广播到本机副本
+    WS->>H: Hub.BroadcastRaw(videoID, msg)
+    H->>H: push 到 Client.send channel<br/>(非阻塞, 满则 drop)
+    H->>V: writePump drain channel<br/>写入 WebSocket 连接
+
+    Note over R,API: 其他副本
+    R-->>API: 跨服务器广播
+    alt 另一台 API Server
+        API->>H: Hub.BroadcastRaw(videoID, msg)
+        H->>V: writePump 推送
+    end
 ```
 
 **流程：**
@@ -99,8 +116,8 @@ sequenceDiagram
 3. 弹幕写入 MySQL，视频 `danmaku_count` +1
 4. 将 JSON 载荷发布到 Redis 频道 `danmaku:fanout`
 5. 每个服务副本订阅该频道，收到消息后调用 `Hub.BroadcastRaw(videoID, body)` 向本地连接池广播
-6. `ws.Hub` 遍历目标视频房间的所有 WebSocket 连接，逐条写入 JSON 消息
-7. 观众通过 `GET /api/v1/ws/danmaku?video_id=...` 建立 WebSocket 连接，加入对应房间，实时接收弹幕
+6. `Hub.BroadcastRaw` 将 JSON 载荷 push 到每个 `Client.send` channel（非阻塞，channel 满则 drop 该慢连接），`writePump` goroutine 异步 drain channel 写入 WebSocket 连接
+7. 观众通过 `GET /api/v1/ws/danmaku?video_id=...&current_time=T` 建立 WebSocket 连接，传入当前播放时间则按 `[T-10s, T+2s]` 范围加载历史弹幕，不传则加载最新 200 条
 
 **关键设计决策：**
 
@@ -131,9 +148,9 @@ sequenceDiagram
     API-->>C: 200 OK (video_id)
 
     RMQ->>W: CONSUME TranscodeJob
-    W->>FF: 转码 → H.264 MP4
+    W->>FF: 转码 -> H.264 MP4
     FF-->>W: out.mp4
-    W->>FF: 截取第 1 帧 → cover.jpg
+    W->>FF: 截取第 1 帧 -> cover.jpg
     FF-->>W: cover.jpg
     W->>OSS: UPLOAD videos/{id}.mp4
     W->>OSS: UPLOAD covers/{id}.jpg

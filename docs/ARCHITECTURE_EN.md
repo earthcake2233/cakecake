@@ -75,21 +75,38 @@ The danmaku (bullet comment) system is the most technically challenging module. 
 
 ```mermaid
 sequenceDiagram
+    participant V as Viewer
+    participant WS as WebSocket Handler
+    participant H as Local Hub (writePump)
     participant S as Sender (Client B)
-    participant API as API Server 1
+    participant API as API Server
+    participant DB as MySQL
     participant R as Redis Pub/Sub
-    participant API2 as API Server 2
-    participant V1 as Viewer (Client A)
-    participant V2 as Viewer (Client C)
 
-    S->>API: POST /videos/:id/danmaku<br/>(HTTP, JWT auth)
-    API->>API: Validate content, cooldown,<br/>sensitive words
-    API->>API: Save to MySQL,<br/>increment danmaku_count
+    Note over V,WS: Connection (current_time)
+    V->>WS: WebSocket connect<br/>(video_id + current_time)
+    WS->>WS: Batch load users<br/>(N+1 eliminated)
+    WS->>WS: Load history by time<br/>window [T-10s, T+2s]
+    WS->>V: Push history
+
+    Note over S,R: Send danmaku
+    S->>API: POST danmaku<br/>(HTTP + JWT)
+    API->>API: Validate + cooldown
+    API->>DB: Save to MySQL
     API->>R: PUBLISH danmaku:fanout
-    R-->>API: fan-out
-    R-->>API2: fan-out
-    API->>V1: WebSocket broadcast (room)
-    API2->>V2: WebSocket broadcast (room)
+
+    Note over R,WS: Broadcast (write pump)
+    R-->>WS: Fan-out local replica
+    WS->>H: Hub.BroadcastRaw(videoID, msg)
+    H->>H: Push to Client.send<br/>(non-blocking, drop if full)
+    H->>V: writePump drain<br/>-> WebSocket write
+
+    Note over R,API: Other replicas
+    R-->>API: Cross-server broadcast
+    alt Another API Server
+        API->>H: Hub.BroadcastRaw(videoID, msg)
+        H->>V: writePump push
+    end
 ```
 
 **Flow:**
@@ -99,8 +116,8 @@ sequenceDiagram
 3. Danmaku saved to MySQL, video `danmaku_count` incremented
 4. Payload published to Redis channel `danmaku:fanout`
 5. Every server replica subscribes to that channel and calls `Hub.BroadcastRaw(videoID, body)`
-6. `ws.Hub` iterates all WebSocket connections in the target video room and writes the JSON message
-7. Viewers connect via `GET /api/v1/ws/danmaku?video_id=...` — upgraded to WebSocket, joined into room, receive broadcasts in real-time
+6. `Hub.BroadcastRaw` pushes the JSON payload to each `Client.send` channel (non-blocking, drops slow clients); `writePump` goroutine asynchronously drains the channel and writes to the WebSocket connection
+7. Viewers connect via `GET /api/v1/ws/danmaku?video_id=...&current_time=T` — when `current_time` is provided, only danmaku within `[T-10s, T+2s]` range are loaded; otherwise the latest 200 are returned
 
 **Key design decisions:**
 
@@ -131,9 +148,9 @@ sequenceDiagram
     API-->>C: 200 OK (video_id)
 
     RMQ->>W: CONSUME TranscodeJob
-    W->>FF: transcode → H.264 MP4
+    W->>FF: transcode -> H.264 MP4
     FF-->>W: out.mp4
-    W->>FF: screenshot frame 1 → cover.jpg
+    W->>FF: screenshot frame 1 -> cover.jpg
     FF-->>W: cover.jpg
     W->>OSS: UPLOAD videos/{id}.mp4
     W->>OSS: UPLOAD covers/{id}.jpg
