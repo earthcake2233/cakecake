@@ -1,15 +1,27 @@
 # Codecov configuration
-# See https://docs.codecov.com/docs/codecovyml-reference
+codecov:
+  require_ci_to_pass: false
+
 coverage:
   status:
     project:
       default:
-        target: auto
-        threshold: 5%
+        target: 70%
+        threshold: 2%
     patch:
       default:
-        target: auto
-        threshold: 50%
+        target: 70%
+        threshold: 5%
+
+flags:
+  frontend:
+    paths:
+      - cakecake-vue/bilibili-vue/src/
+    carryforward: true
+  backend:
+    paths:
+      - internal/
+    carryforward: true
 
 ignore:
   - "**/*_test.go"
@@ -17,6 +29,6 @@ ignore:
   - "**/mocks/**"
 
 comment:
-  layout: "reach, diff, flags, files"
+  layout: "header, diff, flags, components"
   behavior: default
   require_changes: false
