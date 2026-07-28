@@ -648,3 +648,37 @@ flowchart LR
 - 每个迁移文件只做一件事（单表加列 / 单表加索引），方便回滚定位
 - 禁止在迁移 SQL 中包含数据操作（INSERT/UPDATE），数据迁移应写在 Go 迁移函数中
 - `-- +goose Up` 和 `-- +goose Down` 注释是 goose 的指令标记，不可省略
+
+
+
+---
+
+### S-017：优雅关闭实现
+
+**对应 Rule**：R-SHUTDOWN-1（带超时的优雅关闭）、R-SHUTDOWN-2（播放量最终刷写）、R-SHUTDOWN-3（资源关闭顺序）
+
+**触发条件**：新增后台 goroutine、修改 main.go 启动/关闭流程、或需要为异步任务添加生命周期管理时。
+
+**执行步骤**：
+
+1. **声明 WaitGroup**：在 main() 中 var wg sync.WaitGroup，每个后台 goroutine 启动前 wg.Add(1)，goroutine 内 defer wg.Done()。
+2. **HTTP Server 必须使用 http.Server**：禁止使用 gin.Run()（无法优雅关闭）。使用 srv := &http.Server{Addr, Handler} + srv.ListenAndServe()，关闭时调用 srv.Shutdown(ctx)。
+3. **关闭流程**（按顺序）：
+   - 收到 SIGTERM/SIGINT → 记录日志
+   - cancel() 主 context + runtimeCancel() → 停止接收新任务
+   - srv.Shutdown(shutdownCtx) → 排空已有 HTTP 连接
+   - wg.Wait() 带超时（通过 done channel + time.After）
+   - 超时后 Warn 日志并强制退出
+4. **播放量最终刷写**：PlayCount flush goroutine 的 defer 中执行 pc.Flush(context.Background())。
+5. **资源 defer Close**：MQ、ES 等资源的 defer Close() 按声明逆序执行即可，无需手动管理。
+
+**禁止行为**：
+- 禁止使用 time.Sleep 代替 WaitGroup 等待。
+- 禁止使用 gin.Run() 代替 http.Server。
+- 禁止在 cancel() 后不等待直接退出。
+- 禁止遗漏播放量最终刷写。
+
+**验证方式**：
+- go vet ./cmd/... ./internal/config/... 零错误
+- go build -o ./bin/mini-bili ./cmd/mini-bili/ 成功
+- 启动应用后 Ctrl+C，观察日志确认："shutting down gracefully" → "all background tasks finished"

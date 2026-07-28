@@ -249,3 +249,24 @@ Rule says "this must be done"; Skill says "do it this way."
 - One change per file.
 - No data ops (INSERT/UPDATE) in SQL migrations ? use Go functions for data.
 - `-- +goose Up`/`-- +goose Down` markers are mandatory.
+
+
+---
+
+### S-017: Graceful Shutdown Implementation
+
+**Corresponding Rule**: R-SHUTDOWN-1/2/3
+
+**Trigger**: Adding background goroutines or modifying main.go startup/shutdown.
+
+**Steps**:
+
+1. Declare sync.WaitGroup in main(), wg.Add(1) per goroutine, defer wg.Done().
+2. Use http.Server (never gin.Run()), call srv.Shutdown(ctx) on exit.
+3. Shutdown sequence: cancel contexts -> srv.Shutdown -> wg.Wait with timeout.
+4. Final PlayCount Flush in goroutine defer.
+5. Resource Close via defers in reverse declaration order.
+
+**Forbidden**: time.Sleep wait, gin.Run(), exit without waiting, omit final flush.
+
+**Verification**: go vet + go build + Ctrl+C log confirmation.

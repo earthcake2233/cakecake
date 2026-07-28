@@ -27,6 +27,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"strconv"
 	"syscall"
 	"time"
@@ -163,10 +164,24 @@ func main() {
 	}
 	defer func() { _ = esc.Close() }()
 
-	go worker.StartTranscodeConsumer(ctx, cfg, db, mq, ossc, esc)
+	var wg sync.WaitGroup
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		worker.StartTranscodeConsumer(ctx, cfg, db, mq, ossc, esc)
+	}()
 
 	pc := &service.PlayCounter{Rdb: rdb, DB: db}
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
+		// Final flush on exit.
+		defer func() {
+			if err := pc.Flush(context.Background()); err != nil {
+				log.Error("final flush playcount", zap.Error(err))
+			}
+		}()
 		t := time.NewTicker(10 * time.Second)
 		defer t.Stop()
 		for {
@@ -184,7 +199,11 @@ func main() {
 	hub := ws.NewHub()
 	chatHub := ws.NewChatHub()
 	relay := service.NewDanmakuRelay(rdb, hub, log)
-	go relay.RunSubscriber(ctx)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		relay.RunSubscriber(ctx)
+	}()
 
 	var ipLoc *iplocate.Searcher
 	if ipLoc, err = iplocate.Open(cfg.IP2RegionV4XDB); err != nil {
@@ -246,17 +265,46 @@ func main() {
 	r.Use(gin.Recovery())
 	handler.RegisterRoutes(r, api, jm, cfg.AppEnv)
 
+	srv := &http.Server{
+		Addr:    cfg.HTTPAddr,
+		Handler: r,
+	}
+	wg.Add(1)
 	go func() {
-		if err := r.Run(cfg.HTTPAddr); err != nil {
+		defer wg.Done()
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatal("http server", zap.Error(err))
 		}
 	}()
 	log.Info("mini-bili listening", zap.String("addr", cfg.HTTPAddr))
 
+	// ── Graceful shutdown ──
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
 	<-ch
-	log.Info("shutting down")
+	log.Info("shutting down gracefully", zap.Duration("timeout", cfg.ShutdownTimeout))
+
+	// Step 1: cancel contexts to stop accepting new work.
 	cancel()
-	time.Sleep(300 * time.Millisecond)
+	runtimeCancel()
+
+	// Step 2: drain HTTP connections.
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
+	defer shutdownCancel()
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		log.Error("http server forced to close", zap.Error(err))
+	}
+
+	// Step 3: wait for background goroutines with timeout.
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		log.Info("all background tasks finished")
+	case <-time.After(cfg.ShutdownTimeout):
+		log.Warn("shutdown timeout, forcing exit")
+	}
 }

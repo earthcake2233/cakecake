@@ -247,3 +247,15 @@
 | **R-BUILD-1** | **跨平台编译必须走 Makefile** | 禁止手动在 PowerShell 逐条执行 $env:GOOS=linux + go build。必须统一使用 make build-linux，确保 GOCACHE/GOTMPDIR 环境变量被正确导出到 D 盘，防止写满 C 盘。 |
 | **R-BUILD-2** | **每次编译后必须清理 Go 缓存** | uild-linux target 的 recipe 末尾已内置 python scripts/clean_go_cache.py，自动删除 C 盘 Temp 下所有 go-*/gc-*/gm-* 目录以及 AppData\\Local\\go-build。开发者新增其他编译 target 时也必须手动调用本脚本。 |
 | **R-BUILD-3** | **禁止在 C 盘残留编译缓存** | GOCACHE 和 GOTMPDIR 必须指向 D 盘（当前设为 D:\\Minibili\\.gocache 和 D:\\Minibili\\.gotmp），这两条路径已在 .gitignore 中忽略。如果需要在本地临时改路径，改完后必须 python scripts/clean_go_cache.py --local-only 清理。 |
+
+
+
+---
+
+### 十七、优雅关闭与后台任务
+
+| 编号 | 规则 | 说明 |
+| :--- | :--- | :--- |
+| **R-SHUTDOWN-1** | **必须实现带超时的优雅关闭** | 所有后台 goroutine（转码消费、播放量刷写、弹幕中继、HTTP Server 等）必须通过 sync.WaitGroup 追踪，收到 SIGTERM 后按顺序执行：① cancel context 停止接收新任务 → ② http.Server.Shutdown() 排空 HTTP 连接 → ③ wg.Wait() 等待后台任务完成（带 SHUTDOWN_TIMEOUT 超时，默认 30s）→ ④ 超时后强制退出。禁止仅 time.Sleep 后直接退出。关闭超时通过 SHUTDOWN_TIMEOUT 环境变量配置。 |
+| **R-SHUTDOWN-2** | **播放量刷写必须做退出前最终刷写** | PlayCount flush goroutine 退出前（defer 中）必须执行最后一次 Flush()，避免 Redis 增量数据丢失。 |
+| **R-SHUTDOWN-3** | **资源关闭顺序必须正确** | defer 注册的 Close 按逆序执行（后注册先关闭），确保 MQ Channel → MQ Connection → ES 等资源的关闭顺序与依赖关系一致。 |

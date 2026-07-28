@@ -162,3 +162,14 @@ As the project evolves, Rule entries will grow. When a Rule is repeatedly violat
 | **R-VERIFY-2** | **Skipping verification is a violation** | If local test environment issues prevent compilation/testing, fix the environment first. NEVER skip verification citing "environment issues" and push directly. |
 | **R-VERIFY-3** | **Run full test suite before PR** | Before submitting a PR, run `go test ./... -count=1` to ensure all tests pass. NEVER skip citing "only changed one line." |
 | **R-VERIFY-4** | **Author (earthcake) must manually verify before push** | After each code change, the project author (earthcake) must personally log in and verify functionality works correctly and is bug-free before allowing push. NEVER push without author verification. |
+
+
+---
+
+### 13. Shutdown & Graceful Exit
+
+| ID | Rule | Description |
+| :--- | :--- | :--- |
+| **R-SHUTDOWN-1** | **Graceful shutdown with timeout is REQUIRED** | All background goroutines (transcode consumer, playcount flush, danmaku relay, HTTP Server, etc.) MUST be tracked via sync.WaitGroup. On SIGTERM, execute in order: (1) cancel context (2) http.Server.Shutdown() drain HTTP connections (3) wg.Wait() for background tasks with SHUTDOWN_TIMEOUT (default 30s) (4) force exit on timeout. NEVER just time.Sleep and exit. |
+| **R-SHUTDOWN-2** | **PlayCount must do final flush on exit** | PlayCount flush goroutine MUST execute a final Flush() in defer. |
+| **R-SHUTDOWN-3** | **Resource close order must be correct** | defer-registered Close calls execute in reverse order. |

@@ -75,6 +75,9 @@ type C struct {
 	AgentDailyQuota    int
 	AgentRequestTimeout time.Duration
 
+	// ShutdownTimeout max wait for background tasks during graceful shutdown (default 30s).
+	ShutdownTimeout time.Duration
+
 	// RateLimitEnabled enables global IP-based token bucket rate limiter.
 	// Use RATE_LIMIT_ENABLED=1 to turn on (default off).
 	RateLimitEnabled bool
@@ -197,6 +200,7 @@ func Load() *C {
 		RateLimitRate:    parseFloatEnv("RATE_LIMIT_RATE", 20),
 		RateLimitBurst:    atoi(os.Getenv("RATE_LIMIT_BURST"), 50),
 		AgentRequestTimeout: mustParseDuration(os.Getenv("AGENT_REQUEST_TIMEOUT"), 90*time.Second),
+		ShutdownTimeout:     mustParseDuration(os.Getenv("SHUTDOWN_TIMEOUT"), 30*time.Second),
 	}
 }
 
