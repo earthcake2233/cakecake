@@ -14,7 +14,7 @@ import (
 // When autoMigrate is true (default), runs AutoMigrateAll (Go-based V1-V19).
 // When autoMigrate is false (production), skips Go-based migrations and runs
 // only goose SQL migrations (V20+) from the migrations/ directory.
-// For a brand-new production database, run once with autoMigrate=true first.
+// Production mode relies on goose SQL migrations (including baseline DDL).
 func NewDB(dsn string, lg *zap.Logger, autoMigrate bool) (*gorm.DB, error) {
 	if dsn == "" {
 		return nil, fmt.Errorf("MYSQL_DSN is empty")

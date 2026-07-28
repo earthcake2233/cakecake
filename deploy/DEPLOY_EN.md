@@ -129,6 +129,22 @@ file mini-bili-linux
 
 ---
 
+
+
+---
+
+## DB Initialization
+
+1. Create empty database using mysql client.
+2. Set APP_ENV=production in .env (DB_AUTO_MIGRATE defaults to false -> goose SQL only).
+3. Start app: goose runs migrations/00001_baseline.sql, creates all 42+ tables automatically.
+4. Verify with: mysql -u root -p minibili -e "SHOW TABLES;"
+
+MySQL 8.0+ required. Future schema changes go in migrations/ directory (see Skill S-016).
+
+
+---
+
 ## 5. Server Directory Layout
 
 ```bash

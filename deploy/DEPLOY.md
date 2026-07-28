@@ -395,3 +395,19 @@ curl -sI http://127.0.0.1/
 - 本地开发：[README.md](../README.md)  
 - 关闭上传时的发视频流程：[docs/manual-video-ingest.md](../docs/manual-video-ingest.md)  
 - 可选 CI 部署：[.github/workflows/deploy.yml](../.github/workflows/deploy.yml)
+
+
+---
+
+## DB Init
+
+1. Create empty database:
+   mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS minibili CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+
+2. Set APP_ENV=production in .env (DB_AUTO_MIGRATE defaults to false -> goose SQL only)
+
+3. Start app: goose runs migrations/00001_baseline.sql, creates all 42+ tables automatically
+
+4. Verify: mysql -u root -p minibili -e "SHOW TABLES;"
+
+Note: MySQL 8.0+ required. Future schema changes go in migrations/ directory (see Skill S-016).
