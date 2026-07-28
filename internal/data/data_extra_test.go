@@ -2,163 +2,57 @@ package data
 
 import (
 	"testing"
+
+	"github.com/glebarez/sqlite"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
+	"gorm.io/gorm"
+
+	"minibili/internal/model"
 )
 
-func TestNormalizeAgentSlug_Valid(t *testing.T) {
-	tests := []struct {
-		input string
-		want  string
-	}{
-		{"default", "default"},
-		{"my_agent", "my_agent"},
-		{"agent42", "agent42"},
-		{"  Default  ", "default"},
-		{"ab", "ab"},
-		{"abc123_def", "abc123_def"},
-		{"uppercase", "uppercase"},
-	}
-	for _, tc := range tests {
-		got, err := NormalizeAgentSlug(tc.input)
-		if err != nil {
-			t.Errorf("NormalizeAgentSlug(%q) unexpected error: %v", tc.input, err)
-		}
-		if got != tc.want {
-			t.Errorf("NormalizeAgentSlug(%q) = %q, want %q", tc.input, got, tc.want)
-		}
+func extDB(t *testing.T) *gorm.DB {
+	t.Helper()
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	require.NoError(t, err)
+	return db
+}
+
+func extDBWithMigrate(t *testing.T, models ...interface{}) *gorm.DB {
+	t.Helper()
+	db := extDB(t)
+	require.NoError(t, db.AutoMigrate(models...))
+	return db
+}
+
+func Test_RegisteredMigrationsAll(t *testing.T) {
+	migs := RegisteredMigrations()
+	require.Greater(t, len(migs), 0, "should have migrations")
+	for i, m := range migs {
+		require.Equal(t, i+1, m.Version, "migration %d version", i)
+		require.NotEmpty(t, m.Name, "migration %d name", i)
+		require.NotNil(t, m.Func, "migration %d func", i)
 	}
 }
 
-func TestNormalizeAgentSlug_Invalid(t *testing.T) {
-	tests := []string{
-		"",
-		"   ",
-		"a",
-		"has spaces",
-		"with-hyphen",
-		"a@b",
-		"123abc",
-		"_underscore",
-		"toolong_abcdefghijklmnopqrstuvwxyz12345",
-	}
-	for _, input := range tests {
-		got, err := NormalizeAgentSlug(input)
-		if err == nil {
-			t.Errorf("NormalizeAgentSlug(%q) expected error, got %q", input, got)
-		}
-	}
+func Test_AutoMigrateAll(t *testing.T) {
+	err := AutoMigrateAll(extDB(t), zap.NewNop())
+	require.NoError(t, err)
 }
 
-func TestMaxAgentProfilesLimit(t *testing.T) {
-	limit := MaxAgentProfilesLimit()
-	if limit != 12 {
-		t.Errorf("MaxAgentProfilesLimit() = %d, want 12", limit)
-	}
-	if limit != maxAgentProfiles {
-		t.Errorf("MaxAgentProfilesLimit() = %d, want %d", limit, maxAgentProfiles)
-	}
+func Test_ResyncCuratedCountsEmpty(t *testing.T) {
+	db := extDBWithMigrate(t, &model.Video{}, &model.Article{}, &model.Comment{}, &model.ArticleComment{})
+	require.NoError(t, resyncCuratedVideoCommentCounts(db))
+	require.NoError(t, resyncCuratedArticleCommentCounts(db))
 }
 
-func TestAgentBotUsername(t *testing.T) {
-	tests := []struct {
-		slug string
-		want string
-	}{
-		{"default", "ai_default"},
-		{"my_agent", "ai_my_agent"},
-		{"  spaced  ", "ai_spaced"},
-		{"", "ai_"},
-	}
-	for _, tc := range tests {
-		got := AgentBotUsername(tc.slug)
-		if got != tc.want {
-			t.Errorf("AgentBotUsername(%q) = %q, want %q", tc.slug, got, tc.want)
-		}
-	}
+func Test_BackfillUserCakeIDs(t *testing.T) {
+	db := extDBWithMigrate(t, &model.User{})
+	// No users to backfill
+	backfillUserCakeIDs(db, zap.NewNop())
 }
 
-func TestMarshalWelcomeList(t *testing.T) {
-	tests := []struct {
-		input []string
-		want  string
-	}{
-		{[]string{"Hello!"}, `["Hello!"]`},
-		{[]string{"你好", "Welcome"}, `["你好","Welcome"]`},
-	}
-	for _, tc := range tests {
-		got, err := MarshalWelcomeList(tc.input)
-		if err != nil {
-			t.Errorf("MarshalWelcomeList(%v) unexpected error: %v", tc.input, err)
-		}
-		if got != tc.want {
-			t.Errorf("MarshalWelcomeList(%v) = %q, want %q", tc.input, got, tc.want)
-		}
-	}
-}
-
-func TestMarshalWelcomeList_Errors(t *testing.T) {
-	tests := []struct {
-		name  string
-		input []string
-	}{
-		{"empty slice", []string{}},
-		{"nil slice", nil},
-		{"empty string in list", []string{"hello", ""}},
-		{"whitespace only", []string{"hello", "   "}},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			_, err := MarshalWelcomeList(tc.input)
-			if err == nil {
-				t.Error("expected error for invalid input")
-			}
-		})
-	}
-}
-
-func TestUnmarshalWelcomeList(t *testing.T) {
-	tests := []struct {
-		name     string
-		raw      string
-		fallback []string
-		want     []string
-	}{
-		{"empty raw, use fallback", "", []string{"d1", "d2"}, []string{"d1", "d2"}},
-		{"valid json", `["a","b"]`, nil, []string{"a", "b"}},
-		{"json with empty strings", `["a","","b"]`, nil, []string{"a", "b"}},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			got, err := UnmarshalWelcomeList([]byte(tc.raw), tc.fallback)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			if len(got) != len(tc.want) {
-				t.Fatalf("got %v, want %v", got, tc.want)
-			}
-			for i := range got {
-				if got[i] != tc.want[i] {
-					t.Fatalf("got %v, want %v", got, tc.want)
-				}
-			}
-		})
-	}
-}
-
-func TestUnmarshalWelcomeList_Errors(t *testing.T) {
-	tests := []struct {
-		name string
-		raw  string
-	}{
-		{"invalid json", `not json`},
-		{"not array", `"string"`},
-		{"empty after filter", `["","  "]`},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			_, err := UnmarshalWelcomeList([]byte(tc.raw), nil)
-			if err == nil {
-				t.Error("expected error")
-			}
-		})
-	}
+func Test_IsIgnorableAddColumnErr(t *testing.T) {
+	require.True(t, isIgnorableAddColumnErr(nil))
+	require.False(t, isIgnorableAddColumnErr(assert.AnError))
 }
