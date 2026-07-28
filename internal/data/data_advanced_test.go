@@ -134,7 +134,7 @@ func TestBackfillUserCakeIDs(t *testing.T) {
 }
 
 func TestNewDB_EmptyDSN(t *testing.T) {
-	_, err := NewDB("", zap.NewNop())
+	_, err := NewDB("", zap.NewNop(), true)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "MYSQL_DSN is empty")
 }

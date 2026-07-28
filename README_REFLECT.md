@@ -1,4 +1,4 @@
-# README_REFLECT — 架构与反思记录
+EADME_REFLECT — 架构与反思记录
 
 本文档记录 **Mini-Bili 与 SPEC 对齐过程中的架构取舍**，并与仓库内 [`Minibili.md`](Minibili.md)（面试向项目建议）中的方向做对照，便于日后复盘与简历讲述。
 
@@ -587,6 +587,75 @@ video.vue 的 aidParam watcher 调用 syncMinibiliDetail()（async），该函�
 2. **异步数据流转的时序断点**。一个 prop 的变化可能依赖另一个 prop 的异步加载结果。必须确保在异步完成前中间状态正确持有待消费的值（_pendingSeek）。
 3. **Vue Router query 参数变化不触发 route param watcher**。aidParam computed 只依赖 route.params.aid，不依赖 route.query。需要独立的 watcher。
 4. **测试建议**：手动测试至少覆盖三种场景——（1）从其他页面首次导航到视频页（mount 场景）；（2）同一视频页内 query 变化；（3）不同视频间切换后回退。
+
+
+
+
+---
+
+## 2026-07-28：DB 迁移策略改造——GORM AutoMigrate → 版本化迁移 + goose
+
+### 问题
+
+`docs/ARCHITECTURE.md` 原设计为"GORM AutoMigrate 而非 SQL 迁移文件"。该方案在单人开发阶段足够，但在生产演进时有三个风险：
+
+- **不可逆变更**：AutoMigrate 只增不改，删列/改名/改类型需手动 SQL，无回滚路径
+- **无执行历史**：不知道某个迁移是否已在目标库上跑过，全靠 HasColumn / HasIndex 等临时判断
+- **无版本概念**：迁移之间无依赖顺序，重启即全量重跑，无法按需增量
+
+### 方案：三阶段渐进式改造
+
+#### 阶段一：版本门控（Go 原生）
+
+新增 schema_versions 表，将 AutoMigrateAll 内部的 19 个迁移步骤（1 个 AutoMigrate + 18 个 backfill/ensure/migrate）各分配版本号 V1–V19。RunVersionedMigrations 在启动时查表跳过已执行版本，保证幂等安全。
+
+| 新增文件 | 作用 |
+|----------|------|
+| internal/model/schema_version.go | SchemaVersion 模型 |
+| internal/data/migration.go | RunVersionedMigrations + Migration 结构体 |
+
+#### 阶段二：引入 goose（SQL 迁移）
+
+安装 pressly/goose/v3，创建 migrations/ 目录。V1–V19 仍由 Go 管理（schema_versions 表），V20+ 用 SQL 文件（支持 up/down 回滚）。
+
+| 新增文件 | 作用 |
+|----------|------|
+| migrations/00001_baseline.sql | 基线标记；后续迁移在此目录追加 |
+| internal/data/migrate_goose.go | RunGooseMigrations — goose Provider 封装 |
+
+#### 阶段三：环境联动（生产安全）
+
+APP_ENV=production 时 DB_AUTO_MIGRATE 默认 false，只跑 goose SQL 迁移；开发环境默认 true，跑 AutoMigrateAll。均可显式覆盖。
+
+### 最终行为矩阵
+
+| APP_ENV | DB_AUTO_MIGRATE | 效果 |
+|---------|----------------|------|
+| development（默认） | 未设 → true | AutoMigrateAll（V1–V19） |
+| production | 未设 → false | 仅 goose SQL（V20+） |
+| 任意 | =1 | 强制 AutoMigrateAll |
+| 任意 | =0 | 强制 goose only |
+
+### 修改文件汇总
+
+| 文件 | 变更 |
+|------|------|
+| internal/config/config.go | 新增 DBAutoMigrate，APP_ENV 推导默认值 |
+| internal/data/data.go | NewDB(dsn, lg, autoMigrate) |
+| internal/data/migrate.go | AutoMigrateAll → RunVersionedMigrations |
+| cmd/mini-bili/main.go | 传入 cfg.DBAutoMigrate |
+| .env.example | 补充文档 |
+| go.mod / go.sum | 新增 pressly/goose/v3 |
+
+### 验证
+
+go vet ./internal/... 零错误；go test ./internal/data/ ./internal/handler/ ./internal/service/ 全部 PASS。
+
+### 后续
+
+- 如需纯 SQL 基线，可从 GORM 模型导出完整 DDL 替换 00001_baseline.sql
+- 新迁移规范：在 migrations/ 下创建 00002_xxx.sql，含 -- +goose Up / -- +goose Down
+
 ## 当前状态
 
 - 仓库 total: 15.76% 覆盖率，193 文件（含零覆盖的框架/配置类文件）
@@ -603,4 +672,3 @@ video.vue 的 aidParam watcher 调用 syncMinibiliDetail()（async），该函�
 - **E2E 自动化测试**：当前 E2E 为手动，可引入 Playwright 做端到端回归验证。
 - **前端测试补充**：当前测试集中在后端，Vue 组件层（弹幕渲染、发布表单）尚缺自动化测试覆盖。
 ---
-

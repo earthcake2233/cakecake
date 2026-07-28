@@ -60,6 +60,10 @@ type C struct {
 	// VideoUploadDisabled: reject video file upload/transcode; metadata-only drafts still allowed.
 	VideoUploadDisabled bool
 
+	// DBAutoMigrate enables automatic schema migration on startup (default true).
+	// Set DB_AUTO_MIGRATE=0 in production when using goose or another migration tool.
+	DBAutoMigrate bool
+
 	// DeepSeek / AI assistant (optional; empty API key disables replies).
 	DeepSeekAPIKey     string
 	DeepSeekBaseURL    string
@@ -139,8 +143,9 @@ func parseBoolEnv(key string, def bool) bool {
 
 // Load reads configuration from environment variables.
 func Load() *C {
+	appEnv := getenv("APP_ENV", "development")
 	return &C{
-		AppEnv:        getenv("APP_ENV", "development"),
+		AppEnv:        appEnv,
 		HTTPAddr:      getenv("HTTP_ADDR", ":8080"),
 		JWTSecret:     os.Getenv("JWT_SECRET"),
 		MySQLDSN:      os.Getenv("MYSQL_DSN"),
@@ -178,6 +183,7 @@ func Load() *C {
 		VideoReviewRequired:     parseBoolEnv("VIDEO_REVIEW_REQUIRED", true),
 		ArticleReviewRequired:   parseBoolEnv("ARTICLE_REVIEW_REQUIRED", true),
 		VideoUploadDisabled:     parseBoolEnv("VIDEO_UPLOAD_DISABLED", false),
+		DBAutoMigrate:           parseBoolEnv("DB_AUTO_MIGRATE", appEnv != "production"),
 
 		DeepSeekAPIKey:  strings.TrimSpace(os.Getenv("DEEPSEEK_API_KEY")),
 		DeepSeekBaseURL: strings.TrimRight(strings.TrimSpace(getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com")), "/"),

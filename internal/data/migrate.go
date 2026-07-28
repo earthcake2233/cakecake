@@ -13,9 +13,36 @@ import (
 	"minibili/internal/pkg/usercoin"
 )
 
-// AutoMigrateAll applies schema for all domain models (Skill S-002).
-func AutoMigrateAll(db *gorm.DB, lg *zap.Logger) error {
-	if err := db.AutoMigrate(
+
+// RegisteredMigrations returns every schema/data migration in execution order.
+// New migrations MUST be appended at the end with an incremented version number.
+func RegisteredMigrations() []Migration {
+	return []Migration{
+		{1, "core_schema", "create all domain tables via GORM AutoMigrate", autoMigrateCoreModels},
+		{2, "playback_comment_columns", "add missing playback and comment columns", ensurePlaybackAndCommentColumns},
+		{3, "backfill_cake_ids", "generate CakeID for users missing one", backfillUserCakeIDs},
+		{4, "backfill_first_published_at", "set first_published_at for existing UP", backfillUserFirstPublishedAt},
+		{5, "backfill_video_comment_notifs", "insert missing video_comment_received notifications", backfillVideoCommentNotifications},
+		{6, "backfill_reply_received_notifs", "insert missing reply_received notifications", backfillReplyReceivedNotifications},
+		{7, "backfill_favorite_folders", "create default favorite folder for existing users", backfillFavoriteFolders},
+		{8, "backfill_user_coin_balance", "set default coin_balance_tenths for users with 0", backfillUserCoinBalance},
+		{9, "backfill_coin_ledger", "record coin ledger entry for initial balance", backfillCoinLedger},
+		{10, "migrate_fav_unique_index", "replace legacy video_favorites unique index", migrateVideoFavoriteUniqueIndex},
+		{11, "migrate_user_search_history", "dedupe and rebuild search history index", migrateUserSearchHistory},
+		{12, "backfill_dm_participant_pins", "ensure dm_participant pins column", backfillDmParticipantPins},
+		{13, "ensure_dm_hidden_at", "add hidden_at column to dm_participants", ensureDmParticipantHiddenAt},
+		{14, "backfill_comment_approved", "mark existing comments as approved", backfillCommentApproved},
+		{15, "resync_video_comment_counts", "recompute comment_count for curated videos", resyncCuratedVideoCommentCounts},
+		{16, "backfill_article_comment_approved", "mark existing article comments as approved", backfillArticleCommentApproved},
+		{17, "resync_article_comment_counts", "recompute comment_count for curated articles", resyncCuratedArticleCommentCounts},
+		{18, "backfill_dynamic_comment_approved", "mark existing dynamic comments as approved", backfillDynamicCommentApproved},
+		{19, "resync_dynamic_comment_counts", "recompute comment_count for curated dynamics", resyncCuratedDynamicCommentCounts},
+	}
+}
+
+// autoMigrateCoreModels runs GORM AutoMigrate on every domain model table.
+func autoMigrateCoreModels(db *gorm.DB, lg *zap.Logger) error {
+	return db.AutoMigrate(
 		&model.User{},
 		&model.Video{},
 		&model.Danmaku{},
@@ -59,68 +86,15 @@ func AutoMigrateAll(db *gorm.DB, lg *zap.Logger) error {
 		&model.HomeBanner{},
 		&model.HotSearchOp{},
 		&model.HotSearchDisplayLayout{},
-	); err != nil {
-		return err
-	}
-	if err := ensurePlaybackAndCommentColumns(db, lg); err != nil {
-		return err
-	}
-	if err := backfillUserCakeIDs(db, lg); err != nil {
-		return err
-	}
-	if err := backfillUserFirstPublishedAt(db, lg); err != nil {
-		return err
-	}
-	if err := backfillVideoCommentNotifications(db, lg); err != nil {
-		return err
-	}
-	if err := backfillReplyReceivedNotifications(db, lg); err != nil {
-		return err
-	}
-	if err := backfillFavoriteFolders(db, lg); err != nil {
-		return err
-	}
-	if err := backfillUserCoinBalance(db, lg); err != nil {
-		return err
-	}
-	if err := backfillCoinLedger(db, lg); err != nil {
-		return err
-	}
-	if err := migrateVideoFavoriteUniqueIndex(db, lg); err != nil {
-		return err
-	}
-	if err := migrateUserSearchHistory(db, lg); err != nil {
-		return err
-	}
-	if err := backfillDmParticipantPins(db, lg); err != nil {
-		return err
-	}
-	if err := ensureDmParticipantHiddenAt(db, lg); err != nil {
-		return err
-	}
-	if err := backfillCommentApproved(db, lg); err != nil {
-		return err
-	}
-	if err := resyncCuratedVideoCommentCounts(db, lg); err != nil {
-		return err
-	}
-	if err := backfillArticleCommentApproved(db, lg); err != nil {
-		return err
-	}
-	if err := resyncCuratedArticleCommentCounts(db, lg); err != nil {
-		return err
-	}
-	if err := backfillDynamicCommentApproved(db, lg); err != nil {
-		return err
-	}
-	if err := resyncCuratedDynamicCommentCounts(db, lg); err != nil {
-		return err
-	}
-	if lg != nil {
-		lg.Info("database AutoMigrate completed")
-	}
-	return nil
+	)
 }
+
+// AutoMigrateAll applies all registered migrations in order (Skill S-002).
+// Each migration version is recorded in schema_versions so re-runs are safe.
+func AutoMigrateAll(db *gorm.DB, lg *zap.Logger) error {
+	return RunVersionedMigrations(db, lg, RegisteredMigrations())
+}
+
 
 // migrateVideoFavoriteUniqueIndex replaces legacy (user_id, video_id) unique index
 // with (user_id, video_id, folder_id) so one video can exist in multiple folders.

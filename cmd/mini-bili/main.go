@@ -76,7 +76,7 @@ func main() {
 		log.Info("ffprobe ok", zap.String("path", ffmpeg.FFprobeExe()))
 	}
 
-	db, err := data.NewDB(cfg.MySQLDSN, log)
+	db, err := data.NewDB(cfg.MySQLDSN, log, cfg.DBAutoMigrate)
 	if err != nil {
 		log.Fatal("database", zap.Error(err))
 	}

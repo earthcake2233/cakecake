@@ -45,47 +45,33 @@ Rule 说"这件事必须做"，Skill 说"这件事这样做"。
 
 ---
 
-### S-002：数据库迁移
+### S-002：数据库迁移（版本化）
 
-**对应 Rule**：R-DB-3（数据库结构变更必须通过迁移脚本）、R-DB-4（核心字段必须建索引）
+**对应 Rule**：R-DB-3（迁移脚本）、R-DB-4（索引）、R-DB-5（goose SQL 文件）
 
-**触发条件**：任何涉及新增表、修改表结构、新增索引的操作，必须执行本 Skill。
+**触发条件**：任何涉及新增表、修改表结构、新增索引的操作。
+
+**迁移架构**：
+
+- V1–V19：Go 函数迁移，注册在 `internal/data/migrate.go` 的 `RegisteredMigrations()` 中，由 `RunVersionedMigrations` 顺序执行并记录到 `schema_versions` 表
+- V20+：SQL 文件迁移，放在 `migrations/` 目录下（如 `00002_add_xxx.sql`），由 goose 管理，支持 up/down 回滚
+- 生产环境（`APP_ENV=production`）默认仅运行 goose SQL 迁移，跳过 Go AutoMigrate
 
 **执行步骤**：
 
-1. 确认 GORM AutoMigrate 已正确配置在 `internal/data/` 目录下的数据层初始化代码中。
-2. 在对应的模型结构体（Model）中定义或修改字段及标签（tag）。**定义 `play_count` 字段时，必须显式设置 `default:0` 标签**（如 `gorm:"default:0"`），防止新视频因 NULL 值排序问题意外出现在首页。
-3. 将新增或变更的模型注册到 AutoMigrate 的迁移列表中：
-   ```go
-   db.AutoMigrate(
-       &User{},
-       &Video{},
-       &Danmaku{},
-       &Comment{},
-       &Notification{},
-       // 在此处追加新增模型
-   )
+1. 判断变更类型：
+   - 新增 GORM 模型/字段/索引 → 在 `internal/data/migrate.go` 的 `RegisteredMigrations()` 末尾追加新版本条目，编写 Go 迁移函数
+   - V20 及以后的 schema 变更 → 在 `migrations/` 下创建 `NNNNN_desc.sql`，含 `-- +goose Up` 和 `-- +goose Down`
+2. Go 迁移函数签名：`func xxx(db *gorm.DB, lg *zap.Logger) error`。函数内必须处理幂等（检查 `HasColumn` / `HasIndex` 等），确保重复执行安全。
+3. SQL 迁移文件格式：
+   ```sql
+   -- +goose Up
+   ALTER TABLE videos ADD COLUMN new_field VARCHAR(255);
+   -- +goose Down
+   ALTER TABLE videos DROP COLUMN new_field;
    ```
-4. 启动应用，检查日志确认 AutoMigrate 执行成功：
-   - 成功标志：日志中出现 GORM 的 `AutoMigrate` 完成信息，无 error 日志。
-   - 失败标志：日志中出现数据库错误（如权限不足、字段类型冲突）。
-5. 迁移失败时：
-   - 读取完整错误日志。
-   - 回滚模型定义至迁移前状态。
-   - 分析失败原因并修正模型定义后重试。
-
-**数据安全底线**：
-- 严禁在生产环境使用 `db.Migrator().DropTable` 或 `db.Exec("DROP TABLE")` 等破坏性语句。
-- 所有结构变更必须是**增量式**的（仅允许 `Add Column`、`Modify Column` 扩大长度/允许为空、`Create Index`）。
-- 严禁直接修改已有字段的数据类型导致数据丢失或截断（如 `VARCHAR(50)` → `VARCHAR(20)`）。
-- 若确实需要收缩字段长度、删除字段或重命名字段，必须先向人征得明确同意。
-
-**禁止行为**：
-- 严禁直接在数据库中手动执行 `CREATE TABLE` 或 `ALTER TABLE`。
-- 严禁在业务代码（如 handler/service 层）中调用建表语句。
-- 严禁跳过 AutoMigrate 直接假设表结构已存在。
-
----
+4. 本地验证：`go vet ./internal/data/ && go test ./internal/data/ -count=1`
+5. 启动应用，检查日志确认迁移执行成功。
 
 ### S-003：日志初始化
 
@@ -616,3 +602,35 @@ flowchart LR
 特殊符号不能放，简化验证找真凶
 ```
 
+
+
+---
+
+### S-016：创建 goose 迁移文件
+
+**对应 Rule**：R-DB-5（新迁移必须用 goose SQL 文件）
+
+**触发条件**：需要新增 V20+ 的数据库 schema 变更（加表、加列、加索引等）。
+
+**执行步骤**：
+
+1. 确定迁移序号：查看 `migrations/` 目录下最大编号，新文件编号为最大编号 +1（如当前最大 `00001`，则新文件为 `00002_desc.sql`）
+2. 创建迁移文件：
+   ```sql
+   -- +goose Up
+   -- 正向变更 SQL（CREATE TABLE / ALTER TABLE / CREATE INDEX 等）
+
+   -- +goose Down
+   -- 回滚 SQL（DROP TABLE / ALTER TABLE DROP / DROP INDEX 等）
+   ```
+3. 编写 Up 和 Down 两个方向的 SQL，确保 Down 能完全撤销 Up 的变更
+4. 本地验证迁移可执行：
+   - 启动应用（`APP_ENV=development`），goose 自动应用新迁移
+   - 或手动：`goose -dir migrations mysql "DSN" up`
+5. 验证回滚：`goose -dir migrations mysql "DSN" down` 确认 Down SQL 正确执行
+
+**注意事项**：
+
+- 每个迁移文件只做一件事（单表加列 / 单表加索引），方便回滚定位
+- 禁止在迁移 SQL 中包含数据操作（INSERT/UPDATE），数据迁移应写在 Go 迁移函数中
+- `-- +goose Up` 和 `-- +goose Down` 注释是 goose 的指令标记，不可省略
