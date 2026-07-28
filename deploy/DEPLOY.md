@@ -180,7 +180,10 @@ DSN 示例：
 MYSQL_DSN=minibili:强密码@tcp(127.0.0.1:3306)/minibili?charset=utf8mb4&parseTime=True&loc=Local
 ```
 
-首次启动 `mini-bili` 会自动 **AutoMigrate** 建表。
+首次部署需初始化数据库表结构，二选一：
+
+- **开发/单机**：直接以 `APP_ENV=development` 启动，GORM AutoMigrate 自动建表
+- **生产**：执行 `goose -dir migrations mysql "DSN" up` 应用基线迁移，之后以 `APP_ENV=production` 启动（仅跑 goose SQL 迁移）
 
 ### 6.4 Redis
 

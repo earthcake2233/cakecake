@@ -1,3 +1,10 @@
+<p align="center">
+  <strong><img src="https://img.shields.io/badge/🇨🇳中文-00a1d6?style=flat-square" alt="中文"></strong>
+  <a href="README_EN.md">
+    <img src="https://img.shields.io/badge/🇬🇧English-999999?style=flat-square" alt="English">
+  </a>
+</p>
+
 # cakecake 前端（cakecake-web）
 
 仿 B 站界面的 **cakecake** 用户端 + 运营后台，对接仓库根目录 Go API（`/api/v1`）。npm 包名：`cakecake-web`（`package.json`）。
@@ -87,7 +94,7 @@ src/
 | `npm run lint` | ESLint |
 | `npm run check:encoding` | 检查中文乱码（`????`） |
 | [scripts/README.md](./scripts/README.md) | 维护脚本说明 |
-| [AGENTS.md](./AGENTS.md) | 协作者须知（如 PersonalSpace 编码） |
+| `PersonalSpace.vue` | 大文件，**禁止**用非 UTF-8 工具编辑中文文案。改中文请编辑 `src/i18n/*.zh-CN.ts`，提交前 `npm run check:encoding` |
 
 ---
 

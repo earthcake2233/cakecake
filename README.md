@@ -118,7 +118,7 @@ go build -o ./bin/mini-bili ./cmd/mini-bili/
 ./bin/mini-bili               # 默认 :8080；健康检查 GET /api/v1/health
 ```
 
-MySQL 需先建库（如 `minibili`）；表由首次启动时 GORM **AutoMigrate** 创建，无独立 SQL 迁移文件。
+MySQL 需先建库（如 `minibili`）；开发环境由 GORM AutoMigrate 自动建表（V1-V19），生产环境（APP_ENV=production）走 goose SQL 迁移（V20+），支持回滚。
 
 **2. 前端**
 

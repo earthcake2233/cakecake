@@ -11,7 +11,7 @@
 
 # cakecake 🍰
 
-A full-stack video-sharing community built with Go + Vue3, covering video upload, real-time danmaku, nested comments, full-text search, AI assistant, and more. Frontend brand: **cakecake** 路 backend module: `minibili`.
+A full-stack video-sharing community built with Go + Vue3, covering video upload, real-time danmaku, nested comments, full-text search, AI assistant, and more. Frontend brand: **cakecake** · backend module: `minibili`.
 
 <p align="center">
   <a href="https://chengzisoft.top/#/">
@@ -121,7 +121,7 @@ go build -o ./bin/mini-bili ./cmd/mini-bili/
 ./bin/mini-bili               # Default :8080; health check: GET /api/v1/health
 ```
 
-MySQL database must exist (e.g. `minibili`); tables are created by GORM **AutoMigrate** on first startup.
+MySQL database must exist (e.g. `minibili`); dev uses GORM AutoMigrate (V1-V19), production (APP_ENV=production) uses goose SQL migrations (V20+) with rollback support.
 
 **2. Frontend**
 
@@ -136,7 +136,7 @@ npm run dev                   # http://localhost:8888
 
 - Homepage loads, API goes through `/api/v1` (Vite proxy to `127.0.0.1:8080`)
 - Login / Register: `#/minibili/login`, `#/minibili/register`
-- Invalid routes or missing videos 鈫?`#/404`
+- Invalid routes or missing videos →`#/404`
 
 Frontend details: **[bilibili-vue/README.md](./cakecake-vue/bilibili-vue/README.md)**
 
@@ -151,7 +151,7 @@ Frontend details: **[bilibili-vue/README.md](./cakecake-vue/bilibili-vue/README.
 | **MySQL**                              | Persistence                                                              |
 | **Redis**                              | Play counts, danmaku cooldown, Refresh Token                             |
 | **RabbitMQ**                           | Transcoding queue (required by spec, cannot be replaced with Redis List) |
-| **Elasticsearch** (optional)           | Full-text search 鈥?shows "not available" if unconfigured                |
+| **Elasticsearch** (optional)           | Full-text search —shows "not available" if unconfigured                |
 | **FFmpeg / ffprobe**                   | Transcoding & cover thumbnail extraction                                 |
 | **Alibaba Cloud OSS**                  | `videos/`, `covers/`, etc.                                               |
 
@@ -159,7 +159,7 @@ Frontend details: **[bilibili-vue/README.md](./cakecake-vue/bilibili-vue/README.
 
 ## Backend Configuration
 
-Copy [`.env.example`](./.env.example) 鈫?`.env` and configure at minimum:
+Copy [`.env.example`](./.env.example) →`.env` and configure at minimum:
 
 - `JWT_SECRET`, `MYSQL_DSN`
 - `REDIS_*`, `RABBITMQ_URL`
@@ -167,7 +167,7 @@ Copy [`.env.example`](./.env.example) 鈫?`.env` and configure at minimum:
 - `SENSITIVE_WORDS_FILE`
 - `TEMP_UPLOAD_DIR`
 - `ELASTICSEARCH_*` (optional; also supports OpenSearch / Bonsai)
-- `VIDEO_UPLOAD_DISABLED` (optional 鈥?disables browser upload while keeping metadata submission)
+- `VIDEO_UPLOAD_DISABLED` (optional —disables browser upload while keeping metadata submission)
 
 ### Air hot-reload (optional)
 
@@ -223,4 +223,4 @@ See **[deploy/DEPLOY.md](./deploy/DEPLOY.md)**. Optional **[GitHub Actions](./.g
 
 ## License
 
-[Non-Commercial License](./LICENSE) 鈥?personal/educational use permitted, commercial use prohibited.
+[Non-Commercial License](./LICENSE) —personal/educational use permitted, commercial use prohibited.

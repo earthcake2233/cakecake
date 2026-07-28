@@ -1,3 +1,10 @@
+<p align="center">
+  <a href="ARCHITECTURE.md">
+    <img src="https://img.shields.io/badge/🇨🇳中文-999999?style=flat-square" alt="中文">
+  </a>
+  <strong><img src="https://img.shields.io/badge/🇬🇧English-00a1d6?style=flat-square" alt="English"></strong>
+</p>
+
 # Cakecake Architecture
 
 ## Overview
@@ -241,7 +248,7 @@ flowchart LR
 | **Monolith over microservices (v1)**            | Single developer, faster iteration. Code is organized by domain (`handler/`, `service/`, `worker/`) to enable future split into Kratos microservices. |
 | **Redis Pub/Sub over direct WebSocket fan-out** | Decouples broadcast from the HTTP handler. Multiple replicas subscribe to the same Redis channel, enabling horizontal scaling without shared memory.  |
 | **RabbitMQ over Redis List for transcode**      | RabbitMQ provides message persistence, consumer acknowledgments, and dead-lettering — critical for video processing where data loss is unacceptable.  |
-| **GORM AutoMigrate over raw SQL migrations**    | Simpler for a solo project. Tables are declared as Go structs, migrations run on startup.                                                             |
+| **GORM AutoMigrate + goose versioned migrations** | Dev: GORM AutoMigrate (V1-V19). Prod (APP_ENV=production): goose SQL migrations (V20+) with up/down rollback. |                                                    |
 | **ES optional, not mandatory**                  | Reduces onboarding friction. The search page degrades gracefully when ES is not configured.                                                           |
 | **bcrypt + dual-token JWT**                     | Industry standard for auth. Access/Refresh token pattern with Redis-managed refresh token rotation.                                                   |
 

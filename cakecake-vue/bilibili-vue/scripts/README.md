@@ -14,4 +14,4 @@
 | `python scripts/restore-personal-space-encoding.py` | 历史：按行合并修复乱码（同上，参考文件已移除） |
 | `python scripts/patch-collect-video-menu.py` | 一次性补丁脚本，新功能开发不必使用 |
 
-改 `PersonalSpace.vue` 中文文案时，优先编辑 **`src/i18n/*.zh-CN.ts`**，提交前跑 `npm run check:encoding`。详见 **[AGENTS.md](../AGENTS.md)**。
+改 `PersonalSpace.vue` 中文文案时，优先编辑 **`src/i18n/*.zh-CN.ts`**，提交前跑 `npm run check:encoding`。详见 **本文件上方的编码说明**。

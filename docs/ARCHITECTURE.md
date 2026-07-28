@@ -1,3 +1,10 @@
+<p align="center">
+  <strong><img src="https://img.shields.io/badge/🇨🇳中文-00a1d6?style=flat-square" alt="中文"></strong>
+  <a href="ARCHITECTURE_EN.md">
+    <img src="https://img.shields.io/badge/🇬🇧English-999999?style=flat-square" alt="English">
+  </a>
+</p>
+
 # Cakecake 系统架构
 
 ## 概述
@@ -241,7 +248,7 @@ flowchart LR
 | **v1 用单体而非微服务**                               | 单人开发，快速迭代。代码按领域分层（`handler/`、`service/`、`worker/`），为后续拆分为 Kratos 微服务预留空间                     |
 | **Redis Pub/Sub 做弹幕广播中继，而非 WebSocket 直发** | 解耦广播与 HTTP handler。多副本订阅同一 Redis 频道，无需共享内存即可水平扩展                                                    |
 | **转码用 RabbitMQ 而非 Redis List**                   | RabbitMQ 提供消息持久化、消费确认、死信队列——视频处理不可接受数据丢失                                                           |
-| **GORM AutoMigrate 而非 SQL 迁移文件**                | 单人项目简化操作，表结构通过 Go struct 声明，启动时自动建表                                                                     |
+| **GORM AutoMigrate + goose 版本化迁移**                | 开发环境 GORM AutoMigrate 自动建表（V1-V19），生产环境 APP_ENV=production 默认走 goose SQL 迁移（V20+），支持 up/down 回滚 |      |
 | **ES 可选而非强制依赖**                               | 降低上手门槛，未配置时搜索页优雅降级                                                                                            |
 | **Redis 令牌桶做全局限流**                            | 保护列表、搜索、空间等公开接口不受突发/爬虫打垮；按 IP 维度限流；Lua 脚本保证令牌桶原子性；桶容量支持短时突发，速率限制稳态 QPS |
 | **bcrypt + 双 Token JWT**                             | 行业标准认证方案，Access/Refresh 双 Token + Redis 管理 Refresh Token 轮转                                                       |
