@@ -1,3 +1,17 @@
+<p align="center">
+  <strong><img src="https://img.shields.io/badge/🇨🇳中文-00a1d6?style=flat-square" alt="中文"></strong>
+  <a href="deploy/DEPLOY_EN.md">
+    <img src="https://img.shields.io/badge/🇬🇧English-999999?style=flat-square" alt="English">
+  </a>
+</p>
+
+  </a>
+  </a>
+</p>
+
+  </a>
+</p>
+
 # Minibili 生产部署指南（阿里云 CentOS 7）
 
 面向 **个人站 / 面试演示 / 小流量**。默认架构：

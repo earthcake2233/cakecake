@@ -1,3 +1,17 @@
+<p align="center">
+  <strong><img src="https://img.shields.io/badge/🇨🇳中文-00a1d6?style=flat-square" alt="中文"></strong>
+  <a href="docs/manual-video-ingest_EN.md">
+    <img src="https://img.shields.io/badge/🇬🇧English-999999?style=flat-square" alt="English">
+  </a>
+</p>
+
+  </a>
+  </a>
+</p>
+
+  </a>
+</p>
+
 # 本地手动发布视频（服务器无法转码时）
 
 当生产环境开启 `VITE_VIDEO_UPLOAD_DISABLED=true` 时，用户端创作中心会保留界面并提示「云端投稿暂时关闭」。管理员可在 **Windows 本机** 完成转码、上传 OSS，再在云服务器 **MySQL** 写入稿件记录。

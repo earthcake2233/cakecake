@@ -1,6 +1,8 @@
 # ── Personal notes（本地私密，勿提交）──
 Minibili.md
+Minibili_EN.md
 README_REFLECT.md
+README_REFLECT_EN.md
 
 # ── Secrets & local env（切勿提交）──
 .env
@@ -84,5 +86,6 @@ docs/images/bench/
 # ── Benchmarks（个人压测资料，私有不提交）──
 scripts/bench/
 docs/benchmark.md
+docs/benchmark_EN.md
 docs/bench-data/
 docs/images/bench/

@@ -1,3 +1,17 @@
+<p align="center">
+  <strong><img src="https://img.shields.io/badge/🇨🇳中文-00a1d6?style=flat-square" alt="中文"></strong>
+  <a href="Rule_EN.md">
+    <img src="https://img.shields.io/badge/🇬🇧English-999999?style=flat-square" alt="English">
+  </a>
+</p>
+
+  </a>
+  </a>
+</p>
+
+  </a>
+</p>
+
 ## Mini-Bili v1.0 工程规则（Rule）
 
 **版本**：v1.0
@@ -143,10 +157,10 @@
 
 | 编号         | 规则                                               | 说明                                                                                                                                                                                                                            |
 | :----------- | :------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **R-DOC-1**  | **中英 README 必须同步更新**                       | 修改`README.md`（中文）时，必须同步更新 `README_EN.md`（英文），确保描述内容、技术栈徽标、链接等保持一致。反之亦然。                                                                                                            |
+| **R-DOC-1**  | **所有中英配对 .md 必须同步更新**                   | 项目中所有存在 `_EN.md` 配对的中文 `.md` 文件（包括 Rule、Skill、SPEC、DEPLOY、docs/*、cakecake-vue/**/README 等），修改任一方时必须同步更新另一方，确保内容、表格、代码块、链接保持一致，仅语言不同。提交前必须运行 `python scripts/check_en_sync.py` 验证。 |
 | **R-DOC-2**  | **代码变更必须同步更新文档 —— 每次提交前强制检查** | 每次修改代码后、执行 git commit 之前，必须遍历所有 Markdown 文档（README*.md、SPEC.md、docs/*.md、deploy/*.md 等），逐条确认文档描述与代码实现一致。**严禁先提交代码再补文档**——文档同步和代码变更必须在同一次 commit 中完成。 |
 | **R-DOC-2a** | **commit 时必须列出文档检查结果**                  | 每次 git commit 的 message 中，若涉及功能/接口/配置/依赖变更，必须在 body 中注明`Docs: <已检查的md文件列表>`，未写即视为违规。                                                                                 |
-| **R-DOC-3**  | **ARCHITECTURE 中英文必须完全同步**                | 修改`docs/ARCHITECTURE.md`（英文）或 `docs/ARCHITECTURE_EN.md`（中文）任一文件时，必须同步更新另一文件，确保章节结构、图表（Mermaid）、表格、代码块完全一致，仅语言不同。禁止出现一方有某章节/某图表而另一方缺失的情况。        |
+| **R-DOC-3**  | **所有 .md 均需英文版且结构完全同步**                | 项目中每个主要 .md 文件（根目录、docs/、deploy/、cakecake-vue/ 等）均须有对应的 `_EN.md` 英文版。修改任一方时须同步更新另一方，确保章节结构、图表（Mermaid）、表格、代码块完全一致，仅语言不同。禁止出现一方有某章节而另一方缺失。 |
 | **R-DOC-4**  | **Git 提交信息必须使用英文**                       | `git commit -m` 的提交描述必须使用纯英文，遵循 conventional commits 格式（如 `feat:`、`fix:`、`docs:`、`refactor:`、`chore:` 等）。禁止在 commit message 中出现中文。                                   |
 | **R-DOC-5**  | **新增环境变量必须同步写入 .env.example**        | 引入新的环境变量时，必须在同一次 commit 中在 `.env.example` 添加对应的注释说明和默认值。禁止只加代码读取逻辑而不更新模板文件。 |
 | **R-DOC-6** | **中文编码检查** | 每次向代码文件写入中文后、提交前，必须使用 Python 扫描全项目检查是否遗留 BOM、U+FFFD、截断中文等编码问题。使用 Python 的 `pathlib` 读写含中文文件（`Path.read_text(encoding="utf-8")` / `write_text(...)`），避免平台编码差异导致截断或 BOM 问题。 |
@@ -214,6 +228,8 @@
 | 编号 | 规则 | 说明 |
 | :--- | :--- | :--- |
 | **R-DOC-14** | **README_REFLECT.md 的"当前状态"与"后续展望"必须放在末尾** | README_REFLECT.md 中各 dated 条目按时间倒序排列（最新的在最前面），但"当前状态"和"后续展望"两个总览性章节必须放在文档最后，不得插入在 dated 条目之间。新增条目时注意不破坏此顺序。 |
+| **R-DOC-15** | **gitignore 的中英文配对文件必须同步排除**        | 若某中文 `.md` 在 `.gitignore` 中排除（如 `Minibili.md`、`README_REFLECT.md`、`docs/benchmark.md`），其对应的 `_EN.md` 文件也必须同时加入 `.gitignore`。`incident-*.md` 等通配符规则已覆盖中英文。违反此规则将导致私密文档的英文版被公开推送。 |
+| **R-DOC-16** | **新增 .md 时必须同时创建英文版并加入检查**       | 新建任何中文 `.md` 文件时，必须在同一次 commit 中创建对应的 `_EN.md` 英文版，并在 `check_en_sync.py` 的白名单中注册。禁止只创建单语言版本。 |
 
 ### 十六、文件编码规范
 

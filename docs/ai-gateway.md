@@ -1,3 +1,17 @@
+<p align="center">
+  <strong><img src="https://img.shields.io/badge/🇨🇳中文-00a1d6?style=flat-square" alt="中文"></strong>
+  <a href="docs/ai-gateway_EN.md">
+    <img src="https://img.shields.io/badge/🇬🇧English-999999?style=flat-square" alt="English">
+  </a>
+</p>
+
+  </a>
+  </a>
+</p>
+
+  </a>
+</p>
+
 # Minibili AI 网关（消息中心助手）
 
 ## 功能
