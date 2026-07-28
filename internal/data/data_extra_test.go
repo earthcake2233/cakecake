@@ -1,6 +1,7 @@
 package data
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/glebarez/sqlite"
@@ -42,17 +43,19 @@ func Test_AutoMigrateAll(t *testing.T) {
 
 func Test_ResyncCuratedCountsEmpty(t *testing.T) {
 	db := extDBWithMigrate(t, &model.Video{}, &model.Article{}, &model.Comment{}, &model.ArticleComment{})
-	require.NoError(t, resyncCuratedVideoCommentCounts(db))
-	require.NoError(t, resyncCuratedArticleCommentCounts(db))
+	require.NoError(t, resyncCuratedVideoCommentCounts(db, zap.NewNop()))
+	require.NoError(t, resyncCuratedArticleCommentCounts(db, zap.NewNop()))
 }
 
 func Test_BackfillUserCakeIDs(t *testing.T) {
 	db := extDBWithMigrate(t, &model.User{})
-	// No users to backfill
 	backfillUserCakeIDs(db, zap.NewNop())
 }
 
 func Test_IsIgnorableAddColumnErr(t *testing.T) {
-	require.True(t, isIgnorableAddColumnErr(nil))
-	require.False(t, isIgnorableAddColumnErr(assert.AnError))
+	require.False(t, isIgnorableAddColumnErr(nil), "nil should not be ignorable")
+	err := errors.New("some error")
+	require.False(t, isIgnorableAddColumnErr(err), "random error should not be ignorable")
+	err2 := errors.New("duplicate column name")
+	require.True(t, isIgnorableAddColumnErr(err2), "duplicate column error should be ignorable")
 }
