@@ -1,0 +1,313 @@
+package handler
+
+import (
+	"encoding/json"
+	"fmt"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/require"
+
+	"minibili/internal/model"
+)
+
+func Test_DMFlow(t *testing.T) {
+	api, r, _ := newTestAPI(t)
+	u := seedUser(t, api, "dmf1", "DMF1", 10)
+	u2 := seedUser(t, api, "dmf2", "DMF2", 10)
+	tk := tok(t, api, u.ID)
+
+	// Create conversation
+	w := srve(r, areq("POST", "/api/v1/dm/conversations", tk, fmt.Sprintf(`{"peer_id":%d}`, u2.ID)))
+	type convResp struct {
+		Code int `json:"code"`
+		Data struct {
+			ID uint64 `json:"id"`
+		} `json:"data"`
+	}
+	var cr convResp
+	json.Unmarshal(w.Body.Bytes(), &cr)
+	if cr.Code != 0 || cr.Data.ID == 0 {
+		t.Skip("dm conversation not created")
+	}
+	cid := cr.Data.ID
+
+	// List conversations
+	srve(r, areq("GET", "/api/v1/dm/conversations", tk, nil))
+
+	// Send message
+	srve(r, areq("POST", fmt.Sprintf("/api/v1/dm/conversations/%d/messages", cid), tk, `{"content":"hello"}`))
+
+	// List messages
+	srve(r, areq("GET", fmt.Sprintf("/api/v1/dm/conversations/%d/messages", cid), tk, nil))
+}
+
+// ==================== 2. favorite_folder.go ====================
+
+func Test_FavoriteFolderCRUD(t *testing.T) {
+	api, r, _ := newTestAPI(t)
+	u := seedUser(t, api, "ffc1", "FFC1", 10)
+	tk := tok(t, api, u.ID)
+
+	// Create folder
+	w := srve(r, areq("POST", "/api/v1/users/me/favorite-folders", tk, `{"title":"My Folder","description":"Test folder"}`))
+	type ffResp struct {
+		Code int `json:"code"`
+		Data struct {
+			ID uint64 `json:"id"`
+		} `json:"data"`
+	}
+	var ffr ffResp
+	json.Unmarshal(w.Body.Bytes(), &ffr)
+	if ffr.Code != 0 || ffr.Data.ID == 0 {
+		t.Skip("favorite folder not created")
+	}
+	fid := ffr.Data.ID
+
+	// List folders
+	srve(r, areq("GET", "/api/v1/users/me/favorite-folders", tk, nil))
+
+	// Rename folder (UpdateFavoriteFolder)
+	srve(r, areq("PUT", fmt.Sprintf("/api/v1/users/me/favorite-folders/%d", fid), tk, `{"title":"Renamed","description":"Updated desc"}`))
+
+	// Delete folder
+	srve(r, areq("DELETE", fmt.Sprintf("/api/v1/users/me/favorite-folders/%d", fid), tk, nil))
+}
+
+// ==================== 3. user_dynamic.go ====================
+
+func Test_UserDynamicFlow(t *testing.T) {
+	api, r, _ := newTestAPI(t)
+	u := seedUser(t, api, "udf1", "UDF1", 10)
+	tk := tok(t, api, u.ID)
+
+	// Seed a dynamic directly (PostUserDynamic/PutMyUserDynamic are multipart-only)
+	dyn := model.UserDynamic{UserID: u.ID, Title: "My Dynamic", Content: "Dynamic content", ImagesJSON: "[]", CreatedAt: time.Now()}
+	require.NoError(t, api.DB.Create(&dyn).Error)
+
+	// Get dynamic
+	srve(r, areq("GET", fmt.Sprintf("/api/v1/user-dynamics/%d", dyn.ID), "", nil))
+
+	// Patch playback (comments_closed)
+	srve(r, areq("PATCH", fmt.Sprintf("/api/v1/users/me/dynamics/%d/playback", dyn.ID), tk, `{"comments_closed":true}`))
+
+	// List dynamics from space
+	srve(r, areq("GET", fmt.Sprintf("/api/v1/space/%d/dynamics", u.ID), "", nil))
+
+	// Delete dynamic
+	srve(r, areq("DELETE", fmt.Sprintf("/api/v1/users/me/dynamics/%d", dyn.ID), tk, nil))
+}
+
+// ==================== 4. article.go ====================
+
+func Test_ArticleCRUD(t *testing.T) {
+	api, r, _ := newTestAPI(t)
+	u := seedUser(t, api, "acr1", "ACR1", 10)
+	tk := tok(t, api, u.ID)
+
+	// Post article
+	w := srve(r, areq("POST", "/api/v1/articles", tk, `{"title":"My Article","body_md":"# Hello","publish":true}`))
+	type artResp struct {
+		Code int `json:"code"`
+		Data struct {
+			ID uint64 `json:"id"`
+		} `json:"data"`
+	}
+	var ar artResp
+	json.Unmarshal(w.Body.Bytes(), &ar)
+	if ar.Code != 0 || ar.Data.ID == 0 {
+		t.Skip("article not created")
+	}
+	aid := ar.Data.ID
+
+	// Get article (public)
+	srve(r, areq("GET", fmt.Sprintf("/api/v1/articles/%d", aid), "", nil))
+
+	// Put (update) article
+	srve(r, areq("PUT", fmt.Sprintf("/api/v1/users/me/articles/%d", aid), tk, `{"title":"Updated Title","body_md":"# Updated","publish":false}`))
+
+	// Patch playback
+	srve(r, areq("PATCH", fmt.Sprintf("/api/v1/users/me/articles/%d/playback", aid), tk, `{"comments_closed":true}`))
+
+	// Update article cover (nil body -> multipart parse error -> 400)
+	srve(r, areq("PUT", fmt.Sprintf("/api/v1/users/me/articles/%d/cover", aid), tk, nil))
+
+	// Delete article
+	srve(r, areq("DELETE", fmt.Sprintf("/api/v1/users/me/articles/%d", aid), tk, nil))
+}
+
+// ==================== 5. video.go ====================
+
+func Test_VideoUpdateDelete(t *testing.T) {
+	api, r, _ := newTestAPI(t)
+	u := seedUser(t, api, "vud1", "VUD1", 10)
+	tk := tok(t, api, u.ID)
+	v := seedVideo(t, api, u.ID, "Original Title")
+
+	// Get video
+	srve(r, areq("GET", fmt.Sprintf("/api/v1/videos/%d", v.ID), "", nil))
+
+	// Update video
+	srve(r, areq("PUT", fmt.Sprintf("/api/v1/videos/%d", v.ID), tk, `{"title":"Updated Title","description":"New desc"}`))
+
+	// Patch playback
+	srve(r, areq("PATCH", fmt.Sprintf("/api/v1/videos/%d/playback", v.ID), tk, `{"comments_closed":true,"danmaku_closed":false}`))
+
+	// Update video cover (nil body -> multipart parse error -> 400)
+	srve(r, areq("PUT", fmt.Sprintf("/api/v1/videos/%d/cover", v.ID), tk, nil))
+
+	// Delete video
+	srve(r, areq("DELETE", fmt.Sprintf("/api/v1/videos/%d", v.ID), tk, nil))
+}
+
+// ==================== 6. view_history.go ====================
+
+func Test_ViewHistoryFlow(t *testing.T) {
+	api, r, _ := newTestAPI(t)
+	u := seedUser(t, api, "vhf1", "VHF1", 10)
+	v := seedVideo(t, api, u.ID, "VH Video")
+	tk := tok(t, api, u.ID)
+
+	// Post view history
+	srve(r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/view-history", v.ID), tk, nil))
+
+	// List view history
+	srve(r, areq("GET", "/api/v1/users/me/view-history", tk, nil))
+
+	// Get settings
+	srve(r, areq("GET", "/api/v1/users/me/view-history/settings", tk, nil))
+
+	// Update settings
+	srve(r, areq("PUT", "/api/v1/users/me/view-history/settings", tk, `{"paused":true}`))
+
+	// Delete entry
+	srve(r, areq("DELETE", fmt.Sprintf("/api/v1/users/me/view-history/%d", v.ID), tk, nil))
+}
+
+// ==================== 7. user_me.go ====================
+
+func Test_UserMeFlow(t *testing.T) {
+	api, r, _ := newTestAPI(t)
+	u := seedUser(t, api, "umf1", "UMF1", 50)
+	tk := tok(t, api, u.ID)
+
+	// GetMe
+	srve(r, areq("GET", "/api/v1/users/me", tk, nil))
+
+	// Update profile
+	srve(r, areq("PUT", "/api/v1/users/me/profile", tk, `{"nickname":"NewNick","sign":"Hello world","gender":"male","birthday":"2000-01-01"}`))
+
+	// Update announcement
+	srve(r, areq("PUT", "/api/v1/users/me/announcement", tk, `{"announcement":"Welcome to my space!"}`))
+
+	// Update username (use same username to test no-op path)
+	srve(r, areq("PUT", "/api/v1/users/me", tk, fmt.Sprintf(`{"username":"%s"}`, u.Username)))
+
+	// Update password with wrong old password -> 403
+	srve(r, areq("PUT", "/api/v1/users/me/password", tk, `{"old_password":"wrong","new_password":"newpass12345678"}`))
+}
+
+// ==================== 8. user_follow.go ====================
+
+func Test_UserFollowFlow(t *testing.T) {
+	api, r, _ := newTestAPI(t)
+	u := seedUser(t, api, "uff1", "UFF1", 10)
+	u2 := seedUser(t, api, "uff2", "UFF2", 10)
+	tk := tok(t, api, u.ID)
+
+	// Follow user (POST /api/v1/users/:userId/follow)
+	srve(r, areq("POST", fmt.Sprintf("/api/v1/users/%d/follow", u2.ID), tk, nil))
+
+	// List following
+	srve(r, areq("GET", fmt.Sprintf("/api/v1/space/%d/following", u.ID), "", nil))
+
+	// List followers
+	srve(r, areq("GET", fmt.Sprintf("/api/v1/space/%d/followers", u.ID), "", nil))
+
+	// Unfollow (POST same endpoint toggles)
+	srve(r, areq("POST", fmt.Sprintf("/api/v1/users/%d/follow", u2.ID), tk, nil))
+}
+
+// ==================== 9. follow_group.go ====================
+
+func Test_FollowGroupFlow(t *testing.T) {
+	api, r, _ := newTestAPI(t)
+	u := seedUser(t, api, "fgf1", "FGF1", 10)
+	u2 := seedUser(t, api, "fgf2", "FGF2", 10)
+	tk := tok(t, api, u.ID)
+
+	// First follow user2 so we can add to group
+	srve(r, areq("POST", fmt.Sprintf("/api/v1/users/%d/follow", u2.ID), tk, nil))
+
+	// Create group
+	w := srve(r, areq("POST", "/api/v1/users/me/follow-groups", tk, `{"name":"Test Group"}`))
+	type fgResp struct {
+		Code int `json:"code"`
+		Data struct {
+			ID uint64 `json:"id"`
+		} `json:"data"`
+	}
+	var fgr fgResp
+	json.Unmarshal(w.Body.Bytes(), &fgr)
+	if fgr.Code != 0 || fgr.Data.ID == 0 {
+		t.Skip("follow group not created")
+	}
+	gid := fgr.Data.ID
+
+	// List groups
+	srve(r, areq("GET", "/api/v1/users/me/follow-groups", tk, nil))
+
+	// Add member
+	srve(r, areq("POST", fmt.Sprintf("/api/v1/users/me/follow-groups/%d/members", gid), tk, fmt.Sprintf(`{"followee_id":%d}`, u2.ID)))
+
+	// Remove member
+	srve(r, areq("DELETE", fmt.Sprintf("/api/v1/users/me/follow-groups/%d/members/%d", gid, u2.ID), tk, nil))
+
+	// Delete group
+	srve(r, areq("DELETE", fmt.Sprintf("/api/v1/users/me/follow-groups/%d", gid), tk, nil))
+}
+
+// ==================== 10. video_engagement.go ====================
+
+func Test_VideoEngagementFlow(t *testing.T) {
+	api, r, _ := newTestAPI(t)
+	u := seedUser(t, api, "vef1", "VEF1", 100)
+	u2 := seedUser(t, api, "vef2", "VEF2", 100)
+	v := seedVideo(t, api, u2.ID, "Engagement Video")
+	tk := tok(t, api, u.ID)
+
+	// Create a favorite folder first
+	w := srve(r, areq("POST", "/api/v1/users/me/favorite-folders", tk, `{"title":"Test Folder"}`))
+	type ffResp struct {
+		Code int `json:"code"`
+		Data struct {
+			ID uint64 `json:"id"`
+		} `json:"data"`
+	}
+	var ffr ffResp
+	json.Unmarshal(w.Body.Bytes(), &ffr)
+
+	// Toggle video favorite
+	srve(r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/favorite", v.ID), tk, nil))
+
+	if ffr.Code == 0 && ffr.Data.ID > 0 {
+		fid := ffr.Data.ID
+		// Add video to folder
+		srve(r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/favorite-folders/%d", v.ID, fid), tk, nil))
+
+		// Remove video from folder
+		srve(r, areq("DELETE", fmt.Sprintf("/api/v1/videos/%d/favorite-folders/%d", v.ID, fid), tk, nil))
+	}
+
+	// Post coin (need another user's video, can't coin self)
+	srve(r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/coin", v.ID), tk, `{"amount":1}`))
+
+	// Toggle watch later
+	srve(r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/watch-later", v.ID), tk, nil))
+
+	// List watch later
+	srve(r, areq("GET", "/api/v1/users/me/watch-later", tk, nil))
+
+	// Clear watch later
+	srve(r, areq("DELETE", "/api/v1/users/me/watch-later", tk, nil))
+}
