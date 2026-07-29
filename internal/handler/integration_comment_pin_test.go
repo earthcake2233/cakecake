@@ -1,3 +1,5 @@
+//go:build integration
+
 package handler
 
 import (
@@ -35,7 +37,7 @@ func decodeDataComment(t *testing.T, w *httptest.ResponseRecorder) model.Comment
 func Test_CommentPinAndApprove(t *testing.T) {
 	api, r, _ := newTestAPI(t)
 	u := seedUser(t, api, "cpa1", "CPA1", 10)
-	v := seedVideo(t, api, u.ID, "CPA Video")
+	v := seedVideoWithAPI(t, api, u.ID, "CPA Video")
 	tk := tok(t, api, u.ID)
 	// Post a comment
 	var cm model.Comment
@@ -154,7 +156,7 @@ func Test_VideoActions(t *testing.T) {
 	api, r, _ := newTestAPI(t)
 	u := seedUser(t, api, "vact1", "VACT1", 10)
 	tk := tok(t, api, u.ID)
-	v := seedVideo(t, api, u.ID, "VA Video")
+	v := seedVideoWithAPI(t, api, u.ID, "VA Video")
 	
 	// List my videos
 	srve(r, areq("GET", "/api/v1/users/me/videos?page=1&page_size=10", tk, nil))
@@ -215,7 +217,7 @@ func Test_VideoEngagementMore(t *testing.T) {
 	u := seedUser(t, api, "vem1", "VEM1", 100)
 	u2 := seedUser(t, api, "vem2", "VEM2", 100)
 	tk := tok(t, api, u.ID)
-	v := seedVideo(t, api, u2.ID, "VEM Video")
+	v := seedVideoWithAPI(t, api, u2.ID, "VEM Video")
 	
 	// Toggle favorite
 	srve(r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/favorite", v.ID), tk, nil))
@@ -283,7 +285,7 @@ func Test_DanmakuActions(t *testing.T) {
 	api, r, _ := newTestAPI(t)
 	u := seedUser(t, api, "dka1", "DKA1", 10)
 	tk := tok(t, api, u.ID)
-	v := seedVideo(t, api, u.ID, "DK Video")
+	v := seedVideoWithAPI(t, api, u.ID, "DK Video")
 	
 	// Post a danmaku
 	w := srve(r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/danmaku", v.ID), tk, `{"content":"Hello","type":0,"color":16777215,"progress":10.5}`))
@@ -394,7 +396,7 @@ func Test_CoinAndRewardMore(t *testing.T) {
 func Test_VideoZoneAndCatalog(t *testing.T) {
 	api, r, _ := newTestAPI(t)
 	u := seedUser(t, api, "vzc1", "VZC1", 10)
-	v := seedVideo(t, api, u.ID, "Zone Video")
+	v := seedVideoWithAPI(t, api, u.ID, "Zone Video")
 	
 	// List with zone filter
 	srve(r, areq("GET", "/api/v1/videos?zone=entertainment&page=1&page_size=10", "", nil))

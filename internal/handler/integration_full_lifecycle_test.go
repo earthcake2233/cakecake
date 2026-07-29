@@ -1,3 +1,5 @@
+//go:build integration
+
 package handler
 
 import (
@@ -136,7 +138,7 @@ func Test_FavoriteFolderLifecycle(t *testing.T) {
 	u := seedUser(t, api, "ffl1", "FFL1", 10)
 	u2 := seedUser(t, api, "ffl2", "FFL2", 10)
 	tk := tok(t, api, u.ID)
-	v := seedVideo(t, api, u2.ID, "FFL Video")
+	v := seedVideoWithAPI(t, api, u2.ID, "FFL Video")
 	
 	// Create folder
 	w := srve(r, areq("POST", "/api/v1/users/me/favorite-folders", tk, `{"title":"My Collection"}`))
@@ -163,7 +165,7 @@ func Test_SpaceEndpointsFull(t *testing.T) {
 	api, r, _ := newTestAPI(t)
 	u := seedUser(t, api, "sef1", "SEF1", 100)
 	u2 := seedUser(t, api, "sef2", "SEF2", 100)
-	v := seedVideo(t, api, u.ID, "SEF Video")
+	v := seedVideoWithAPI(t, api, u.ID, "SEF Video")
 	_ = seedArticle(t, api, u.ID, "SEF Article")
 	
 	// Get user space

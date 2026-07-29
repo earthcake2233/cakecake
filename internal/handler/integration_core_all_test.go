@@ -1,3 +1,5 @@
+//go:build integration
+
 package handler
 
 import (
@@ -25,7 +27,7 @@ func seedUser(t *testing.T, api *API, username, nickname string, coin int) model
 	return u
 }
 
-func seedVideo(t *testing.T, api *API, uid uint64, title string) model.Video {
+func seedVideoWithAPI(t *testing.T, api *API, uid uint64, title string) model.Video {
 	t.Helper()
 	v := model.Video{UserID: uid, Title: title, Status: "published", VideoURL: "https://cdn.example.com/v.mp4", CreatedAt: time.Now(), UpdatedAt: time.Now()}
 	require.NoError(t, api.DB.Create(&v).Error)
@@ -80,7 +82,7 @@ func Test_VideoEngagement(t *testing.T) {
 	api, r, _ := newTestAPI(t)
 	u := seedUser(t, api, "ve1", "VEng1", 100)
 	u2 := seedUser(t, api, "ve2", "VEng2", 100)
-	v := seedVideo(t, api, u2.ID, "VE Video")
+	v := seedVideoWithAPI(t, api, u2.ID, "VE Video")
 	tk := tok(t, api, u.ID)
 	srve(r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/like", v.ID), tk, nil))
 	srve(r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/like", v.ID), tk, nil))
@@ -92,7 +94,7 @@ func Test_VideoEngagement(t *testing.T) {
 func Test_CommentCRUD(t *testing.T) {
 	api, r, _ := newTestAPI(t)
 	u := seedUser(t, api, "c1", "C1", 10)
-	v := seedVideo(t, api, u.ID, "C Video")
+	v := seedVideoWithAPI(t, api, u.ID, "C Video")
 	tk := tok(t, api, u.ID)
 	srve(r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/comments", v.ID), tk, `{"content":"hello"}`))
 	srve(r, areq("GET", fmt.Sprintf("/api/v1/videos/%d/comments", v.ID), "", nil))
@@ -116,7 +118,7 @@ func Test_ArticleFlow(t *testing.T) {
 func Test_ViewHistory(t *testing.T) {
 	api, r, _ := newTestAPI(t)
 	u := seedUser(t, api, "vh1", "VH1", 10)
-	v := seedVideo(t, api, u.ID, "VH Video")
+	v := seedVideoWithAPI(t, api, u.ID, "VH Video")
 	tk := tok(t, api, u.ID)
 	srve(r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/view-history", v.ID), tk, nil))
 	srve(r, areq("GET", "/api/v1/users/me/view-history", tk, nil))
@@ -152,7 +154,7 @@ func Test_DmConversation(t *testing.T) {
 func Test_FavoriteFolder(t *testing.T) {
 	api, r, _ := newTestAPI(t)
 	u := seedUser(t, api, "ff1", "FF1", 10)
-	v := seedVideo(t, api, u.ID, "FF Video")
+	v := seedVideoWithAPI(t, api, u.ID, "FF Video")
 	tk := tok(t, api, u.ID)
 	df := model.FavoriteFolder{UserID: u.ID, Title: "default", IsDefault: true}
 	require.NoError(t, api.DB.Create(&df).Error)
@@ -168,7 +170,7 @@ func Test_FavoriteFolder(t *testing.T) {
 func Test_VideoDetailAndListing(t *testing.T) {
 	api, r, _ := newTestAPI(t)
 	u := seedUser(t, api, "vd1", "VD1", 10)
-	v := seedVideo(t, api, u.ID, "VD Video")
+	v := seedVideoWithAPI(t, api, u.ID, "VD Video")
 	srve(r, areq("GET", fmt.Sprintf("/api/v1/videos/%d", v.ID), "", nil))
 	srve(r, areq("GET", "/api/v1/videos?page=1&page_size=10", "", nil))
 	srve(r, areq("GET", fmt.Sprintf("/api/v1/space/%d/videos", u.ID), "", nil))
@@ -255,14 +257,14 @@ func Test_DynamicCommentList(t *testing.T) {
 func Test_SearchAll(t *testing.T) {
 	api, r, _ := newTestAPI(t)
 	u := seedUser(t, api, "sa1", "SA1", 10)
-	seedVideo(t, api, u.ID, "Searchable Video")
+	seedVideoWithAPI(t, api, u.ID, "Searchable Video")
 	srve(r, areq("GET", "/api/v1/search?keyword=test&page=1&page_size=10", "", nil))
 }
 
 func Test_UserMeFavorites(t *testing.T) {
 	api, r, _ := newTestAPI(t)
 	u := seedUser(t, api, "ufv1", "UFV1", 10)
-	v := seedVideo(t, api, u.ID, "Fav Video")
+	v := seedVideoWithAPI(t, api, u.ID, "Fav Video")
 	tk := tok(t, api, u.ID)
 	srve(r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/favorite", v.ID), tk, nil))
 	srve(r, areq("GET", "/api/v1/users/me/favorites", tk, nil))

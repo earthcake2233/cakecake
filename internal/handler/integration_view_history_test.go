@@ -1,3 +1,5 @@
+//go:build integration
+
 package handler
 
 import (
@@ -10,7 +12,7 @@ import (
 func Test_ViewHistory_Basic(t *testing.T) {
 	api, r, _ := newTestAPI(t)
 	u := seedUser(t, api, "vh1", "VHUser", 100)
-	v := seedVideo(t, api, u.ID, "VH Video")
+	v := seedVideoWithAPI(t, api, u.ID, "VH Video")
 	tk := tok(t, api, u.ID)
 
 	// Post view history

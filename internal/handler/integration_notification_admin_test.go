@@ -1,3 +1,5 @@
+//go:build integration
+
 package handler
 
 import (
@@ -16,7 +18,7 @@ func Test_NotificationFromComment(t *testing.T) {
 	u := seedUser(t, api, "nfc1", "NFC1", 10)
 	u2 := seedUser(t, api, "nfc2", "NFC2", 10)
 	tk := tok(t, api, u2.ID)
-	v := seedVideo(t, api, u.ID, "Notif Video")
+	v := seedVideoWithAPI(t, api, u.ID, "Notif Video")
 	
 	// Post comment from u2 on u1 video
 	body := fmt.Sprintf(`{"content":"Nice video!","video_id":%d}`, v.ID)
@@ -95,7 +97,7 @@ func Test_CommentReplyFlow(t *testing.T) {
 	u2 := seedUser(t, api, "crf2", "CRF2", 10)
 	tk := tok(t, api, u.ID)
 	tk2 := tok(t, api, u2.ID)
-	v := seedVideo(t, api, u2.ID, "Reply Video")
+	v := seedVideoWithAPI(t, api, u2.ID, "Reply Video")
 	
 	// Post parent comment
 	body := fmt.Sprintf(`{"content":"Parent comment","video_id":%d}`, v.ID)
@@ -117,7 +119,7 @@ func Test_CoinAndWatchLaterEdge(t *testing.T) {
 	u := seedUser(t, api, "cwe1", "CWE1", 100)
 	u2 := seedUser(t, api, "cwe2", "CWE2", 100)
 	tk := tok(t, api, u.ID)
-	v := seedVideo(t, api, u2.ID, "CWE Video")
+	v := seedVideoWithAPI(t, api, u2.ID, "CWE Video")
 	
 	// Coin with amount=2
 	srve(r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/coin", v.ID), tk, `{"amount":2}`))
@@ -143,7 +145,7 @@ func Test_CreatorEndpointsFull(t *testing.T) {
 	u := seedUser(t, api, "cef1", "CEF1", 10)
 	u2 := seedUser(t, api, "cef2", "CEF2", 10)
 	tk := tok(t, api, u.ID)
-	v := seedVideo(t, api, u.ID, "Creator Video")
+	v := seedVideoWithAPI(t, api, u.ID, "Creator Video")
 	
 	// Post a comment on the video from another user
 	tk2 := tok(t, api, u2.ID)
@@ -160,7 +162,7 @@ func Test_CreatorEndpointsFull(t *testing.T) {
 func Test_HomeStatsAndBanners(t *testing.T) {
 	api, r, _ := newTestAPI(t)
 	u := seedUser(t, api, "hsb1", "HSB1", 10)
-	_ = seedVideo(t, api, u.ID, "HS Video")
+	_ = seedVideoWithAPI(t, api, u.ID, "HS Video")
 	
 	// Home stats should work
 	srve(r, areq("GET", "/api/v1/stats/home", "", nil))

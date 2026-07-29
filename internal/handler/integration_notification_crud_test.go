@@ -1,3 +1,5 @@
+//go:build integration
+
 // auto-generated test file
 package handler
 
@@ -57,7 +59,7 @@ func Test_NotificationLikeAggregation(t *testing.T) {
 	api, r, _ := newTestAPI(t)
 	u := seedUser(t, api, "nla1", "NLA1", 10)
 	u2 := seedUser(t, api, "nla2", "NLA2", 10)
-	v := seedVideo(t, api, u2.ID, "Notif Like Agg Video")
+	v := seedVideoWithAPI(t, api, u2.ID, "Notif Like Agg Video")
 	body := fmt.Sprintf(`{"content":"Comment for like agg test","video_id":%d}`, v.ID)
 	srve(r, areq("POST", "/api/v1/videos/"+fmt.Sprint(v.ID)+"/comments", tok(t, api, u2.ID), body))
 	body2 := fmt.Sprintf(`{"content":"Second comment for like agg","video_id":%d}`, v.ID)
@@ -76,7 +78,7 @@ func Test_CommentApproveIgnoreDelete(t *testing.T) {
 	u := seedUser(t, api, "cai1", "CAI1", 10)
 	u2 := seedUser(t, api, "cai2", "CAI2", 10)
 	tk := tok(t, api, u.ID)
-	v := seedVideo(t, api, u.ID, "CAI Video")
+	v := seedVideoWithAPI(t, api, u.ID, "CAI Video")
 	w := srve(r, areq("POST", "/api/v1/videos/"+fmt.Sprint(v.ID)+"/comments", tok(t, api, u2.ID), fmt.Sprintf(`{"content":"Needs approval"}`)))
 	var cr struct { Code int `json:"code"`; Data struct { ID uint64 `json:"id"`} }
 	json.Unmarshal(w.Body.Bytes(), &cr)
@@ -95,7 +97,7 @@ func Test_CommentIgnoreCurated(t *testing.T) {
 	u := seedUser(t, api, "cic1", "CIC1", 10)
 	u2 := seedUser(t, api, "cic2", "CIC2", 10)
 	tk := tok(t, api, u.ID)
-	v := seedVideo(t, api, u.ID, "CIC Video")
+	v := seedVideoWithAPI(t, api, u.ID, "CIC Video")
 	w := srve(r, areq("POST", "/api/v1/videos/"+fmt.Sprint(v.ID)+"/comments", tok(t, api, u2.ID), fmt.Sprintf(`{"content":"Ignore me"}`)))
 	var cr struct { Code int `json:"code"`; Data struct { ID uint64 `json:"id"`} }
 	json.Unmarshal(w.Body.Bytes(), &cr)
@@ -129,7 +131,7 @@ func Test_VideoFavoritePickerAndFolderOps(t *testing.T) {
 	u := seedUser(t, api, "vfp1", "VFP1", 10)
 	u2 := seedUser(t, api, "vfp2", "VFP2", 10)
 	tk := tok(t, api, u.ID)
-	v := seedVideo(t, api, u2.ID, "VFP Video")
+	v := seedVideoWithAPI(t, api, u2.ID, "VFP Video")
 	w1 := srve(r, areq("POST", "/api/v1/users/me/favorite-folders", tk, `{"title":"Folder A"}`))
 	w2 := srve(r, areq("POST", "/api/v1/users/me/favorite-folders", tk, `{"title":"Folder B"}`))
 	var f1 struct { Code int `json:"code"`; Data struct { ID uint64 `json:"id"`} }
@@ -149,7 +151,7 @@ func Test_VideoPlaybackAndCover(t *testing.T) {
 	u := seedUser(t, api, "vpb1", "VPB1", 10)
 	u2 := seedUser(t, api, "vpb2", "VPB2", 10)
 	tk := tok(t, api, u.ID)
-	v := seedVideo(t, api, u2.ID, "VPB Video")
+	v := seedVideoWithAPI(t, api, u2.ID, "VPB Video")
 	srve(r, areq("PATCH", fmt.Sprintf("/api/v1/videos/%d/playback", v.ID), tk, `{"current_time":15.5}`))
 	srve(r, areq("PUT", fmt.Sprintf("/api/v1/videos/%d/cover", v.ID), tk, nil))
 }
@@ -183,7 +185,7 @@ func Test_CreatorCommentsWithApproval(t *testing.T) {
 	u := seedUser(t, api, "ccw1", "CCW1", 10)
 	u2 := seedUser(t, api, "ccw2", "CCW2", 10)
 	tk := tok(t, api, u.ID)
-	v := seedVideo(t, api, u.ID, "CCW Video")
+	v := seedVideoWithAPI(t, api, u.ID, "CCW Video")
 	w := srve(r, areq("POST", "/api/v1/videos/"+fmt.Sprint(v.ID)+"/comments", tok(t, api, u2.ID), `{"content":"Creator comment test"}`))
 	var cr struct { Code int `json:"code"`; Data struct { ID uint64 `json:"id"`} }
 	json.Unmarshal(w.Body.Bytes(), &cr)
@@ -211,7 +213,7 @@ func Test_FavoriteFolderBatchRemove(t *testing.T) {
 	u := seedUser(t, api, "fbr1", "FBR1", 10)
 	u2 := seedUser(t, api, "fbr2", "FBR2", 10)
 	tk := tok(t, api, u.ID)
-	v := seedVideo(t, api, u2.ID, "FBR Video")
+	v := seedVideoWithAPI(t, api, u2.ID, "FBR Video")
 	w := srve(r, areq("POST", "/api/v1/users/me/favorite-folders", tk, `{"title":"Batch Folder"}`))
 	var fr struct { Code int `json:"code"`; Data struct { ID uint64 `json:"id"`} }
 	json.Unmarshal(w.Body.Bytes(), &fr)
@@ -301,7 +303,7 @@ func Test_DanmakuDeleteAndLike(t *testing.T) {
 	u := seedUser(t, api, "ddl1", "DDL1", 10)
 	u2 := seedUser(t, api, "ddl2", "DDL2", 10)
 	tk := tok(t, api, u.ID)
-	v := seedVideo(t, api, u2.ID, "DDL Video")
+	v := seedVideoWithAPI(t, api, u2.ID, "DDL Video")
 	w := srve(r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/danmaku", v.ID), tk, `{"content":"DDL Danmaku","type":0,"color":16777215,"progress":5.0}`))
 	var dmr struct { Code int `json:"code"`; Data struct { ID uint64 `json:"id"`} }
 	json.Unmarshal(w.Body.Bytes(), &dmr)
@@ -393,7 +395,7 @@ func Test_ViewHistoryEndpoints(t *testing.T) {
 	u := seedUser(t, api, "vhe1", "VHE1", 10)
 	u2 := seedUser(t, api, "vhe2", "VHE2", 10)
 	tk := tok(t, api, u.ID)
-	v := seedVideo(t, api, u2.ID, "VHE Video")
+	v := seedVideoWithAPI(t, api, u2.ID, "VHE Video")
 	srve(r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/view", v.ID), tk, `{"current_time":5.0,"duration":120.0}`))
 	srve(r, areq("GET", "/api/v1/users/me/view-history?page=1&page_size=10", tk, nil))
 	srve(r, areq("DELETE", fmt.Sprintf("/api/v1/users/me/view-history/videos/%d", v.ID), tk, nil))
@@ -406,7 +408,7 @@ func Test_CoinLedgerEndpoints(t *testing.T) {
 	u := seedUser(t, api, "cle1", "CLE1", 100)
 	u2 := seedUser(t, api, "cle2", "CLE2", 10)
 	tk := tok(t, api, u.ID)
-	v := seedVideo(t, api, u2.ID, "CLE Video")
+	v := seedVideoWithAPI(t, api, u2.ID, "CLE Video")
 	srve(r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/coin", v.ID), tk, `{"amount":1}`))
 	srve(r, areq("GET", "/api/v1/users/me/coin-balance", tk, nil))
 	srve(r, areq("GET", "/api/v1/users/me/coin-ledger?page=1&page_size=10", tk, nil))

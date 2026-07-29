@@ -1,3 +1,5 @@
+//go:build integration
+
 package handler
 
 import (
@@ -157,7 +159,7 @@ func Test_clearCommentLike(t *testing.T) {
 func Test_resolveReplyInboxTarget(t *testing.T) {
 	api, _, _ := newTestAPI(t)
 	u := seedUser(t, api, "rir1", "RIR1", 10)
-	v := seedVideo(t, api, u.ID, "Test Video")
+	v := seedVideoWithAPI(t, api, u.ID, "Test Video")
 	cm := model.Comment{
 		UserID:  u.ID,
 		VideoID: v.ID,

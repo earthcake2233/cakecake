@@ -1,3 +1,5 @@
+//go:build integration
+
 package handler
 
 import (
@@ -26,7 +28,7 @@ func Test_CommentApproveByNonOwner(t *testing.T) {
 	u2 := seedUser(t, api, "can2", "CAN2", 10)
 	u3 := seedUser(t, api, "can3", "CAN3", 10)
 	tk := tok(t, api, u2.ID)
-	v := seedVideo(t, api, u3.ID, "CAN Video")
+	v := seedVideoWithAPI(t, api, u3.ID, "CAN Video")
 	w := srve(r, areq("POST", "/api/v1/videos/"+fmt.Sprint(v.ID)+"/comments", tok(t, api, u.ID), `{"content":"Can I be approved?"}`))
 	var cr struct { Code int `json:"code"`; Data struct { ID uint64 `json:"id"`} }
 	json.Unmarshal(w.Body.Bytes(), &cr)
@@ -63,7 +65,7 @@ func Test_CreatorCommentsWithFilters(t *testing.T) {
 	u := seedUser(t, api, "ccf1", "CCF1", 10)
 	u2 := seedUser(t, api, "ccf2", "CCF2", 10)
 	tk := tok(t, api, u.ID)
-	v := seedVideo(t, api, u.ID, "CCF Video")
+	v := seedVideoWithAPI(t, api, u.ID, "CCF Video")
 	srve(r, areq("POST", "/api/v1/videos/"+fmt.Sprint(v.ID)+"/comments", tok(t, api, u2.ID), `{"content":"Filter test comment"}`))
 	srve(r, areq("GET", "/api/v1/users/me/creator/comments?page=1&page_size=10", tk, nil))
 	srve(r, areq("GET", "/api/v1/users/me/creator/comments?page=1&page_size=10&status=pending", tk, nil))

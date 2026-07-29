@@ -1,3 +1,5 @@
+//go:build integration
+
 package handler
 
 import (
@@ -229,7 +231,7 @@ func Test_SpaceRecentCoinsAndFavorites(t *testing.T) {
 	api, r, _ := newTestAPI(t)
 	u := seedUser(t, api, "src1", "SRC1", 100)
 	u2 := seedUser(t, api, "src2", "SRC2", 100)
-	v := seedVideo(t, api, u2.ID, "Coin Video")
+	v := seedVideoWithAPI(t, api, u2.ID, "Coin Video")
 	
 	// Post a coin from u to u2's video
 	tk := tok(t, api, u.ID)

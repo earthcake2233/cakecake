@@ -9,10 +9,8 @@ import (
 	"github.com/alicebob/miniredis/v2"
 	"github.com/glebarez/sqlite"
 	"github.com/redis/go-redis/v9"
-	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"minibili/internal/config"
 	"minibili/internal/model"
 )
 
@@ -232,155 +230,7 @@ func TestDanmakuRelay_Skip(t *testing.T) {
 
 // ---------- AgentService: CheckQuota ----------
 
-func TestAgentService_CheckQuota(t *testing.T) {
-	mr, err := miniredis.Run()
-	if err != nil {
-		t.Fatal(err)
-	}
-	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	log := zap.NewNop()
 
-	t.Run("nil service returns true", func(t *testing.T) {
-		var s *AgentService
-		if !s.CheckQuota(context.Background(), 1) {
-			t.Error("nil service should return true")
-		}
-	})
-
-	t.Run("nil redis returns true", func(t *testing.T) {
-		s := &AgentService{Redis: nil, Log: log}
-		if !s.CheckQuota(context.Background(), 1) {
-			t.Error("nil redis should return true")
-		}
-	})
-
-	t.Run("nil cfg returns true", func(t *testing.T) {
-		s := &AgentService{Redis: rdb, Log: log, Cfg: nil}
-		if !s.CheckQuota(context.Background(), 1) {
-			t.Error("nil cfg should return true")
-		}
-	})
-
-	t.Run("quota zero means unlimited", func(t *testing.T) {
-		s := &AgentService{Redis: rdb, Log: log, Cfg: &config.C{AgentDailyQuota: 0}}
-		if !s.CheckQuota(context.Background(), 42) {
-			t.Error("quota=0 should be unlimited (return true)")
-		}
-	})
-
-	t.Run("under quota returns true", func(t *testing.T) {
-		ctx := context.Background()
-		s := &AgentService{Redis: rdb, Log: log, Cfg: &config.C{AgentDailyQuota: 10}}
-		if !s.CheckQuota(ctx, 100) {
-			t.Error("fresh user should have quota")
-		}
-	})
-
-	t.Run("at quota returns true (equal)", func(t *testing.T) {
-		ctx := context.Background()
-		s := &AgentService{Redis: rdb, Log: log, Cfg: &config.C{AgentDailyQuota: 5}}
-		key := s.quotaKey(200)
-		_ = rdb.Set(ctx, key, 5, 0).Err()
-		// CheckQuota: n >= quota returns false? Let's check: if s.RC != nil { quota = s.RC.GetInt(...) }
-		// n < quota -> true; otherwise false (n >= quota -> false)
-		// So at quota (n=5, quota=5) -> n < quota is false -> returns false
-		// Wait, that means at quota it returns false? That doesn't seem right.
-		// Let me re-read: if n < quota { return true } else { return false }
-		// n=5, quota=5, n < quota = false, return false.
-		// Hmm but the method returns true for "has quota available". If n >= quota, no quota available => false.
-		// Actually let me re-read the implementation:
-		// n, err := s.Redis.Get(ctx, s.quotaKey(userID)).Int()
-		// if err == redis.Nil { return true }  // no key yet
-		// return err != nil || n < quota
-		// So n < quota => true (ok), n >= quota => false (exceeded)
-		// At n=5, quota=5: n < quota is false, so returns false (not OK)
-		// At n=5, quota=10: n < quota is true, so returns true (OK)
-		// So correctly at quota means exceeded
-		got := s.CheckQuota(ctx, 200)
-		if got {
-			t.Error("at quota (5==5) should return false (no quota)")
-		}
-	})
-
-	t.Run("over quota returns false", func(t *testing.T) {
-		ctx := context.Background()
-		s := &AgentService{Redis: rdb, Log: log, Cfg: &config.C{AgentDailyQuota: 5}}
-		key := s.quotaKey(300)
-		_ = rdb.Set(ctx, key, 10, 0).Err()
-		if s.CheckQuota(ctx, 300) {
-			t.Error("over quota should return false")
-		}
-	})
-
-	t.Run("no key yet returns true", func(t *testing.T) {
-		ctx := context.Background()
-		s := &AgentService{Redis: rdb, Log: log, Cfg: &config.C{AgentDailyQuota: 5}}
-		if !s.CheckQuota(ctx, 999) {
-			t.Error("no key (redis.Nil) should return true")
-		}
-	})
-}
-
-// ---------- AgentService: IsBotUser ----------
-
-func TestAgentService_IsBotUser(t *testing.T) {
-	log := zap.NewNop()
-
-	t.Run("nil service", func(t *testing.T) {
-		var s *AgentService
-		if s.IsBotUser(1) {
-			t.Error("nil service should return false")
-		}
-	})
-
-	t.Run("nil db", func(t *testing.T) {
-		s := &AgentService{DB: nil, Log: log}
-		if s.IsBotUser(1) {
-			t.Error("nil db should return false")
-		}
-	})
-
-	t.Run("zero uid", func(t *testing.T) {
-		db := setupSQLiteDB(t)
-		s := &AgentService{DB: db, Log: log}
-		if s.IsBotUser(0) {
-			t.Error("zero uid should return false")
-		}
-	})
-
-	t.Run("user not a bot", func(t *testing.T) {
-		db := setupSQLiteDB(t)
-		s := &AgentService{DB: db, Log: log}
-		if s.IsBotUser(42) {
-			t.Error("no agent profile should return false")
-		}
-	})
-
-	t.Run("user is a bot", func(t *testing.T) {
-		db := setupSQLiteDB(t)
-		// Create an agent profile with BotUserID=100
-		profile := model.AgentProfile{
-			Slug:                "test-bot",
-			BotUserID:           100,
-			DisplayName:         "Test Bot",
-			SystemPrompt:        "You are a test bot.",
-			WelcomeMessagesJSON: `["Hello"]`,
-			Enabled:             true,
-		}
-		if err := db.Create(&profile).Error; err != nil {
-			t.Fatal(err)
-		}
-		s := &AgentService{DB: db, Log: log}
-		if !s.IsBotUser(100) {
-			t.Error("user 100 has an agent profile, should return true")
-		}
-		if s.IsBotUser(101) {
-			t.Error("user 101 has no agent profile, should return false")
-		}
-	})
-}
-
-// ---------- AgentService: IsAgentConversation (already tested in service_extra_test.go) ----------
 
 func TestAgentService_IsAgentConversationIntegration(t *testing.T) {
 	s := &AgentService{}

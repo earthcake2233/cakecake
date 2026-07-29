@@ -1,3 +1,5 @@
+//go:build integration
+
 package handler
 
 import (
@@ -127,7 +129,7 @@ func Test_VideoEngagementFullFolderFlow(t *testing.T) {
 	u := seedUser(t, api, "vef2", "VEF2", 10)
 	u2 := seedUser(t, api, "vef3", "VEF3", 10)
 	tk := tok(t, api, u.ID)
-	v := seedVideo(t, api, u2.ID, "VEF2 Video")
+	v := seedVideoWithAPI(t, api, u2.ID, "VEF2 Video")
 	w := srve(r, areq("POST", "/api/v1/users/me/favorite-folders", tk, `{"title":"VEF Folder"}`))
 	var fr struct { Code int `json:"code"`; Data struct { ID uint64 `json:"id"`} }
 	json.Unmarshal(w.Body.Bytes(), &fr)
@@ -156,7 +158,7 @@ func Test_ViewHistoryRecordAndClear(t *testing.T) {
 	u := seedUser(t, api, "vhr1", "VHR1", 10)
 	u2 := seedUser(t, api, "vhr2", "VHR2", 10)
 	tk := tok(t, api, u.ID)
-	v := seedVideo(t, api, u2.ID, "VHR Video")
+	v := seedVideoWithAPI(t, api, u2.ID, "VHR Video")
 	srve(r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/view", v.ID), tk, `{"current_time":10.0,"duration":200.0}`))
 	srve(r, areq("GET", "/api/v1/users/me/view-history?page=1&page_size=10", tk, nil))
 	srve(r, areq("DELETE", fmt.Sprintf("/api/v1/users/me/view-history/videos/%d", v.ID), tk, nil))

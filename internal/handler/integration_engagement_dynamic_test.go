@@ -1,3 +1,5 @@
+//go:build integration
+
 package handler
 
 import (
@@ -69,7 +71,7 @@ func Test_VideoEngagementFolderOps(t *testing.T) {
 	u := seedUser(t, api, "vef1", "VEF1", 10)
 	u2 := seedUser(t, api, "vef2", "VEF2", 10)
 	tk := tok(t, api, u.ID)
-	v := seedVideo(t, api, u2.ID, "VEF Video")
+	v := seedVideoWithAPI(t, api, u2.ID, "VEF Video")
 	w := srve(r, areq("POST", "/api/v1/users/me/favorite-folders", tk, `{"title":"VEF Folder"}`))
 	var fr struct { Code int `json:"code"`; Data struct { ID uint64 `json:"id"`} `json:"data"` }
 	json.Unmarshal(w.Body.Bytes(), &fr)

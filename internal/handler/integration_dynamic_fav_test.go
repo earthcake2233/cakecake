@@ -1,3 +1,5 @@
+//go:build integration
+
 package handler
 
 import (
@@ -39,7 +41,7 @@ func Test_FavoriteFolderCRUDMore(t *testing.T) {
 	u := seedUser(t, api, "ffc1", "FFC1", 10)
 	u2 := seedUser(t, api, "ffc2", "FFC2", 10)
 	tk := tok(t, api, u.ID)
-	v := seedVideo(t, api, u2.ID, "FF Video")
+	v := seedVideoWithAPI(t, api, u2.ID, "FF Video")
 	
 	// Create a folder
 	w := srve(r, areq("POST", "/api/v1/users/me/favorite-folders", tk, `{"title":"My Folder","is_public":true}`))
@@ -104,7 +106,7 @@ func Test_VideoFavoriteFolders(t *testing.T) {
 	u := seedUser(t, api, "vff1", "VFF1", 10)
 	u2 := seedUser(t, api, "vff2", "VFF2", 10)
 	tk := tok(t, api, u.ID)
-	v := seedVideo(t, api, u2.ID, "VFF Video")
+	v := seedVideoWithAPI(t, api, u2.ID, "VFF Video")
 	
 	// Get video detail with engagement
 	srve(r, areq("GET", fmt.Sprintf("/api/v1/videos/%d", v.ID), tk, nil))
@@ -135,7 +137,7 @@ func Test_VideoMyListAndCount(t *testing.T) {
 	api, r, _ := newTestAPI(t)
 	u := seedUser(t, api, "vml1", "VML1", 10)
 	tk := tok(t, api, u.ID)
-	seedVideo(t, api, u.ID, "My Video 1")
+	seedVideoWithAPI(t, api, u.ID, "My Video 1")
 	
 	// List my videos
 	srve(r, areq("GET", "/api/v1/users/me/videos?page=1&page_size=10", tk, nil))

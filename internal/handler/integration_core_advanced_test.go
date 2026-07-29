@@ -1,3 +1,5 @@
+//go:build integration
+
 package handler
 
 import (
@@ -25,7 +27,7 @@ func Test_NotifLikeFlow(t *testing.T) {
 	api, r, _ := newTestAPI(t)
 	u := seedUser(t, api, "nlf1", "NLF1", 0)
 	u2 := seedUser(t, api, "nlf2", "NLF2", 0)
-	v := seedVideo(t, api, u2.ID, "NLF Video")
+	v := seedVideoWithAPI(t, api, u2.ID, "NLF Video")
 	tk := tok(t, api, u.ID)
 
 	// Create a comment on u2 video
@@ -73,7 +75,7 @@ func Test_DMFullFlow(t *testing.T) {
 func Test_CreatorCommentsList(t *testing.T) {
 	api, r, _ := newTestAPI(t)
 	u := seedUser(t, api, "ccl1", "CCL1", 0)
-	v := seedVideo(t, api, u.ID, "CCL Video")
+	v := seedVideoWithAPI(t, api, u.ID, "CCL Video")
 	tk := tok(t, api, u.ID)
 
 	// Post a comment first
@@ -103,7 +105,7 @@ func Test_ArticleEngagement(t *testing.T) {
 func Test_WatchLaterFlow(t *testing.T) {
 	api, r, _ := newTestAPI(t)
 	u := seedUser(t, api, "wlf1", "WLF1", 0)
-	v := seedVideo(t, api, u.ID, "WL Video")
+	v := seedVideoWithAPI(t, api, u.ID, "WL Video")
 	tk := tok(t, api, u.ID)
 
 	srve(r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/watch-later", v.ID), tk, nil))
@@ -117,7 +119,7 @@ func Test_WatchLaterFlow(t *testing.T) {
 func Test_MultiFavoriteFolders(t *testing.T) {
 	api, r, _ := newTestAPI(t)
 	u := seedUser(t, api, "mff1", "MFF1", 0)
-	v := seedVideo(t, api, u.ID, "MFF Video")
+	v := seedVideoWithAPI(t, api, u.ID, "MFF Video")
 	tk := tok(t, api, u.ID)
 
 	// Create two folders
@@ -188,7 +190,7 @@ func Test_AdminHotSearchOps(t *testing.T) {
 func Test_AdminReviewOps(t *testing.T) {
 	api, r, _ := newTestAPI(t)
 	u := seedUser(t, api, "aro1", "ARO1", 0)
-	v := seedVideo(t, api, u.ID, "ARO Video")
+	v := seedVideoWithAPI(t, api, u.ID, "ARO Video")
 	art := seedArticle(t, api, u.ID, "ARO Article")
 	atk := admintok(t, api)
 

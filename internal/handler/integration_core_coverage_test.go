@@ -1,3 +1,5 @@
+//go:build integration
+
 package handler
 
 import (
@@ -25,7 +27,7 @@ func Test_DecrementPaths(t *testing.T) {
 	api, r, _ := newTestAPI(t)
 	u := seedUser(t, api, "dec1", "DEC1", 100)
 	u2 := seedUser(t, api, "dec2", "DEC2", 100)
-	v := seedVideo(t, api, u.ID, "DEC Video")
+	v := seedVideoWithAPI(t, api, u.ID, "DEC Video")
 	tk := tok(t, api, u2.ID)
 
 	// Post a comment
@@ -116,7 +118,7 @@ func Test_ArticleCommentDecrement(t *testing.T) {
 func Test_DanmakuOperations(t *testing.T) {
 	api, r, _ := newTestAPI(t)
 	u := seedUser(t, api, "dan1", "DAN1", 0)
-	v := seedVideo(t, api, u.ID, "DAN Video")
+	v := seedVideoWithAPI(t, api, u.ID, "DAN Video")
 	tk := tok(t, api, u.ID)
 
 	// Post a danmaku
@@ -151,7 +153,7 @@ func Test_ViewHistorySettingsMore(t *testing.T) {
 	// Update settings
 	srve(r, areq("PUT", "/api/v1/users/me/view-history/settings", tk, `{"paused":true}`))
 	// Post view history
-	v := seedVideo(t, api, u.ID, "VHS Vid")
+	v := seedVideoWithAPI(t, api, u.ID, "VHS Vid")
 	srve(r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/view-history", v.ID), tk, nil))
 	// List
 	srve(r, areq("GET", "/api/v1/users/me/view-history", tk, nil))
@@ -163,7 +165,7 @@ func Test_ViewHistorySettingsMore(t *testing.T) {
 func Test_WatchLaterOperations(t *testing.T) {
 	api, r, _ := newTestAPI(t)
 	u := seedUser(t, api, "wlo1", "WLO1", 0)
-	v := seedVideo(t, api, u.ID, "WLO Vid")
+	v := seedVideoWithAPI(t, api, u.ID, "WLO Vid")
 	tk := tok(t, api, u.ID)
 
 	// Toggle watch later
@@ -180,7 +182,7 @@ func Test_WatchLaterOperations(t *testing.T) {
 func Test_VideoFolderOperations(t *testing.T) {
 	api, r, _ := newTestAPI(t)
 	u := seedUser(t, api, "vfo1", "VFO1", 0)
-	v := seedVideo(t, api, u.ID, "VFO Vid")
+	v := seedVideoWithAPI(t, api, u.ID, "VFO Vid")
 	tk := tok(t, api, u.ID)
 
 	// Create folder
@@ -216,7 +218,7 @@ func Test_SearchEndpoints(t *testing.T) {
 func Test_AdminDeleteMore(t *testing.T) {
 	api, r, _ := newTestAPI(t)
 	u := seedUser(t, api, "adm1", "ADM1", 0)
-	v := seedVideo(t, api, u.ID, "ADM Vid")
+	v := seedVideoWithAPI(t, api, u.ID, "ADM Vid")
 	art := seedArticle(t, api, u.ID, "ADM Article")
 	atk := admintok(t, api)
 
@@ -231,7 +233,7 @@ func Test_CoinOperations(t *testing.T) {
 	api, r, _ := newTestAPI(t)
 	u := seedUser(t, api, "cop1", "COP1", 100)
 	u2 := seedUser(t, api, "cop2", "COP2", 0)
-	v := seedVideo(t, api, u2.ID, "COP Vid")
+	v := seedVideoWithAPI(t, api, u2.ID, "COP Vid")
 	art := seedArticle(t, api, u2.ID, "COP Art")
 	tk := tok(t, api, u.ID)
 

@@ -1,3 +1,5 @@
+//go:build integration
+
 package handler
 
 import (
@@ -28,7 +30,7 @@ func Test_CommentLikeDislikeToggleFlow(t *testing.T) {
 	u := seedUser(t, api, "clt1", "CLT1", 10)
 	u2 := seedUser(t, api, "clt2", "CLT2", 10)
 	tk := tok(t, api, u.ID)
-	v := seedVideo(t, api, u2.ID, "CLT Video")
+	v := seedVideoWithAPI(t, api, u2.ID, "CLT Video")
 	w := srve(r, areq("POST", "/api/v1/videos/"+fmt.Sprint(v.ID)+"/comments", tok(t, api, u2.ID), fmt.Sprintf(`{"content":"Toggle test comment"}`)))
 	var cr struct { Code int `json:"code"`; Data struct { ID uint64 `json:"id"`} }
 	json.Unmarshal(w.Body.Bytes(), &cr)
@@ -46,7 +48,7 @@ func Test_VideoCoinDifferentAmounts(t *testing.T) {
 	u := seedUser(t, api, "vcd1", "VCD1", 100)
 	u2 := seedUser(t, api, "vcd2", "VCD2", 10)
 	tk := tok(t, api, u.ID)
-	v := seedVideo(t, api, u2.ID, "VCD Video")
+	v := seedVideoWithAPI(t, api, u2.ID, "VCD Video")
 	srve(r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/coin", v.ID), tk, `{"amount":2}`))
 	srve(r, areq("GET", fmt.Sprintf("/api/v1/space/%d/recent-coins", u2.ID), "", nil))
 }
@@ -89,8 +91,8 @@ func Test_UserFollowGroupsAndList(t *testing.T) {
 func Test_SpaceAndSearchFlow(t *testing.T) {
 	api, r, _ := newTestAPI(t)
 	u := seedUser(t, api, "ssf1", "SSF1", 10)
-	_ = seedVideo(t, api, u.ID, "SSF Video 1")
-	_ = seedVideo(t, api, u.ID, "SSF Video 2")
+	_ = seedVideoWithAPI(t, api, u.ID, "SSF Video 1")
+	_ = seedVideoWithAPI(t, api, u.ID, "SSF Video 2")
 	srve(r, areq("GET", fmt.Sprintf("/api/v1/space/%d", u.ID), "", nil))
 	srve(r, areq("GET", fmt.Sprintf("/api/v1/space/%d/videos", u.ID), "", nil))
 	srve(r, areq("GET", "/api/v1/search?q=SSF&page=1&page_size=10", "", nil))
@@ -112,7 +114,7 @@ func Test_CreatorDanmakuList(t *testing.T) {
 	u := seedUser(t, api, "cdl1", "CDL1", 10)
 	u2 := seedUser(t, api, "cdl2", "CDL2", 10)
 	tk := tok(t, api, u.ID)
-	v := seedVideo(t, api, u.ID, "CDL Video")
+	v := seedVideoWithAPI(t, api, u.ID, "CDL Video")
 	srve(r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/danmaku", v.ID), tok(t, api, u2.ID), `{"content":"CDL Danmaku","type":0,"color":16777215,"progress":10.0}`))
 	srve(r, areq("GET", "/api/v1/users/me/creator/danmakus?page=1&page_size=10", tk, nil))
 }
@@ -164,7 +166,7 @@ func Test_VideoLikeToggle(t *testing.T) {
 	u := seedUser(t, api, "vlt1", "VLT1", 10)
 	u2 := seedUser(t, api, "vlt2", "VLT2", 10)
 	tk := tok(t, api, u.ID)
-	v := seedVideo(t, api, u2.ID, "VLT Video")
+	v := seedVideoWithAPI(t, api, u2.ID, "VLT Video")
 	srve(r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/like", v.ID), tk, nil))
 	srve(r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/like", v.ID), tk, nil))
 }

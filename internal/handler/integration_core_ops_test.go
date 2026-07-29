@@ -1,3 +1,5 @@
+//go:build integration
+
 package handler
 
 import (
@@ -32,7 +34,7 @@ func decodeDataArticle(t *testing.T, w *httptest.ResponseRecorder) model.Article
 func Test_CommentBasicOps(t *testing.T) {
     api, r, _ := newTestAPI(t)
     u := seedUser(t, api, "cbo1", "CBO1", 0)
-    v := seedVideo(t, api, u.ID, "CBO Video")
+    v := seedVideoWithAPI(t, api, u.ID, "CBO Video")
     tk := tok(t, api, u.ID)
 
     var cm model.Comment

@@ -1,3 +1,5 @@
+//go:build integration
+
 package handler
 
 import (
@@ -11,7 +13,7 @@ func Test_DecrementPaths_LikeFavCoin(t *testing.T) {
 	api, r, _ := newTestAPI(t)
 	u := seedUser(t, api, "dc1", "DCUser", 200)
 	u2 := seedUser(t, api, "dc2", "DCUser2", 100)
-	v := seedVideo(t, api, u2.ID, "DC Video")
+	v := seedVideoWithAPI(t, api, u2.ID, "DC Video")
 	tk := tok(t, api, u.ID)
 
 	w := srve(r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/like", v.ID), tk, nil))
@@ -34,7 +36,7 @@ func Test_UserCoinAndLedger(t *testing.T) {
 	api, r, _ := newTestAPI(t)
 	u := seedUser(t, api, "cl1", "CLUser", 100)
 	u2 := seedUser(t, api, "cl2", "CLUser2", 100)
-	v := seedVideo(t, api, u2.ID, "CL Video")
+	v := seedVideoWithAPI(t, api, u2.ID, "CL Video")
 	tk := tok(t, api, u.ID)
 
 	w := srve(r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/coin", v.ID), tk, `{"coins":1}`))

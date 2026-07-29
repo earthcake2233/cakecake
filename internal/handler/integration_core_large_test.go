@@ -1,3 +1,5 @@
+//go:build integration
+
 package handler
 
 import (
@@ -142,7 +144,7 @@ func Test_VideoUpdateDelete(t *testing.T) {
 	api, r, _ := newTestAPI(t)
 	u := seedUser(t, api, "vud1", "VUD1", 10)
 	tk := tok(t, api, u.ID)
-	v := seedVideo(t, api, u.ID, "Original Title")
+	v := seedVideoWithAPI(t, api, u.ID, "Original Title")
 
 	// Get video
 	srve(r, areq("GET", fmt.Sprintf("/api/v1/videos/%d", v.ID), "", nil))
@@ -165,7 +167,7 @@ func Test_VideoUpdateDelete(t *testing.T) {
 func Test_ViewHistoryFlow(t *testing.T) {
 	api, r, _ := newTestAPI(t)
 	u := seedUser(t, api, "vhf1", "VHF1", 10)
-	v := seedVideo(t, api, u.ID, "VH Video")
+	v := seedVideoWithAPI(t, api, u.ID, "VH Video")
 	tk := tok(t, api, u.ID)
 
 	// Post view history
@@ -273,7 +275,7 @@ func Test_VideoEngagementFlow(t *testing.T) {
 	api, r, _ := newTestAPI(t)
 	u := seedUser(t, api, "vef1", "VEF1", 100)
 	u2 := seedUser(t, api, "vef2", "VEF2", 100)
-	v := seedVideo(t, api, u2.ID, "Engagement Video")
+	v := seedVideoWithAPI(t, api, u2.ID, "Engagement Video")
 	tk := tok(t, api, u.ID)
 
 	// Create a favorite folder first
