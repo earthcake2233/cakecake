@@ -60,7 +60,7 @@ jobs:
         env:
           RABBITMQ_URL: amqp://guest:guest@localhost:5672/
         run: |
-          go test ./... -count=1 -coverprofile=coverage.out -covermode=atomic
+          go test -tags=integration ./... -count=1 -coverprofile=coverage.out -covermode=atomic
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5.5.5
