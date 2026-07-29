@@ -105,6 +105,12 @@ func TestParseBoolEnv(t *testing.T) {
 // --- Load() ---
 
 func TestLoad_Defaults(t *testing.T) {
+	// Save/Restore RABBITMQ_URL so CI env does not override defaults.
+	saved, had := os.LookupEnv("RABBITMQ_URL")
+	os.Unsetenv("RABBITMQ_URL")
+	if had {
+		t.Cleanup(func() { os.Setenv("RABBITMQ_URL", saved) })
+	}
 	cfg := Load()
 
 	if cfg.AppEnv != "development" {
@@ -619,3 +625,4 @@ func TestNormalizeAliyunOSSEndpoint_EmptyHost(t *testing.T) {
 		t.Errorf("normalize('https://', 'mybucket') = %q; want 'https://'", got)
 	}
 }
+
