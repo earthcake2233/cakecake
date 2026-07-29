@@ -18,10 +18,21 @@ var _ TranscodePublisher = (*Client)(nil)
 // TranscodeQueue is the durable queue name for video transcoding jobs.
 const TranscodeQueue = "mini_bili_transcode"
 
+// amqpChannel is the subset of *amqp.Channel needed by Client.
+type amqpChannel interface {
+	PublishWithContext(ctx context.Context, exchange, key string, mandatory, immediate bool, msg amqp.Publishing) error
+	Consume(queue, consumer string, autoAck, exclusive, noLocal, noWait bool, args amqp.Table) (<-chan amqp.Delivery, error)
+	QueueDeclare(name string, durable, autoDelete, exclusive, noWait bool, args amqp.Table) (amqp.Queue, error)
+	Close() error
+}
+
+// Compile-time check that *amqp.Channel satisfies amqpChannel.
+var _ amqpChannel = (*amqp.Channel)(nil)
+
 // Client wraps an AMQP channel for publishing and consuming.
 type Client struct {
 	conn *amqp.Connection
-	ch   *amqp.Channel
+	ch   amqpChannel
 }
 
 // Dial connects to RabbitMQ and declares the transcode queue.
@@ -56,6 +67,9 @@ func (c *Client) Close() error {
 
 // PublishTranscode sends a persistent JSON body to the transcode queue.
 func (c *Client) PublishTranscode(ctx context.Context, body []byte) error {
+	if c.ch == nil {
+		return fmt.Errorf("channel is nil")
+	}
 	return c.ch.PublishWithContext(ctx, "", TranscodeQueue, false, false, amqp.Publishing{
 		DeliveryMode: amqp.Persistent,
 		ContentType:  "application/json",
@@ -65,10 +79,16 @@ func (c *Client) PublishTranscode(ctx context.Context, body []byte) error {
 
 // ConsumeTranscode registers a consumer (manual ack).
 func (c *Client) ConsumeTranscode(consumerTag string) (<-chan amqp.Delivery, error) {
+	if c.ch == nil {
+		return nil, fmt.Errorf("channel is nil")
+	}
 	return c.ch.Consume(TranscodeQueue, consumerTag, false, false, false, false, nil)
 }
 
 // NewConsumerChannel opens a dedicated channel for consuming (separate from publish channel).
 func (c *Client) NewConsumerChannel() (*amqp.Channel, error) {
+	if c.conn == nil {
+		return nil, fmt.Errorf("connection is nil")
+	}
 	return c.conn.Channel()
 }

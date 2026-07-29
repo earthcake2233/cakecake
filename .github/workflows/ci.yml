@@ -43,6 +43,11 @@ jobs:
 
   test-backend:
     runs-on: ubuntu-latest
+    services:
+      rabbitmq:
+        image: rabbitmq:3-alpine
+        ports:
+          - 5672:5672
     steps:
       - uses: actions/checkout@v4
 
@@ -52,6 +57,8 @@ jobs:
           go-version-file: go.mod
 
       - name: Run Go tests with coverage
+        env:
+          RABBITMQ_URL: amqp://guest:guest@localhost:5672/
         run: |
           go test ./... -count=1 -coverprofile=coverage.out -covermode=atomic
 
