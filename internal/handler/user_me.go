@@ -16,6 +16,7 @@ import (
 	"minibili/internal/model"
 	"minibili/internal/pkg/coverval"
 	"minibili/internal/pkg/resp"
+	"minibili/internal/pkg/dailyreward"
 )
 
 func (a *API) GetMe(c *gin.Context) {
@@ -24,12 +25,26 @@ func (a *API) GetMe(c *gin.Context) {
 		resp.Err(c, http.StatusUnauthorized, errcode.CodeUnauthorized)
 		return
 	}
+	_ = maybeFinalizeAccountDeletion(a, uid)
 	profile, err := a.UserSvc.GetMe(c.Request.Context(), uid)
 	if err != nil {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
-	resp.OK(c, profile)
+	_ = dailyreward.MarkLogin(a.DB, uid)
+	g := normalizeGender(profile.Gender)
+	resp.OK(c, gin.H{
+		"user_id":      profile.ID,
+		"username":     profile.Username,
+		"cake_id":      strings.TrimSpace(profile.CakeID),
+		"nickname":     profile.Nickname,
+		"sign":         profile.Sign,
+		"announcement": strings.TrimSpace(profile.Announcement),
+		"gender":       g,
+		"birthday":     strings.TrimSpace(profile.Birthday),
+		"avatar_url":   profile.AvatarURL,
+		"created_at":   profile.CreatedAt,
+	})
 }
 
 func (a *API) UpdateMeProfile(c *gin.Context) {
@@ -65,7 +80,19 @@ func (a *API) UpdateMeProfile(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	resp.OK(c, gin.H{"ok": true})
+	profile, err := a.UserSvc.GetMe(c.Request.Context(), uid)
+	if err != nil {
+		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
+		return
+	}
+	g := normalizeGender(profile.Gender)
+	resp.OK(c, gin.H{
+		"nickname": profile.Nickname,
+		"sign":     profile.Sign,
+		"gender":   g,
+		"birthday": strings.TrimSpace(profile.Birthday),
+		"cake_id":  strings.TrimSpace(profile.CakeID),
+	})
 }
 
 func (a *API) UpdateMeUsername(c *gin.Context) {
@@ -187,11 +214,9 @@ func (a *API) UpdateMeAnnouncement(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	resp.OK(c, gin.H{"ok": true})
+	resp.OK(c, gin.H{"announcement": body.Announcement})
 }
 
-// validProfileBirthday validates birthday format YYYY-MM-DD, year 1900-2100.
-// Empty string is valid (optional field).
 func validProfileBirthday(s string) bool {
 	s = strings.TrimSpace(s)
 	if s == "" {
@@ -206,4 +231,38 @@ func validProfileBirthday(s string) bool {
 	}
 	y := t.Year()
 	return y >= 1900 && y <= 2100
+}
+
+func normalizeGender(input string) string {
+	s := strings.TrimSpace(input)
+	switch s {
+	case "male", "female":
+		return s
+	default:
+		return "secret"
+	}
+}
+
+func validProfileNickname(s string) bool {
+	return len([]rune(s)) <= 30
+}
+
+func validProfileSign(s string) bool {
+	return len([]rune(s)) <= 500
+}
+
+func validSpaceAnnouncement(s string) bool {
+	return len([]rune(s)) <= 150
+}
+
+func creatorUpInclusiveDays(first *time.Time) int {
+	if first == nil || first.IsZero() {
+		return 0
+	}
+	now := time.Now()
+	if first.After(now) {
+		return 1
+	}
+	days := int(now.Sub(*first).Hours() / 24)
+	return days + 1
 }

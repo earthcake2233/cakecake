@@ -73,6 +73,13 @@ func newTestAPI(t *testing.T) (*API, *gin.Engine, *jwttoken.Manager) {
 	ctx, cancel := context.WithCancel(context.Background())
 	go relay.RunSubscriber(ctx)
 	t.Cleanup(cancel)
+
+	authSvc := service.NewAuthService(db, rdb, log, jm, service.AuthConfig{})
+	followSvc := service.NewFollowService(db, log)
+	danmakuSvc := service.NewDanmakuService(db, rdb, log, sens)
+	commentSvc := service.NewCommentService(db, rdb, log, sens)
+	notifSvc := service.NewNotificationService(db, rdb, log)
+	userSvc := service.NewUserService(db, log)
 	api := &API{
 		Dependencies: &Dependencies{
 			Cfg:          cfg,
@@ -86,6 +93,12 @@ func newTestAPI(t *testing.T) (*API, *gin.Engine, *jwttoken.Manager) {
 			MQ:           noopMQ{},
 			Play:         pc,
 			DanmakuRelay: relay,
+			AuthSvc:    authSvc,
+			FollowSvc:  followSvc,
+			DanmakuSvc: danmakuSvc,
+			CommentSvc: commentSvc,
+			NotifSvc:   notifSvc,
+			UserSvc:    userSvc,
 		},
 	}
 	r := gin.New()

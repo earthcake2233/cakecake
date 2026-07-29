@@ -27,6 +27,9 @@ type UserProfile struct {
 	Sign      string `json:"sign"`
 	CakeID    string `json:"cake_id"`
 	CreatedAt string `json:"created_at"`
+	Gender    string `json:"gender"`
+	Birthday  string `json:"birthday"`
+	Announcement string `json:"announcement"`
 }
 
 // GetMe returns the current user's profile.
@@ -39,6 +42,7 @@ func (s *UserService) GetMe(ctx context.Context, userID uint64) (*UserProfile, e
 		ID: u.ID, Username: u.Username, Nickname: u.Nickname,
 		AvatarURL: u.AvatarURL, Sign: u.Sign, CakeID: u.CakeID,
 		CreatedAt: u.CreatedAt.Format("2006-01-02 15:04:05"),
+		Gender: u.Gender, Birthday: u.Birthday, Announcement: u.SpaceAnnouncement,
 	}, nil
 }
 
@@ -76,6 +80,7 @@ func (s *UserService) GetUserPublic(ctx context.Context, userID uint64) (*UserPr
 		ID: u.ID, Username: u.Username, Nickname: u.Nickname,
 		AvatarURL: u.AvatarURL, Sign: u.Sign, CakeID: u.CakeID,
 		CreatedAt: u.CreatedAt.Format("2006-01-02 15:04:05"),
+		Gender: u.Gender, Birthday: u.Birthday, Announcement: u.SpaceAnnouncement,
 	}, nil
 }
 // UpdateAnnouncement updates the user's space announcement.
