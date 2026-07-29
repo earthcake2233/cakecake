@@ -32,7 +32,7 @@ func (a *API) ListDynamicComments(c *gin.Context) {
 			"ip_location": iplocate.DisplayLabel(item.IPLocation), "is_by_uploader": item.IsByUploader,
 		})
 	}
-	resp.OK(c, gin.H{"items": out, "comments_curated": result.CommentsCurated})
+	resp.OK(c, gin.H{"items": out, "comments_curated": result.CommentsCurated, "comments_closed": result.CommentsClosed})
 }
 
 func (a *API) PostDynamicComment(c *gin.Context) {

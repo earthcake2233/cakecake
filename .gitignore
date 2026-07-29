@@ -90,4 +90,6 @@ docs/benchmark_EN.md
 docs/bench-data/
 docs/images/bench/
 
-# Claude IDE local settings.claude/
+# Claude IDE local settings
+.claude/
+_claude*

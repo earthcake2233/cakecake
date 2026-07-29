@@ -69,7 +69,7 @@ func (a *API) ListComments(c *gin.Context) {
 			"ip_location": iplocate.DisplayLabel(item.IPLocation),
 		})
 	}
-	resp.OK(c, gin.H{"items": out, "comments_curated": result.CommentsCurated})
+	resp.OK(c, gin.H{"items": out, "comments_curated": result.CommentsCurated, "comments_closed": result.CommentsClosed})
 }
 
 // PostComment creates a comment or reply.
@@ -93,7 +93,7 @@ func (a *API) PostComment(c *gin.Context) {
 	r := gin.H{"id": cm.ID, "user_id": cm.UserID, "content": cm.Content, "like_count": 0,
 		"created_at": uploadedAt, "level": cm.Level, "liked_by_me": false, "pinned": false, "approved": !v.CommentsCurated}
 	if req.ParentID != 0 { r["parent_id"] = req.ParentID } else { r["parent_id"] = nil }
-	resp.OK(c, r)
+	resp.JSON(c, http.StatusCreated, errcode.CodeSuccess, r)
 }
 
 // DeleteComment deletes a comment and its descendants.
@@ -165,7 +165,7 @@ func (a *API) IgnoreCuratedComment(c *gin.Context) {
 	cid, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil || cid == 0 { resp.Err(c, http.StatusBadRequest, errcode.CodeParamError); return }
 	if err := a.CommentSvc.IgnoreCuratedComment(c.Request.Context(), cid); err != nil { resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError); return }
-	resp.OK(c, gin.H{"ok": true})
+	resp.OK(c, gin.H{"curated_ignored": true})
 }
 
 // UnreadSummary returns unread notification counts.
@@ -173,7 +173,7 @@ func (a *API) UnreadSummary(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok { resp.Err(c, http.StatusUnauthorized, errcode.CodeUnauthorized); return }
 	r := a.NotifSvc.UnreadSummary(c.Request.Context(), uid)
-	resp.OK(c, r)
+	resp.JSON(c, http.StatusCreated, errcode.CodeSuccess, r)
 }
 // ListNotifications lists notifications for the user.
 func (a *API) ListNotifications(c *gin.Context) {

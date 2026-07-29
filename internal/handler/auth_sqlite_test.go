@@ -78,6 +78,11 @@ func newTestAPI(t *testing.T) (*API, *gin.Engine, *jwttoken.Manager) {
 	followSvc := service.NewFollowService(db, log)
 	danmakuSvc := service.NewDanmakuService(db, rdb, log, sens)
 	commentSvc := service.NewCommentService(db, rdb, log, sens)
+	userProv := service.NewUserProvider(db)
+	videoProv := service.NewVideoProvider(db)
+	articleProv := service.NewArticleProvider(db)
+	dynamicProv := service.NewDynamicProvider(db)
+	commentSvc.SetProviders(userProv, videoProv, articleProv, dynamicProv)
 	notifSvc := service.NewNotificationService(db, rdb, log)
 	userSvc := service.NewUserService(db, log)
 	api := &API{

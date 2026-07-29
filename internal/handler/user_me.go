@@ -17,6 +17,8 @@ import (
 	"minibili/internal/pkg/coverval"
 	"minibili/internal/pkg/resp"
 	"minibili/internal/pkg/dailyreward"
+	"minibili/internal/pkg/usercoin"
+	"minibili/internal/pkg/userlevel"
 )
 
 func (a *API) GetMe(c *gin.Context) {
@@ -33,7 +35,7 @@ func (a *API) GetMe(c *gin.Context) {
 	}
 	_ = dailyreward.MarkLogin(a.DB, uid)
 	g := normalizeGender(profile.Gender)
-	resp.OK(c, gin.H{
+	out := gin.H{
 		"user_id":      profile.ID,
 		"username":     profile.Username,
 		"cake_id":      strings.TrimSpace(profile.CakeID),
@@ -44,7 +46,15 @@ func (a *API) GetMe(c *gin.Context) {
 		"birthday":     strings.TrimSpace(profile.Birthday),
 		"avatar_url":   profile.AvatarURL,
 		"created_at":   profile.CreatedAt,
-	})
+	}
+	// Add extra fields expected by integration tests
+	var u model.User
+	if err := a.DB.First(&u, uid).Error; err == nil {
+		out["space_privacy"] = spacePrivacyFromUser(&u)
+		out["level_info"] = userlevel.FromExperience(u.Experience)
+		out["coin_balance"] = usercoin.BalanceFloat(u.CoinBalanceTenths)
+	}
+	resp.OK(c, out)
 }
 
 func (a *API) UpdateMeProfile(c *gin.Context) {

@@ -51,15 +51,28 @@ func setupHandlerIntegrationDB(t *testing.T) (*API, *gin.Engine, string) {
 
 	api := &API{
 		Dependencies: &Dependencies{
-			Cfg:   cfg,
-			DB:    db,
-			Redis: rdb,
-			JWT:   jm,
-			Hub:   ws.NewHub(),
-			Log:   zap.NewNop(),
-			Play:  &service.PlayCounter{Rdb: rdb, DB: db},
+			Cfg:          cfg,
+			DB:           db,
+			Redis:        rdb,
+			JWT:          jm,
+			Hub:          ws.NewHub(),
+			Log:          zap.NewNop(),
+			Play:         &service.PlayCounter{Rdb: rdb, DB: db},
+			AuthSvc:      service.NewAuthService(db, rdb, zap.NewNop(), jm, service.AuthConfig{}),
+			UserSvc:      service.NewUserService(db, zap.NewNop()),
+			FollowSvc:    service.NewFollowService(db, zap.NewNop()),
+			DanmakuSvc:   service.NewDanmakuService(db, rdb, zap.NewNop(), nil),
+			CommentSvc:   service.NewCommentService(db, rdb, zap.NewNop(), nil),
+			NotifSvc:     service.NewNotificationService(db, rdb, zap.NewNop()),
 		},
 	}
+	commentSvc := api.CommentSvc
+	commentSvc.SetProviders(
+		service.NewUserProvider(db),
+		service.NewVideoProvider(db),
+		service.NewArticleProvider(db),
+		service.NewDynamicProvider(db),
+	)
 
 	r := gin.New()
 	RegisterRoutes(r, api, jm, "test")

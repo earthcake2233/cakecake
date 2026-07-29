@@ -33,7 +33,7 @@ func (a *API) ListArticleComments(c *gin.Context) {
 			"ip_location": iplocate.DisplayLabel(item.IPLocation),
 		})
 	}
-	resp.OK(c, gin.H{"items": out, "comments_curated": result.CommentsCurated})
+	resp.OK(c, gin.H{"items": out, "comments_curated": result.CommentsCurated, "comments_closed": result.CommentsClosed})
 }
 
 func (a *API) PostArticleComment(c *gin.Context) {
@@ -60,7 +60,7 @@ func (a *API) PostArticleComment(c *gin.Context) {
 	cm, svcErr := a.CommentSvc.PostArticleComment(c.Request.Context(), uid, aid,
 		service.PostCommentReq{Content: content, ParentID: req.ParentID}, ipLoc)
 	if svcErr != nil { resp.Err(c, httpStatusFromSvc(errCodeFromSvc(svcErr)), errCodeFromSvc(svcErr)); return }
-	resp.OK(c, gin.H{"id": cm.ID, "user_id": cm.UserID, "content": cm.Content, "parent_id": nil, "level": cm.Level, "approved": !art.CommentsCurated, "like_count": 0})
+	resp.JSON(c, http.StatusCreated, errcode.CodeSuccess, gin.H{"id": cm.ID, "user_id": cm.UserID, "content": cm.Content, "parent_id": nil, "level": cm.Level, "approved": !art.CommentsCurated, "like_count": 0})
 }
 
 func getClientIP(c *gin.Context) string {

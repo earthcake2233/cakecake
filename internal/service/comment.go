@@ -81,22 +81,25 @@ type DynamicCommentItem struct {
 type CommentListResult struct {
 	Items           []CommentItem
 	CommentsCurated bool
+	CommentsClosed  bool
 }
 
 type ArticleCommentListResult struct {
 	Items           []ArticleCommentItem
 	CommentsCurated bool
+	CommentsClosed  bool
 }
 
 type DynamicCommentListResult struct {
 	Items           []DynamicCommentItem
 	CommentsCurated bool
+	CommentsClosed  bool
 }
 
 func (s *CommentService) ListComments(ctx context.Context, videoID, viewerID uint64) (*CommentListResult, error) {
 	v, err := s.videos.GetPublishedVideo(ctx, videoID)
 	if err != nil { return nil, ErrNotFound }
-	r := &CommentListResult{CommentsCurated: v.CommentsCurated}
+	r := &CommentListResult{CommentsCurated: v.CommentsCurated, CommentsClosed: v.CommentsClosed}
 	if v.CommentsClosed { r.Items = []CommentItem{}; return r, nil }
 
 	q := s.db.WithContext(ctx).Where("video_id = ?", videoID)
@@ -224,16 +227,14 @@ func (s *CommentService) ApproveComment(ctx context.Context, commentID uint64) e
 }
 
 func (s *CommentService) IgnoreCuratedComment(ctx context.Context, commentID uint64) error {
-	_ = s.db.WithContext(ctx).Where("comment_id = ?", commentID).Delete(&model.CommentLike{}).Error
-	_ = s.db.WithContext(ctx).Where("comment_id = ?", commentID).Delete(&model.CommentDislike{}).Error
-	return s.db.WithContext(ctx).Delete(&model.Comment{}, commentID).Error
+	return s.db.WithContext(ctx).Model(&model.Comment{}).Where("id = ?", commentID).Update("curated_ignored", true).Error
 }
 // ─── Article Comments ───
 
 func (s *CommentService) ListArticleComments(ctx context.Context, articleID, viewerID uint64) (*ArticleCommentListResult, error) {
 	a, err := s.articles.GetPublishedArticle(ctx, articleID)
 	if err != nil { return nil, ErrNotFound }
-	r := &ArticleCommentListResult{CommentsCurated: a.CommentsCurated}
+	r := &ArticleCommentListResult{CommentsCurated: a.CommentsCurated, CommentsClosed: a.CommentsClosed}
 	if a.CommentsClosed { r.Items = []ArticleCommentItem{}; return r, nil }
 
 	q := s.db.WithContext(ctx).Where("article_id = ?", articleID)
@@ -364,7 +365,7 @@ func (s *CommentService) IgnoreArticleComment(ctx context.Context, commentID uin
 func (s *CommentService) ListDynamicComments(ctx context.Context, dynamicID, viewerID uint64) (*DynamicCommentListResult, error) {
 	d, err := s.dynamics.GetPublishedDynamic(ctx, dynamicID)
 	if err != nil { return nil, ErrNotFound }
-	r := &DynamicCommentListResult{CommentsCurated: d.CommentsCurated}
+	r := &DynamicCommentListResult{CommentsCurated: d.CommentsCurated, CommentsClosed: d.CommentsClosed}
 	if d.CommentsClosed { r.Items = []DynamicCommentItem{}; return r, nil }
 
 	q := s.db.WithContext(ctx).Where("dynamic_id = ?", dynamicID)

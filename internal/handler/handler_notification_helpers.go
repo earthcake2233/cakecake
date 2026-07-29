@@ -17,18 +17,18 @@ type replyInboxTarget struct {
 	ArticleID uint64
 }
 
-// likeNotifPayloadIsArticle returns true if the notification payload indicates an article comment like.
-func (a *API) likeNotifPayloadIsArticle(n *model.Notification) bool {
+// likeNotifPayloadSubject returns the like_subject field from a notification payload.
+func (a *API) likeNotifPayloadSubject(n *model.Notification) string {
 	if n.PayloadJSON == "" {
-		return false
+		return ""
 	}
 	var p struct {
 		LikeSubject string `json:"like_subject"`
 	}
 	if err := json.Unmarshal([]byte(n.PayloadJSON), &p); err != nil {
-		return false
+		return ""
 	}
-	return p.LikeSubject == "article_comment"
+	return p.LikeSubject
 }
 
 // consolidateDuplicateLikeAggregations removes duplicate like_aggregation notifications,
@@ -100,9 +100,13 @@ func (a *API) formatNotification(n model.Notification) map[string]interface{} {
 		"created_at":       n.CreatedAt.Format(time.RFC3339),
 	}
 	if n.Type == "like_aggregation" {
-		if a.likeNotifPayloadIsArticle(&n) {
+		subject := a.likeNotifPayloadSubject(&n)
+		switch subject {
+		case "article_comment":
 			out["like_target"] = "文章"
-		} else {
+		case "danmaku":
+			out["like_target"] = "弹幕"
+		default:
 			out["like_target"] = "评论"
 		}
 	}

@@ -11,23 +11,22 @@ import (
 	"minibili/internal/model"
 )
 
-func Test_likeNotifPayloadIsArticle(t *testing.T) {
+func Test_likeNotifPayloadSubject(t *testing.T) {
 	api, _, _ := newTestAPI(t)
 	tests := []struct {
 		name string
 		n    model.Notification
-		want bool
+		want string
 	}{
-		{name: "empty payload", n: model.Notification{PayloadJSON: ""}, want: false},
-		{name: "article_comment", n: model.Notification{PayloadJSON: `{"like_subject":"article_comment"}`}, want: true},
-		{name: "danmaku", n: model.Notification{PayloadJSON: `{"like_subject":"danmaku"}`}, want: false},
-		{name: "comment", n: model.Notification{PayloadJSON: `{"like_subject":"comment"}`}, want: false},
+		{name: "empty payload", n: model.Notification{PayloadJSON: ""}, want: ""},
+		{name: "article_comment", n: model.Notification{PayloadJSON: `{"like_subject":"article_comment"}`}, want: "article_comment"},
+		{name: "danmaku", n: model.Notification{PayloadJSON: `{"like_subject":"danmaku"}`}, want: "danmaku"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := api.likeNotifPayloadIsArticle(&tt.n)
+			got := api.likeNotifPayloadSubject(&tt.n)
 			if got != tt.want {
-				t.Errorf("likeNotifPayloadIsArticle() = %v, want %v", got, tt.want)
+				t.Errorf("likeNotifPayloadSubject() = %q, want %q", got, tt.want)
 			}
 		})
 	}

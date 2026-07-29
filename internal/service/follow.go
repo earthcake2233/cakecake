@@ -126,7 +126,7 @@ func (s *FollowService) ToggleFollow(ctx context.Context, followerID, followeeID
 			if err := tx.Delete(&row).Error; err != nil {
 				return err
 			}
-			return tx.Where("group_id IN (SELECT id FROM follow_groups WHERE user_id = ?) AND followee_id = ?", followerID, followeeID).
+			return tx.Where("group_id IN (SELECT id FROM user_follow_groups WHERE user_id = ?) AND followee_id = ?", followerID, followeeID).
 				Delete(&model.UserFollowGroupMember{}).Error
 		}); err != nil {
 			return false, err
