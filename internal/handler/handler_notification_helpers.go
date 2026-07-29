@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"time"
 
+	"gorm.io/gorm"
+
 	"minibili/internal/model"
 	"minibili/internal/pkg/useravatar"
 )
@@ -15,7 +17,7 @@ type replyInboxTarget struct {
 	ArticleID uint64
 }
 
-// likeNotifPayloadIsArticle returns true if the notification's payload indicates an article comment like.
+// likeNotifPayloadIsArticle returns true if the notification payload indicates an article comment like.
 func (a *API) likeNotifPayloadIsArticle(n *model.Notification) bool {
 	if n.PayloadJSON == "" {
 		return false
@@ -60,7 +62,7 @@ func (a *API) likeAggTotalFromDB(relatedID uint64, isArticle bool) int {
 		return int(total)
 	}
 	var total int64
-	a.DB.Model(&model.VideoLike{}).Where("video_id = ? ", relatedID).Count(&total)
+	a.DB.Model(&model.VideoLike{}).Where("video_id = ?", relatedID).Count(&total)
 	return int(total)
 }
 
@@ -71,7 +73,7 @@ func (a *API) likeAggTopLikerNames(relatedID uint64, isArticle bool, limit int) 
 		a.DB.Model(&model.ArticleFavorite{}).Where("article_id = ?", relatedID).
 			Order("id ASC").Limit(limit).Pluck("user_id", &userIDs)
 	} else {
-		a.DB.Model(&model.VideoLike{}).Where("video_id = ? ", relatedID, 1).
+		a.DB.Model(&model.VideoLike{}).Where("video_id = ?", relatedID).
 			Order("id ASC").Limit(limit).Pluck("user_id", &userIDs)
 	}
 	var names []string
@@ -159,5 +161,50 @@ func (a *API) resolveReplyInboxTarget(n *model.Notification) (replyInboxTarget, 
 		return replyInboxTarget{VideoID: p.VideoID, CommentID: p.CommentID, ArticleID: p.ArticleID}, true
 	default:
 		return replyInboxTarget{}, false
+	}
+}
+
+// userFolloweeIDsSet returns a set of user IDs that the given user follows.
+func userFolloweeIDsSet(db *gorm.DB, userID uint64, excludeIDs []uint64) map[uint64]bool {
+	var rows []struct{ FolloweeID uint64 }
+	db.Model(&model.UserFollow{}).Where("follower_id = ?", userID).Find(&rows)
+	exclude := make(map[uint64]bool)
+	for _, id := range excludeIDs { exclude[id] = true }
+	set := make(map[uint64]bool)
+	for _, r := range rows {
+		if !exclude[r.FolloweeID] { set[r.FolloweeID] = true }
+	}
+	return set
+}
+
+// mergeUniqueDisplayNames deduplicates and returns unique display names in original order.
+func mergeUniqueDisplayNames(names []string) []string {
+	seen := make(map[string]bool)
+	var out []string
+	for _, n := range names {
+		if !seen[n] { seen[n] = true; out = append(out, n) }
+	}
+	return out
+}
+
+// isReplyInboxType returns true if the notification type is reply-related.
+func isReplyInboxType(notifType string) bool {
+	switch notifType {
+	case "reply_received", "article_reply_received", "dynamic_reply_received":
+		return true
+	default:
+		return false
+	}
+}
+
+// notifUint64 converts a value to uint64 for notification processing.
+func notifUint64(v interface{}) uint64 {
+	switch val := v.(type) {
+	case float64:
+		return uint64(val)
+	case uint64:
+		return val
+	default:
+		return 0
 	}
 }
