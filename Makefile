@@ -1,4 +1,4 @@
-﻿# MiniBili Makefile -- cross-platform build & test entry.
+# MiniBili Makefile -- cross-platform build & test entry.
 #   Linux/macOS: make <target>
 #   Windows:     make <target>   (GNU Make required, uses cmd.exe)
 

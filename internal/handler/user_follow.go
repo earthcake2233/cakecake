@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -16,87 +15,7 @@ import (
 	"minibili/internal/pkg/resp"
 )
 
-func userFollowCounts(db *gorm.DB, userID uint64) (following, followers int64) {
-	_ = db.Model(&model.UserFollow{}).Where("follower_id = ?", userID).Count(&following).Error
-	_ = db.Model(&model.UserFollow{}).Where("followee_id = ?", userID).Count(&followers).Error
-	return following, followers
-}
-
-func userFollows(db *gorm.DB, followerID, followeeID uint64) bool {
-	if followerID == 0 || followeeID == 0 || followerID == followeeID {
-		return false
-	}
-	var n int64
-	_ = db.Model(&model.UserFollow{}).
-		Where("follower_id = ? AND followee_id = ?", followerID, followeeID).
-		Count(&n).Error
-	return n > 0
-}
-
-// userFolloweeIDsSet returns followee IDs the viewer follows among the given candidates.
-func userFolloweeIDsSet(db *gorm.DB, followerID uint64, followeeIDs []uint64) map[uint64]bool {
-	out := make(map[uint64]bool)
-	if followerID == 0 || len(followeeIDs) == 0 {
-		return out
-	}
-	uniq := make([]uint64, 0, len(followeeIDs))
-	seen := make(map[uint64]struct{}, len(followeeIDs))
-	for _, id := range followeeIDs {
-		if id == 0 || id == followerID {
-			continue
-		}
-		if _, ok := seen[id]; ok {
-			continue
-		}
-		seen[id] = struct{}{}
-		uniq = append(uniq, id)
-	}
-	if len(uniq) == 0 {
-		return out
-	}
-	var ids []uint64
-	_ = db.Model(&model.UserFollow{}).
-		Where("follower_id = ? AND followee_id IN ?", followerID, uniq).
-		Pluck("followee_id", &ids).Error
-	for _, id := range ids {
-		out[id] = true
-	}
-	return out
-}
-
-func uploaderPublishedCount(db *gorm.DB, userID uint64) int64 {
-	var videoN, articleN, dynN int64
-	_ = db.Model(&model.Video{}).
-		Where("user_id = ? AND status = ?", userID, "published").
-		Count(&videoN).Error
-	_ = db.Model(&model.Article{}).
-		Where("user_id = ? AND status = ?", userID, articleStatusPublished).
-		Count(&articleN).Error
-	_ = db.Model(&model.UserDynamic{}).
-		Where("user_id = ?", userID).
-		Count(&dynN).Error
-	return videoN + articleN + dynN
-}
-
-func loadSpaceUserForFollow(a *API, userID uint64) (model.User, bool) {
-	var u model.User
-	if err := a.DB.First(&u, userID).Error; err != nil {
-		return u, false
-	}
-	if model.IsUserAnonymized(&u) {
-		return u, false
-	}
-	return u, true
-}
-
-func canViewFollowingList(viewerOK bool, viewer, ownerID uint64, u *model.User) bool {
-	return spaceViewerCanSee(ownerID, viewerOK, viewer, u.PrivacyPublicFollowing)
-}
-
-func canViewFollowersList(viewerOK bool, viewer, ownerID uint64, u *model.User) bool {
-	return spaceViewerCanSee(ownerID, viewerOK, viewer, u.PrivacyPublicFans)
-}
-
+// followUserRows converts follow rows to gin.H items for API response.
 func followUserRows(
 	db *gorm.DB,
 	ownerID uint64,
@@ -152,13 +71,13 @@ func followUserRows(
 		}
 		sign := strings.TrimSpace(u.Sign)
 		if sign == "" {
-			sign = "这个家伙很懒，什么都没有写"
+			sign = "?????????????"
 		}
 		item := gin.H{
-			"user_id":    u.ID,
-			"nickname":   nick,
-			"sign":       sign,
-			"avatar_url": avatarURLForAPI(&u),
+			"user_id":     u.ID,
+			"nickname":    nick,
+			"sign":        sign,
+			"avatar_url":  avatarURLForAPI(&u),
 			"followed_at": created[uid].Format(time.RFC3339),
 		}
 		if followerField {
@@ -167,6 +86,25 @@ func followUserRows(
 		items = append(items, item)
 	}
 	return items, nil
+}
+
+func loadSpaceUserForFollow(a *API, userID uint64) (model.User, bool) {
+	var u model.User
+	if err := a.DB.First(&u, userID).Error; err != nil {
+		return u, false
+	}
+	if model.IsUserAnonymized(&u) {
+		return u, false
+	}
+	return u, true
+}
+
+func canViewFollowingList(viewerOK bool, viewer, ownerID uint64, u *model.User) bool {
+	return spaceViewerCanSee(ownerID, viewerOK, viewer, u.PrivacyPublicFollowing)
+}
+
+func canViewFollowersList(viewerOK bool, viewer, ownerID uint64, u *model.User) bool {
+	return spaceViewerCanSee(ownerID, viewerOK, viewer, u.PrivacyPublicFans)
 }
 
 // ListUserFollowing lists users that owner follows (respects privacy).
@@ -193,29 +131,8 @@ func (a *API) ListUserFollowing(c *gin.Context) {
 		}
 	}
 	groupID, _ := strconv.ParseUint(strings.TrimSpace(c.Query("groupId")), 10, 64)
-	if groupID > 0 {
-		g, ok := loadFollowGroupForOwner(a.DB, ownerID, groupID)
-		if !ok {
-			resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
-			return
-		}
-		_ = g
-	}
-	var rows []model.UserFollow
-	q := a.DB.Where("follower_id = ?", ownerID)
-	if groupID > 0 {
-		ids, err := followeeIDsInGroup(a.DB, groupID)
-		if err != nil {
-			resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
-			return
-		}
-		if len(ids) == 0 {
-			resp.OK(c, gin.H{"items": []gin.H{}, "total": 0, "group_id": groupID})
-			return
-		}
-		q = q.Where("followee_id IN ?", ids)
-	}
-	if err := q.Order("created_at DESC").Limit(limit).Find(&rows).Error; err != nil {
+	rows, svcErr := a.FollowSvc.GetFollowingList(c.Request.Context(), ownerID, limit, groupID)
+	if svcErr != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
@@ -224,11 +141,8 @@ func (a *API) ListUserFollowing(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	total := int64(len(items))
-	if groupID == 0 {
-		following, _ := userFollowCounts(a.DB, ownerID)
-		total = following
-	}
+	counts, _ := a.FollowSvc.GetFollowCounts(c.Request.Context(), ownerID)
+	total := counts.Following
 	payload := gin.H{"items": items, "total": total}
 	if groupID > 0 {
 		payload["group_id"] = groupID
@@ -259,11 +173,8 @@ func (a *API) ListUserFollowers(c *gin.Context) {
 			limit = n
 		}
 	}
-	var rows []model.UserFollow
-	if err := a.DB.Where("followee_id = ?", ownerID).
-		Order("created_at DESC").
-		Limit(limit).
-		Find(&rows).Error; err != nil {
+	rows, svcErr := a.FollowSvc.GetFollowersList(c.Request.Context(), ownerID, limit)
+	if svcErr != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
@@ -272,8 +183,8 @@ func (a *API) ListUserFollowers(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	_, followers := userFollowCounts(a.DB, ownerID)
-	resp.OK(c, gin.H{"items": items, "total": followers})
+	counts, _ := a.FollowSvc.GetFollowCounts(c.Request.Context(), ownerID)
+	resp.OK(c, gin.H{"items": items, "total": counts.Followers})
 }
 
 // ToggleFollowUser toggles the caller's follow on another user.
@@ -300,37 +211,14 @@ func (a *API) ToggleFollowUser(c *gin.Context) {
 		resp.Err(c, http.StatusForbidden, errcode.CodeUserBlocked)
 		return
 	}
-	var row model.UserFollow
-	err = a.DB.Where("follower_id = ? AND followee_id = ?", uid, followeeID).First(&row).Error
-	if err == nil {
-		if err := a.DB.Transaction(func(tx *gorm.DB) error {
-			if err := tx.Delete(&row).Error; err != nil {
-				return err
-			}
-			return deleteFollowGroupMembersForFollowee(tx, uid, followeeID)
-		}); err != nil {
-			resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
-			return
-		}
-		_, followers := userFollowCounts(a.DB, followeeID)
-		resp.OK(c, gin.H{
-			"followed":       false,
-			"follower_count": followers,
-		})
-		return
-	}
-	if !errors.Is(err, gorm.ErrRecordNotFound) {
+	followed, svcErr := a.FollowSvc.ToggleFollow(c.Request.Context(), uid, followeeID)
+	if svcErr != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	row = model.UserFollow{FollowerID: uid, FolloweeID: followeeID}
-	if err := a.DB.Create(&row).Error; err != nil {
-		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
-		return
-	}
-	_, followers := userFollowCounts(a.DB, followeeID)
+	counts, _ := a.FollowSvc.GetFollowCounts(c.Request.Context(), followeeID)
 	resp.OK(c, gin.H{
-		"followed":       true,
-		"follower_count": followers,
+		"followed":       followed,
+		"follower_count": counts.Followers,
 	})
 }

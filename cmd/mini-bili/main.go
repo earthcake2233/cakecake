@@ -2,7 +2,7 @@
 //
 // @title           Mini-Bili API
 // @version         1.0
-// @description     Mini-Bili - 轻量级弹幕视频分享平台后端 API
+// @description     Mini-Bili - 杞婚噺绾у脊骞曡棰戝垎浜钩鍙板悗绔?API
 // @termsOfService  https://github.com/earthcake2233/cakecake/blob/main/LICENSE
 //
 // @contact.name   earthcake2233
@@ -21,14 +21,13 @@
 // @description                 JWT Bearer token, e.g. "Bearer {token}"
 package main
 
-
 import (
 	"context"
 	"net/http"
 	"os"
 	"os/signal"
-	"sync"
 	"strconv"
+	"sync"
 	"syscall"
 	"time"
 
@@ -42,8 +41,8 @@ import (
 	"minibili/internal/data"
 	"minibili/internal/ffmpeg"
 	"minibili/internal/handler"
-	"minibili/internal/middleware"
 	"minibili/internal/logger"
+	"minibili/internal/middleware"
 	"minibili/internal/pkg/iplocate"
 	"minibili/internal/pkg/jwttoken"
 	"minibili/internal/pkg/sensitive"
@@ -69,7 +68,7 @@ func main() {
 
 	ffmpeg.Init(cfg.FFprobePath, cfg.FFmpegPath)
 	if err := ffmpeg.CheckFFprobe(); err != nil {
-		log.Warn("ffprobe 不可用，视频上传将返回 40009，直到 PATH 或 FFPROBE_PATH 配置正确",
+		log.Warn("ffprobe 涓嶅彲鐢紝瑙嗛涓婁紶灏嗚繑鍥?40009锛岀洿鍒?PATH 鎴?FFPROBE_PATH 閰嶇疆姝ｇ‘",
 			zap.String("ffprobe", ffmpeg.FFprobeExe()),
 			zap.Error(err),
 		)
@@ -122,14 +121,14 @@ func main() {
 
 	// Runtime config: seeded from env, periodically refreshed from DB.
 	runtimeCfg := config.NewRuntimeConfig(db, map[string]string{
-		"agent_enabled":        strconv.FormatBool(cfg.AgentEnabled),
-		"agent_daily_quota":    strconv.Itoa(cfg.AgentDailyQuota),
-		"agent_max_history":    strconv.Itoa(cfg.AgentMaxHistory),
-		"agent_history_ttl":    cfg.AgentHistoryTTL.String(),
+		"agent_enabled":         strconv.FormatBool(cfg.AgentEnabled),
+		"agent_daily_quota":     strconv.Itoa(cfg.AgentDailyQuota),
+		"agent_max_history":     strconv.Itoa(cfg.AgentMaxHistory),
+		"agent_history_ttl":     cfg.AgentHistoryTTL.String(),
 		"agent_request_timeout": cfg.AgentRequestTimeout.String(),
-		"rate_limit_enabled":   strconv.FormatBool(cfg.RateLimitEnabled),
-		"rate_limit_rate":      strconv.FormatFloat(cfg.RateLimitRate, 'f', -1, 64),
-		"rate_limit_burst":     strconv.Itoa(cfg.RateLimitBurst),
+		"rate_limit_enabled":    strconv.FormatBool(cfg.RateLimitEnabled),
+		"rate_limit_rate":       strconv.FormatFloat(cfg.RateLimitRate, 'f', -1, 64),
+		"rate_limit_burst":      strconv.Itoa(cfg.RateLimitBurst),
 	})
 	runtimeCtx, runtimeCancel := context.WithCancel(context.Background())
 	defer runtimeCancel()
@@ -219,14 +218,14 @@ func main() {
 	if cfg.DeepSeekAPIKey != "" {
 		agentGW = &aigateway.Gateway{
 			LLM: &aigateway.Client{
-				APIKey:  cfg.DeepSeekAPIKey,
-				BaseURL: cfg.DeepSeekBaseURL,
-				Model:   cfg.DeepSeekModel,
+				APIKey:     cfg.DeepSeekAPIKey,
+				BaseURL:    cfg.DeepSeekBaseURL,
+				Model:      cfg.DeepSeekModel,
 				HTTPClient: &http.Client{Timeout: cfg.AgentRequestTimeout},
 			},
-			Redis:       rdb,
-			MaxHistory:  cfg.AgentMaxHistory,
-			HistoryTTL:  cfg.AgentHistoryTTL,
+			Redis:      rdb,
+			MaxHistory: cfg.AgentMaxHistory,
+			HistoryTTL: cfg.AgentHistoryTTL,
 		}
 		log.Info("ai gateway enabled",
 			zap.String("model", cfg.DeepSeekModel),
@@ -247,11 +246,31 @@ func main() {
 		ToolExec: &toolkit.PlatformExecutor{DB: db, ES: esc, Sens: sens},
 	}
 
+	userProv := service.NewUserProvider(db)
+	videoProv := service.NewVideoProvider(db)
+	articleProv := service.NewArticleProvider(db)
+	dynamicProv := service.NewDynamicProvider(db)
+
+	commentSvc := service.NewCommentService(db, rdb, log, sens)
+	notifSvc := service.NewNotificationService(db, rdb, log)
+	commentSvc.SetNotificationService(notifSvc)
+	commentSvc.SetProviders(userProv, videoProv, articleProv, dynamicProv)
+	authSvc := service.NewAuthService(db, rdb, log, jm, service.AuthConfig{AgentBotUsername: cfg.AgentBotUsername})
+	followSvc := service.NewFollowService(db, log)
+	danmakuSvc := service.NewDanmakuService(db, rdb, log, sens)
+	userSvc := service.NewUserService(db, log)
+
 	deps := &handler.Dependencies{
 		Cfg: cfg, DB: db, Redis: rdb, Log: log, Hub: hub, ChatHub: chatHub,
 		JWT: jm, Sens: sens, OSS: ossc, MQ: mq, ES: esc, Play: pc,
 		SearchHot: searchHot, DanmakuRelay: relay, IPLocate: ipLoc, Agent: agentSvc,
 		RateLimiter: rl, RuntimeCfg: runtimeCfg,
+		AuthSvc:    authSvc,
+		FollowSvc:  followSvc,
+		DanmakuSvc: danmakuSvc,
+		UserSvc:    userSvc,
+		CommentSvc: commentSvc,
+		NotifSvc:   notifSvc,
 	}
 	api := &handler.API{Dependencies: deps}
 	api.InitHotRecorder(64)
@@ -278,7 +297,7 @@ func main() {
 	}()
 	log.Info("mini-bili listening", zap.String("addr", cfg.HTTPAddr))
 
-	// ── Graceful shutdown ──
+	// 鈹€鈹€ Graceful shutdown 鈹€鈹€
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
 	<-ch

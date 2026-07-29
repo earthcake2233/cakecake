@@ -34,9 +34,17 @@ type Dependencies struct {
 	SearchHot    *service.SearchHotRecorder
 	DanmakuRelay *service.DanmakuRelay
 	IPLocate     *iplocate.Searcher
-	RuntimeCfg  *config.RuntimeConfig
+	RuntimeCfg   *config.RuntimeConfig
 	RateLimiter  *middleware.RateLimiter
 	Agent        *service.AgentService
+
+	// Phase 1 domain services (thin service layer over business logic).
+	AuthSvc    *service.AuthService
+	FollowSvc  *service.FollowService
+	DanmakuSvc *service.DanmakuService
+	CommentSvc *service.CommentService
+	NotifSvc   *service.NotificationService
+	UserSvc    *service.UserService
 
 	// hotRecCh buffers SearchHot.Record requests (async, best-effort).
 	hotRecCh chan<- hotRecordReq

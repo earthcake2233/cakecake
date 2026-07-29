@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"gorm.io/gorm"
 	"context"
 	"net/http"
 	"strconv"
@@ -157,4 +158,12 @@ func (a *API) ListUserPublishedVideos(c *gin.Context) {
 		next = strconv.FormatUint(last.ID, 10)
 	}
 	resp.OK(c, gin.H{"items": items, "next_cursor": next})
+}
+
+func ensureUserCakeID(db *gorm.DB, u *model.User) {
+	if u.CakeID == "" {
+		cakeID := model.FormatCakeID(u.ID)
+		db.Model(u).Update("cake_id", cakeID)
+		u.CakeID = cakeID
+	}
 }
