@@ -3,6 +3,7 @@
 package handler
 
 import (
+	"minibili/internal/model/video"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -15,7 +16,6 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"minibili/internal/model"
 	"minibili/internal/pkg/jwttoken"
 	"minibili/internal/ws"
 )
@@ -226,7 +226,7 @@ func TestRefresh_InvalidTokens(t *testing.T) {
 
 func seedVideo(t *testing.T, db *gorm.DB, userID uint64, title string) uint64 {
 	t.Helper()
-	v := model.Video{
+	v := video.Video{
 		UserID:      userID,
 		Title:       title,
 		Status:      "published",

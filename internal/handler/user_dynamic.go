@@ -1,9 +1,13 @@
-package handler
+﻿package handler
 
 import (
+	"minibili/internal/model/comment"
+	"minibili/internal/model/dynamic"
+	"minibili/internal/model/user"
 	"encoding/json"
 	"fmt"
 	"mime/multipart"
+	"context"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -18,9 +22,9 @@ import (
 
 	"minibili/internal/errcode"
 	"minibili/internal/middleware"
-	"minibili/internal/model"
 	"minibili/internal/pkg/coverval"
 	"minibili/internal/pkg/resp"
+	"minibili/internal/service"
 )
 
 const (
@@ -48,17 +52,17 @@ func parseDynamicImagesJSON(raw string) []string {
 	return out
 }
 
-func userDynamicAuthorName(author *model.User) string {
-	if author == nil || model.IsUserAnonymized(author) {
+func userDynamicAuthorName(author *user.User) string {
+	if author == nil || user.IsUserAnonymized(author) {
 		return ""
 	}
 	if author.Nickname != "" {
 		return strings.TrimSpace(author.Nickname)
 	}
-	return model.DisplayUsername(author)
+	return user.DisplayUsername(author)
 }
 
-func userDynamicReadPayload(d *model.UserDynamic, author *model.User, likedByMe bool, viewer uint64) gin.H {
+func userDynamicReadPayload(d *dynamic.UserDynamic, author *user.User, likedByMe bool, viewer uint64) gin.H {
 	out := userDynamicPayload(d, likedByMe)
 	out["user_id"] = d.UserID
 	out["author_name"] = userDynamicAuthorName(author)
@@ -87,17 +91,22 @@ func (a *API) GetUserDynamic(c *gin.Context) {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
-	var author model.User
-	_ = a.DB.First(&author, dyn.UserID).Error
+	var author user.User
+	aP, _ := a.UserSvc.GetUserPublic(c.Request.Context(), dyn.UserID)
+	if aP != nil {
+		author.ID = aP.ID
+		author.Username = aP.Username
+		author.AvatarURL = aP.AvatarURL
+	}
 	var viewer uint64
 	if uid, ok := middleware.UserID(c); ok {
 		viewer = uid
 	}
-	likedMap := dynamicLikesByViewer(a.DB, viewer, []uint64{id})
+	likedMap := a.DynamicSvc.BatchCheckLiked(c.Request.Context(), viewer, []uint64{id})
 	resp.OK(c, userDynamicReadPayload(dyn, &author, likedMap[id], viewer))
 }
 
-func userDynamicPayload(d *model.UserDynamic, likedByMe bool) gin.H {
+func userDynamicPayload(d *dynamic.UserDynamic, likedByMe bool) gin.H {
 	imgs := parseDynamicImagesJSON(d.ImagesJSON)
 	if imgs == nil {
 		imgs = []string{}
@@ -133,8 +142,8 @@ func (a *API) PatchUserDynamicPlayback(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	var dyn model.UserDynamic
-	if err := a.DB.First(&dyn, id).Error; err != nil {
+	dyn, err := a.DynamicSvc.GetDynamicByID(context.Background(), id)
+	if err != nil {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
@@ -158,31 +167,20 @@ func (a *API) PatchUserDynamicPlayback(c *gin.Context) {
 	if req.CommentsCurated != nil {
 		updates["comments_curated"] = *req.CommentsCurated
 	}
-	if err := a.DB.Model(&dyn).Updates(updates).Error; err != nil {
+	if err := a.DynamicSvc.UpdateDynamic(context.Background(), id, updates); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	if err := a.DB.First(&dyn, id).Error; err != nil {
+	d, e := a.DynamicSvc.GetDynamicByID(context.Background(), id)
+	if e != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
+	dyn = d
 	resp.OK(c, gin.H{
 		"comments_closed":  dyn.CommentsClosed,
 		"comments_curated": dyn.CommentsCurated,
 	})
-}
-
-func dynamicLikesByViewer(db *gorm.DB, viewer uint64, ids []uint64) map[uint64]bool {
-	out := make(map[uint64]bool)
-	if viewer == 0 || len(ids) == 0 {
-		return out
-	}
-	var rows []model.UserDynamicLike
-	_ = db.Where("user_id = ? AND dynamic_id IN ?", viewer, ids).Find(&rows).Error
-	for _, r := range rows {
-		out[r.DynamicID] = true
-	}
-	return out
 }
 
 func (a *API) uploadDynamicImage(uid uint64, fh *multipart.FileHeader) (string, int) {
@@ -264,13 +262,13 @@ func (a *API) PostUserDynamic(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	dyn := model.UserDynamic{
+	dyn := dynamic.UserDynamic{
 		UserID:     uid,
 		Title:      title,
 		Content:    content,
 		ImagesJSON: string(imgsJSON),
 	}
-	if err := a.DB.Create(&dyn).Error; err != nil {
+	if err := a.DynamicSvc.CreateDynamic(context.Background(), &dyn); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
@@ -308,8 +306,8 @@ func (a *API) PutMyUserDynamic(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	var dyn model.UserDynamic
-	if err := a.DB.First(&dyn, id).Error; err != nil {
+	dyn, err := a.DynamicSvc.GetDynamicByID(context.Background(), id)
+	if err != nil {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
@@ -364,14 +362,16 @@ func (a *API) PutMyUserDynamic(c *gin.Context) {
 		return
 	}
 	dyn.Title = title
-	dyn.Content = content
-	dyn.ImagesJSON = string(imgsJSON)
-	if err := a.DB.Save(&dyn).Error; err != nil {
+	updates := map[string]interface{}{
+		"content": content,
+		"images_json": string(imgsJSON),
+	}
+	if err := a.DynamicSvc.UpdateDynamic(context.Background(), id, updates); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
 	purgeRemovedDynamicImageURLs(a.Cfg, a.OSS, a.Log, oldURLs, imageURLs)
-	resp.OK(c, userDynamicPayload(&dyn, false))
+	resp.OK(c, userDynamicPayload(dyn, false))
 }
 
 // ToggleDynamicLike toggles the current user's like on a user dynamic.
@@ -386,53 +386,36 @@ func (a *API) ToggleDynamicLike(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	if _, ok := loadUserDynamic(a, did); !ok {
-		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
-		return
-	}
-	var like model.UserDynamicLike
-	res := a.DB.Where("user_id = ? AND dynamic_id = ?", uid, did).Limit(1).Find(&like)
-	if res.Error != nil {
+	liked, err := a.DynamicSvc.ToggleDynamicLike(context.Background(), uid, did)
+	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	if res.RowsAffected == 0 {
-		if err := a.DB.Create(&model.UserDynamicLike{UserID: uid, DynamicID: did}).Error; err != nil {
-			resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
-			return
-		}
-		_ = a.DB.Model(&model.UserDynamic{}).Where("id = ?", did).
-			UpdateColumn("like_count", gorm.Expr("like_count + ?", 1)).Error
+	if liked {
 		resp.OK(c, gin.H{"liked": true, "like_count_delta": 1})
-		return
+	} else {
+		resp.OK(c, gin.H{"liked": false, "like_count_delta": -1})
 	}
-	if err := a.DB.Delete(&like).Error; err != nil {
-		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
-		return
-	}
-	_ = a.DB.Model(&model.UserDynamic{}).Where("id = ?", did).
-		UpdateColumn("like_count", gorm.Expr("CASE WHEN like_count - ? < 0 THEN 0 ELSE like_count - ? END", 1, 1)).Error
-	resp.OK(c, gin.H{"liked": false, "like_count_delta": -1})
 }
 
 func deleteUserDynamicCascade(tx *gorm.DB, id uint64) error {
 	var cids []uint64
-	_ = tx.Model(&model.DynamicComment{}).Where("dynamic_id = ?", id).Pluck("id", &cids).Error
+	_ = tx.Model(&comment.DynamicComment{}).Where("dynamic_id = ?", id).Pluck("id", &cids).Error
 	if len(cids) > 0 {
-		if err := tx.Where("comment_id IN ?", cids).Delete(&model.DynamicCommentLike{}).Error; err != nil {
+		if err := tx.Where("comment_id IN ?", cids).Delete(&comment.DynamicCommentLike{}).Error; err != nil {
 			return err
 		}
-		if err := tx.Where("comment_id IN ?", cids).Delete(&model.DynamicCommentDislike{}).Error; err != nil {
+		if err := tx.Where("comment_id IN ?", cids).Delete(&comment.DynamicCommentDislike{}).Error; err != nil {
 			return err
 		}
-		if err := tx.Where("dynamic_id = ?", id).Delete(&model.DynamicComment{}).Error; err != nil {
+		if err := tx.Where("dynamic_id = ?", id).Delete(&comment.DynamicComment{}).Error; err != nil {
 			return err
 		}
 	}
-	if err := tx.Where("dynamic_id = ?", id).Delete(&model.UserDynamicLike{}).Error; err != nil {
+	if err := tx.Where("dynamic_id = ?", id).Delete(&comment.UserDynamicLike{}).Error; err != nil {
 		return err
 	}
-	return tx.Where("id = ?", id).Delete(&model.UserDynamic{}).Error
+	return tx.Where("id = ?", id).Delete(&dynamic.UserDynamic{}).Error
 }
 
 // DeleteMyDynamic deletes the caller's own image/text dynamic.
@@ -447,8 +430,8 @@ func (a *API) DeleteMyDynamic(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	var dyn model.UserDynamic
-	if err := a.DB.First(&dyn, id).Error; err != nil {
+	dyn, err := a.DynamicSvc.GetDynamicByID(context.Background(), id)
+	if err != nil {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
@@ -456,26 +439,14 @@ func (a *API) DeleteMyDynamic(c *gin.Context) {
 		resp.Err(c, http.StatusForbidden, errcode.CodeForbidden)
 		return
 	}
-	if err := a.DB.Transaction(func(tx *gorm.DB) error {
-		return deleteUserDynamicCascade(tx, id)
-	}); err != nil {
+	if err := a.DynamicSvc.DeleteDynamic(context.Background(), id); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	purgeDynamicOSSObjects(a.Cfg, a.OSS, a.Log, dyn)
+	purgeDynamicOSSObjects(a.Cfg, a.OSS, a.Log, *dyn)
 	resp.OK(c, gin.H{"ok": true})
 }
 
-func orderClauseForMyDynamics(sort string) string {
-	switch strings.TrimSpace(sort) {
-	case "reply":
-		return "comment_count DESC, id DESC"
-	case "like":
-		return "like_count DESC, id DESC"
-	default:
-		return "id DESC"
-	}
-}
 
 // ListMyDynamics lists the current user's image/text dynamics (稿件管理).
 // Query: page, page_size, sort(time|reply|like), q(title or content).
@@ -496,39 +467,23 @@ func (a *API) ListMyDynamics(c *gin.Context) {
 	sortKey := strings.TrimSpace(c.DefaultQuery("sort", "time"))
 	titleQ := strings.TrimSpace(c.Query("q"))
 
-	filtered := a.DB.Model(&model.UserDynamic{}).Where("user_id = ?", uid)
-	if titleQ != "" {
-		filtered = filtered.Where("title LIKE ? OR content LIKE ?", "%"+titleQ+"%", "%"+titleQ+"%")
-	}
-	var total int64
-	if err := filtered.Count(&total).Error; err != nil {
+	resDyn, err := a.DynamicSvc.ListMyDynamicsAdvanced(c.Request.Context(), service.MyDynamicFilter{
+		UserID: uid, TitleQ: titleQ, SortKey: sortKey, Page: page, PageSize: pageSize,
+	})
+	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	totalPages := int((total + int64(pageSize) - 1) / int64(pageSize))
-	if totalPages < 1 {
-		totalPages = 1
-	}
-	if page > totalPages {
-		page = totalPages
-	}
-	offset := (page - 1) * pageSize
-	var list []model.UserDynamic
-	if err := filtered.Order(orderClauseForMyDynamics(sortKey)).
-		Offset(offset).Limit(pageSize).Find(&list).Error; err != nil {
-		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
-		return
-	}
-	items := make([]gin.H, 0, len(list))
-	for i := range list {
-		items = append(items, userDynamicPayload(&list[i], false))
+	items := make([]gin.H, 0, len(resDyn.Dynamics))
+	for i := range resDyn.Dynamics {
+		items = append(items, userDynamicPayload(&resDyn.Dynamics[i], false))
 	}
 	resp.OK(c, gin.H{
 		"items":       items,
 		"page":        page,
 		"page_size":   pageSize,
-		"total":       total,
-		"total_pages": totalPages,
+		"total":       resDyn.Total,
+		"total_pages": resDyn.TotalPages,
 	})
 }
 
@@ -549,12 +504,16 @@ func (a *API) ListUserPublishedDynamics(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	var u model.User
-	if err := a.DB.First(&u, uid).Error; err != nil {
+	var u user.User
+	uP, err := a.UserSvc.GetUserPublic(c.Request.Context(), uid)
+	if err != nil || uP == nil {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
-	if model.IsUserAnonymized(&u) {
+	u.ID = uP.ID
+	u.Username = uP.Username
+	u.AvatarURL = uP.AvatarURL
+	if user.IsUserAnonymized(&u) {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
@@ -565,12 +524,8 @@ func (a *API) ListUserPublishedDynamics(c *gin.Context) {
 		}
 	}
 	curID, _ := strconv.ParseUint(c.Query("cursor"), 10, 64)
-	q := a.DB.Model(&model.UserDynamic{}).Where("user_id = ?", uid)
-	if curID > 0 {
-		q = q.Where("id < ?", curID)
-	}
-	var list []model.UserDynamic
-	if err := q.Order("id DESC").Limit(limit + 1).Find(&list).Error; err != nil {
+	list, err := a.DynamicSvc.ListUserDynamicsCursor(c.Request.Context(), uid, curID, limit+1)
+	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
@@ -586,7 +541,7 @@ func (a *API) ListUserPublishedDynamics(c *gin.Context) {
 	for _, d := range list {
 		ids = append(ids, d.ID)
 	}
-	likedMap := dynamicLikesByViewer(a.DB, viewer, ids)
+	likedMap := a.DynamicSvc.BatchCheckLiked(c.Request.Context(), viewer, ids)
 	items := make([]gin.H, 0, len(list))
 	for i := range list {
 		items = append(items, userDynamicPayload(&list[i], likedMap[list[i].ID]))

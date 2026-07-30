@@ -1,6 +1,7 @@
 package service
 
 import (
+	"minibili/internal/model/admin"
 	"context"
 	"sort"
 	"strings"
@@ -8,7 +9,6 @@ import (
 
 	"gorm.io/gorm"
 
-	"minibili/internal/model"
 )
 
 func hotSearchOpActive(now time.Time, start, end *time.Time) bool {
@@ -21,7 +21,7 @@ func hotSearchOpActive(now time.Time, start, end *time.Time) bool {
 	return true
 }
 
-func hotSearchDisplayTitle(op *model.HotSearchOp) string {
+func hotSearchDisplayTitle(op *admin.HotSearchOp) string {
 	if t := strings.TrimSpace(op.DisplayTitle); t != "" {
 		return t
 	}
@@ -53,11 +53,11 @@ func listHotSearchMergedLegacy(ctx context.Context, db *gorm.DB, rec *SearchHotR
 		limit = 20
 	}
 	now := time.Now()
-	var ops []model.HotSearchOp
+	var ops []admin.HotSearchOp
 	if db != nil {
 		_ = db.Where("enabled = ?", true).Order("pin_rank ASC, id ASC").Find(&ops).Error
 	}
-	active := make([]model.HotSearchOp, 0, len(ops))
+	active := make([]admin.HotSearchOp, 0, len(ops))
 	blocked := make(map[string]struct{})
 	for i := range ops {
 		op := ops[i]

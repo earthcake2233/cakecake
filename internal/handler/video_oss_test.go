@@ -1,17 +1,17 @@
 package handler
 
 import (
+	"minibili/internal/model/video"
 	"testing"
 
 	"minibili/internal/config"
-	"minibili/internal/model"
 )
 
 func TestVideoOSSObjectKeys(t *testing.T) {
 	cfg := &config.C{
 		OSSPublicURLPrefix: "https://b.oss.aliyuncs.com",
 	}
-	v := model.Video{
+	v := video.Video{
 		ID:       7,
 		VideoURL: "https://b.oss.aliyuncs.com/videos/7.mp4",
 		CoverURL: "https://b.oss.aliyuncs.com/covers/7.png",

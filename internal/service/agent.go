@@ -1,6 +1,8 @@
 package service
 
 import (
+	"minibili/internal/model/agent"
+	"minibili/internal/model/dm"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -19,7 +21,6 @@ import (
 	"minibili/internal/aigateway/toolkit"
 	"minibili/internal/config"
 	"minibili/internal/data"
-	"minibili/internal/model"
 	"minibili/internal/pkg/sensitive"
 	"minibili/internal/ws"
 )
@@ -97,8 +98,8 @@ func (s *AgentService) EnsureForUser(humanID uint64) error {
 	return data.EnsureAllAgentConversationsForUser(s.DB, humanID)
 }
 
-func (s *AgentService) IsAgentConversation(conv *model.DmConversation) bool {
-	return conv != nil && conv.Kind == model.DmKindAgent
+func (s *AgentService) IsAgentConversation(conv *dm.DmConversation) bool {
+	return conv != nil && conv.Kind == dm.DmKindAgent
 }
 
 func (s *AgentService) IsBotUser(uid uint64) bool {
@@ -109,7 +110,7 @@ func (s *AgentService) IsBotUser(uid uint64) bool {
 	return err == nil
 }
 
-func (s *AgentService) profileForConversation(conv *model.DmConversation) (*model.AgentProfile, error) {
+func (s *AgentService) profileForConversation(conv *dm.DmConversation) (*agent.AgentProfile, error) {
 	if s == nil || s.DB == nil || conv == nil {
 		return nil, fmt.Errorf("invalid conversation")
 	}
@@ -122,7 +123,7 @@ func (s *AgentService) profileForConversation(conv *model.DmConversation) (*mode
 	return data.GetAgentProfileByBotUserID(s.DB, conv.UserHigh)
 }
 
-func (s *AgentService) PostAssistantMessage(conv *model.DmConversation, humanID uint64, content string, extra ...string) (*model.DmMessage, error) {
+func (s *AgentService) PostAssistantMessage(conv *dm.DmConversation, humanID uint64, content string, extra ...string) (*dm.DmMessage, error) {
 	if s == nil || s.DB == nil || conv == nil {
 		return nil, fmt.Errorf("agent service not ready")
 	}
@@ -147,7 +148,7 @@ func (s *AgentService) PostAssistantMessage(conv *model.DmConversation, humanID 
 		toolActivities = extra[0]
 		toolResultData = extra[1]
 	}
-	msg := model.DmMessage{
+	msg := dm.DmMessage{
 		ConversationID: conv.ID,
 		SenderID:       botID,
 		Role:           "assistant",
@@ -173,7 +174,7 @@ func (s *AgentService) PostAssistantMessage(conv *model.DmConversation, humanID 
 		tx.Rollback()
 		return nil, err
 	}
-	if err := tx.Model(&model.DmParticipant{}).
+	if err := tx.Model(&dm.DmParticipant{}).
 		Where("conversation_id = ? AND user_id = ?", conv.ID, humanID).
 		Updates(map[string]interface{}{
 			"unread_count": gorm.Expr("unread_count + ?", 1),
@@ -279,7 +280,7 @@ func (s *AgentService) clearToolCallbacks() {
 	}
 }
 
-func (s *AgentService) GenerateReply(ctx context.Context, conv *model.DmConversation, userText string) (*GenerateReplyResult, error) {
+func (s *AgentService) GenerateReply(ctx context.Context, conv *dm.DmConversation, userText string) (*GenerateReplyResult, error) {
 	if !s.gatewayReady() {
 		return nil, fmt.Errorf("ai assistant is not configured")
 	}
@@ -406,7 +407,7 @@ func (s *AgentService) GenerateReply(ctx context.Context, conv *model.DmConversa
 	}
 	return result, nil
 }
-func (s *AgentService) ResetConversation(ctx context.Context, conv *model.DmConversation, humanID uint64) (*model.DmMessage, error) {
+func (s *AgentService) ResetConversation(ctx context.Context, conv *dm.DmConversation, humanID uint64) (*dm.DmMessage, error) {
 	if s == nil || s.DB == nil || conv == nil || humanID == 0 {
 		return nil, fmt.Errorf("agent service not ready")
 	}
@@ -421,7 +422,7 @@ func (s *AgentService) ResetConversation(ctx context.Context, conv *model.DmConv
 		r := []rune(preview)
 		preview = string(r[:80]) + "..."
 	}
-	msg := model.DmMessage{
+	msg := dm.DmMessage{
 		ConversationID: conv.ID,
 		SenderID:       profile.BotUserID,
 		Role:           "assistant",
@@ -429,7 +430,7 @@ func (s *AgentService) ResetConversation(ctx context.Context, conv *model.DmConv
 		CreatedAt:      now,
 	}
 	tx := s.DB.Begin()
-	if err := tx.Where("conversation_id = ?", conv.ID).Delete(&model.DmMessage{}).Error; err != nil {
+	if err := tx.Where("conversation_id = ?", conv.ID).Delete(&dm.DmMessage{}).Error; err != nil {
 		tx.Rollback()
 		return nil, err
 	}
@@ -444,7 +445,7 @@ func (s *AgentService) ResetConversation(ctx context.Context, conv *model.DmConv
 		tx.Rollback()
 		return nil, err
 	}
-	if err := tx.Model(&model.DmParticipant{}).
+	if err := tx.Model(&dm.DmParticipant{}).
 		Where("conversation_id = ? AND user_id = ?", conv.ID, humanID).
 		Updates(map[string]interface{}{
 			"unread_count": 0,
@@ -465,3 +466,91 @@ func (s *AgentService) ResetConversation(ctx context.Context, conv *model.DmConv
 
 // ReloadProfiles is a no-op placeholder after multi-profile migration.
 func (s *AgentService) ReloadProfiles() {}
+
+
+// ListAgentProfiles returns all agent profiles.
+func (s *AgentService) ListAgentProfiles(ctx context.Context) ([]agent.AgentProfile, error) {
+	var rows []agent.AgentProfile
+	if err := s.DB.WithContext(ctx).Order("id ASC").Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	return rows, nil
+}
+
+// GetAgentProfile returns an agent profile by ID.
+func (s *AgentService) GetAgentProfile(ctx context.Context, id uint64) (*agent.AgentProfile, error) {
+	var p agent.AgentProfile
+	if err := s.DB.WithContext(ctx).First(&p, id).Error; err != nil {
+		return nil, err
+	}
+	return &p, nil
+}
+
+// CreateAgentProfile creates a new agent profile.
+func (s *AgentService) CreateAgentProfile(ctx context.Context, p *agent.AgentProfile) error {
+	return s.DB.WithContext(ctx).Create(p).Error
+}
+
+// UpdateAgentProfile updates an agent profile.
+func (s *AgentService) UpdateAgentProfile(ctx context.Context, id uint64, updates map[string]interface{}) error {
+	return s.DB.WithContext(ctx).Model(&agent.AgentProfile{}).Where("id = ?", id).Updates(updates).Error
+}
+
+// DeleteAgentProfile deletes an agent profile by ID.
+func (s *AgentService) DeleteAgentProfile(ctx context.Context, id uint64) error {
+	return s.DB.WithContext(ctx).Delete(&agent.AgentProfile{}, id).Error
+}
+
+// CountActiveAgentProfiles returns the count of enabled agent profiles.
+func (s *AgentService) CountActiveAgentProfiles(ctx context.Context) (int64, error) {
+	var cnt int64
+	err := s.DB.WithContext(ctx).Model(&agent.AgentProfile{}).Where("enabled = ?", true).Count(&cnt).Error
+	return cnt, err
+}
+
+// CheckAgentSlugExists checks if a slug is already taken.
+func (s *AgentService) CheckAgentSlugExists(ctx context.Context, slug string) (bool, error) {
+	var cnt int64
+	err := s.DB.WithContext(ctx).Model(&agent.AgentProfile{}).Where("slug = ?", slug).Count(&cnt).Error
+	return cnt > 0, err
+}
+
+// UpdateAgentAvatar updates the avatar_url of an agent profile.
+func (s *AgentService) UpdateAgentAvatar(ctx context.Context, id uint64, avatarURL string) error {
+	return s.DB.WithContext(ctx).Model(&agent.AgentProfile{}).Where("id = ?", id).Update("avatar_url", avatarURL).Error
+}
+
+// GetGlobalSystemPrompt returns the global system prompt from agent settings.
+func (s *AgentService) GetGlobalSystemPrompt(ctx context.Context) string {
+	return data.GetGlobalSystemPrompt(s.DB)
+}
+
+// ProfileCount returns total number of agent profiles.
+func (s *AgentService) ProfileCount(ctx context.Context) (int64, error) {
+	return data.ProfileCount(s.DB)
+}
+
+// CreateAgentBotUser creates a non-login system user for a new profile.
+func (s *AgentService) CreateAgentBotUser(ctx context.Context, slug, displayName, sign, avatarURL string) (uint64, error) {
+	return data.CreateAgentBotUser(s.DB, slug, displayName, sign, avatarURL)
+}
+
+// RenameAgentProfileSlug updates a profile slug and the linked bot user username.
+func (s *AgentService) RenameAgentProfileSlug(ctx context.Context, p *agent.AgentProfile, newSlug string) error {
+	return data.RenameAgentProfileSlug(s.DB, p, newSlug)
+}
+
+// SyncAgentProfile copies profile display fields onto the bot user row.
+func (s *AgentService) SyncAgentProfile(ctx context.Context, p *agent.AgentProfile) error {
+	return data.SyncAgentProfile(s.DB, p)
+}
+
+// EnsureAgentProfiles migrates legacy settings and guarantees at least one profile.
+func (s *AgentService) EnsureAgentProfiles(ctx context.Context) error {
+	return data.EnsureAgentProfiles(s.DB, s.Cfg, s.Log)
+}
+
+// AgentBotUsername returns the internal username for a profile slug.
+func AgentBotUsername(slug string) string {
+	return data.AgentBotUsername(slug)
+}

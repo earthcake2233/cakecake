@@ -1,19 +1,19 @@
 package data
 
 import (
+	"minibili/internal/model/dm"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"minibili/internal/model"
 )
 
 func ensureDmParticipantHiddenAt(db *gorm.DB, lg *zap.Logger) error {
 	m := db.Migrator()
-	if !m.HasTable(&model.DmParticipant{}) {
+	if !m.HasTable(&dm.DmParticipant{}) {
 		return nil
 	}
-	if !m.HasColumn(&model.DmParticipant{}, "HiddenAt") {
-		if err := m.AddColumn(&model.DmParticipant{}, "HiddenAt"); err != nil {
+	if !m.HasColumn(&dm.DmParticipant{}, "HiddenAt") {
+		if err := m.AddColumn(&dm.DmParticipant{}, "HiddenAt"); err != nil {
 			return err
 		}
 		if lg != nil {
@@ -27,7 +27,7 @@ func ensureDmParticipantHiddenAt(db *gorm.DB, lg *zap.Logger) error {
 // Keeps the newest pin (pinned_at, then id); clears pinned_at when pinned=false.
 func backfillDmParticipantPins(db *gorm.DB, lg *zap.Logger) error {
 	// 未置顶会话不应有 pinned_at（含历史写入的 0000-00-00）
-	_ = db.Model(&model.DmParticipant{}).
+	_ = db.Model(&dm.DmParticipant{}).
 		Where("pinned = ?", false).
 		Update("pinned_at", nil).Error
 
@@ -36,7 +36,7 @@ func backfillDmParticipantPins(db *gorm.DB, lg *zap.Logger) error {
 		Cnt    int64
 	}
 	var multi []userPinCount
-	if err := db.Model(&model.DmParticipant{}).
+	if err := db.Model(&dm.DmParticipant{}).
 		Select("user_id, COUNT(*) as cnt").
 		Where("pinned = ?", true).
 		Group("user_id").
@@ -47,7 +47,7 @@ func backfillDmParticipantPins(db *gorm.DB, lg *zap.Logger) error {
 
 	var unpinnedExtra int64
 	for _, u := range multi {
-		var parts []model.DmParticipant
+		var parts []dm.DmParticipant
 		if err := db.Where("user_id = ? AND pinned = ?", u.UserID, true).
 			Order("pinned_at DESC, id DESC").
 			Find(&parts).Error; err != nil {
@@ -57,7 +57,7 @@ func backfillDmParticipantPins(db *gorm.DB, lg *zap.Logger) error {
 			continue
 		}
 		keepID := parts[0].ID
-		res := db.Model(&model.DmParticipant{}).
+		res := db.Model(&dm.DmParticipant{}).
 			Where("user_id = ? AND pinned = ? AND id != ?", u.UserID, true, keepID).
 			Updates(map[string]interface{}{
 				"pinned":    false,
@@ -69,7 +69,7 @@ func backfillDmParticipantPins(db *gorm.DB, lg *zap.Logger) error {
 		unpinnedExtra += res.RowsAffected
 	}
 
-	res := db.Model(&model.DmParticipant{}).
+	res := db.Model(&dm.DmParticipant{}).
 		Where("pinned = ? AND pinned_at IS NOT NULL", false).
 		Update("pinned_at", nil)
 	if res.Error != nil {

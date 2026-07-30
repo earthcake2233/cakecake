@@ -1,31 +1,36 @@
 package model_test
 
 import (
+	"minibili/internal/model/admin"
+	"minibili/internal/model/agent"
+	"minibili/internal/model/dm"
+	"minibili/internal/model/notification"
+	"minibili/internal/model/user"
+	"minibili/internal/model/video"
 	"encoding/json"
 	"testing"
 	"time"
 
-	"minibili/internal/model"
 
 	"github.com/stretchr/testify/require"
 )
 
 func TestNotification_ReadStatus(t *testing.T) {
-	n := model.Notification{RecipientID: 1, Type: "reply", IsRead: true}
+	n := notification.Notification{RecipientID: 1, Type: "reply", IsRead: true}
 	require.True(t, n.IsRead)
-	n2 := model.Notification{RecipientID: 1, Type: "like", IsRead: false}
+	n2 := notification.Notification{RecipientID: 1, Type: "like", IsRead: false}
 	require.False(t, n2.IsRead)
 }
 
 func TestNotification_ZeroValues(t *testing.T) {
-	var n model.Notification
+	var n notification.Notification
 	require.Empty(t, n.Type)
 	require.Empty(t, n.SenderNamesJSON)
 	require.Equal(t, 0, n.TotalLikes)
 }
 
 func TestNotification_JSONSerialization(t *testing.T) {
-	n := model.Notification{
+	n := notification.Notification{
 		RecipientID: 42,
 		Type:        "system",
 		RelatedID:   1,
@@ -37,7 +42,7 @@ func TestNotification_JSONSerialization(t *testing.T) {
 }
 
 func TestLikeNotifMute_StructFields(t *testing.T) {
-	m := model.LikeNotifMute{
+	m := notification.LikeNotifMute{
 		RecipientID: 42,
 		CommentID:   100,
 	}
@@ -47,39 +52,39 @@ func TestLikeNotifMute_StructFields(t *testing.T) {
 
 func TestIsUserAnonymized_Anonymized(t *testing.T) {
 	now := time.Now()
-	u := &model.User{AnonymizedAt: &now}
-	require.True(t, model.IsUserAnonymized(u))
+	u := &user.User{AnonymizedAt: &now}
+	require.True(t, user.IsUserAnonymized(u))
 }
 
 func TestIsUserAnonymized_Nil(t *testing.T) {
-	require.False(t, model.IsUserAnonymized(nil))
+	require.False(t, user.IsUserAnonymized(nil))
 }
 
 func TestIsUserAnonymized_NotAnonymized(t *testing.T) {
-	u := &model.User{}
-	require.False(t, model.IsUserAnonymized(u))
+	u := &user.User{}
+	require.False(t, user.IsUserAnonymized(u))
 }
 
 func TestDisplayUsername_Anonymized(t *testing.T) {
 	now := time.Now()
-	u := &model.User{
+	u := &user.User{
 		Username:     "testuser",
 		AnonymizedAt: &now,
 	}
-	require.Equal(t, "已注销用户", model.DisplayUsername(u))
+	require.Equal(t, "已注销用户", user.DisplayUsername(u))
 }
 
 func TestDisplayUsername_Normal(t *testing.T) {
-	u := &model.User{Username: "alice"}
-	require.Equal(t, "alice", model.DisplayUsername(u))
+	u := &user.User{Username: "alice"}
+	require.Equal(t, "alice", user.DisplayUsername(u))
 }
 
 func TestDisplayUsername_Nil(t *testing.T) {
-	require.Empty(t, model.DisplayUsername(nil))
+	require.Empty(t, user.DisplayUsername(nil))
 }
 
 func TestUserBlock_StructFields(t *testing.T) {
-	b := model.UserBlock{
+	b := user.UserBlock{
 		BlockerID: 1,
 		BlockedID: 42,
 	}
@@ -89,7 +94,7 @@ func TestUserBlock_StructFields(t *testing.T) {
 
 func TestAdmin_StructFields(t *testing.T) {
 	now := time.Now()
-	a := model.Admin{
+	a := admin.Admin{
 		ID:          1,
 		Username:    "ops",
 		PasswordHash: "hash",
@@ -105,7 +110,7 @@ func TestAdmin_StructFields(t *testing.T) {
 }
 
 func TestAdmin_Disabled(t *testing.T) {
-	a := model.Admin{
+	a := admin.Admin{
 		Username: "inactive",
 		Status:   "disabled",
 	}
@@ -113,7 +118,7 @@ func TestAdmin_Disabled(t *testing.T) {
 }
 
 func TestAdmin_ZeroValues(t *testing.T) {
-	var a model.Admin
+	var a admin.Admin
 	require.Empty(t, a.Username)
 	require.Empty(t, a.DisplayName)
 	require.Nil(t, a.LastLoginAt)
@@ -121,7 +126,7 @@ func TestAdmin_ZeroValues(t *testing.T) {
 
 func TestDmParticipant_StructFields(t *testing.T) {
 	now := time.Now()
-	p := model.DmParticipant{
+	p := dm.DmParticipant{
 		ConversationID: 10,
 		UserID:         42,
 		UnreadCount:    5,
@@ -138,14 +143,14 @@ func TestDmParticipant_StructFields(t *testing.T) {
 }
 
 func TestDmParticipant_DefaultValues(t *testing.T) {
-	var p model.DmParticipant
+	var p dm.DmParticipant
 	require.Equal(t, uint32(0), p.UnreadCount)
 	require.False(t, p.Pinned)
 	require.False(t, p.Muted)
 }
 
 func TestDmMessage_StructFields(t *testing.T) {
-	msg := model.DmMessage{
+	msg := dm.DmMessage{
 		ConversationID: 10,
 		SenderID:       42,
 		Role:           "user",
@@ -158,7 +163,7 @@ func TestDmMessage_StructFields(t *testing.T) {
 }
 
 func TestDmMessage_EmptyContent(t *testing.T) {
-	msg := model.DmMessage{
+	msg := dm.DmMessage{
 		ConversationID: 1,
 		SenderID:       1,
 		Role:           "assistant",
@@ -167,7 +172,7 @@ func TestDmMessage_EmptyContent(t *testing.T) {
 }
 
 func TestDmConversation_Struct(t *testing.T) {
-	c := model.DmConversation{
+	c := dm.DmConversation{
 		UserLow:      1,
 		UserHigh:     2,
 		Kind:         "human",
@@ -178,7 +183,7 @@ func TestDmConversation_Struct(t *testing.T) {
 }
 
 func TestDmConversation_AgentKind(t *testing.T) {
-	c := model.DmConversation{
+	c := dm.DmConversation{
 		UserLow:        1,
 		UserHigh:       2,
 		Kind:           "agent",
@@ -189,7 +194,7 @@ func TestDmConversation_AgentKind(t *testing.T) {
 }
 
 func TestVideoFavorite_StructFields(t *testing.T) {
-	vf := model.VideoFavorite{
+	vf := video.VideoFavorite{
 		FolderID: 1,
 		VideoID:  100,
 	}
@@ -198,14 +203,14 @@ func TestVideoFavorite_StructFields(t *testing.T) {
 }
 
 func TestVideoFavorite_ZeroFolder(t *testing.T) {
-	vf := model.VideoFavorite{VideoID: 42}
+	vf := video.VideoFavorite{VideoID: 42}
 	require.Equal(t, uint64(0), vf.FolderID)
 	require.Equal(t, uint64(42), vf.VideoID)
 }
 
 func TestHomeBanner_Struct(t *testing.T) {
 	now := time.Now()
-	b := model.HomeBanner{
+	b := admin.HomeBanner{
 		Title:      "Welcome",
 		ImageURL:   "https://example.com/banner.jpg",
 		LinkType:   "video",
@@ -221,7 +226,7 @@ func TestHomeBanner_Struct(t *testing.T) {
 }
 
 func TestHomeBanner_Defaults(t *testing.T) {
-	var b model.HomeBanner
+	var b admin.HomeBanner
 	// In Go, struct fields default to zero values; GORM default:"none" only applies at DB level.
 	require.Empty(t, b.LinkType)
 	require.Empty(t, b.Title)
@@ -229,7 +234,7 @@ func TestHomeBanner_Defaults(t *testing.T) {
 }
 
 func TestHotSearchOp_Struct(t *testing.T) {
-	op := model.HotSearchOp{
+	op := admin.HotSearchOp{
 		OpType:       "pin",
 		Keyword:      "news",
 		DisplayTitle: "Breaking News",
@@ -243,14 +248,14 @@ func TestHotSearchOp_Struct(t *testing.T) {
 }
 
 func TestHotSearchOp_Defaults(t *testing.T) {
-	var op model.HotSearchOp
+	var op admin.HotSearchOp
 	require.Empty(t, op.OpType)
 	require.Equal(t, 0, op.PinRank)
 	require.False(t, op.Enabled)
 }
 
 func TestAgentSettings_Struct(t *testing.T) {
-	s := model.AgentSettings{
+	s := agent.AgentSettings{
 		DisplayName:      "AI Assistant",
 		SystemPrompt:     "Be helpful",
 		AssistantEnabled: true,
@@ -260,7 +265,7 @@ func TestAgentSettings_Struct(t *testing.T) {
 }
 
 func TestAgentProfile_Struct(t *testing.T) {
-	p := model.AgentProfile{
+	p := agent.AgentProfile{
 		Slug:                "default",
 		BotUserID:           1,
 		DisplayName:         "Bot",
@@ -275,7 +280,7 @@ func TestAgentProfile_Struct(t *testing.T) {
 }
 
 func TestAgentProfile_Disabled(t *testing.T) {
-	p := model.AgentProfile{
+	p := agent.AgentProfile{
 		Slug:    "offline",
 		Enabled: false,
 	}
@@ -296,7 +301,7 @@ func TestParseWelcomeMessages(t *testing.T) {
 		{`["hello"]`, []string{"hello"}},
 	}
 	for _, tc := range tests {
-		got := model.ParseWelcomeMessages(tc.raw)
+		got := agent.ParseWelcomeMessages(tc.raw)
 		require.Equal(t, tc.want, got, "ParseWelcomeMessages(%q)", tc.raw)
 	}
 }
@@ -314,14 +319,14 @@ func TestEncodeWelcomeMessages(t *testing.T) {
 		{[]string{"你好"}, `["你好"]`},
 	}
 	for _, tc := range tests {
-		got := model.EncodeWelcomeMessages(tc.input)
+		got := agent.EncodeWelcomeMessages(tc.input)
 		require.Equal(t, tc.want, got, "EncodeWelcomeMessages(%v)", tc.input)
 	}
 }
 
 func TestUser_DeletionFields(t *testing.T) {
 	now := time.Now()
-	u := model.User{
+	u := user.User{
 		DeletionRequestedAt: &now,
 		DeletionEffectiveAt: &now,
 		AnonymizedAt:        &now,
@@ -334,7 +339,7 @@ func TestUser_DeletionFields(t *testing.T) {
 }
 
 func TestUser_PrivacyDefaults(t *testing.T) {
-	var u model.User
+	var u user.User
 	require.False(t, u.PrivacyPublicFavorites)
 	require.False(t, u.PrivacyPublicRecentCoins)
 	require.False(t, u.PrivacyPublicFollowing)
@@ -344,6 +349,6 @@ func TestUser_PrivacyDefaults(t *testing.T) {
 }
 
 func TestConstants(t *testing.T) {
-	require.Equal(t, "human", model.DmKindHuman)
-	require.Equal(t, "agent", model.DmKindAgent)
+	require.Equal(t, "human", dm.DmKindHuman)
+	require.Equal(t, "agent", dm.DmKindAgent)
 }

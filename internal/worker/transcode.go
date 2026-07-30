@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"minibili/internal/model/video"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -16,7 +17,6 @@ import (
 	"minibili/internal/config"
 	"minibili/internal/ffmpeg"
 	"minibili/internal/logger"
-	"minibili/internal/model"
 	"minibili/internal/queue"
 	"minibili/internal/search"
 	"minibili/internal/service"
@@ -161,7 +161,7 @@ func handleDelivery(ctx context.Context, cfg *config.C, db *gorm.DB, ch, pubCh *
 	if cfg.VideoReviewRequired {
 		updates["status"] = "pending_review"
 	}
-	if err := db.Model(&model.Video{}).Where("id = ?", job.VideoID).Updates(updates).Error; err != nil {
+	if err := db.Model(&video.Video{}).Where("id = ?", job.VideoID).Updates(updates).Error; err != nil {
 		lg.Error("db update after transcode", zap.Error(err))
 	} else if !cfg.VideoReviewRequired {
 		if err := service.PublishVideo(ctx, db, esc, lg, job.VideoID, nil); err != nil {
@@ -190,7 +190,7 @@ func failVideo(db *gorm.DB, id uint64, reason string) {
 	if msg == "" {
 		msg = "视频处理失败，请稍后重试。"
 	}
-	_ = db.Model(&model.Video{}).Where("id = ?", id).Updates(map[string]interface{}{
+	_ = db.Model(&video.Video{}).Where("id = ?", id).Updates(map[string]interface{}{
 		"status":      "failed",
 		"fail_reason": truncate(msg, 1900),
 	}).Error

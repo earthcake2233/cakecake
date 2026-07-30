@@ -1,21 +1,21 @@
 package data
 
 import (
+	"minibili/internal/model/extra"
 	"fmt"
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"minibili/internal/model"
 	"minibili/internal/pkg/searchhist"
 )
 
 // migrateUserSearchHistory applies schema, dedupes rows, then adds the unique (user_id, keyword_norm) index.
 func migrateUserSearchHistory(db *gorm.DB, lg *zap.Logger) error {
 	m := db.Migrator()
-	if m.HasTable(&model.UserSearchHistory{}) {
+	if m.HasTable(&extra.UserSearchHistory{}) {
 		for _, name := range []string{"idx_user_search_kw", "idx_user_search_norm"} {
-			if !m.HasIndex(&model.UserSearchHistory{}, name) {
+			if !m.HasIndex(&extra.UserSearchHistory{}, name) {
 				continue
 			}
 			if err := dropSearchHistoryIndex(db, m, name); err != nil {
@@ -26,11 +26,11 @@ func migrateUserSearchHistory(db *gorm.DB, lg *zap.Logger) error {
 			}
 		}
 	}
-	if err := db.AutoMigrate(&model.UserSearchHistory{}); err != nil {
+	if err := db.AutoMigrate(&extra.UserSearchHistory{}); err != nil {
 		return err
 	}
 	for _, name := range []string{"idx_user_search_kw", "idx_user_search_norm"} {
-		if !m.HasIndex(&model.UserSearchHistory{}, name) {
+		if !m.HasIndex(&extra.UserSearchHistory{}, name) {
 			continue
 		}
 		if err := dropSearchHistoryIndex(db, m, name); err != nil {
@@ -43,7 +43,7 @@ func migrateUserSearchHistory(db *gorm.DB, lg *zap.Logger) error {
 	if err := CleanupUserSearchHistory(db, lg); err != nil {
 		return err
 	}
-	if m.HasIndex(&model.UserSearchHistory{}, "idx_user_search_norm") {
+	if m.HasIndex(&extra.UserSearchHistory{}, "idx_user_search_norm") {
 		return nil
 	}
 	switch db.Dialector.Name() {
@@ -63,7 +63,7 @@ func migrateUserSearchHistory(db *gorm.DB, lg *zap.Logger) error {
 }
 
 func dropSearchHistoryIndex(db *gorm.DB, m gorm.Migrator, name string) error {
-	if err := m.DropIndex(&model.UserSearchHistory{}, name); err != nil {
+	if err := m.DropIndex(&extra.UserSearchHistory{}, name); err != nil {
 		if db.Dialector.Name() == "mysql" {
 			return db.Exec("ALTER TABLE user_search_histories DROP INDEX " + name).Error
 		}
@@ -74,7 +74,7 @@ func dropSearchHistoryIndex(db *gorm.DB, m gorm.Migrator, name string) error {
 
 // CleanupUserSearchHistory backfills keyword_norm and removes duplicate/invalid rows per user.
 func CleanupUserSearchHistory(db *gorm.DB, lg *zap.Logger) error {
-	var rows []model.UserSearchHistory
+	var rows []extra.UserSearchHistory
 	if err := db.Order("updated_at DESC, id DESC").Find(&rows).Error; err != nil {
 		return err
 	}
@@ -97,7 +97,7 @@ func CleanupUserSearchHistory(db *gorm.DB, lg *zap.Logger) error {
 		seen[key] = r.ID
 	}
 	if len(deleteIDs) > 0 {
-		if err := db.Where("id IN ?", deleteIDs).Delete(&model.UserSearchHistory{}).Error; err != nil {
+		if err := db.Where("id IN ?", deleteIDs).Delete(&extra.UserSearchHistory{}).Error; err != nil {
 			return err
 		}
 		if lg != nil {

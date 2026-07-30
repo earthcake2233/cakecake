@@ -2,7 +2,7 @@
 //
 // @title           Mini-Bili API
 // @version         1.0
-// @description     Mini-Bili - 杞婚噺绾у脊骞曡棰戝垎浜钩鍙板悗绔?API
+// @description     Mini-Bili - 轻量级弹幕视频分享平台后端API
 // @termsOfService  https://github.com/earthcake2233/cakecake/blob/main/LICENSE
 //
 // @contact.name   earthcake2233
@@ -68,7 +68,7 @@ func main() {
 
 	ffmpeg.Init(cfg.FFprobePath, cfg.FFmpegPath)
 	if err := ffmpeg.CheckFFprobe(); err != nil {
-		log.Warn("ffprobe 涓嶅彲鐢紝瑙嗛涓婁紶灏嗚繑鍥?40009锛岀洿鍒?PATH 鎴?FFPROBE_PATH 閰嶇疆姝ｇ‘",
+		log.Warn("ffprobe 不可用，视频上传将返回40009，直到PATH 或FFPROBE_PATH 配置正确",
 			zap.String("ffprobe", ffmpeg.FFprobeExe()),
 			zap.Error(err),
 		)
@@ -255,10 +255,25 @@ func main() {
 	notifSvc := service.NewNotificationService(db, rdb, log)
 	commentSvc.SetNotificationService(notifSvc)
 	commentSvc.SetProviders(userProv, videoProv, articleProv, dynamicProv)
+	notifSvc.SetUserProvider(userProv)
 	authSvc := service.NewAuthService(db, rdb, log, jm, service.AuthConfig{AgentBotUsername: cfg.AgentBotUsername})
 	followSvc := service.NewFollowService(db, log)
 	danmakuSvc := service.NewDanmakuService(db, rdb, log, sens)
 	userSvc := service.NewUserService(db, log)
+	videoSvc := service.NewVideoService(db, rdb, log)
+	dmSvc := service.NewDmService(db, rdb, log)
+	favoriteSvc := service.NewFavoriteService(db, rdb, log)
+	favoriteSvc.SetProviders(userProv, videoProv)
+	articleSvc := service.NewArticleService(db, rdb, log)
+	articleSvc.SetUserService(userSvc)
+	dynamicSvc := service.NewDynamicService(db, rdb, log)
+	engagementSvc := service.NewEngagementService(db, rdb, log)
+	engagementSvc.SetProviders(userProv, videoProv)
+	viewHistorySvc := service.NewViewHistoryService(db, rdb, log)
+	videoDraftSvc := service.NewVideoDraftService(db, rdb, log)
+	creatorCommentSvc := service.NewCreatorCommentService(db, rdb, log)
+	searchHistorySvc := service.NewSearchHistoryService(db, log)
+	hotSearchSvc := service.NewHotSearchService(db, searchHot)
 
 	deps := &handler.Dependencies{
 		Cfg: cfg, DB: db, Redis: rdb, Log: log, Hub: hub, ChatHub: chatHub,
@@ -269,8 +284,19 @@ func main() {
 		FollowSvc:  followSvc,
 		DanmakuSvc: danmakuSvc,
 		UserSvc:    userSvc,
+		SearchHistorySvc: searchHistorySvc,
+		HotSearchSvc:    hotSearchSvc,
 		CommentSvc: commentSvc,
 		NotifSvc:   notifSvc,
+		VideoSvc:   videoSvc,
+		DmSvc:      dmSvc,
+		FavoriteSvc: favoriteSvc,
+		ArticleSvc:  articleSvc,
+		DynamicSvc:  dynamicSvc,
+		EngagementSvc: engagementSvc,
+		ViewHistorySvc: viewHistorySvc,
+		VideoDraftSvc: videoDraftSvc,
+		CreatorCommentSvc: creatorCommentSvc,
 	}
 	api := &handler.API{Dependencies: deps}
 	api.InitHotRecorder(64)
@@ -297,7 +323,7 @@ func main() {
 	}()
 	log.Info("mini-bili listening", zap.String("addr", cfg.HTTPAddr))
 
-	// 鈹€鈹€ Graceful shutdown 鈹€鈹€
+	// ── Graceful shutdown ──
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
 	<-ch

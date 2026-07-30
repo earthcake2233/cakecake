@@ -1,15 +1,15 @@
 package useravatar
 
 import (
+	"minibili/internal/model/user"
 	"fmt"
 	"strings"
 
-	"minibili/internal/model"
 )
 
 // PublicURL appends ?v=updated_at so browsers refetch after OSS overwrite at a fixed key.
-func PublicURL(u *model.User) string {
-	if u == nil || model.IsUserAnonymized(u) {
+func PublicURL(u *user.User) string {
+	if u == nil || user.IsUserAnonymized(u) {
 		return ""
 	}
 	raw := strings.TrimSpace(u.AvatarURL)

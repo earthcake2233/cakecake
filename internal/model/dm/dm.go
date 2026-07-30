@@ -1,4 +1,4 @@
-package model
+package dm
 
 import "time"
 
@@ -7,7 +7,6 @@ const (
 	DmKindAgent = "agent"
 )
 
-// DmConversation is a 1:1 chat thread between two users (UserLow < UserHigh).
 type DmConversation struct {
 	ID            uint64    `gorm:"primaryKey"`
 	UserLow       uint64    `gorm:"uniqueIndex:idx_dm_pair_low_high;not null"`
@@ -19,8 +18,6 @@ type DmConversation struct {
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
 }
-
-// DmParticipant tracks per-user unread state in a conversation.
 type DmParticipant struct {
 	ID             uint64 `gorm:"primaryKey"`
 	ConversationID uint64 `gorm:"uniqueIndex:idx_dm_part_user_conv;not null"`
@@ -33,8 +30,6 @@ type DmParticipant struct {
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 }
-
-// DmMessage is a private message in a conversation.
 type DmMessage struct {
 	ID             uint64 `gorm:"primaryKey"`
 	ConversationID uint64 `gorm:"index:idx_dm_msg_conv;not null"`

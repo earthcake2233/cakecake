@@ -1,11 +1,15 @@
 package handler
 
 import (
+	"minibili/internal/model/admin"
+	"minibili/internal/model/article"
+	"minibili/internal/model/dynamic"
+	"minibili/internal/model/user"
+	"minibili/internal/model/video"
 	"mime/multipart"
 	"testing"
 	"time"
 
-	"minibili/internal/model"
 )
 
 // ---------- parseOptionalUnix ----------
@@ -141,7 +145,7 @@ func TestAdminArticleStatusFilter(t *testing.T) {
 
 func TestAdminVideoToJSON(t *testing.T) {
 	now := time.Now()
-	v := &model.Video{
+	v := &video.Video{
 		ID:                1,
 		Title:             "Test Video",
 		Description:       "A description",
@@ -184,7 +188,7 @@ func TestAdminVideoToJSON(t *testing.T) {
 		t.Errorf("uploader_name = %q", out["uploader_name"])
 	}
 	// Without reviewed fields
-	v2 := &model.Video{ID: 2, Title: "No Review", Status: "draft"}
+	v2 := &video.Video{ID: 2, Title: "No Review", Status: "draft"}
 	out2 := adminVideoToJSON(v2, "")
 	if _, ok := out2["reviewed_at"]; ok {
 		t.Error("reviewed_at should NOT be present")
@@ -201,7 +205,7 @@ func ptrUint64(v uint64) *uint64 { return &v }
 func TestAdminArticleToJSON(t *testing.T) {
 	now := time.Now()
 	pubAt := now.Add(-time.Hour)
-	art := &model.Article{
+	art := &article.Article{
 		ID:                10,
 		Title:             "My Article",
 		CoverURL:          "https://example.com/cover.png",
@@ -246,7 +250,7 @@ func TestAdminArticleToJSON(t *testing.T) {
 		t.Error("body_html should be rendered")
 	}
 	// Without reviewed fields
-	art2 := &model.Article{ID: 11, Title: "Draft", BodyMD: "draft", Status: "draft"}
+	art2 := &article.Article{ID: 11, Title: "Draft", BodyMD: "draft", Status: "draft"}
 	out2 := adminArticleToJSON(art2, "")
 	if _, ok := out2["reviewed_at"]; ok {
 		t.Error("reviewed_at should NOT be present without reviewed fields")
@@ -260,7 +264,7 @@ func TestAdminArticleToJSON(t *testing.T) {
 
 func TestAdminDynamicToJSON(t *testing.T) {
 	now := time.Now()
-	d := &model.UserDynamic{
+	d := &dynamic.UserDynamic{
 		ID:              99,
 		Title:           "My Day",
 		Content:         "Had a great day!",
@@ -286,7 +290,7 @@ func TestAdminDynamicToJSON(t *testing.T) {
 		t.Errorf("user_id = %v", out["user_id"])
 	}
 	// Empty images
-	d2 := &model.UserDynamic{ID: 100, Title: "No Images", Content: "text"}
+	d2 := &dynamic.UserDynamic{ID: 100, Title: "No Images", Content: "text"}
 	out2 := adminDynamicToJSON(d2, "")
 	imgs := out2["images"].([]string)
 	if len(imgs) != 0 {
@@ -301,7 +305,7 @@ func TestAdminDynamicToJSON(t *testing.T) {
 
 func TestBannerToJSON(t *testing.T) {
 	now := time.Now()
-	b := &model.HomeBanner{
+	b := &admin.HomeBanner{
 		ID:          5,
 		Title:       "Summer Sale",
 		ImageURL:    "https://img.example.com/banner.jpg",
@@ -330,7 +334,7 @@ func TestBannerToJSON(t *testing.T) {
 
 func TestHotSearchOpToJSON(t *testing.T) {
 	now := time.Now()
-	op := &model.HotSearchOp{
+	op := &admin.HotSearchOp{
 		ID:           7,
 		OpType:       "pin",
 		Keyword:      "summer",
@@ -436,15 +440,15 @@ func TestUploaderNameForAPI_Extra(t *testing.T) {
 	anon := time.Now()
 	tests := []struct {
 		name string
-		u    *model.User
+		u    *user.User
 		want string
 	}{
 		{"nil user", nil, ""},
-		{"nickname set", &model.User{Nickname: "CoolNick", Username: "user123"}, "CoolNick"},
-		{"nickname with spaces", &model.User{Nickname: "  Spaced  ", Username: "user456"}, "Spaced"},
-		{"no nickname", &model.User{Username: "plain_user"}, "plain_user"},
-		{"empty nickname", &model.User{Nickname: "", Username: "fallback"}, "fallback"},
-		{"anonymized with nickname", &model.User{Nickname: "OldNick", Username: "user789", AnonymizedAt: &anon}, "已注销用户"},
+		{"nickname set", &user.User{Nickname: "CoolNick", Username: "user123"}, "CoolNick"},
+		{"nickname with spaces", &user.User{Nickname: "  Spaced  ", Username: "user456"}, "Spaced"},
+		{"no nickname", &user.User{Username: "plain_user"}, "plain_user"},
+		{"empty nickname", &user.User{Nickname: "", Username: "fallback"}, "fallback"},
+		{"anonymized with nickname", &user.User{Nickname: "OldNick", Username: "user789", AnonymizedAt: &anon}, "已注销用户"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -503,7 +507,7 @@ func TestValidateArticleContent_Extra(t *testing.T) {
 // ---------- extra edge cases ----------
 
 func TestAdminVideoToJSONMinimal(t *testing.T) {
-	v := &model.Video{ID: 1, Title: "Minimal", Description: "desc", Status: "draft"}
+	v := &video.Video{ID: 1, Title: "Minimal", Description: "desc", Status: "draft"}
 	out := adminVideoToJSON(v, "")
 	if out["duration_sec"] != float64(0) {
 		t.Errorf("duration_sec = %v", out["duration_sec"])
@@ -511,7 +515,7 @@ func TestAdminVideoToJSONMinimal(t *testing.T) {
 }
 
 func TestAdminArticleToJSONMinimal(t *testing.T) {
-	art := &model.Article{ID: 1, Title: "Minimal", BodyMD: "body"}
+	art := &article.Article{ID: 1, Title: "Minimal", BodyMD: "body"}
 	out := adminArticleToJSON(art, "")
 	if out["published_at"] != "" {
 		t.Errorf("published_at = %q, want empty", out["published_at"])

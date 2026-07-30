@@ -1,11 +1,13 @@
 package handler
 
 import (
+	"minibili/internal/model/article"
+	"minibili/internal/model/dm"
+	"minibili/internal/model/dynamic"
 	"testing"
 	"time"
 
 	"minibili/internal/config"
-	"minibili/internal/model"
 )
 
 func TestSearchCacheKey_Unit(t *testing.T) {
@@ -29,7 +31,7 @@ func TestManuscriptVideoStatusFilter_Unit(t *testing.T) {
 
 func TestArticleListItem_Unit(t *testing.T) {
 	now := time.Now()
-	art := model.Article{ID: 1, Title: "T", PublishedAt: &now}
+	art := article.Article{ID: 1, Title: "T", PublishedAt: &now}
 	item := articleListItem(art, "Author", articleEngagement{FavoritedByMe: true})
 	if item["author_name"].(string) != "Author" { t.Errorf("got %v", item["author_name"]) }
 	v, ok := item["favorited_by_me"].(bool)
@@ -37,20 +39,20 @@ func TestArticleListItem_Unit(t *testing.T) {
 }
 
 func TestArticleListItem_NilPubAt(t *testing.T) {
-	art := model.Article{Title: "Draft"}
+	art := article.Article{Title: "Draft"}
 	item := articleListItem(art, "", articleEngagement{})
 	if item["published_at"].(string) != "" { t.Errorf("got %v", item["published_at"]) }
 }
 
 func TestUserDynamicPayload_EmptyImages(t *testing.T) {
-	d := &model.UserDynamic{}
+	d := &dynamic.UserDynamic{}
 	p := userDynamicPayload(d, false)
 	imgs := p["images"].([]string)
 	if len(imgs) != 0 { t.Error("expected empty") }
 }
 
 func TestUserDynamicPayload_WithData(t *testing.T) {
-	d := &model.UserDynamic{
+	d := &dynamic.UserDynamic{
 		ImagesJSON: "[\"img.jpg\"]",
 		LikeCount: 10,
 	}
@@ -71,7 +73,7 @@ func TestDmPairIDs_All(t *testing.T) {
 }
 
 func TestDmPeerID_All(t *testing.T) {
-	conv := &model.DmConversation{UserLow: 1, UserHigh: 2}
+	conv := &dm.DmConversation{UserLow: 1, UserHigh: 2}
 	if got := dmPeerID(conv, 1); got != 2 { t.Errorf("1=>%d", got) }
 	if got := dmPeerID(conv, 2); got != 1 { t.Errorf("2=>%d", got) }
 }
@@ -114,22 +116,3 @@ func TestParseFolderIsPublicForm_All(t *testing.T) {
 	if got := parseFolderIsPublicForm("1"); got != true { t.Error("1") }
 }
 
-func TestOrderClauseForMyDynamics_All(t *testing.T) {
-	if got := orderClauseForMyDynamics(""); got != "id DESC" { t.Errorf("got %q", got) }
-	if got := orderClauseForMyDynamics("reply"); got != "comment_count DESC, id DESC" { t.Errorf("got %q", got) }
-}
-
-func TestFolderIDsFromMap_All(t *testing.T) {
-	got := folderIDsFromMap(map[uint64]bool{1: true, 0: true})
-	if len(got) != 1 { t.Errorf("len=%d", len(got)) }
-	if got := folderIDsFromMap(nil); len(got) != 0 { t.Errorf("nil=%d", len(got)) }
-}
-
-func TestAdminAgentProfilePayload_All(t *testing.T) {
-	if p := adminAgentProfilePayload(nil, ""); p == nil { t.Error("non-nil expected") }
-}
-
-func TestHotSearchDisplayTitle_All(t *testing.T) {
-	if got := hotSearchDisplayTitle(nil); got != "" { t.Errorf("nil: %q", got) }
-	if got := hotSearchDisplayTitle(&model.HotSearchOp{Keyword: "test"}); got != "test" { t.Errorf("got %q", got) }
-}

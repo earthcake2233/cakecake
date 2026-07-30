@@ -13,8 +13,7 @@ import (
 	"minibili/internal/data"
 	"minibili/internal/errcode"
 	"minibili/internal/middleware"
-	"minibili/internal/model"
-	"minibili/internal/pkg/resp"
+		"minibili/internal/pkg/resp"
 )
 
 type adminLoginReq struct {
@@ -34,8 +33,8 @@ func (a *API) AdminLogin(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	var adm model.Admin
-	if err := a.DB.Where("username = ?", strings.TrimSpace(req.Username)).First(&adm).Error; err != nil {
+	adm, err := a.AuthSvc.FindAdminByUsername(c.Request.Context(), strings.TrimSpace(req.Username))
+	if err != nil {
 		resp.Err(c, http.StatusUnauthorized, errcode.CodeInvalidLogin)
 		return
 	}
@@ -53,7 +52,7 @@ func (a *API) AdminLogin(c *gin.Context) {
 		return
 	}
 	now := time.Now()
-	_ = a.DB.Model(&adm).Update("last_login_at", now).Error
+	_ = a.AuthSvc.UpdateAdminLoginTime(c.Request.Context(), adm.ID, now)
 	a.Log.Info("admin login", zap.String("username", adm.Username), zap.Uint64("admin_id", adm.ID))
 	resp.OK(c, adminTokenPairResp{AccessToken: access, RefreshToken: refresh})
 }
@@ -70,8 +69,8 @@ func (a *API) AdminRefresh(c *gin.Context) {
 		resp.Err(c, http.StatusUnauthorized, errcode.CodeUnauthorized)
 		return
 	}
-	var adm model.Admin
-	if err := a.DB.First(&adm, aid).Error; err != nil || adm.Status != "active" {
+	adm, err := a.AuthSvc.GetAdminByID(c.Request.Context(), aid)
+	if err != nil || adm.Status != "active" {
 		resp.Err(c, http.StatusUnauthorized, errcode.CodeUnauthorized)
 		return
 	}
@@ -96,8 +95,8 @@ func (a *API) AdminMe(c *gin.Context) {
 		resp.Err(c, http.StatusUnauthorized, errcode.CodeUnauthorized)
 		return
 	}
-	var adm model.Admin
-	if err := a.DB.First(&adm, aid).Error; err != nil {
+	adm, err := a.AuthSvc.GetAdminByID(c.Request.Context(), aid)
+	if err != nil {
 		resp.Err(c, http.StatusUnauthorized, errcode.CodeUnauthorized)
 		return
 	}

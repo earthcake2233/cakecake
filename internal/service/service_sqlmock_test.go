@@ -1,6 +1,11 @@
 package service
 
 import (
+	"minibili/internal/model/admin"
+	"minibili/internal/model/article"
+	"minibili/internal/model/extra"
+	"minibili/internal/model/user"
+	"minibili/internal/model/video"
 	"context"
 	"testing"
 	"time"
@@ -12,7 +17,6 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"minibili/internal/model"
 )
 
 // ---------- PlayCounter ----------
@@ -49,7 +53,7 @@ func TestPlayCounter_Display(t *testing.T) {
 	pc := &PlayCounter{Rdb: rdb}
 
 	ctx := context.Background()
-	v := &model.Video{ID: 42, PlayCount: 100}
+	v := &video.Video{ID: 42, PlayCount: 100}
 
 	// No delta - should return play_count only
 	n, err := pc.Display(ctx, v)
@@ -71,10 +75,10 @@ func TestPlayCounter_Flush(t *testing.T) {
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&model.Video{}))
+	require.NoError(t, db.AutoMigrate(&video.Video{}))
 
 	// Create a video record
-	v := model.Video{ID: 1, Title: "Test", PlayCount: 50, Status: "published"}
+	v := video.Video{ID: 1, Title: "Test", PlayCount: 50, Status: "published"}
 	require.NoError(t, db.Create(&v).Error)
 
 	pc := &PlayCounter{Rdb: rdb, DB: db}
@@ -89,7 +93,7 @@ func TestPlayCounter_Flush(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify DB was updated
-	var updated model.Video
+	var updated video.Video
 	require.NoError(t, db.First(&updated, 1).Error)
 	require.Equal(t, uint64(53), updated.PlayCount)
 
@@ -105,10 +109,10 @@ func TestPlayCounter_Flush(t *testing.T) {
 func TestPublishArticle_Success(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&model.Article{}))
+	require.NoError(t, db.AutoMigrate(&article.Article{}))
 
 	now := time.Now()
-	art := model.Article{
+	art := article.Article{
 		Title:   "Test Article",
 		BodyMD:  "# Hello",
 		Status:  "pending_review",
@@ -125,7 +129,7 @@ func TestPublishArticle_Success(t *testing.T) {
 	err = PublishArticle(ctx, db, nil, log, art.ID, &adminID)
 	require.NoError(t, err)
 
-	var updated model.Article
+	var updated article.Article
 	require.NoError(t, db.First(&updated, art.ID).Error)
 	require.Equal(t, "published", updated.Status)
 	require.NotNil(t, updated.PublishedAt)
@@ -135,11 +139,11 @@ func TestPublishArticle_Success(t *testing.T) {
 func TestPublishArticle_AlreadyPublished(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&model.Article{}))
+	require.NoError(t, db.AutoMigrate(&article.Article{}))
 
 	now := time.Now()
 	pubAt := now
-	art := model.Article{
+	art := article.Article{
 		Title:     "Published Article",
 		BodyMD:    "# Done",
 		Status:    "published",
@@ -160,7 +164,7 @@ func TestPublishArticle_AlreadyPublished(t *testing.T) {
 func TestPublishArticle_NotFound(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&model.Article{}))
+	require.NoError(t, db.AutoMigrate(&article.Article{}))
 
 	log := zap.NewNop()
 	ctx := context.Background()
@@ -174,13 +178,13 @@ func TestPublishArticle_NotFound(t *testing.T) {
 func TestPublishVideo_Success(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&model.Video{}, &model.User{}))
+	require.NoError(t, db.AutoMigrate(&video.Video{}, &user.User{}))
 
 	now := time.Now()
-	u := model.User{Username: "testuser", PasswordHash: "hash", CoinBalanceTenths: 230}
+	u := user.User{Username: "testuser", PasswordHash: "hash", CoinBalanceTenths: 230}
 	require.NoError(t, db.Create(&u).Error)
 
-	v := model.Video{
+	v := video.Video{
 		Title:     "Test Video",
 		VideoURL:  "https://cdn.example.com/v.mp4",
 		Status:    "pending_review",
@@ -198,7 +202,7 @@ func TestPublishVideo_Success(t *testing.T) {
 	err = PublishVideo(ctx, db, nil, log, v.ID, &adminID)
 	require.NoError(t, err)
 
-	var updated model.Video
+	var updated video.Video
 	require.NoError(t, db.First(&updated, v.ID).Error)
 	require.Equal(t, "published", updated.Status)
 	require.NotNil(t, updated.ReviewedAt)
@@ -207,13 +211,13 @@ func TestPublishVideo_Success(t *testing.T) {
 func TestPublishVideo_AlreadyPublished(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&model.Video{}, &model.User{}))
+	require.NoError(t, db.AutoMigrate(&video.Video{}, &user.User{}))
 
 	now := time.Now()
-	u := model.User{Username: "testuser2", PasswordHash: "hash", CoinBalanceTenths: 230}
+	u := user.User{Username: "testuser2", PasswordHash: "hash", CoinBalanceTenths: 230}
 	require.NoError(t, db.Create(&u).Error)
 
-	v := model.Video{
+	v := video.Video{
 		Title:    "Published Video",
 		VideoURL: "https://cdn.example.com/v.mp4",
 		Status:   "published",
@@ -233,7 +237,7 @@ func TestPublishVideo_AlreadyPublished(t *testing.T) {
 func TestPublishVideo_NotFound(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&model.Video{}))
+	require.NoError(t, db.AutoMigrate(&video.Video{}))
 
 	log := zap.NewNop()
 	ctx := context.Background()
@@ -247,7 +251,7 @@ func TestPublishVideo_NotFound(t *testing.T) {
 func TestSearchSuggest_EmptyDB(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&model.UserSearchHistory{}, &model.HotSearchOp{}))
+	require.NoError(t, db.AutoMigrate(&extra.UserSearchHistory{}, &admin.HotSearchOp{}))
 
 	ctx := context.Background()
 	results := SearchSuggest(ctx, db, nil, 0, "", 10)
@@ -258,10 +262,10 @@ func TestSearchSuggest_EmptyDB(t *testing.T) {
 func TestSearchSuggest_WithUserHistory(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&model.UserSearchHistory{}, &model.HotSearchOp{}))
+	require.NoError(t, db.AutoMigrate(&extra.UserSearchHistory{}, &admin.HotSearchOp{}))
 
 	// Add user search history
-	h := model.UserSearchHistory{
+	h := extra.UserSearchHistory{
 		UserID:   1,
 		Keyword:  "golang testing",
 	}
@@ -278,7 +282,7 @@ func TestSearchSuggest_WithUserHistory(t *testing.T) {
 func TestSearchSuggest_TermTooLong(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&model.UserSearchHistory{}, &model.HotSearchOp{}))
+	require.NoError(t, db.AutoMigrate(&extra.UserSearchHistory{}, &admin.HotSearchOp{}))
 
 	ctx := context.Background()
 	longTerm := string(make([]rune, 60))
@@ -290,7 +294,7 @@ func TestSearchSuggest_TermTooLong(t *testing.T) {
 func TestSearchSuggest_LimitBounds(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&model.UserSearchHistory{}, &model.HotSearchOp{}))
+	require.NoError(t, db.AutoMigrate(&extra.UserSearchHistory{}, &admin.HotSearchOp{}))
 
 	ctx := context.Background()
 

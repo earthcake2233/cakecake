@@ -14,7 +14,6 @@ import (
 	"go.uber.org/zap"
 
 	"minibili/internal/errcode"
-	"minibili/internal/model"
 	"minibili/internal/pkg/coverval"
 	"minibili/internal/pkg/resp"
 )
@@ -82,8 +81,8 @@ func (a *API) AdminUploadBannerImageByID(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	var b model.HomeBanner
-	if err := a.DB.First(&b, id).Error; err != nil {
+	b, err := a.VideoSvc.GetBanner(c.Request.Context(), id)
+	if err != nil {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
@@ -103,7 +102,7 @@ func (a *API) AdminUploadBannerImageByID(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, code)
 		return
 	}
-	if err := a.DB.Model(&b).Update("image_url", url).Error; err != nil {
+	if err := a.VideoSvc.UpdateBanner(c.Request.Context(), b.ID, map[string]interface{}{"image_url": url}); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}

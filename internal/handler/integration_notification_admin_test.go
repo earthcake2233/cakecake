@@ -3,6 +3,8 @@
 package handler
 
 import (
+	"minibili/internal/model/article"
+	"minibili/internal/model/video"
 	"encoding/json"
 	"fmt"
 	"testing"
@@ -10,7 +12,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"minibili/internal/model"
 )
 
 func Test_NotificationFromComment(t *testing.T) {
@@ -62,11 +63,11 @@ func Test_AdminReviewFlow(t *testing.T) {
 	at := admintok(t, api)
 	
 	// Create pending video
-	v := model.Video{UserID: u.ID, Title: "Pending Video", Status: "pending_review", VideoURL: "https://cdn.example.com/p.mp4", CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	v := video.Video{UserID: u.ID, Title: "Pending Video", Status: "pending_review", VideoURL: "https://cdn.example.com/p.mp4", CreatedAt: time.Now(), UpdatedAt: time.Now()}
 	require.NoError(t, api.DB.Create(&v).Error)
 	
 	// Create pending article
-	art := model.Article{UserID: u.ID, Title: "Pending Article", BodyMD: "# Content", Status: "pending_review", CreatedAt: time.Now()}
+	art := article.Article{UserID: u.ID, Title: "Pending Article", BodyMD: "# Content", Status: "pending_review", CreatedAt: time.Now()}
 	require.NoError(t, api.DB.Create(&art).Error)
 	
 	// List pending videos

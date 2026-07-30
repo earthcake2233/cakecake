@@ -8,18 +8,19 @@ import (
 	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 
 	"minibili/internal/errcode"
 	"minibili/internal/middleware"
-	"minibili/internal/model"
 	"minibili/internal/pkg/resp"
+	"minibili/internal/service"
 )
-
-const maxFollowGroupsPerUser = 50
 
 type followGroupNameJSON struct {
 	Name string `json:"name"`
+}
+
+type followGroupMemberJSON struct {
+	FolloweeID uint64 `json:"followee_id"`
 }
 
 func parseFollowGroupID(c *gin.Context) (uint64, bool) {
@@ -27,40 +28,14 @@ func parseFollowGroupID(c *gin.Context) (uint64, bool) {
 	return id, err == nil && id > 0
 }
 
+func parseFolloweeIDParam(c *gin.Context) (uint64, bool) {
+	id, err := strconv.ParseUint(c.Param("followeeId"), 10, 64)
+	return id, err == nil && id > 0
+}
+
 func validateFollowGroupName(name string) bool {
 	name = strings.TrimSpace(name)
 	return name != "" && utf8.RuneCountInString(name) <= 16
-}
-
-func followGroupMemberCounts(db *gorm.DB, groupIDs []uint64) map[uint64]int64 {
-	out := make(map[uint64]int64, len(groupIDs))
-	if len(groupIDs) == 0 {
-		return out
-	}
-	type row struct {
-		GroupID uint64
-		Cnt     int64
-	}
-	var rows []row
-	_ = db.Model(&model.UserFollowGroupMember{}).
-		Select("group_id, COUNT(*) AS cnt").
-		Where("group_id IN ?", groupIDs).
-		Group("group_id").
-		Scan(&rows).Error
-	for i := range rows {
-		out[rows[i].GroupID] = rows[i].Cnt
-	}
-	return out
-}
-
-func followGroupPayload(db *gorm.DB, g *model.UserFollowGroup) gin.H {
-	counts := followGroupMemberCounts(db, []uint64{g.ID})
-	return gin.H{
-		"id":           g.ID,
-		"name":         g.Name,
-		"member_count": counts[g.ID],
-		"created_at":   g.CreatedAt,
-	}
 }
 
 // ListMyFollowGroups lists the caller's custom following groups.
@@ -77,8 +52,8 @@ func (a *API) ListMyFollowGroups(c *gin.Context) {
 		resp.Err(c, http.StatusUnauthorized, errcode.CodeUnauthorized)
 		return
 	}
-	var groups []model.UserFollowGroup
-	if err := a.DB.Where("user_id = ?", uid).Order("created_at ASC, id ASC").Find(&groups).Error; err != nil {
+	groups, err := a.FollowSvc.ListGroups(c.Request.Context(), uid)
+	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
@@ -86,7 +61,11 @@ func (a *API) ListMyFollowGroups(c *gin.Context) {
 	for i := range groups {
 		ids = append(ids, groups[i].ID)
 	}
-	counts := followGroupMemberCounts(a.DB, ids)
+	counts, err := a.FollowSvc.GetGroupMemberCounts(c.Request.Context(), ids)
+	if err != nil {
+		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
+		return
+	}
 	items := make([]gin.H, 0, len(groups))
 	for i := range groups {
 		items = append(items, gin.H{
@@ -124,32 +103,22 @@ func (a *API) CreateFollowGroup(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	var total int64
-	if err := a.DB.Model(&model.UserFollowGroup{}).Where("user_id = ?", uid).Count(&total).Error; err != nil {
-		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
+	g, err := a.FollowSvc.CreateGroup(c.Request.Context(), uid, name)
+	if err != nil {
+		if errors.Is(err, service.ErrParamError) {
+			resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
+		} else {
+			resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
+		}
 		return
 	}
-	if total >= maxFollowGroupsPerUser {
-		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
-		return
-	}
-	var dup int64
-	if err := a.DB.Model(&model.UserFollowGroup{}).
-		Where("user_id = ? AND name = ?", uid, name).
-		Count(&dup).Error; err != nil {
-		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
-		return
-	}
-	if dup > 0 {
-		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
-		return
-	}
-	row := model.UserFollowGroup{UserID: uid, Name: name}
-	if err := a.DB.Create(&row).Error; err != nil {
-		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
-		return
-	}
-	resp.OK(c, followGroupPayload(a.DB, &row))
+	cnt, _ := a.FollowSvc.GetGroupMemberCounts(c.Request.Context(), []uint64{g.ID})
+	resp.OK(c, gin.H{
+		"id":           g.ID,
+		"name":         g.Name,
+		"member_count": cnt[g.ID],
+		"created_at":   g.CreatedAt,
+	})
 }
 
 // UpdateFollowGroup renames a custom following group for the caller.
@@ -173,11 +142,6 @@ func (a *API) UpdateFollowGroup(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	g, ok := loadFollowGroupForOwner(a.DB, uid, groupID)
-	if !ok {
-		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
-		return
-	}
 	var body followGroupNameJSON
 	if err := c.ShouldBindJSON(&body); err != nil {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
@@ -188,29 +152,28 @@ func (a *API) UpdateFollowGroup(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	var dup int64
-	if err := a.DB.Model(&model.UserFollowGroup{}).
-		Where("user_id = ? AND name = ? AND id <> ?", uid, name, g.ID).
-		Count(&dup).Error; err != nil {
-		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
+	g, err := a.FollowSvc.UpdateGroup(c.Request.Context(), uid, groupID, name)
+	if err != nil {
+		if errors.Is(err, service.ErrNotFound) {
+			resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
+		} else {
+			resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
+		}
 		return
 	}
-	if dup > 0 {
-		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
-		return
-	}
-	g.Name = name
-	if err := a.DB.Save(g).Error; err != nil {
-		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
-		return
-	}
-	resp.OK(c, followGroupPayload(a.DB, g))
+	cnt, _ := a.FollowSvc.GetGroupMemberCounts(c.Request.Context(), []uint64{g.ID})
+	resp.OK(c, gin.H{
+		"id":           g.ID,
+		"name":         g.Name,
+		"member_count": cnt[g.ID],
+		"created_at":   g.CreatedAt,
+	})
 }
 
-// DeleteFollowGroup removes a custom group and its member links only (does not unfollow).
+// DeleteFollowGroup deletes a custom following group for the caller.
 // DeleteFollowGroup godoc
 // @Summary      Delete a follow group
-// @Description  Remove a follow group (members become ungrouped)
+// @Description  Delete a follow group and its members
 // @Tags         Users
 // @Produce      json
 // @Param        groupId path int true "Group ID"
@@ -227,63 +190,15 @@ func (a *API) DeleteFollowGroup(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	if _, ok := loadFollowGroupForOwner(a.DB, uid, groupID); !ok {
-		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
-		return
-	}
-	err := a.DB.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("group_id = ?", groupID).Delete(&model.UserFollowGroupMember{}).Error; err != nil {
-			return err
+	if err := a.FollowSvc.DeleteGroup(c.Request.Context(), uid, groupID); err != nil {
+		if errors.Is(err, service.ErrNotFound) {
+			resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
+		} else {
+			resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		}
-		return tx.Where("id = ? AND user_id = ?", groupID, uid).Delete(&model.UserFollowGroup{}).Error
-	})
-	if err != nil {
-		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	resp.OK(c, gin.H{"deleted": true, "id": groupID})
-}
-
-func loadFollowGroupForOwner(db *gorm.DB, ownerID, groupID uint64) (*model.UserFollowGroup, bool) {
-	if groupID == 0 {
-		return nil, false
-	}
-	var g model.UserFollowGroup
-	if err := db.Where("id = ? AND user_id = ?", groupID, ownerID).First(&g).Error; err != nil {
-		return nil, false
-	}
-	return &g, true
-}
-
-func followeeIDsInGroup(db *gorm.DB, groupID uint64) ([]uint64, error) {
-	var ids []uint64
-	err := db.Model(&model.UserFollowGroupMember{}).
-		Where("group_id = ?", groupID).
-		Pluck("followee_id", &ids).Error
-	return ids, err
-}
-
-type followGroupMemberJSON struct {
-	FolloweeID uint64 `json:"followee_id"`
-}
-
-func parseFolloweeIDParam(c *gin.Context) (uint64, bool) {
-	id, err := strconv.ParseUint(c.Param("followeeId"), 10, 64)
-	return id, err == nil && id > 0
-}
-
-func deleteFollowGroupMembersForFollowee(db *gorm.DB, ownerID, followeeID uint64) error {
-	var groupIDs []uint64
-	if err := db.Model(&model.UserFollowGroup{}).
-		Where("user_id = ?", ownerID).
-		Pluck("id", &groupIDs).Error; err != nil {
-		return err
-	}
-	if len(groupIDs) == 0 {
-		return nil
-	}
-	return db.Where("group_id IN ? AND followee_id = ?", groupIDs, followeeID).
-		Delete(&model.UserFollowGroupMember{}).Error
+	resp.OK(c, gin.H{"deleted": true})
 }
 
 // ListFolloweeGroupIDs lists which of the caller's follow groups include a followee.
@@ -298,16 +213,12 @@ func (a *API) ListFolloweeGroupIDs(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	if !userFollows(a.DB, uid, followeeID) {
+	following, err := a.FollowSvc.IsFollowing(c.Request.Context(), uid, followeeID)
+	if err != nil || !following {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	var groupIDs []uint64
-	err := a.DB.Model(&model.UserFollowGroupMember{}).
-		Select("user_follow_group_members.group_id").
-		Joins("JOIN user_follow_groups ON user_follow_groups.id = user_follow_group_members.group_id").
-		Where("user_follow_groups.user_id = ? AND user_follow_group_members.followee_id = ?", uid, followeeID).
-		Pluck("user_follow_group_members.group_id", &groupIDs).Error
+	groupIDs, err := a.FollowSvc.GetFolloweeGroupIDs(c.Request.Context(), uid, followeeID)
 	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
@@ -336,7 +247,8 @@ func (a *API) AddFollowGroupMember(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	if _, ok := loadFollowGroupForOwner(a.DB, uid, groupID); !ok {
+	_, err := a.FollowSvc.GetGroup(c.Request.Context(), uid, groupID)
+	if err != nil {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
@@ -345,22 +257,17 @@ func (a *API) AddFollowGroupMember(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	if body.FolloweeID == uid || !userFollows(a.DB, uid, body.FolloweeID) {
+	if body.FolloweeID == uid {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	var row model.UserFollowGroupMember
-	err := a.DB.Where("group_id = ? AND followee_id = ?", groupID, body.FolloweeID).First(&row).Error
-	if err == nil {
-		resp.OK(c, gin.H{"added": false, "group_id": groupID, "followee_id": body.FolloweeID})
+	following, err := a.FollowSvc.IsFollowing(c.Request.Context(), uid, body.FolloweeID)
+	if err != nil || !following {
+		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	if !errors.Is(err, gorm.ErrRecordNotFound) {
-		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
-		return
-	}
-	row = model.UserFollowGroupMember{GroupID: groupID, FolloweeID: body.FolloweeID}
-	if err := a.DB.Create(&row).Error; err != nil {
+	err = a.FollowSvc.AddGroupMember(c.Request.Context(), groupID, body.FolloweeID)
+	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
@@ -393,12 +300,12 @@ func (a *API) RemoveFollowGroupMember(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	if _, ok := loadFollowGroupForOwner(a.DB, uid, groupID); !ok {
+	_, err := a.FollowSvc.GetGroup(c.Request.Context(), uid, groupID)
+	if err != nil {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
-	if err := a.DB.Where("group_id = ? AND followee_id = ?", groupID, followeeID).
-		Delete(&model.UserFollowGroupMember{}).Error; err != nil {
+	if err := a.FollowSvc.RemoveGroupMember(c.Request.Context(), groupID, followeeID); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}

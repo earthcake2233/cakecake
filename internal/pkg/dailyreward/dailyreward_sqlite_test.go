@@ -3,6 +3,9 @@
 package dailyreward
 
 import (
+	"minibili/internal/model/extra"
+	"minibili/internal/model/user"
+	"minibili/internal/model/video"
 	"testing"
 	"time"
 
@@ -10,18 +13,17 @@ import (
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 
-	"minibili/internal/model"
 )
 
 func setupDailyRewardDB(t *testing.T) *gorm.DB {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&model.UserDailyTask{}, &model.User{}, &model.CoinLedger{}, &model.VideoCoin{}))
+	require.NoError(t, db.AutoMigrate(&extra.UserDailyTask{}, &user.User{}, &user.CoinLedger{}, &video.VideoCoin{}))
 	return db
 }
 
 func createUser(t *testing.T, db *gorm.DB, id uint64) {
-	require.NoError(t, db.Create(&model.User{ID: id, Username: "u" + uitoa(id), PasswordHash: "hash", CoinBalanceTenths: 200}).Error)
+	require.NoError(t, db.Create(&user.User{ID: id, Username: "u" + uitoa(id), PasswordHash: "hash", CoinBalanceTenths: 200}).Error)
 }
 
 func uitoa(n uint64) string {
@@ -44,7 +46,7 @@ func TestMarkLogin_FirstTime(t *testing.T) {
 	require.NoError(t, err)
 
 	// should create a row and mark login_done
-	var row model.UserDailyTask
+	var row extra.UserDailyTask
 	require.NoError(t, db.Where("user_id = ? AND task_date = ?", 1, TodayDate()).First(&row).Error)
 	require.True(t, row.LoginDone)
 	require.False(t, row.WatchDone)
@@ -61,7 +63,7 @@ func TestMarkLogin_Idempotent(t *testing.T) {
 	err = MarkLogin(db, 2)
 	require.NoError(t, err)
 
-	var rows []model.UserDailyTask
+	var rows []extra.UserDailyTask
 	require.NoError(t, db.Find(&rows).Error)
 	require.Len(t, rows, 1)
 }
@@ -73,7 +75,7 @@ func TestMarkWatch_FirstTime(t *testing.T) {
 	err := MarkWatch(db, 3)
 	require.NoError(t, err)
 
-	var row model.UserDailyTask
+	var row extra.UserDailyTask
 	require.NoError(t, db.Where("user_id = ? AND task_date = ?", 3, TodayDate()).First(&row).Error)
 	require.True(t, row.WatchDone)
 	require.False(t, row.LoginDone)
@@ -86,7 +88,7 @@ func TestMarkWatch_Idempotent(t *testing.T) {
 	require.NoError(t, MarkWatch(db, 4))
 	require.NoError(t, MarkWatch(db, 4))
 
-	var rows []model.UserDailyTask
+	var rows []extra.UserDailyTask
 	require.NoError(t, db.Find(&rows).Error)
 	require.Len(t, rows, 1)
 }
@@ -98,7 +100,7 @@ func TestGrantCoinExp_PositiveDelta(t *testing.T) {
 	err := GrantCoinExp(db, 5, 0, 10)
 	require.NoError(t, err)
 
-	var u model.User
+	var u user.User
 	require.NoError(t, db.First(&u, 5).Error)
 	require.Equal(t, uint64(10), u.Experience)
 }
@@ -110,7 +112,7 @@ func TestGrantCoinExp_ZeroDelta(t *testing.T) {
 	err := GrantCoinExp(db, 6, 10, 10)
 	require.NoError(t, err)
 
-	var u model.User
+	var u user.User
 	require.NoError(t, db.First(&u, 6).Error)
 	require.Equal(t, uint64(0), u.Experience)
 }
@@ -122,7 +124,7 @@ func TestGrantCoinExp_NegativeDelta(t *testing.T) {
 	err := GrantCoinExp(db, 7, 10, 5)
 	require.NoError(t, err) // delta <= 0, no-op
 
-	var u model.User
+	var u user.User
 	require.NoError(t, db.First(&u, 7).Error)
 	require.Equal(t, uint64(0), u.Experience)
 }
@@ -197,7 +199,7 @@ func TestAddUserExp_ZeroDelta(t *testing.T) {
 	err := addUserExp(db, 13, 0)
 	require.NoError(t, err)
 
-	var u model.User
+	var u user.User
 	require.NoError(t, db.First(&u, 13).Error)
 	require.Equal(t, uint64(0), u.Experience)
 }
@@ -209,7 +211,7 @@ func TestAddUserExp_Positive(t *testing.T) {
 	err := addUserExp(db, 14, 50)
 	require.NoError(t, err)
 
-	var u model.User
+	var u user.User
 	require.NoError(t, db.First(&u, 14).Error)
 	require.Equal(t, uint64(50), u.Experience)
 }
@@ -221,7 +223,7 @@ func TestGrantCoinExp_Additive(t *testing.T) {
 	require.NoError(t, GrantCoinExp(db, 15, 0, 10))
 	require.NoError(t, GrantCoinExp(db, 15, 10, 25))
 
-	var u model.User
+	var u user.User
 	require.NoError(t, db.First(&u, 15).Error)
 	require.Equal(t, uint64(25), u.Experience) // 10 + 15
 }

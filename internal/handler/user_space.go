@@ -1,7 +1,7 @@
 package handler
 
 import (
-	"gorm.io/gorm"
+	"minibili/internal/model/user"
 	"context"
 	"net/http"
 	"strconv"
@@ -11,7 +11,6 @@ import (
 
 	"minibili/internal/errcode"
 	"minibili/internal/middleware"
-	"minibili/internal/model"
 	"minibili/internal/pkg/resp"
 	"minibili/internal/pkg/userlevel"
 )
@@ -31,42 +30,46 @@ func (a *API) GetUserPublic(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	var u model.User
-	if err := a.DB.First(&u, id).Error; err != nil {
+	u, err := a.UserSvc.GetUserByID(c.Request.Context(), id)
+	if err != nil {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
-	ensureUserCakeID(a.DB, &u)
+	_ = a.UserSvc.EnsureCakeID(c.Request.Context(), u)
 	nick := strings.TrimSpace(u.Nickname)
 	if nick == "" {
-		nick = model.DisplayUsername(&u)
+		nick = user.DisplayUsername(u)
 	}
-	avatar := avatarURLForAPI(&u)
+	avatar := avatarURLForAPI(u)
 	sign := strings.TrimSpace(u.Sign)
 	announcement := strings.TrimSpace(u.SpaceAnnouncement)
 	gender := strings.TrimSpace(u.Gender)
 	if gender != "male" && gender != "female" && gender != "secret" {
 		gender = "secret"
 	}
-	if model.IsUserAnonymized(&u) {
-		nick = "已注销用户"
+	if user.IsUserAnonymized(u) {
+		nick = "?????"
 		avatar = ""
 		sign = ""
 		announcement = ""
 		gender = "secret"
 	}
 	viewer, viewerOK := middleware.UserID(c)
-	if viewerOK && viewer != id && dmUsersBlocked(a.DB, viewer, id) {
-		resp.Err(c, http.StatusForbidden, errcode.CodeUserBlocked)
-		return
+	if viewerOK && viewer != id {
+		blocked, _ := a.FollowSvc.UsersBlocked(c.Request.Context(), viewer, id)
+		if blocked {
+			resp.Err(c, http.StatusForbidden, errcode.CodeUserBlocked)
+			return
+		}
 	}
 	isOwner := viewerOK && viewer == id
-	privacy := spacePrivacyFromUser(&u)
+	privacy := spacePrivacyFromUser(u)
 	birthday := ""
 	if isOwner || u.PrivacyPublicBirthday {
 		birthday = strings.TrimSpace(u.Birthday)
 	}
-	followingCnt, followerCnt := userFollowCounts(a.DB, id)
+	counts, _ := a.FollowSvc.GetFollowCounts(c.Request.Context(), id)
+	pubCount, _ := a.FollowSvc.GetUploaderPublishedCount(c.Request.Context(), id)
 	payload := gin.H{
 		"user_id":          u.ID,
 		"nickname":         nick,
@@ -78,14 +81,15 @@ func (a *API) GetUserPublic(c *gin.Context) {
 		"birthday":         birthday,
 		"privacy":          privacy,
 		"is_owner":         isOwner,
-		"following_count":  followingCnt,
-		"follower_count":   followerCnt,
-		"published_count":  uploaderPublishedCount(a.DB, id),
+		"following_count":  counts.Following,
+		"follower_count":   counts.Followers,
+		"published_count":  pubCount,
 		"followed_by_me":   false,
 		"level_info":       userlevel.FromExperience(u.Experience),
 	}
 	if viewerOK && viewer != id {
-		payload["followed_by_me"] = userFollows(a.DB, viewer, id)
+		following, _ := a.FollowSvc.IsFollowing(c.Request.Context(), viewer, id)
+		payload["followed_by_me"] = following
 	}
 	resp.OK(c, payload)
 }
@@ -107,12 +111,12 @@ func (a *API) ListUserPublishedVideos(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	var u model.User
-	if err := a.DB.First(&u, uid).Error; err != nil {
+	u, err := a.UserSvc.GetUserByID(c.Request.Context(), uid)
+	if err != nil {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
-	if model.IsUserAnonymized(&u) {
+	if user.IsUserAnonymized(u) {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
@@ -123,12 +127,8 @@ func (a *API) ListUserPublishedVideos(c *gin.Context) {
 		}
 	}
 	curID, _ := strconv.ParseUint(c.Query("cursor"), 10, 64)
-	q := a.DB.Model(&model.Video{}).Where("user_id = ? AND status = ?", uid, "published")
-	if curID > 0 {
-		q = q.Where("id < ?", curID)
-	}
-	var list []model.Video
-	if err := q.Order("id DESC").Limit(limit + 1).Find(&list).Error; err != nil {
+	list, err := a.VideoSvc.ListUserPublishedVideosCursor(c.Request.Context(), uid, curID, limit+1)
+	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
@@ -136,7 +136,7 @@ func (a *API) ListUserPublishedVideos(c *gin.Context) {
 	if hasMore {
 		list = list[:limit]
 	}
-	up := model.DisplayUsername(&u)
+	up := user.DisplayUsername(u)
 	ctx := context.Background()
 	var viewer uint64
 	if uid, ok := middleware.UserID(c); ok {
@@ -146,7 +146,7 @@ func (a *API) ListUserPublishedVideos(c *gin.Context) {
 	for _, v := range list {
 		ids = append(ids, v.ID)
 	}
-	eng := videoEngagementByViewer(a.DB, viewer, ids)
+	eng := a.engagementByViewer(viewer, ids)
 	items := make([]gin.H, 0, len(list))
 	for _, v := range list {
 		pc, _ := a.Play.Display(ctx, &v)
@@ -158,12 +158,4 @@ func (a *API) ListUserPublishedVideos(c *gin.Context) {
 		next = strconv.FormatUint(last.ID, 10)
 	}
 	resp.OK(c, gin.H{"items": items, "next_cursor": next})
-}
-
-func ensureUserCakeID(db *gorm.DB, u *model.User) {
-	if u.CakeID == "" {
-		cakeID := model.FormatCakeID(u.ID)
-		db.Model(u).Update("cake_id", cakeID)
-		u.CakeID = cakeID
-	}
 }

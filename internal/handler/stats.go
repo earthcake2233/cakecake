@@ -3,7 +3,6 @@ package handler
 import (
 	"github.com/gin-gonic/gin"
 
-	"minibili/internal/model"
 	"minibili/internal/pkg/resp"
 )
 
@@ -16,10 +15,7 @@ import (
 // @Success     200 {object} map[string]interface{}
 // @Router      /stats/home [get]
 func (a *API) HomeStats(c *gin.Context) {
-	var published int64
-	if a.DB != nil {
-		_ = a.DB.Model(&model.Video{}).Where("status = ?", "published").Count(&published).Error
-	}
+	published := a.VideoSvc.CountPublishedVideos(c.Request.Context())
 	webOnline := 0
 	if a.Hub != nil {
 		webOnline = a.Hub.TotalConnections()

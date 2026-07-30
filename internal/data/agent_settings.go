@@ -1,12 +1,13 @@
 package data
 
 import (
+	"minibili/internal/model/agent"
+	"minibili/internal/model/user"
 	"strings"
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"minibili/internal/model"
 )
 
 const defaultAgentDisplayName = "cakecake AI"
@@ -28,8 +29,8 @@ func EnsureDefaultAgentSettings(db *gorm.DB, lg *zap.Logger) error {
 	if db == nil {
 		return nil
 	}
-	var st model.AgentSettings
-	err := db.First(&st, model.AgentSettingsRowID).Error
+	var st agent.AgentSettings
+	err := db.First(&st, agent.AgentSettingsRowID).Error
 	if err == nil {
 		// Always sync global prompt from code constant on startup
 		st.SystemPrompt = defaultAgentSystemPrompt
@@ -42,8 +43,8 @@ func EnsureDefaultAgentSettings(db *gorm.DB, lg *zap.Logger) error {
 	if err != gorm.ErrRecordNotFound {
 		return err
 	}
-	st = model.AgentSettings{
-		ID:               model.AgentSettingsRowID,
+	st = agent.AgentSettings{
+		ID:               agent.AgentSettingsRowID,
 		DisplayName:      defaultAgentDisplayName,
 		Sign:             defaultAgentSign,
 		SystemPrompt:     defaultAgentSystemPrompt,
@@ -60,12 +61,12 @@ func EnsureDefaultAgentSettings(db *gorm.DB, lg *zap.Logger) error {
 }
 
 // GetAgentSettings loads the singleton settings (nil if missing).
-func GetAgentSettings(db *gorm.DB) (*model.AgentSettings, error) {
+func GetAgentSettings(db *gorm.DB) (*agent.AgentSettings, error) {
 	if db == nil {
 		return nil, gorm.ErrRecordNotFound
 	}
-	var st model.AgentSettings
-	if err := db.First(&st, model.AgentSettingsRowID).Error; err != nil {
+	var st agent.AgentSettings
+	if err := db.First(&st, agent.AgentSettingsRowID).Error; err != nil {
 		return nil, err
 	}
 	return &st, nil
@@ -81,7 +82,7 @@ func AgentWelcomeMessage(db *gorm.DB) string {
 }
 
 // SyncAgentBotProfile copies display fields to the system AI user row.
-func SyncAgentBotProfile(db *gorm.DB, botUserID uint64, st *model.AgentSettings) error {
+func SyncAgentBotProfile(db *gorm.DB, botUserID uint64, st *agent.AgentSettings) error {
 	if db == nil || botUserID == 0 || st == nil {
 		return nil
 	}
@@ -89,7 +90,7 @@ func SyncAgentBotProfile(db *gorm.DB, botUserID uint64, st *model.AgentSettings)
 	if name == "" {
 		name = defaultAgentDisplayName
 	}
-	return db.Model(&model.User{}).Where("id = ?", botUserID).Updates(map[string]interface{}{
+	return db.Model(&user.User{}).Where("id = ?", botUserID).Updates(map[string]interface{}{
 		"nickname":    name,
 		"avatar_url":  strings.TrimSpace(st.AvatarURL),
 		"sign":        strings.TrimSpace(st.Sign),

@@ -1,11 +1,13 @@
 package search
 
 import (
+	"minibili/internal/model/article"
+	"minibili/internal/model/user"
+	"minibili/internal/model/video"
 	"strings"
 
 	"gorm.io/gorm"
 
-	"minibili/internal/model"
 	"minibili/internal/pkg/userlevel"
 	"minibili/internal/pkg/useravatar"
 )
@@ -13,11 +15,11 @@ import (
 // EnrichUserHits fills profile stats, follow state, and recent archives from MySQL.
 func EnrichUserHits(db *gorm.DB, viewer uint64, hits []UserHit) []UserHit {
 	for i := range hits {
-		var u model.User
+		var u user.User
 		if err := db.First(&u, hits[i].Mid).Error; err != nil {
 			continue
 		}
-		if model.IsUserAnonymized(&u) {
+		if user.IsUserAnonymized(&u) {
 			hits[i].Uname = "已注销用户"
 			hits[i].Usign = ""
 			hits[i].Face = ""
@@ -31,18 +33,18 @@ func EnrichUserHits(db *gorm.DB, viewer uint64, hits []UserHit) []UserHit {
 		hits[i].Level = userlevel.FromExperience(u.Experience).CurrentLevel
 
 		var videoCnt, articleCnt int64
-		_ = db.Model(&model.Video{}).Where("user_id = ? AND status = ?", u.ID, "published").Count(&videoCnt).Error
-		_ = db.Model(&model.Article{}).Where("user_id = ? AND status = ?", u.ID, "published").Count(&articleCnt).Error
+		_ = db.Model(&video.Video{}).Where("user_id = ? AND status = ?", u.ID, "published").Count(&videoCnt).Error
+		_ = db.Model(&article.Article{}).Where("user_id = ? AND status = ?", u.ID, "published").Count(&articleCnt).Error
 		hits[i].Archives = int(videoCnt + articleCnt)
 
 		var fanCnt int64
-		_ = db.Model(&model.UserFollow{}).Where("followee_id = ?", u.ID).Count(&fanCnt).Error
+		_ = db.Model(&user.UserFollow{}).Where("followee_id = ?", u.ID).Count(&fanCnt).Error
 		hits[i].Fans = int(fanCnt)
 
 		hits[i].FollowedByMe = false
 		if viewer > 0 && viewer != u.ID {
 			var rel int64
-			_ = db.Model(&model.UserFollow{}).
+			_ = db.Model(&user.UserFollow{}).
 				Where("follower_id = ? AND followee_id = ?", viewer, u.ID).
 				Count(&rel).Error
 			hits[i].FollowedByMe = rel > 0
@@ -57,7 +59,7 @@ func recentArchivesForUser(db *gorm.DB, userID uint64, limit int) []UserArchiveI
 	if limit <= 0 {
 		return nil
 	}
-	var videos []model.Video
+	var videos []video.Video
 	_ = db.Where("user_id = ? AND status = ?", userID, "published").
 		Order("id DESC").
 		Limit(limit).
@@ -76,7 +78,7 @@ func recentArchivesForUser(db *gorm.DB, userID uint64, limit int) []UserArchiveI
 		return out
 	}
 	remain := limit - len(out)
-	var articles []model.Article
+	var articles []article.Article
 	_ = db.Where("user_id = ? AND status = ?", userID, "published").
 		Order("COALESCE(published_at, created_at) DESC, id DESC").
 		Limit(remain).

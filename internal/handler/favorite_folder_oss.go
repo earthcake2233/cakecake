@@ -1,19 +1,19 @@
 package handler
 
 import (
+	"minibili/internal/model/video"
 	"fmt"
 	"strings"
 
 	"go.uber.org/zap"
 
 	"minibili/internal/config"
-	"minibili/internal/model"
 	"minibili/internal/storage"
 )
 
 var favoriteFolderCoverOSSExts = []string{"jpg", "jpeg", "png", "webp", "gif", "bmp"}
 
-func favoriteFolderOSSObjectKeys(cfg *config.C, f model.FavoriteFolder) []string {
+func favoriteFolderOSSObjectKeys(cfg *config.C, f video.FavoriteFolder) []string {
 	seen := make(map[string]struct{})
 	out := make([]string, 0, len(favoriteFolderCoverOSSExts)+1)
 	add := func(key string) {
@@ -36,7 +36,7 @@ func favoriteFolderOSSObjectKeys(cfg *config.C, f model.FavoriteFolder) []string
 	return out
 }
 
-func purgeFavoriteFolderOSSObjects(cfg *config.C, ossClient *storage.OSS, log *zap.Logger, f model.FavoriteFolder) {
+func purgeFavoriteFolderOSSObjects(cfg *config.C, ossClient *storage.OSS, log *zap.Logger, f video.FavoriteFolder) {
 	if ossClient == nil {
 		return
 	}
@@ -68,7 +68,7 @@ func purgeFavoriteFolderCoverURL(cfg *config.C, ossClient *storage.OSS, log *zap
 	if cfg == nil || ossClient == nil {
 		return
 	}
-	purgeFavoriteFolderOSSObjects(cfg, ossClient, log, model.FavoriteFolder{
+	purgeFavoriteFolderOSSObjects(cfg, ossClient, log, video.FavoriteFolder{
 		ID:       folderID,
 		UserID:   uid,
 		CoverURL: coverURL,

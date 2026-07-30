@@ -3,6 +3,8 @@
 package handler
 
 import (
+	"minibili/internal/model/comment"
+	"minibili/internal/model/dynamic"
 	"encoding/json"
 	"fmt"
 	"net/http/httptest"
@@ -12,7 +14,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"minibili/internal/model"
 )
 
 func codeFrom(t *testing.T, w *httptest.ResponseRecorder) int {
@@ -35,7 +36,7 @@ func Test_DecrementPaths(t *testing.T) {
 	if codeFrom(t, w) != 0 { t.Skip("comment post failed") }
 
 	// Extract comment ID
-	var cm struct { Data model.Comment `json:"data"` }
+	var cm struct { Data comment.Comment `json:"data"` }
 	json.Unmarshal(w.Body.Bytes(), &cm)
 	if cm.Data.ID == 0 { t.Skip("no comment id") }
 	cid := cm.Data.ID
@@ -69,7 +70,7 @@ func Test_DynamicCommentReactions(t *testing.T) {
 	tk := tok(t, api, u.ID)
 
 	// Create dynamic directly
-	dyn := model.UserDynamic{UserID: u.ID, Title: "DYN", Content: "test", ImagesJSON: "[]", CreatedAt: time.Now()}
+	dyn := dynamic.UserDynamic{UserID: u.ID, Title: "DYN", Content: "test", ImagesJSON: "[]", CreatedAt: time.Now()}
 	require.NoError(t, api.DB.Create(&dyn).Error)
 
 	// Post comment on dynamic
@@ -77,7 +78,7 @@ func Test_DynamicCommentReactions(t *testing.T) {
 	w := srve(r, areq("POST", fmt.Sprintf("/api/v1/user-dynamics/%d/comments", dyn.ID), tk, body))
 	if codeFrom(t, w) != 0 { t.Skip("dynamic comment failed") }
 
-	var dcm struct { Data model.DynamicComment `json:"data"` }
+	var dcm struct { Data comment.DynamicComment `json:"data"` }
 	json.Unmarshal(w.Body.Bytes(), &dcm)
 	if dcm.Data.ID == 0 { t.Skip("no dynamic comment id") }
 	dcid := dcm.Data.ID
@@ -97,7 +98,7 @@ func Test_ArticleCommentDecrement(t *testing.T) {
 	w := srve(r, areq("POST", fmt.Sprintf("/api/v1/articles/%d/comments", art.ID), tk, `{"content":"acd comment"}`))
 	if codeFrom(t, w) != 0 { t.Skip("article comment failed") }
 
-	var acm struct { Data model.ArticleComment `json:"data"` }
+	var acm struct { Data comment.ArticleComment `json:"data"` }
 	json.Unmarshal(w.Body.Bytes(), &acm)
 	if acm.Data.ID == 0 { t.Skip("no article comment id") }
 	acid := acm.Data.ID
@@ -134,7 +135,7 @@ func Test_DynamicLike(t *testing.T) {
 	u := seedUser(t, api, "dyl1", "DYL1", 0)
 	tk := tok(t, api, u.ID)
 
-	dyn := model.UserDynamic{UserID: u.ID, Title: "DYL", Content: "test", ImagesJSON: "[]", CreatedAt: time.Now()}
+	dyn := dynamic.UserDynamic{UserID: u.ID, Title: "DYL", Content: "test", ImagesJSON: "[]", CreatedAt: time.Now()}
 	require.NoError(t, api.DB.Create(&dyn).Error)
 
 	// Toggle like on/off (covers CASE WHEN like_count -= 1)

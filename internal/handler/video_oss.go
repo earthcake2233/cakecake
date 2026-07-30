@@ -1,19 +1,19 @@
 package handler
 
 import (
+	"minibili/internal/model/video"
 	"fmt"
 	"strings"
 
 	"go.uber.org/zap"
 
 	"minibili/internal/config"
-	"minibili/internal/model"
 	"minibili/internal/storage"
 )
 
 var videoCoverOSSExts = []string{"jpg", "jpeg", "png", "webp"}
 
-func videoOSSObjectKeys(cfg *config.C, v model.Video) []string {
+func videoOSSObjectKeys(cfg *config.C, v video.Video) []string {
 	seen := make(map[string]struct{})
 	out := make([]string, 0, 4)
 	add := func(key string) {
@@ -38,7 +38,7 @@ func videoOSSObjectKeys(cfg *config.C, v model.Video) []string {
 	return out
 }
 
-func purgeVideoOSSObjects(cfg *config.C, ossClient *storage.OSS, log *zap.Logger, v model.Video) {
+func purgeVideoOSSObjects(cfg *config.C, ossClient *storage.OSS, log *zap.Logger, v video.Video) {
 	if ossClient == nil {
 		return
 	}

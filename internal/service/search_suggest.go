@@ -1,6 +1,8 @@
 package service
 
 import (
+	"minibili/internal/model/admin"
+	"minibili/internal/model/extra"
 	"context"
 	"sort"
 	"strings"
@@ -9,7 +11,6 @@ import (
 
 	"gorm.io/gorm"
 
-	"minibili/internal/model"
 )
 
 // SearchSuggestTag is one row for search box autocomplete (B 站 suggest.tag).
@@ -55,7 +56,7 @@ func SearchSuggest(ctx context.Context, db *gorm.DB, rec *SearchHotRecorder, use
 	}
 
 	if userID > 0 && db != nil {
-		var rows []model.UserSearchHistory
+		var rows []extra.UserSearchHistory
 		_ = db.Where("user_id = ?", userID).
 			Order("updated_at DESC, id DESC").
 			Limit(40).
@@ -67,7 +68,7 @@ func SearchSuggest(ctx context.Context, db *gorm.DB, rec *SearchHotRecorder, use
 
 	if db != nil {
 		now := time.Now()
-		var ops []model.HotSearchOp
+		var ops []admin.HotSearchOp
 		_ = db.Where("enabled = ?", true).Find(&ops).Error
 		for i := range ops {
 			op := ops[i]

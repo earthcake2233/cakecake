@@ -1,12 +1,12 @@
 package config
 
 import (
+	"minibili/internal/model/system"
 	"testing"
 
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 
-	"minibili/internal/model"
 )
 
 func setupRuntimeTest(t *testing.T) (*RuntimeConfig, *gorm.DB) {
@@ -15,7 +15,7 @@ func setupRuntimeTest(t *testing.T) (*RuntimeConfig, *gorm.DB) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_ = db.AutoMigrate(&model.SystemConfig{})
+	_ = db.AutoMigrate(&system.SystemConfig{})
 	defaults := map[string]string{
 		"agent_enabled":     "true",
 		"agent_daily_quota": "80",
@@ -75,7 +75,7 @@ func TestRuntimeConfig_Set(t *testing.T) {
 		t.Error("expected agent_enabled to become false after Set")
 	}
 	// Verify it persisted to DB
-	var cfg model.SystemConfig
+	var cfg system.SystemConfig
 	if err := db.First(&cfg, "`key` = ?", "agent_enabled").Error; err != nil {
 		t.Fatal(err)
 	}
@@ -89,9 +89,9 @@ func TestRuntimeConfig_SeedDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_ = db.AutoMigrate(&model.SystemConfig{})
+	_ = db.AutoMigrate(&system.SystemConfig{})
 	// Pre-insert one key
-	db.Save(&model.SystemConfig{Key: "agent_enabled", Value: "false"})
+	db.Save(&system.SystemConfig{Key: "agent_enabled", Value: "false"})
 
 	rc := NewRuntimeConfig(db, map[string]string{
 		"agent_enabled":     "true",

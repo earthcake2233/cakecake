@@ -1,11 +1,11 @@
 package service
 
 import (
+	"minibili/internal/model/user"
 	"context"
 
 	"gorm.io/gorm"
 
-	"minibili/internal/model"
 )
 
 // UserProviderImpl implements UserProvider using *gorm.DB (Phase 1 monolith).
@@ -18,7 +18,7 @@ func NewUserProvider(db *gorm.DB) *UserProviderImpl {
 }
 
 func (p *UserProviderImpl) GetUser(ctx context.Context, id uint64) (UserInfo, error) {
-	var u model.User
+	var u user.User
 	if err := p.db.WithContext(ctx).First(&u, id).Error; err != nil {
 		return UserInfo{}, err
 	}
@@ -27,7 +27,7 @@ func (p *UserProviderImpl) GetUser(ctx context.Context, id uint64) (UserInfo, er
 
 func (p *UserProviderImpl) GetUsersByIDs(ctx context.Context, ids []uint64) (map[uint64]UserInfo, error) {
 	if len(ids) == 0 { return nil, nil }
-	var users []model.User
+	var users []user.User
 	if err := p.db.WithContext(ctx).Where("id IN ?", ids).Find(&users).Error; err != nil {
 		return nil, err
 	}
@@ -40,7 +40,7 @@ func (p *UserProviderImpl) GetUsersByIDs(ctx context.Context, ids []uint64) (map
 
 func (p *UserProviderImpl) BatchCurrentLevels(ctx context.Context, ids []uint64) (map[uint64]int, error) {
 	if len(ids) == 0 { return nil, nil }
-	var users []model.User
+	var users []user.User
 	if err := p.db.WithContext(ctx).Where("id IN ?", ids).Find(&users).Error; err != nil {
 		return nil, err
 	}
@@ -56,10 +56,16 @@ func (p *UserProviderImpl) BatchCurrentLevels(ctx context.Context, ids []uint64)
 	return result, nil
 }
 
-func toUserInfo(u *model.User) UserInfo {
+func toUserInfo(u *user.User) UserInfo {
 	name := u.Username
 	if u.Nickname != "" { name = u.Nickname }
 	return UserInfo{
 		ID: u.ID, Username: u.Username, Nickname: name, AvatarURL: u.AvatarURL,
+		CoinBalanceTenths: u.CoinBalanceTenths,
 	}
+}
+
+func (p *UserProviderImpl) DecrementCoins(ctx context.Context, userID uint64, amount int) error {
+    return p.db.WithContext(ctx).Model(&user.User{}).Where("id = ? AND coins >= ?", userID, amount).
+        UpdateColumn("coins", gorm.Expr("coins - ?", amount)).Error
 }

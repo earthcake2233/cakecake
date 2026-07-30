@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"minibili/internal/model/video"
 	"bytes"
 	"encoding/json"
 	"net/http"
@@ -10,7 +11,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 
-	"minibili/internal/model"
 )
 
 func registerLogin(t *testing.T, r *gin.Engine, username string) string {
@@ -41,7 +41,7 @@ func registerLogin(t *testing.T, r *gin.Engine, username string) string {
 
 func createTestVideo(t *testing.T, api *API) uint64 {
 	t.Helper()
-	v := model.Video{Title: "test video", Description: "desc", Status: "published", UserID: 1}
+	v := video.Video{Title: "test video", Description: "desc", Status: "published", UserID: 1}
 	require.NoError(t, api.DB.Create(&v).Error)
 	return v.ID
 }
@@ -138,7 +138,7 @@ func TestPostDanmaku_Sensitive(t *testing.T) {
 func TestPostDanmaku_DanmakuClosed(t *testing.T) {
 	api, r, _ := newTestAPI(t)
 	tok := registerLogin(t, r, "dmuser4")
-	v := model.Video{Title: "closed", Description: "desc", Status: "published", UserID: 1, DanmakuClosed: true}
+	v := video.Video{Title: "closed", Description: "desc", Status: "published", UserID: 1, DanmakuClosed: true}
 	require.NoError(t, api.DB.Create(&v).Error)
 	u := "/api/v1/videos/" + formatUint(v.ID) + "/danmaku"
 

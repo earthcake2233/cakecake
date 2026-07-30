@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"minibili/internal/model/video"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -15,7 +16,6 @@ import (
 	"github.com/glebarez/sqlite"
 
 	"minibili/internal/logger"
-	"minibili/internal/model"
 )
 
 type mockAcknowledger struct {
@@ -118,14 +118,14 @@ func TestHandleDelivery_EmptyBody_Adv(t *testing.T) {
 
 func TestHandleDelivery_NilOSS_Adv(t *testing.T) {
 	db := setupWorkerDB_Adv(t)
-	db.Create(&model.Video{Title: "No OSS", Status: "transcoding"})
+	db.Create(&video.Video{Title: "No OSS", Status: "transcoding"})
 	job := TranscodeJob{VideoID: 1, RawPath: "/tmp/v.mp4"}
 	body, _ := json.Marshal(job)
 	mockAck := &mockAcknowledger{}
 	d := amqp.Delivery{Acknowledger: mockAck, Body: body}
 	handleDelivery(nil, nil, db, nil, nil, nil, nil, d)
 	assert.True(t, mockAck.ackCalled)
-	var v model.Video
+	var v video.Video
 	db.First(&v, 1)
 	assert.Equal(t, "failed", v.Status)
 }
@@ -134,6 +134,6 @@ func setupWorkerDB_Adv(t *testing.T) *gorm.DB {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&model.Video{}))
+	require.NoError(t, db.AutoMigrate(&video.Video{}))
 	return db
 }

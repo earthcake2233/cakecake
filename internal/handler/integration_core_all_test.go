@@ -3,6 +3,10 @@
 package handler
 
 import (
+	"minibili/internal/model/article"
+	"minibili/internal/model/dynamic"
+	"minibili/internal/model/user"
+	"minibili/internal/model/video"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -15,28 +19,27 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 
-	"minibili/internal/model"
 )
 
 // helpers
-func seedUser(t *testing.T, api *API, username, nickname string, coin int) model.User {
+func seedUser(t *testing.T, api *API, username, nickname string, coin int) user.User {
 	t.Helper()
-	u := model.User{Username: username, PasswordHash: "hash", Nickname: nickname, CoinBalanceTenths: int64(coin * 10)}
+	u := user.User{Username: username, PasswordHash: "hash", Nickname: nickname, CoinBalanceTenths: int64(coin * 10)}
 	require.NoError(t, api.DB.Create(&u).Error)
 	ensureUserCakeID(api.DB, &u)
 	return u
 }
 
-func seedVideoWithAPI(t *testing.T, api *API, uid uint64, title string) model.Video {
+func seedVideoWithAPI(t *testing.T, api *API, uid uint64, title string) video.Video {
 	t.Helper()
-	v := model.Video{UserID: uid, Title: title, Status: "published", VideoURL: "https://cdn.example.com/v.mp4", CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	v := video.Video{UserID: uid, Title: title, Status: "published", VideoURL: "https://cdn.example.com/v.mp4", CreatedAt: time.Now(), UpdatedAt: time.Now()}
 	require.NoError(t, api.DB.Create(&v).Error)
 	return v
 }
 
-func seedArticle(t *testing.T, api *API, uid uint64, title string) model.Article {
+func seedArticle(t *testing.T, api *API, uid uint64, title string) article.Article {
 	t.Helper()
-	a := model.Article{UserID: uid, Title: title, Status: "published", CreatedAt: time.Now()}
+	a := article.Article{UserID: uid, Title: title, Status: "published", CreatedAt: time.Now()}
 	require.NoError(t, api.DB.Create(&a).Error)
 	return a
 }
@@ -129,7 +132,7 @@ func Test_ViewHistory(t *testing.T) {
 func Test_UserDynamic(t *testing.T) {
 	api, r, _ := newTestAPI(t)
 	u := seedUser(t, api, "dyn1", "Dyn1", 10)
-	dyn := model.UserDynamic{UserID: u.ID, Title: "My Dyn", Content: "Content", ImagesJSON: "[]", CreatedAt: time.Now()}
+	dyn := dynamic.UserDynamic{UserID: u.ID, Title: "My Dyn", Content: "Content", ImagesJSON: "[]", CreatedAt: time.Now()}
 	require.NoError(t, api.DB.Create(&dyn).Error)
 	srve(r, areq("GET", fmt.Sprintf("/api/v1/space/%d/dynamics", u.ID), "", nil))
 	srve(r, areq("GET", fmt.Sprintf("/api/v1/user-dynamics/%d", dyn.ID), "", nil))
@@ -156,7 +159,7 @@ func Test_FavoriteFolder(t *testing.T) {
 	u := seedUser(t, api, "ff1", "FF1", 10)
 	v := seedVideoWithAPI(t, api, u.ID, "FF Video")
 	tk := tok(t, api, u.ID)
-	df := model.FavoriteFolder{UserID: u.ID, Title: "default", IsDefault: true}
+	df := video.FavoriteFolder{UserID: u.ID, Title: "default", IsDefault: true}
 	require.NoError(t, api.DB.Create(&df).Error)
 	srve(r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/favorite", v.ID), tk, nil))
 	w := srve(r, areq("POST", "/api/v1/users/me/favorite-folders", tk, `{"title":"My Folder"}`))
@@ -249,7 +252,7 @@ func Test_SpacePrivacy(t *testing.T) {
 func Test_DynamicCommentList(t *testing.T) {
 	api, r, _ := newTestAPI(t)
 	u := seedUser(t, api, "dc1", "DC1", 10)
-	dyn := model.UserDynamic{UserID: u.ID, Title: "D", Content: "C", ImagesJSON: "[]", CreatedAt: time.Now()}
+	dyn := dynamic.UserDynamic{UserID: u.ID, Title: "D", Content: "C", ImagesJSON: "[]", CreatedAt: time.Now()}
 	require.NoError(t, api.DB.Create(&dyn).Error)
 	srve(r, areq("GET", fmt.Sprintf("/api/v1/user-dynamics/%d/comments", dyn.ID), "", nil))
 }

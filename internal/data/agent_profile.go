@@ -1,6 +1,9 @@
 package data
 
 import (
+	"minibili/internal/model/agent"
+	"minibili/internal/model/dm"
+	"minibili/internal/model/user"
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
@@ -13,7 +16,6 @@ import (
 	"gorm.io/gorm"
 
 	"minibili/internal/config"
-	"minibili/internal/model"
 )
 
 var agentSlugRe = regexp.MustCompile(`^[a-z][a-z0-9_]{1,30}$`)
@@ -28,7 +30,7 @@ func EnsureAgentProfiles(db *gorm.DB, cfg *config.C, lg *zap.Logger) error {
 	_ = EnsureDefaultAgentSettings(db, lg)
 
 	var n int64
-	_ = db.Model(&model.AgentProfile{}).Count(&n).Error
+	_ = db.Model(&agent.AgentProfile{}).Count(&n).Error
 	if n > 0 {
 		return backfillDmAgentProfileIDs(db, lg)
 	}
@@ -62,14 +64,14 @@ func EnsureAgentProfiles(db *gorm.DB, cfg *config.C, lg *zap.Logger) error {
 		return err
 	}
 
-	p := model.AgentProfile{
+	p := agent.AgentProfile{
 		Slug:                "default",
 		BotUserID:           botID,
 		DisplayName:         displayName,
 		AvatarURL:           avatarURL,
 		Sign:                sign,
 		SystemPrompt:        systemPrompt,
-		WelcomeMessagesJSON: model.EncodeWelcomeMessages(welcome),
+		WelcomeMessagesJSON: agent.EncodeWelcomeMessages(welcome),
 		SortOrder:           0,
 		Enabled:             enabled,
 	}
@@ -87,10 +89,10 @@ func findOrCreateLegacyBotUser(db *gorm.DB, cfg *config.C, displayName, sign, av
 	if cfg != nil && strings.TrimSpace(cfg.AgentBotUsername) != "" {
 		username = strings.TrimSpace(cfg.AgentBotUsername)
 	}
-	var u model.User
+	var u user.User
 	err := db.Where("username = ?", username).First(&u).Error
 	if err == nil {
-		_ = syncAgentProfileToUser(db, &model.AgentProfile{
+		_ = syncAgentProfileToUser(db, &agent.AgentProfile{
 			DisplayName: displayName,
 			AvatarURL:   avatarURL,
 			Sign:        sign,
@@ -104,7 +106,7 @@ func findOrCreateLegacyBotUser(db *gorm.DB, cfg *config.C, displayName, sign, av
 	if err != nil {
 		return 0, err
 	}
-	u = model.User{
+	u = user.User{
 		Username:     username,
 		PasswordHash: string(hash),
 		Nickname:     displayName,
@@ -114,7 +116,7 @@ func findOrCreateLegacyBotUser(db *gorm.DB, cfg *config.C, displayName, sign, av
 	if err := db.Create(&u).Error; err != nil {
 		return 0, err
 	}
-	cid := model.FormatCakeID(u.ID)
+	cid := user.FormatCakeID(u.ID)
 	_ = db.Model(&u).Update("cake_id", cid).Error
 	if lg != nil {
 		lg.Info("legacy agent bot user created", zap.String("username", username), zap.Uint64("user_id", u.ID))
@@ -124,7 +126,7 @@ func findOrCreateLegacyBotUser(db *gorm.DB, cfg *config.C, displayName, sign, av
 
 
 func backfillDmAgentProfileIDs(db *gorm.DB, lg *zap.Logger) error {
-	var profiles []model.AgentProfile
+	var profiles []agent.AgentProfile
 	if err := db.Find(&profiles).Error; err != nil {
 		return err
 	}
@@ -132,8 +134,8 @@ func backfillDmAgentProfileIDs(db *gorm.DB, lg *zap.Logger) error {
 	for i := range profiles {
 		byBot[profiles[i].BotUserID] = profiles[i].ID
 	}
-	var convs []model.DmConversation
-	_ = db.Where("kind = ?", model.DmKindAgent).Find(&convs).Error
+	var convs []dm.DmConversation
+	_ = db.Where("kind = ?", dm.DmKindAgent).Find(&convs).Error
 	for i := range convs {
 		c := &convs[i]
 		if c.AgentProfileID > 0 {
@@ -151,8 +153,8 @@ func backfillDmAgentProfileIDs(db *gorm.DB, lg *zap.Logger) error {
 }
 
 // ListAgentProfiles returns all profiles for admin (newest sort_order first in UI handled by handler).
-func ListAgentProfiles(db *gorm.DB) ([]model.AgentProfile, error) {
-	var list []model.AgentProfile
+func ListAgentProfiles(db *gorm.DB) ([]agent.AgentProfile, error) {
+	var list []agent.AgentProfile
 	if err := db.Order("sort_order ASC, id ASC").Find(&list).Error; err != nil {
 		return nil, err
 	}
@@ -160,8 +162,8 @@ func ListAgentProfiles(db *gorm.DB) ([]model.AgentProfile, error) {
 }
 
 // ListEnabledAgentProfiles returns enabled personas for user-facing ensure.
-func ListEnabledAgentProfiles(db *gorm.DB) ([]model.AgentProfile, error) {
-	var list []model.AgentProfile
+func ListEnabledAgentProfiles(db *gorm.DB) ([]agent.AgentProfile, error) {
+	var list []agent.AgentProfile
 	if err := db.Where("enabled = ?", true).Order("sort_order ASC, id ASC").Find(&list).Error; err != nil {
 		return nil, err
 	}
@@ -169,8 +171,8 @@ func ListEnabledAgentProfiles(db *gorm.DB) ([]model.AgentProfile, error) {
 }
 
 // GetAgentProfile loads one profile by id.
-func GetAgentProfile(db *gorm.DB, id uint64) (*model.AgentProfile, error) {
-	var p model.AgentProfile
+func GetAgentProfile(db *gorm.DB, id uint64) (*agent.AgentProfile, error) {
+	var p agent.AgentProfile
 	if err := db.First(&p, id).Error; err != nil {
 		return nil, err
 	}
@@ -178,8 +180,8 @@ func GetAgentProfile(db *gorm.DB, id uint64) (*model.AgentProfile, error) {
 }
 
 // GetAgentProfileByBotUserID finds profile for a system bot account.
-func GetAgentProfileByBotUserID(db *gorm.DB, botUserID uint64) (*model.AgentProfile, error) {
-	var p model.AgentProfile
+func GetAgentProfileByBotUserID(db *gorm.DB, botUserID uint64) (*agent.AgentProfile, error) {
+	var p agent.AgentProfile
 	if err := db.Where("bot_user_id = ?", botUserID).First(&p).Error; err != nil {
 		return nil, err
 	}
@@ -187,11 +189,11 @@ func GetAgentProfileByBotUserID(db *gorm.DB, botUserID uint64) (*model.AgentProf
 }
 
 // PickWelcomeMessage chooses one welcome line at random.
-func PickWelcomeMessage(p *model.AgentProfile) string {
+func PickWelcomeMessage(p *agent.AgentProfile) string {
 	if p == nil {
 		return defaultAgentWelcome
 	}
-	list := model.ParseWelcomeMessages(p.WelcomeMessagesJSON)
+	list := agent.ParseWelcomeMessages(p.WelcomeMessagesJSON)
 	if len(list) == 0 {
 		return defaultAgentWelcome
 	}
@@ -207,7 +209,7 @@ func PickWelcomeMessage(p *model.AgentProfile) string {
 }
 
 // EnsureAgentConversationForProfile creates a user鈫攂ot thread for one persona.
-func EnsureAgentConversationForProfile(db *gorm.DB, humanID uint64, profile *model.AgentProfile) (*model.DmConversation, bool, error) {
+func EnsureAgentConversationForProfile(db *gorm.DB, humanID uint64, profile *agent.AgentProfile) (*dm.DmConversation, bool, error) {
 	if db == nil || profile == nil || humanID == 0 || profile.BotUserID == 0 || humanID == profile.BotUserID {
 		return nil, false, fmt.Errorf("invalid agent conversation")
 	}
@@ -218,15 +220,15 @@ func EnsureAgentConversationForProfile(db *gorm.DB, humanID uint64, profile *mod
 	if low > high {
 		low, high = high, low
 	}
-	var conv model.DmConversation
+	var conv dm.DmConversation
 	err := db.Where("user_low = ? AND user_high = ?", low, high).First(&conv).Error
 	if err == nil {
 		updates := map[string]interface{}{
-			"kind":             model.DmKindAgent,
+			"kind":             dm.DmKindAgent,
 			"agent_profile_id": profile.ID,
 		}
 		_ = db.Model(&conv).Updates(updates).Error
-		conv.Kind = model.DmKindAgent
+		conv.Kind = dm.DmKindAgent
 		conv.AgentProfileID = profile.ID
 		ensureDmParticipants(db, conv.ID, humanID, profile.BotUserID)
 		return &conv, false, nil
@@ -236,10 +238,10 @@ func EnsureAgentConversationForProfile(db *gorm.DB, humanID uint64, profile *mod
 	}
 	welcome := PickWelcomeMessage(profile)
 	now := db.NowFunc()
-	conv = model.DmConversation{
+	conv = dm.DmConversation{
 		UserLow:          low,
 		UserHigh:         high,
-		Kind:             model.DmKindAgent,
+		Kind:             dm.DmKindAgent,
 		AgentProfileID:   profile.ID,
 		LastMessageAt:    now,
 		LastPreview:      welcome,
@@ -248,7 +250,7 @@ func EnsureAgentConversationForProfile(db *gorm.DB, humanID uint64, profile *mod
 		return nil, false, err
 	}
 	ensureDmParticipants(db, conv.ID, humanID, profile.BotUserID)
-	msg := model.DmMessage{
+	msg := dm.DmMessage{
 		ConversationID: conv.ID,
 		SenderID:       profile.BotUserID,
 		Role:           "assistant",
@@ -281,7 +283,7 @@ func CreateAgentBotUser(db *gorm.DB, slug, displayName, sign, avatarURL string) 
 	if err != nil {
 		return 0, err
 	}
-	u := model.User{
+	u := user.User{
 		Username:     username,
 		PasswordHash: string(hash),
 		Nickname:     displayName,
@@ -291,7 +293,7 @@ func CreateAgentBotUser(db *gorm.DB, slug, displayName, sign, avatarURL string) 
 	if err := db.Create(&u).Error; err != nil {
 		return 0, err
 	}
-	cid := model.FormatCakeID(u.ID)
+	cid := user.FormatCakeID(u.ID)
 	_ = db.Model(&u).Update("cake_id", cid).Error
 	return u.ID, nil
 }
@@ -311,7 +313,7 @@ func NormalizeAgentSlug(slug string) (string, error) {
 }
 
 // RenameAgentProfileSlug updates profile slug and the linked bot user's username.
-func RenameAgentProfileSlug(db *gorm.DB, p *model.AgentProfile, newSlug string) error {
+func RenameAgentProfileSlug(db *gorm.DB, p *agent.AgentProfile, newSlug string) error {
 	if db == nil || p == nil {
 		return fmt.Errorf("invalid profile")
 	}
@@ -323,7 +325,7 @@ func RenameAgentProfileSlug(db *gorm.DB, p *model.AgentProfile, newSlug string) 
 		return nil
 	}
 	var taken int64
-	if err := db.Model(&model.AgentProfile{}).
+	if err := db.Model(&agent.AgentProfile{}).
 		Where("slug = ? AND id <> ?", newSlug, p.ID).
 		Count(&taken).Error; err != nil {
 		return err
@@ -332,7 +334,7 @@ func RenameAgentProfileSlug(db *gorm.DB, p *model.AgentProfile, newSlug string) 
 		return fmt.Errorf("slug taken")
 	}
 	newUsername := AgentBotUsername(newSlug)
-	if err := db.Model(&model.User{}).
+	if err := db.Model(&user.User{}).
 		Where("username = ? AND id <> ?", newUsername, p.BotUserID).
 		Count(&taken).Error; err != nil {
 		return err
@@ -345,7 +347,7 @@ func RenameAgentProfileSlug(db *gorm.DB, p *model.AgentProfile, newSlug string) 
 		tx.Rollback()
 		return err
 	}
-	if err := tx.Model(&model.User{}).Where("id = ?", p.BotUserID).
+	if err := tx.Model(&user.User{}).Where("id = ?", p.BotUserID).
 		Update("username", newUsername).Error; err != nil {
 		tx.Rollback()
 		return err
@@ -355,14 +357,14 @@ func RenameAgentProfileSlug(db *gorm.DB, p *model.AgentProfile, newSlug string) 
 }
 
 // SyncAgentProfile copies profile display fields onto the bot user row.
-func SyncAgentProfile(db *gorm.DB, p *model.AgentProfile) error {
+func SyncAgentProfile(db *gorm.DB, p *agent.AgentProfile) error {
 	if p == nil {
 		return nil
 	}
 	return syncAgentProfileToUser(db, p, p.BotUserID)
 }
 
-func syncAgentProfileToUser(db *gorm.DB, p *model.AgentProfile, botUserID uint64) error {
+func syncAgentProfileToUser(db *gorm.DB, p *agent.AgentProfile, botUserID uint64) error {
 	if db == nil || p == nil || botUserID == 0 {
 		return nil
 	}
@@ -370,7 +372,7 @@ func syncAgentProfileToUser(db *gorm.DB, p *model.AgentProfile, botUserID uint64
 	if name == "" {
 		name = defaultAgentDisplayName
 	}
-	return db.Model(&model.User{}).Where("id = ?", botUserID).Updates(map[string]interface{}{
+	return db.Model(&user.User{}).Where("id = ?", botUserID).Updates(map[string]interface{}{
 		"nickname":   name,
 		"avatar_url": strings.TrimSpace(p.AvatarURL),
 		"sign":       strings.TrimSpace(p.Sign),
@@ -380,7 +382,7 @@ func syncAgentProfileToUser(db *gorm.DB, p *model.AgentProfile, botUserID uint64
 // ProfileCount returns total profiles (for create limit).
 func ProfileCount(db *gorm.DB) (int64, error) {
 	var n int64
-	err := db.Model(&model.AgentProfile{}).Count(&n).Error
+	err := db.Model(&agent.AgentProfile{}).Count(&n).Error
 	return n, err
 }
 
@@ -399,7 +401,7 @@ func MarshalWelcomeList(list []string) (string, error) {
 			return "", fmt.Errorf("empty welcome at %d", i)
 		}
 	}
-	return model.EncodeWelcomeMessages(list), nil
+	return agent.EncodeWelcomeMessages(list), nil
 }
 
 // UnmarshalWelcomeList from API request []string.
@@ -426,9 +428,9 @@ func UnmarshalWelcomeList(raw json.RawMessage, fallback []string) ([]string, err
 
 func ensureDmParticipants(db *gorm.DB, convID, humanID, botID uint64) {
 	for _, uid := range []uint64{humanID, botID} {
-		var p model.DmParticipant
+		var p dm.DmParticipant
 		if db.Where("conversation_id = ? AND user_id = ?", convID, uid).First(&p).Error == gorm.ErrRecordNotFound {
-			_ = db.Create(&model.DmParticipant{
+			_ = db.Create(&dm.DmParticipant{
 				ConversationID: convID,
 				UserID:         uid,
 				UnreadCount:    0,

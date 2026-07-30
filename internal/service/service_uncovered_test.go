@@ -1,6 +1,7 @@
 package service
 
 import (
+	"minibili/internal/model/admin"
 	"context"
 	"testing"
 
@@ -11,7 +12,6 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"minibili/internal/model"
 	"minibili/internal/ws"
 )
 
@@ -76,7 +76,7 @@ func TestDanmakuRelay_Publish_Error(t *testing.T) {
 func setupHotSearchDB(t *testing.T) *gorm.DB {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&model.HotSearchDisplayLayout{}, &model.HotSearchOp{}))
+	require.NoError(t, db.AutoMigrate(&admin.HotSearchDisplayLayout{}, &admin.HotSearchOp{}))
 	return db
 }
 
@@ -151,7 +151,7 @@ func TestSaveHotSearchDisplayLayout_NoDB(t *testing.T) {
 func TestLoadHotSearchLayout_EmptyJSON(t *testing.T) {
 	db := setupHotSearchDB(t)
 	// Insert a row with empty OrderJSON
-	layout := model.HotSearchDisplayLayout{ID: 1, OrderJSON: "[]"}
+	layout := admin.HotSearchDisplayLayout{ID: 1, OrderJSON: "[]"}
 	err := db.Save(&layout).Error
 	require.NoError(t, err)
 
@@ -161,7 +161,7 @@ func TestLoadHotSearchLayout_EmptyJSON(t *testing.T) {
 
 func TestLoadHotSearchLayout_InvalidJSON(t *testing.T) {
 	db := setupHotSearchDB(t)
-	layout := model.HotSearchDisplayLayout{ID: 1, OrderJSON: "not-json"}
+	layout := admin.HotSearchDisplayLayout{ID: 1, OrderJSON: "not-json"}
 	err := db.Save(&layout).Error
 	require.NoError(t, err)
 

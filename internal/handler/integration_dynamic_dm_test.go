@@ -3,6 +3,9 @@
 package handler
 
 import (
+	"minibili/internal/model/comment"
+	"minibili/internal/model/dm"
+	"minibili/internal/model/dynamic"
 	"encoding/json"
 	"fmt"
 	"testing"
@@ -10,7 +13,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"minibili/internal/model"
 )
 
 // Test_DynamicCommentApproveIgnoreDelete verifies curated comment flow for dynamics.
@@ -21,7 +23,7 @@ func Test_DynamicCommentApproveIgnoreDelete(t *testing.T) {
 	tk := tok(t, api, u.ID)
 	tk2 := tok(t, api, u2.ID)
 	// Create a dynamic
-	dyn := model.UserDynamic{UserID: u.ID, Title: "Test Dyn", Content: "Test"}
+	dyn := dynamic.UserDynamic{UserID: u.ID, Title: "Test Dyn", Content: "Test"}
 	require.NoError(t, api.DB.Create(&dyn).Error)
 	did := dyn.ID
 	// Post a comment as u2
@@ -54,7 +56,7 @@ func Test_UserDynamicEdgeCases(t *testing.T) {
 	u := seedUser(t, api, "udc1", "UDC1", 10)
 	tk := tok(t, api, u.ID)
 	// Create a dynamic
-	dyn := model.UserDynamic{UserID: u.ID, Title: "Edge Dyn", Content: "Edge"}
+	dyn := dynamic.UserDynamic{UserID: u.ID, Title: "Edge Dyn", Content: "Edge"}
 	require.NoError(t, api.DB.Create(&dyn).Error)
 	did := dyn.ID
 	// Update (PUT)
@@ -108,9 +110,9 @@ func Test_DynamicCommentLikeDislikeEdge(t *testing.T) {
 	u2 := seedUser(t, api, "dld2", "DLD2", 10)
 	tk := tok(t, api, u.ID)
 	// Create dynamic and comment
-	dyn := model.UserDynamic{UserID: u.ID, Title: "Like Test", Content: "Testing likes"}
+	dyn := dynamic.UserDynamic{UserID: u.ID, Title: "Like Test", Content: "Testing likes"}
 	require.NoError(t, api.DB.Create(&dyn).Error)
-	cm := model.DynamicComment{DynamicID: dyn.ID, UserID: u2.ID, Content: "Test comment", Approved: true}
+	cm := comment.DynamicComment{DynamicID: dyn.ID, UserID: u2.ID, Content: "Test comment", Approved: true}
 	require.NoError(t, api.DB.Create(&cm).Error)
 	cid := cm.ID
 	// Like
@@ -131,11 +133,11 @@ func Test_DmConversationDirectDB(t *testing.T) {
 	// Create a conversation directly in DB
 	lo, hi := u1.ID, u2.ID
 	if lo > hi { lo, hi = hi, lo }
-	conv := model.DmConversation{UserLow: lo, UserHigh: hi, Kind: model.DmKindHuman, CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	conv := dm.DmConversation{UserLow: lo, UserHigh: hi, Kind: dm.DmKindHuman, CreatedAt: time.Now(), UpdatedAt: time.Now()}
 	require.NoError(t, api.DB.Create(&conv).Error)
 	// Add participants
-	p1 := model.DmParticipant{ConversationID: conv.ID, UserID: u1.ID, UnreadCount: 0}
-	p2 := model.DmParticipant{ConversationID: conv.ID, UserID: u2.ID, UnreadCount: 0}
+	p1 := dm.DmParticipant{ConversationID: conv.ID, UserID: u1.ID, UnreadCount: 0}
+	p2 := dm.DmParticipant{ConversationID: conv.ID, UserID: u2.ID, UnreadCount: 0}
 	require.NoError(t, api.DB.Create(&p1).Error)
 	require.NoError(t, api.DB.Create(&p2).Error)
 	cid := conv.ID

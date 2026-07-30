@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"minibili/internal/model/admin"
+	"minibili/internal/model/agent"
 	"encoding/json"
 	"net/http"
 	"testing"
@@ -12,7 +14,6 @@ import (
 	"go.uber.org/zap"
 
 	"minibili/internal/config"
-	"minibili/internal/model"
 	"minibili/internal/ws"
 )
 
@@ -37,7 +38,7 @@ func TestAdminAgentMeta_NilCfg(t *testing.T) {
 
 func TestAdminAgentProfilePayload(t *testing.T) {
 	now := time.Now()
-	p := &model.AgentProfile{
+	p := &agent.AgentProfile{
 		ID: 1, Slug: "assistant", BotUserID: 100,
 		DisplayName: "AI Assistant",
 		AvatarURL: "https://ex.com/avatar.png",
@@ -65,17 +66,17 @@ func TestAdminAgentProfilePayload_Nil(t *testing.T) {
 }
 
 func TestAdminAgentProfilePayload_EmptyWelcome(t *testing.T) {
-	p := &model.AgentProfile{ID: 1, Slug: "test", WelcomeMessagesJSON: "[]", UpdatedAt: time.Now()}
+	p := &agent.AgentProfile{ID: 1, Slug: "test", WelcomeMessagesJSON: "[]", UpdatedAt: time.Now()}
 	out := adminAgentProfilePayload(p, "")
 	require.Equal(t, []string{}, out["welcome_messages"])
 }
 
 func TestHotSearchDisplayTitle(t *testing.T) {
-	tests := []struct{ name string; op *model.HotSearchOp; want string }{
+	tests := []struct{ name string; op *admin.HotSearchOp; want string }{
 		{"nil", nil, ""},
-		{"display title set", &model.HotSearchOp{DisplayTitle: "Display Title", Keyword: "kw"}, "Display Title"},
-		{"empty display title", &model.HotSearchOp{DisplayTitle: "", Keyword: "keyword"}, "keyword"},
-		{"whitespace display title", &model.HotSearchOp{DisplayTitle: "  ", Keyword: "real-keyword"}, "real-keyword"},
+		{"display title set", &admin.HotSearchOp{DisplayTitle: "Display Title", Keyword: "kw"}, "Display Title"},
+		{"empty display title", &admin.HotSearchOp{DisplayTitle: "", Keyword: "keyword"}, "keyword"},
+		{"whitespace display title", &admin.HotSearchOp{DisplayTitle: "  ", Keyword: "real-keyword"}, "real-keyword"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) { got := hotSearchDisplayTitle(tc.op); require.Equal(t, tc.want, got) })

@@ -13,7 +13,6 @@ import (
 	"minibili/internal/middleware"
 	"minibili/internal/pkg/resp"
 	"minibili/internal/search"
-	"minibili/internal/service"
 )
 
 // SearchSuggest GET /api/v1/search/suggest?term=xxx&limit=10
@@ -35,7 +34,7 @@ func (a *API) SearchSuggest(c *gin.Context) {
 			resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 			return
 		}
-		if !service.ValidateSuggestTerm(term) {
+		if !a.HotSearchSvc.ValidateSuggestTerm(term) {
 			resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 			return
 		}
@@ -47,6 +46,6 @@ func (a *API) SearchSuggest(c *gin.Context) {
 	}
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 800*time.Millisecond)
 	defer cancel()
-	tags := service.SearchSuggest(ctx, a.DB, a.SearchHot, uid, term, limit)
+	tags := a.HotSearchSvc.SearchSuggest(ctx, uid, term, limit)
 	resp.OK(c, gin.H{"tag": tags})
 }

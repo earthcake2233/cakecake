@@ -1,6 +1,7 @@
 package service
 
 import (
+	"minibili/internal/model/video"
 	"context"
 	"strconv"
 
@@ -8,7 +9,6 @@ import (
 	"gorm.io/gorm"
 
 	"minibili/internal/data"
-	"minibili/internal/model"
 )
 
 // PlayCounter syncs Redis hot counters with MySQL (SPEC F3).
@@ -27,7 +27,7 @@ func (p *PlayCounter) Incr(ctx context.Context, videoID uint64) error {
 }
 
 // Display returns MySQL play_count plus unflushed Redis delta.
-func (p *PlayCounter) Display(ctx context.Context, v *model.Video) (uint64, error) {
+func (p *PlayCounter) Display(ctx context.Context, v *video.Video) (uint64, error) {
 	key := data.VideoPlayDeltaKey(v.ID)
 	d, err := p.Rdb.Get(ctx, key).Uint64()
 	if err == redis.Nil {
@@ -64,7 +64,7 @@ func (p *PlayCounter) Flush(ctx context.Context) error {
 			_, _ = p.Rdb.SRem(ctx, data.SetPlayDirty, sid).Result()
 			continue
 		}
-		if err := p.DB.WithContext(ctx).Model(&model.Video{}).Where("id = ?", vid).
+		if err := p.DB.WithContext(ctx).Model(&video.Video{}).Where("id = ?", vid).
 			UpdateColumn("play_count", gorm.Expr("play_count + ?", d)).Error; err != nil {
 			continue
 		}

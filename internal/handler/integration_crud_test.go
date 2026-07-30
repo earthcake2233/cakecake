@@ -3,6 +3,12 @@
 package handler
 
 import (
+	"minibili/internal/model/admin"
+	"minibili/internal/model/article"
+	"minibili/internal/model/comment"
+	"minibili/internal/model/dynamic"
+	"minibili/internal/model/user"
+	"minibili/internal/model/video"
 	"bytes"
 	"encoding/json"
 	"net/http"
@@ -21,7 +27,6 @@ import (
 
 	"minibili/internal/config"
 	"minibili/internal/data"
-	"minibili/internal/model"
 	"minibili/internal/pkg/jwttoken"
 	"minibili/internal/service"
 	"minibili/internal/ws"
@@ -64,6 +69,11 @@ func setupHandlerIntegrationDB(t *testing.T) (*API, *gin.Engine, string) {
 			DanmakuSvc:   service.NewDanmakuService(db, rdb, zap.NewNop(), nil),
 			CommentSvc:   service.NewCommentService(db, rdb, zap.NewNop(), nil),
 			NotifSvc:     service.NewNotificationService(db, rdb, zap.NewNop()),
+			VideoSvc:     service.NewVideoService(db, rdb, zap.NewNop()),
+			DmSvc:        service.NewDmService(db, rdb, zap.NewNop()),
+			FavoriteSvc:  service.NewFavoriteService(db, rdb, zap.NewNop()),
+			ArticleSvc:   service.NewArticleService(db, rdb, zap.NewNop()),
+			DynamicSvc:   service.NewDynamicService(db, rdb, zap.NewNop()),
 		},
 	}
 	commentSvc := api.CommentSvc
@@ -86,7 +96,7 @@ func TestIntegration_HomeBanners(t *testing.T) {
 	api, r, _ := setupHandlerIntegrationDB(t)
 
 	now := time.Now()
-	b := model.HomeBanner{
+	b := admin.HomeBanner{
 		Title:      "Test Banner",
 		ImageURL:   "https://ex.com/banner.jpg",
 		LinkType:   "url",
@@ -137,7 +147,7 @@ func TestIntegration_Login(t *testing.T) {
 	api, r, _ := setupHandlerIntegrationDB(t)
 
 	hash, _ := bcrypt.GenerateFromPassword([]byte("password123"), bcrypt.DefaultCost)
-	api.DB.Create(&model.User{Username: "logintest", PasswordHash: string(hash)})
+	api.DB.Create(&user.User{Username: "logintest", PasswordHash: string(hash)})
 
 	body := `{"username":"logintest","password":"password123"}`
 	w := httptest.NewRecorder()
@@ -169,7 +179,7 @@ func TestIntegration_LoginFailed(t *testing.T) {
 func TestIntegration_MeEndpoint(t *testing.T) {
 	api, r, token := setupHandlerIntegrationDB(t)
 
-	api.DB.Create(&model.User{ID: 1, Username: "metest", Nickname: "MeTest"})
+	api.DB.Create(&user.User{ID: 1, Username: "metest", Nickname: "MeTest"})
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("GET", "/api/v1/users/me", nil)
@@ -189,8 +199,8 @@ func TestIntegration_SearchHistory_NoAuth(t *testing.T) {
 
 func TestMore_VideoList(t *testing.T) {
 	api, r, _ := setupHandlerIntegrationDB(t)
-	api.DB.Create(&model.User{ID: 1, Username: "u1", Nickname: "u1"})
-	api.DB.Create(&model.Video{ID: 1, UserID: 1, Title: "V1", Status: "published", Zone: "Life-Daily"})
+	api.DB.Create(&user.User{ID: 1, Username: "u1", Nickname: "u1"})
+	api.DB.Create(&video.Video{ID: 1, UserID: 1, Title: "V1", Status: "published", Zone: "Life-Daily"})
 	api.Play = &service.PlayCounter{Rdb: api.Dependencies.Redis, DB: api.DB}
 
 	w := httptest.NewRecorder()
@@ -200,7 +210,7 @@ func TestMore_VideoList(t *testing.T) {
 
 func TestMore_SpaceUser(t *testing.T) {
 	api, r, _ := setupHandlerIntegrationDB(t)
-	api.DB.Create(&model.User{ID: 1, Username: "sp", Nickname: "sp"})
+	api.DB.Create(&user.User{ID: 1, Username: "sp", Nickname: "sp"})
 
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, httptest.NewRequest("GET", "/api/v1/space/1", nil))
@@ -216,8 +226,8 @@ func TestMore_SpaceUserNotFound(t *testing.T) {
 
 func TestMore_SpaceVideos(t *testing.T) {
 	api, r, _ := setupHandlerIntegrationDB(t)
-	api.DB.Create(&model.User{ID: 1, Username: "u1"})
-	api.DB.Create(&model.Video{ID: 1, UserID: 1, Title: "V", Status: "published", Zone: "Life"})
+	api.DB.Create(&user.User{ID: 1, Username: "u1"})
+	api.DB.Create(&video.Video{ID: 1, UserID: 1, Title: "V", Status: "published", Zone: "Life"})
 	api.Play = &service.PlayCounter{Rdb: api.Dependencies.Redis, DB: api.DB}
 
 	w := httptest.NewRecorder()
@@ -227,8 +237,8 @@ func TestMore_SpaceVideos(t *testing.T) {
 
 func TestMore_GetVideo(t *testing.T) {
 	api, r, _ := setupHandlerIntegrationDB(t)
-	api.DB.Create(&model.User{ID: 1, Username: "u1"})
-	api.DB.Create(&model.Video{ID: 1, UserID: 1, Title: "D", Status: "published", Zone: "Life"})
+	api.DB.Create(&user.User{ID: 1, Username: "u1"})
+	api.DB.Create(&video.Video{ID: 1, UserID: 1, Title: "D", Status: "published", Zone: "Life"})
 	api.Play = &service.PlayCounter{Rdb: api.Dependencies.Redis, DB: api.DB}
 
 	w := httptest.NewRecorder()
@@ -245,9 +255,9 @@ func TestMore_GetVideoNotFound(t *testing.T) {
 
 func TestMore_Comments(t *testing.T) {
 	api, r, _ := setupHandlerIntegrationDB(t)
-	api.DB.Create(&model.User{ID: 2, Username: "u2"})
-	api.DB.Create(&model.Video{ID: 1, UserID: 2, Title: "C", Status: "published", Zone: "Life"})
-	api.DB.Create(&model.Comment{VideoID: 1, UserID: 2, Content: "Nice!", Approved: true})
+	api.DB.Create(&user.User{ID: 2, Username: "u2"})
+	api.DB.Create(&video.Video{ID: 1, UserID: 2, Title: "C", Status: "published", Zone: "Life"})
+	api.DB.Create(&comment.Comment{VideoID: 1, UserID: 2, Content: "Nice!", Approved: true})
 
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, httptest.NewRequest("GET", "/api/v1/videos/1/comments", nil))
@@ -256,8 +266,8 @@ func TestMore_Comments(t *testing.T) {
 
 func TestMore_GetArticle(t *testing.T) {
 	api, r, _ := setupHandlerIntegrationDB(t)
-	api.DB.Create(&model.User{ID: 1, Username: "au"})
-	api.DB.Create(&model.Article{ID: 1, UserID: 1, Title: "A", BodyMD: "body", Status: "published"})
+	api.DB.Create(&user.User{ID: 1, Username: "au"})
+	api.DB.Create(&article.Article{ID: 1, UserID: 1, Title: "A", BodyMD: "body", Status: "published"})
 
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, httptest.NewRequest("GET", "/api/v1/articles/1", nil))
@@ -287,7 +297,7 @@ func TestMore_HomeStats(t *testing.T) {
 
 func TestMore_Authd_Me(t *testing.T) {
 	api, r, token := setupHandlerIntegrationDB(t)
-	api.DB.Create(&model.User{ID: 1, Username: "cu"})
+	api.DB.Create(&user.User{ID: 1, Username: "cu"})
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("GET", "/api/v1/users/me", nil)
@@ -298,7 +308,7 @@ func TestMore_Authd_Me(t *testing.T) {
 
 func TestMore_Authd_DailyRewards(t *testing.T) {
 	api, r, token := setupHandlerIntegrationDB(t)
-	api.DB.Create(&model.User{ID: 1, Username: "u1"})
+	api.DB.Create(&user.User{ID: 1, Username: "u1"})
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("GET", "/api/v1/users/me/daily-rewards", nil)
@@ -309,7 +319,7 @@ func TestMore_Authd_DailyRewards(t *testing.T) {
 
 func TestMore_Authd_CoinLedger(t *testing.T) {
 	api, r, token := setupHandlerIntegrationDB(t)
-	api.DB.Create(&model.User{ID: 1, Username: "u1"})
+	api.DB.Create(&user.User{ID: 1, Username: "u1"})
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("GET", "/api/v1/users/me/coin-ledger", nil)
@@ -320,7 +330,7 @@ func TestMore_Authd_CoinLedger(t *testing.T) {
 
 func TestMore_Authd_FollowGroups(t *testing.T) {
 	api, r, token := setupHandlerIntegrationDB(t)
-	api.DB.Create(&model.User{ID: 1, Username: "u1"})
+	api.DB.Create(&user.User{ID: 1, Username: "u1"})
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("GET", "/api/v1/users/me/follow-groups", nil)
@@ -331,7 +341,7 @@ func TestMore_Authd_FollowGroups(t *testing.T) {
 
 func TestMore_Authd_WatchLater(t *testing.T) {
 	api, r, token := setupHandlerIntegrationDB(t)
-	api.DB.Create(&model.User{ID: 1, Username: "u1"})
+	api.DB.Create(&user.User{ID: 1, Username: "u1"})
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("GET", "/api/v1/users/me/watch-later", nil)
@@ -342,8 +352,8 @@ func TestMore_Authd_WatchLater(t *testing.T) {
 
 func TestMore_Authd_ToggleLike(t *testing.T) {
 	api, r, token := setupHandlerIntegrationDB(t)
-	api.DB.Create(&model.User{ID: 1, Username: "u1"})
-	api.DB.Create(&model.Video{ID: 1, UserID: 1, Title: "L", Status: "published", Zone: "Life"})
+	api.DB.Create(&user.User{ID: 1, Username: "u1"})
+	api.DB.Create(&video.Video{ID: 1, UserID: 1, Title: "L", Status: "published", Zone: "Life"})
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("POST", "/api/v1/videos/1/like", nil)
@@ -354,7 +364,7 @@ func TestMore_Authd_ToggleLike(t *testing.T) {
 
 func TestMore_FavoriteFolders(t *testing.T) {
 	api, r, token := setupHandlerIntegrationDB(t)
-	api.DB.Create(&model.User{ID: 1, Username: "u1"})
+	api.DB.Create(&user.User{ID: 1, Username: "u1"})
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("GET", "/api/v1/users/me/favorite-folders", nil)
@@ -365,8 +375,8 @@ func TestMore_FavoriteFolders(t *testing.T) {
 
 func TestMore_MyVideos(t *testing.T) {
 	api, r, token := setupHandlerIntegrationDB(t)
-	api.DB.Create(&model.User{ID: 1, Username: "u1"})
-	api.DB.Create(&model.Video{ID: 1, UserID: 1, Title: "MV", Status: "published", Zone: "Life"})
+	api.DB.Create(&user.User{ID: 1, Username: "u1"})
+	api.DB.Create(&video.Video{ID: 1, UserID: 1, Title: "MV", Status: "published", Zone: "Life"})
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("GET", "/api/v1/users/me/videos", nil)
@@ -377,8 +387,8 @@ func TestMore_MyVideos(t *testing.T) {
 
 func TestMore_SpaceFollowing(t *testing.T) {
 	api, r, token := setupHandlerIntegrationDB(t)
-	api.DB.Create(&model.User{ID: 1, Username: "u1"})
-	api.DB.Create(&model.User{ID: 2, Username: "u2"})
+	api.DB.Create(&user.User{ID: 1, Username: "u1"})
+	api.DB.Create(&user.User{ID: 2, Username: "u2"})
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("GET", "/api/v1/space/1/following", nil)
@@ -389,8 +399,8 @@ func TestMore_SpaceFollowing(t *testing.T) {
 
 func TestMore_SpaceFollowers(t *testing.T) {
 	api, r, token := setupHandlerIntegrationDB(t)
-	api.DB.Create(&model.User{ID: 1, Username: "u1"})
-	api.DB.Create(&model.User{ID: 2, Username: "u2"})
+	api.DB.Create(&user.User{ID: 1, Username: "u1"})
+	api.DB.Create(&user.User{ID: 2, Username: "u2"})
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("GET", "/api/v1/space/1/followers", nil)
@@ -401,8 +411,8 @@ func TestMore_SpaceFollowers(t *testing.T) {
 
 func TestMore_SpaceArticles(t *testing.T) {
 	api, r, _ := setupHandlerIntegrationDB(t)
-	api.DB.Create(&model.User{ID: 1, Username: "au"})
-	api.DB.Create(&model.Article{ID: 1, UserID: 1, Title: "A1", BodyMD: "body", Status: "published"})
+	api.DB.Create(&user.User{ID: 1, Username: "au"})
+	api.DB.Create(&article.Article{ID: 1, UserID: 1, Title: "A1", BodyMD: "body", Status: "published"})
 
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, httptest.NewRequest("GET", "/api/v1/space/1/articles", nil))
@@ -411,8 +421,8 @@ func TestMore_SpaceArticles(t *testing.T) {
 
 func TestMore_SpaceDynamics(t *testing.T) {
 	api, r, _ := setupHandlerIntegrationDB(t)
-	api.DB.Create(&model.User{ID: 1, Username: "u1"})
-	api.DB.Create(&model.UserDynamic{ID: 1, UserID: 1, Content: "Hello!"})
+	api.DB.Create(&user.User{ID: 1, Username: "u1"})
+	api.DB.Create(&dynamic.UserDynamic{ID: 1, UserID: 1, Content: "Hello!"})
 
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, httptest.NewRequest("GET", "/api/v1/space/1/dynamics", nil))
@@ -421,8 +431,8 @@ func TestMore_SpaceDynamics(t *testing.T) {
 
 func TestMore_GetDynamic(t *testing.T) {
 	api, r, _ := setupHandlerIntegrationDB(t)
-	api.DB.Create(&model.User{ID: 1, Username: "u1"})
-	api.DB.Create(&model.UserDynamic{ID: 1, UserID: 1, Content: "Test Dynamic"})
+	api.DB.Create(&user.User{ID: 1, Username: "u1"})
+	api.DB.Create(&dynamic.UserDynamic{ID: 1, UserID: 1, Content: "Test Dynamic"})
 
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, httptest.NewRequest("GET", "/api/v1/user-dynamics/1", nil))
@@ -431,9 +441,9 @@ func TestMore_GetDynamic(t *testing.T) {
 
 func TestMore_DynamicComments(t *testing.T) {
 	api, r, _ := setupHandlerIntegrationDB(t)
-	api.DB.Create(&model.User{ID: 2, Username: "u2"})
-	api.DB.Create(&model.UserDynamic{ID: 1, UserID: 1, Content: "Dynamic"})
-	api.DB.Create(&model.DynamicComment{DynamicID: 1, UserID: 2, Content: "Nice!", Approved: true})
+	api.DB.Create(&user.User{ID: 2, Username: "u2"})
+	api.DB.Create(&dynamic.UserDynamic{ID: 1, UserID: 1, Content: "Dynamic"})
+	api.DB.Create(&comment.DynamicComment{DynamicID: 1, UserID: 2, Content: "Nice!", Approved: true})
 
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, httptest.NewRequest("GET", "/api/v1/user-dynamics/1/comments", nil))
@@ -442,8 +452,8 @@ func TestMore_DynamicComments(t *testing.T) {
 
 func TestMore_SpaceFavorites(t *testing.T) {
 	api, r, _ := setupHandlerIntegrationDB(t)
-	api.DB.Create(&model.User{ID: 1, Username: "u1"})
-	api.DB.Create(&model.Video{ID: 1, UserID: 1, Title: "Fav", Status: "published", Zone: "Life"})
+	api.DB.Create(&user.User{ID: 1, Username: "u1"})
+	api.DB.Create(&video.Video{ID: 1, UserID: 1, Title: "Fav", Status: "published", Zone: "Life"})
 
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, httptest.NewRequest("GET", "/api/v1/space/1/favorites", nil))
@@ -452,8 +462,8 @@ func TestMore_SpaceFavorites(t *testing.T) {
 
 func TestMore_FavoritePicker(t *testing.T) {
 	api, r, token := setupHandlerIntegrationDB(t)
-	api.DB.Create(&model.User{ID: 1, Username: "u1"})
-	api.DB.Create(&model.Video{ID: 1, UserID: 1, Title: "Pick", Status: "published", Zone: "Life"})
+	api.DB.Create(&user.User{ID: 1, Username: "u1"})
+	api.DB.Create(&video.Video{ID: 1, UserID: 1, Title: "Pick", Status: "published", Zone: "Life"})
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("GET", "/api/v1/videos/1/favorite-picker", nil)
@@ -464,7 +474,7 @@ func TestMore_FavoritePicker(t *testing.T) {
 
 func TestMore_DmConversations(t *testing.T) {
 	api, r, token := setupHandlerIntegrationDB(t)
-	api.DB.Create(&model.User{ID: 1, Username: "u1"})
+	api.DB.Create(&user.User{ID: 1, Username: "u1"})
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("GET", "/api/v1/dm/conversations", nil)
@@ -475,9 +485,9 @@ func TestMore_DmConversations(t *testing.T) {
 
 func TestMore_ArticleComments(t *testing.T) {
 	api, r, _ := setupHandlerIntegrationDB(t)
-	api.DB.Create(&model.User{ID: 2, Username: "u2"})
-	api.DB.Create(&model.Article{ID: 1, UserID: 1, Title: "Art", BodyMD: "body", Status: "published"})
-	api.DB.Create(&model.ArticleComment{ArticleID: 1, UserID: 2, Content: "Great!", Approved: true})
+	api.DB.Create(&user.User{ID: 2, Username: "u2"})
+	api.DB.Create(&article.Article{ID: 1, UserID: 1, Title: "Art", BodyMD: "body", Status: "published"})
+	api.DB.Create(&comment.ArticleComment{ArticleID: 1, UserID: 2, Content: "Great!", Approved: true})
 
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, httptest.NewRequest("GET", "/api/v1/articles/1/comments", nil))

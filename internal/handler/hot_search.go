@@ -11,7 +11,6 @@ import (
 
 	"minibili/internal/errcode"
 	"minibili/internal/pkg/resp"
-	"minibili/internal/service"
 )
 
 // HotSearchList returns hot search keywords aggregated in Redis.
@@ -36,7 +35,7 @@ func (a *API) HotSearchList(c *gin.Context) {
 	}
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 2*time.Second)
 	defer cancel()
-	items, err := service.ListHotSearchMerged(ctx, a.DB, a.SearchHot, limit)
+	items, err := a.HotSearchSvc.ListMerged(ctx, limit)
 	if err != nil {
 		a.Log.Error("hot search list", zap.Error(err))
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)

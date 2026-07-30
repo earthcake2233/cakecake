@@ -1,6 +1,7 @@
 package config
 
 import (
+	"minibili/internal/model/system"
 	"context"
 	"strconv"
 	"sync"
@@ -8,7 +9,6 @@ import (
 
 	"gorm.io/gorm"
 
-	"minibili/internal/model"
 )
 
 const refreshInterval = 30 * time.Second
@@ -72,7 +72,7 @@ func (rc *RuntimeConfig) loop(ctx context.Context) {
 }
 
 func (rc *RuntimeConfig) refresh(ctx context.Context) {
-	var list []model.SystemConfig
+	var list []system.SystemConfig
 	if err := rc.db.Find(&list).Error; err != nil {
 		return
 	}
@@ -85,7 +85,7 @@ func (rc *RuntimeConfig) refresh(ctx context.Context) {
 	for k, v := range rc.defaults {
 		if _, ok := rc.cache[k]; !ok {
 			rc.cache[k] = v
-			if err := rc.db.Save(&model.SystemConfig{
+			if err := rc.db.Save(&system.SystemConfig{
 				Key:   k,
 				Value: v,
 			}).Error; err != nil {
@@ -159,7 +159,7 @@ func (rc *RuntimeConfig) GetFloat(key string, fallback float64) float64 {
 
 // Set writes a config key to DB and immediately updates the in-memory cache.
 func (rc *RuntimeConfig) Set(ctx context.Context, key, value string) error {
-	if err := rc.db.Save(&model.SystemConfig{
+	if err := rc.db.Save(&system.SystemConfig{
 		Key:   key,
 		Value: value,
 	}).Error; err != nil {

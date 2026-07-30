@@ -1,12 +1,15 @@
 package handler
 
 import (
+	"minibili/internal/model/article"
+	"minibili/internal/model/comment"
+	"minibili/internal/model/notification"
+	"minibili/internal/model/user"
+	"minibili/internal/model/video"
 	"encoding/json"
 	"time"
 
-	"gorm.io/gorm"
 
-	"minibili/internal/model"
 	"minibili/internal/pkg/useravatar"
 )
 
@@ -18,7 +21,7 @@ type replyInboxTarget struct {
 }
 
 // likeNotifPayloadSubject returns the like_subject field from a notification payload.
-func (a *API) likeNotifPayloadSubject(n *model.Notification) string {
+func (a *API) likeNotifPayloadSubject(n *notification.Notification) string {
 	if n.PayloadJSON == "" {
 		return ""
 	}
@@ -34,7 +37,7 @@ func (a *API) likeNotifPayloadSubject(n *model.Notification) string {
 // consolidateDuplicateLikeAggregations removes duplicate like_aggregation notifications,
 // keeping only the most recent one for each (recipient_id, related_id) pair.
 func (a *API) consolidateDuplicateLikeAggregations(userID uint64) {
-	var rows []model.Notification
+	var rows []notification.Notification
 	a.DB.Where("recipient_id = ? AND type = ?", userID, "like_aggregation").
 		Order("created_at DESC").Find(&rows)
 	seen := make(map[uint64]bool)
@@ -51,18 +54,18 @@ func (a *API) consolidateDuplicateLikeAggregations(userID uint64) {
 func (a *API) consolidateLikeAggregationNotifs(userID uint64, maxAgeDays int) {
 	cutoff := time.Now().AddDate(0, 0, -maxAgeDays)
 	a.DB.Where("recipient_id = ? AND type = ? AND created_at < ?", userID, "like_aggregation", cutoff).
-		Delete(&model.Notification{})
+		Delete(&notification.Notification{})
 }
 
 // likeAggTotalFromDB returns the total likes count for a given related entity.
 func (a *API) likeAggTotalFromDB(relatedID uint64, isArticle bool) int {
 	if isArticle {
 		var total int64
-		a.DB.Model(&model.ArticleFavorite{}).Where("article_id = ?", relatedID).Count(&total)
+		a.DB.Model(&article.ArticleFavorite{}).Where("article_id = ?", relatedID).Count(&total)
 		return int(total)
 	}
 	var total int64
-	a.DB.Model(&model.VideoLike{}).Where("video_id = ?", relatedID).Count(&total)
+	a.DB.Model(&video.VideoLike{}).Where("video_id = ?", relatedID).Count(&total)
 	return int(total)
 }
 
@@ -70,15 +73,15 @@ func (a *API) likeAggTotalFromDB(relatedID uint64, isArticle bool) int {
 func (a *API) likeAggTopLikerNames(relatedID uint64, isArticle bool, limit int) []string {
 	var userIDs []uint64
 	if isArticle {
-		a.DB.Model(&model.ArticleFavorite{}).Where("article_id = ?", relatedID).
+		a.DB.Model(&article.ArticleFavorite{}).Where("article_id = ?", relatedID).
 			Order("id ASC").Limit(limit).Pluck("user_id", &userIDs)
 	} else {
-		a.DB.Model(&model.VideoLike{}).Where("video_id = ?", relatedID).
+		a.DB.Model(&video.VideoLike{}).Where("video_id = ?", relatedID).
 			Order("id ASC").Limit(limit).Pluck("user_id", &userIDs)
 	}
 	var names []string
 	for _, uid := range userIDs {
-		var u model.User
+		var u user.User
 		if err := a.DB.First(&u, uid).Error; err == nil {
 			names = append(names, u.Username)
 		}
@@ -87,7 +90,7 @@ func (a *API) likeAggTopLikerNames(relatedID uint64, isArticle bool, limit int) 
 }
 
 // formatNotification formats a notification for API response.
-func (a *API) formatNotification(n model.Notification) map[string]interface{} {
+func (a *API) formatNotification(n notification.Notification) map[string]interface{} {
 	out := map[string]interface{}{
 		"id":               n.ID,
 		"type":             n.Type,
@@ -121,7 +124,7 @@ func (a *API) likeNotifTopSenders(senderNames []string, limit int) ([]string, []
 		if limit > 0 && len(urls) >= limit {
 			break
 		}
-		var u model.User
+		var u user.User
 		if err := a.DB.Where("username = ?", name).First(&u).Error; err == nil {
 			urls = append(urls, useravatar.PublicURL(&u))
 			ids = append(ids, u.ID)
@@ -133,22 +136,22 @@ func (a *API) likeNotifTopSenders(senderNames []string, limit int) ([]string, []
 // clearCommentDislike removes a dislike record for the given user and comment.
 func (a *API) clearCommentDislike(userID, commentID uint64) (bool, error) {
 	res := a.DB.Where("user_id = ? AND comment_id = ?", userID, commentID).
-		Delete(&model.CommentDislike{})
+		Delete(&comment.CommentDislike{})
 	return res.RowsAffected > 0, res.Error
 }
 
 // clearCommentLike removes a like record for the given user and comment.
-func (a *API) clearCommentLike(userID, commentID uint64, cm *model.Comment) (bool, error) {
+func (a *API) clearCommentLike(userID, commentID uint64, cm *comment.Comment) (bool, error) {
 	res := a.DB.Where("user_id = ? AND comment_id = ?", userID, commentID).
-		Delete(&model.CommentLike{})
+		Delete(&comment.CommentLike{})
 	return res.RowsAffected > 0, res.Error
 }
 
 // resolveReplyInboxTarget resolves the target (video/comment/article) from a notification.
-func (a *API) resolveReplyInboxTarget(n *model.Notification) (replyInboxTarget, bool) {
+func (a *API) resolveReplyInboxTarget(n *notification.Notification) (replyInboxTarget, bool) {
 	switch n.Type {
 	case "reply_received":
-		var cm model.Comment
+		var cm comment.Comment
 		if err := a.DB.First(&cm, n.RelatedID).Error; err != nil {
 			return replyInboxTarget{}, false
 		}
@@ -168,18 +171,6 @@ func (a *API) resolveReplyInboxTarget(n *model.Notification) (replyInboxTarget, 
 	}
 }
 
-// userFolloweeIDsSet returns a set of user IDs that the given user follows.
-func userFolloweeIDsSet(db *gorm.DB, userID uint64, excludeIDs []uint64) map[uint64]bool {
-	var rows []struct{ FolloweeID uint64 }
-	db.Model(&model.UserFollow{}).Where("follower_id = ?", userID).Find(&rows)
-	exclude := make(map[uint64]bool)
-	for _, id := range excludeIDs { exclude[id] = true }
-	set := make(map[uint64]bool)
-	for _, r := range rows {
-		if !exclude[r.FolloweeID] { set[r.FolloweeID] = true }
-	}
-	return set
-}
 
 // mergeUniqueDisplayNames deduplicates and returns unique display names in original order.
 func mergeUniqueDisplayNames(names []string) []string {

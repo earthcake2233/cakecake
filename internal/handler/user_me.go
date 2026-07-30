@@ -13,7 +13,6 @@ import (
 
 	"minibili/internal/errcode"
 	"minibili/internal/middleware"
-	"minibili/internal/model"
 	"minibili/internal/pkg/coverval"
 	"minibili/internal/pkg/resp"
 	"minibili/internal/pkg/dailyreward"
@@ -48,11 +47,11 @@ func (a *API) GetMe(c *gin.Context) {
 		"created_at":   profile.CreatedAt,
 	}
 	// Add extra fields expected by integration tests
-	var u model.User
-	if err := a.DB.First(&u, uid).Error; err == nil {
-		out["space_privacy"] = spacePrivacyFromUser(&u)
-		out["level_info"] = userlevel.FromExperience(u.Experience)
-		out["coin_balance"] = usercoin.BalanceFloat(u.CoinBalanceTenths)
+	userModel, _ := a.UserSvc.GetUserByID(c.Request.Context(), uid)
+	if userModel != nil {
+		out["space_privacy"] = spacePrivacyFromUser(userModel)
+		out["level_info"] = userlevel.FromExperience(userModel.Experience)
+		out["coin_balance"] = usercoin.BalanceFloat(userModel.CoinBalanceTenths)
 	}
 	resp.OK(c, out)
 }
@@ -144,12 +143,12 @@ func (a *API) UpdateMePassword(c *gin.Context) {
 		return
 	}
 
-	var u struct{ PasswordHash string }
-	if err := a.DB.Raw("SELECT password_hash FROM users WHERE id = ?", uid).Scan(&u).Error; err != nil {
+	hashStr, err := a.UserSvc.GetPasswordHash(c.Request.Context(), uid)
+	if err != nil {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
-	if err := bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(body.OldPassword)); err != nil {
+	if err := bcrypt.CompareHashAndPassword([]byte(hashStr), []byte(body.OldPassword)); err != nil {
 		resp.Err(c, http.StatusForbidden, errcode.CodePasswordMismatch)
 		return
 	}
@@ -196,7 +195,7 @@ func (a *API) UpdateMeAvatar(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	if err := a.DB.Model(&model.User{}).Where("id = ?", uid).Update("avatar_url", objectKey).Error; err != nil {
+	if err := a.UserSvc.UpdateAvatar(c.Request.Context(), uid, objectKey); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}

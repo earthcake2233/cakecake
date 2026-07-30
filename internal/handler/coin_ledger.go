@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"minibili/internal/model/user"
 	"net/http"
 	"strconv"
 	"strings"
@@ -9,7 +10,6 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"minibili/internal/middleware"
-	"minibili/internal/model"
 	"minibili/internal/pkg/bvid"
 	"go.uber.org/zap"
 
@@ -48,17 +48,8 @@ func (a *API) ListMeCoinLedger(c *gin.Context) {
 		offset = v
 	}
 
-	q := a.DB.Model(&model.CoinLedger{}).Where("user_id = ? AND created_at >= ?", uid, since)
-	var total int64
-	if err := q.Count(&total).Error; err != nil {
-		a.Log.Error("count coin ledger", zap.Error(err))
-		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
-		return
-	}
-	var rows []model.CoinLedger
-	if err := q.Order("created_at DESC, id DESC").
-		Limit(limit).Offset(offset).
-		Find(&rows).Error; err != nil {
+	total, rows, err := a.UserSvc.ListCoinLedger(c.Request.Context(), uid, since, limit, offset)
+	if err != nil {
 		a.Log.Error("list coin ledger", zap.Error(err))
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
@@ -75,7 +66,7 @@ func (a *API) ListMeCoinLedger(c *gin.Context) {
 	})
 }
 
-func formatCoinLedgerItem(row *model.CoinLedger) gin.H {
+func formatCoinLedgerItem(row *user.CoinLedger) gin.H {
 	change := float64(row.DeltaTenths) / float64(usercoin.TenthsPerCoin)
 	reason := coinLedgerReasonText(row)
 	return gin.H{
@@ -85,7 +76,7 @@ func formatCoinLedgerItem(row *model.CoinLedger) gin.H {
 	}
 }
 
-func coinLedgerReasonText(row *model.CoinLedger) string {
+func coinLedgerReasonText(row *user.CoinLedger) string {
 	switch row.ReasonType {
 	case usercoin.ReasonLoginReward:
 		return "登录奖励"

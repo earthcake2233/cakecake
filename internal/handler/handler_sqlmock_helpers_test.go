@@ -30,12 +30,14 @@ func newMockGORM(t *testing.T) (*gorm.DB, sqlmock.Sqlmock) {
 func newMockAPISimple(t *testing.T, gormDB *gorm.DB) *API {
 	t.Helper()
 	commentSvc := service.NewCommentService(gormDB, nil, zap.NewNop(), nil)
+	viewHistorySvc := service.NewViewHistoryService(gormDB, nil, zap.NewNop())
 	return &API{
 		Dependencies: &Dependencies{
-			DB:         gormDB,
-			Log:        zap.NewNop(),
-			Hub:        ws.NewHub(),
-			CommentSvc: commentSvc,
+			DB:             gormDB,
+			Log:            zap.NewNop(),
+			Hub:            ws.NewHub(),
+			CommentSvc:     commentSvc,
+			ViewHistorySvc: viewHistorySvc,
 		},
 	}
 }

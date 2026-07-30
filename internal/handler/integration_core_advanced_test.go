@@ -3,6 +3,8 @@
 package handler
 
 import (
+	"minibili/internal/model/admin"
+	"minibili/internal/model/comment"
 	"encoding/json"
 	"fmt"
 	"net/http/httptest"
@@ -10,7 +12,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"minibili/internal/model"
 )
 
 func code(t *testing.T, w *httptest.ResponseRecorder) int {
@@ -34,7 +35,7 @@ func Test_NotifLikeFlow(t *testing.T) {
 	body := `{"content":"nice video"}`
 	w := srve(r, areq("POST", "/api/v1/videos/"+strconv.FormatUint(v.ID, 10)+"/comments", tk, body))
 	if code(t, w) != 0 { t.Skip("comment post failed") }
-	var cm struct { Data model.Comment `json:"data"` }
+	var cm struct { Data comment.Comment `json:"data"` }
 	json.Unmarshal(w.Body.Bytes(), &cm)
 	if cm.Data.ID == 0 { t.Skip("no comment id") }
 
@@ -179,7 +180,7 @@ func Test_AdminHotSearchOps(t *testing.T) {
 	_ = api
 
 	// Create an admin user
-	adm := model.Admin{Username: "admin_hs", PasswordHash: "hash"}
+	adm := admin.Admin{Username: "admin_hs", PasswordHash: "hash"}
 	require.NoError(t, api.DB.Create(&adm).Error)
 
 	atk := admintok(t, api)

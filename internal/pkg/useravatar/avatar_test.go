@@ -1,15 +1,15 @@
 package useravatar
 
 import (
+	"minibili/internal/model/user"
 	"testing"
 	"time"
 
-	"minibili/internal/model"
 )
 
 func TestPublicURLCacheBust(t *testing.T) {
 	ts := time.Unix(1700000000, 0)
-	u := &model.User{
+	u := &user.User{
 		AvatarURL: "https://bucket.oss.com/avatars/1.jpg",
 		UpdatedAt: ts,
 	}
@@ -21,7 +21,7 @@ func TestPublicURLCacheBust(t *testing.T) {
 }
 
 func TestPublicURLEmpty(t *testing.T) {
-	if PublicURL(&model.User{}) != "" {
+	if PublicURL(&user.User{}) != "" {
 		t.Fatal("expected empty")
 	}
 }

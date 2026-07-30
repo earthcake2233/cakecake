@@ -1,25 +1,24 @@
 package handler
 
 import (
+	"minibili/internal/model/user"
 	"net/http"
 	"strconv"
 	"strings"
+	"context"
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 
 	"minibili/internal/errcode"
 	"minibili/internal/middleware"
-	"minibili/internal/model"
 	"minibili/internal/pkg/resp"
 )
 
 // followUserRows converts follow rows to gin.H items for API response.
-func followUserRows(
-	db *gorm.DB,
+func (a *API) buildFollowUserRows(
 	ownerID uint64,
-	rows []model.UserFollow,
+	rows []user.UserFollow,
 	followerField bool,
 ) ([]gin.H, error) {
 	if len(rows) == 0 {
@@ -37,20 +36,16 @@ func followUserRows(
 		ids = append(ids, uid)
 		created[uid] = rows[i].CreatedAt
 	}
-	var users []model.User
-	if err := db.Where("id IN ?", ids).Find(&users).Error; err != nil {
-		return nil, err
-	}
-	umap := make(map[uint64]model.User, len(users))
-	for i := range users {
-		umap[users[i].ID] = users[i]
+	users := a.UserSvc.BatchGetUsers(context.Background(), ids)
+	umap := make(map[uint64]user.User, len(users))
+	for id, u := range users {
+		umap[id] = *u
 	}
 	mutual := make(map[uint64]bool)
 	if followerField && len(ids) > 0 {
-		var back []model.UserFollow
-		_ = db.Where("follower_id IN ? AND followee_id = ?", ids, ownerID).Find(&back).Error
-		for i := range back {
-			mutual[back[i].FollowerID] = true
+		following, _ := a.FollowSvc.GetFollowingIDs(context.Background(), ownerID, ids)
+		for fid := range following {
+			mutual[fid] = true
 		}
 	}
 	items := make([]gin.H, 0, len(rows))
@@ -62,12 +57,12 @@ func followUserRows(
 			uid = rows[i].FollowerID
 		}
 		u, ok := umap[uid]
-		if !ok || model.IsUserAnonymized(&u) {
+		if !ok || user.IsUserAnonymized(&u) {
 			continue
 		}
 		nick := strings.TrimSpace(u.Nickname)
 		if nick == "" {
-			nick = model.DisplayUsername(&u)
+			nick = user.DisplayUsername(&u)
 		}
 		sign := strings.TrimSpace(u.Sign)
 		if sign == "" {
@@ -88,22 +83,22 @@ func followUserRows(
 	return items, nil
 }
 
-func loadSpaceUserForFollow(a *API, userID uint64) (model.User, bool) {
-	var u model.User
-	if err := a.DB.First(&u, userID).Error; err != nil {
-		return u, false
+func loadSpaceUserForFollow(a *API, userID uint64) (user.User, bool) {
+	u, err := a.UserSvc.GetUserByID(context.Background(), userID)
+	if err != nil || u == nil {
+		return user.User{}, false
 	}
-	if model.IsUserAnonymized(&u) {
-		return u, false
+	if user.IsUserAnonymized(u) {
+		return *u, false
 	}
-	return u, true
+	return *u, true
 }
 
-func canViewFollowingList(viewerOK bool, viewer, ownerID uint64, u *model.User) bool {
+func canViewFollowingList(viewerOK bool, viewer, ownerID uint64, u *user.User) bool {
 	return spaceViewerCanSee(ownerID, viewerOK, viewer, u.PrivacyPublicFollowing)
 }
 
-func canViewFollowersList(viewerOK bool, viewer, ownerID uint64, u *model.User) bool {
+func canViewFollowersList(viewerOK bool, viewer, ownerID uint64, u *user.User) bool {
 	return spaceViewerCanSee(ownerID, viewerOK, viewer, u.PrivacyPublicFans)
 }
 
@@ -136,7 +131,7 @@ func (a *API) ListUserFollowing(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	items, err := followUserRows(a.DB, ownerID, rows, true)
+	items, err := a.buildFollowUserRows(ownerID, rows, true)
 	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
@@ -178,7 +173,7 @@ func (a *API) ListUserFollowers(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	items, err := followUserRows(a.DB, ownerID, rows, false)
+	items, err := a.buildFollowUserRows(ownerID, rows, false)
 	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
@@ -207,7 +202,7 @@ func (a *API) ToggleFollowUser(c *gin.Context) {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
-	if dmUsersBlocked(a.DB, uid, followeeID) {
+	if a.isDMUsersBlocked(uid, followeeID) {
 		resp.Err(c, http.StatusForbidden, errcode.CodeUserBlocked)
 		return
 	}

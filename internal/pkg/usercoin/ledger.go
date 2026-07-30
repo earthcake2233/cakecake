@@ -1,11 +1,11 @@
 package usercoin
 
 import (
+	"minibili/internal/model/user"
 	"time"
 
 	"gorm.io/gorm"
 
-	"minibili/internal/model"
 )
 
 const (
@@ -27,7 +27,7 @@ func RecordLedgerAt(tx *gorm.DB, uid uint64, deltaTenths int64, reasonType strin
 	if deltaTenths == 0 {
 		return nil
 	}
-	row := model.CoinLedger{
+	row := user.CoinLedger{
 		UserID:      uid,
 		DeltaTenths: deltaTenths,
 		ReasonType:  reasonType,

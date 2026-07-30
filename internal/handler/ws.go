@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"minibili/internal/model/user"
     "context"
     "net/http"
 	"encoding/json"
@@ -12,7 +13,6 @@ import (
     "github.com/gorilla/websocket"
     "go.uber.org/zap"
 
-    "minibili/internal/model"
 )
 
 var wsUpgrader = websocket.Upgrader{
@@ -47,8 +47,8 @@ func (a *API) ServeDanmaku(c *gin.Context) {
         currentTime, _ = strconv.ParseFloat(ct, 64)
     }
 
-    var v model.Video
-    if err := a.DB.First(&v, videoID).Error; err != nil {
+    v, errV := a.VideoSvc.GetVideoByID(c.Request.Context(), videoID)
+    if errV != nil {
         c.Status(http.StatusNotFound)
         return
     }
@@ -87,13 +87,7 @@ func (a *API) ServeDanmaku(c *gin.Context) {
     a.pushWatchingCount(videoID)
 
     // ---- history: N+1 修复 + current_time 支持 ----
-    query := a.DB.Where("video_id = ?", videoID)
-    if currentTime > 0 {
-        query = query.Where("video_time BETWEEN ? AND ?", currentTime-10, currentTime+2)
-    }
-    query = query.Order("video_time ASC").Limit(200)
-    var hist []model.Danmaku
-    _ = query.Find(&hist).Error
+    hist, _ := a.DanmakuSvc.ListHistory(c.Request.Context(), videoID, currentTime, 200)
 
     // Batch load users (fix N+1: was doing 200 separate queries)
     userIDs := make([]uint64, 0, len(hist))
@@ -104,12 +98,11 @@ func (a *API) ServeDanmaku(c *gin.Context) {
             userIDs = append(userIDs, d.UserID)
         }
     }
-    userMap := make(map[uint64]model.User)
+    userMap := make(map[uint64]user.User)
     if len(userIDs) > 0 {
-        var users []model.User
-        _ = a.DB.Where("id IN ?", userIDs).Find(&users).Error
-        for i := range users {
-            userMap[users[i].ID] = users[i]
+        users := a.UserSvc.BatchGetUsers(c.Request.Context(), userIDs)
+        for id, u := range users {
+            userMap[id] = *u
         }
     }
 
@@ -123,7 +116,7 @@ func (a *API) ServeDanmaku(c *gin.Context) {
             "type":       d.Type,
             "font_size":  danmakuFontSizeField(d),
             "video_time": d.VideoTime,
-            "user":       model.DisplayUsername(&u),
+            "user":       user.DisplayUsername(&u),
             "created_at": d.CreatedAt.Format("2006-01-02 15:04:05"),
         })
     }

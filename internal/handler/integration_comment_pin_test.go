@@ -3,6 +3,8 @@
 package handler
 
 import (
+	"minibili/internal/model/comment"
+	"minibili/internal/model/dynamic"
 	"encoding/json"
 	"fmt"
 	"net/http/httptest"
@@ -12,7 +14,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"minibili/internal/model"
 )
 
 func decodeCode(t *testing.T, w *httptest.ResponseRecorder) int {
@@ -24,10 +25,10 @@ func decodeCode(t *testing.T, w *httptest.ResponseRecorder) int {
 	return r.Code
 }
 
-func decodeDataComment(t *testing.T, w *httptest.ResponseRecorder) model.Comment {
+func decodeDataComment(t *testing.T, w *httptest.ResponseRecorder) comment.Comment {
 	t.Helper()
 	var r struct {
-		Data model.Comment `json:"data"`
+		Data comment.Comment `json:"data"`
 	}
 	json.Unmarshal(w.Body.Bytes(), &r)
 	return r.Data
@@ -40,7 +41,7 @@ func Test_CommentPinAndApprove(t *testing.T) {
 	v := seedVideoWithAPI(t, api, u.ID, "CPA Video")
 	tk := tok(t, api, u.ID)
 	// Post a comment
-	var cm model.Comment
+	var cm comment.Comment
 	body := fmt.Sprintf(`{"content":"test comment","video_id":%d}`, v.ID)
 	w := srve(r, areq("POST", "/api/v1/videos/"+strconv.FormatUint(v.ID, 10)+"/comments", tk, body))
 	if c := decodeCode(t, w); c == 0 {
@@ -244,7 +245,7 @@ func Test_DynamicActions(t *testing.T) {
 	tk := tok(t, api, u.ID)
 	
 	// Create a dynamic
-	dyn := model.UserDynamic{UserID: u.ID, Title: "My Dynamic", Content: "Dynamic Content", ImagesJSON: "[]", CreatedAt: time.Now()}
+	dyn := dynamic.UserDynamic{UserID: u.ID, Title: "My Dynamic", Content: "Dynamic Content", ImagesJSON: "[]", CreatedAt: time.Now()}
 	require.NoError(t, api.DB.Create(&dyn).Error)
 	
 	// Get dynamic

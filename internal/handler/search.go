@@ -151,7 +151,7 @@ func (a *API) SearchAll(c *gin.Context) {
 				ids = append(ids, v.Aid)
 			}
 		}
-		later := watchLaterByViewer(a.DB, viewer, ids)
+		later := a.EngagementSvc.BatchWatchLater(context.Background(), viewer, ids)
 		for i := range out.Result.Video {
 			out.Result.Video[i].InWatchLater = later[out.Result.Video[i].Aid]
 		}

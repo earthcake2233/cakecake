@@ -1,13 +1,13 @@
 package data
 
 import (
+	"minibili/internal/model/system"
 	"fmt"
 	"time"
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"minibili/internal/model"
 )
 
 // Migration is a single versioned schema/data migration.
@@ -22,13 +22,13 @@ type Migration struct {
 // registered migration in order, skipping versions that have already been
 // recorded as executed. It is safe to call on every startup.
 func RunVersionedMigrations(db *gorm.DB, lg *zap.Logger, migrations []Migration) error {
-	if err := db.AutoMigrate(&model.SchemaVersion{}); err != nil {
+	if err := db.AutoMigrate(&system.SchemaVersion{}); err != nil {
 		return fmt.Errorf("auto-migrate schema_versions: %w", err)
 	}
 
 	var done map[int]bool
 	{
-		var rows []model.SchemaVersion
+		var rows []system.SchemaVersion
 		if err := db.Find(&rows).Error; err != nil {
 			return fmt.Errorf("query schema_versions: %w", err)
 		}
@@ -60,7 +60,7 @@ func RunVersionedMigrations(db *gorm.DB, lg *zap.Logger, migrations []Migration)
 			return fmt.Errorf("migration v%d %s: %w", m.Version, m.Name, err)
 		}
 
-		rec := model.SchemaVersion{
+		rec := system.SchemaVersion{
 			Version:     m.Version,
 			Name:        m.Name,
 			Description: m.Description,

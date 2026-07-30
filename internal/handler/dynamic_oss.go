@@ -1,16 +1,16 @@
 package handler
 
 import (
+	"minibili/internal/model/dynamic"
 	"strings"
 
 	"go.uber.org/zap"
 
 	"minibili/internal/config"
-	"minibili/internal/model"
 	"minibili/internal/storage"
 )
 
-func dynamicOSSObjectKeys(cfg *config.C, dyn model.UserDynamic) []string {
+func dynamicOSSObjectKeys(cfg *config.C, dyn dynamic.UserDynamic) []string {
 	if cfg == nil {
 		return nil
 	}
@@ -81,7 +81,7 @@ func purgeRemovedDynamicImageURLs(cfg *config.C, ossClient *storage.OSS, log *za
 	purgeDynamicImageURLs(cfg, ossClient, log, removed)
 }
 
-func purgeDynamicOSSObjects(cfg *config.C, ossClient *storage.OSS, log *zap.Logger, dyn model.UserDynamic) {
+func purgeDynamicOSSObjects(cfg *config.C, ossClient *storage.OSS, log *zap.Logger, dyn dynamic.UserDynamic) {
 	if ossClient == nil {
 		return
 	}

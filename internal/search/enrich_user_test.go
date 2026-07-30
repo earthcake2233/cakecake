@@ -1,6 +1,9 @@
 package search
 
 import (
+	"minibili/internal/model/article"
+	"minibili/internal/model/user"
+	"minibili/internal/model/video"
 	"testing"
 	"time"
 
@@ -9,14 +12,13 @@ import (
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 
-	"minibili/internal/model"
 )
 
 func setupEnrichDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&model.Video{}, &model.Article{}, &model.User{}, &model.UserFollow{}))
+	require.NoError(t, db.AutoMigrate(&video.Video{}, &article.Article{}, &user.User{}, &user.UserFollow{}))
 	return db
 }
 
@@ -41,7 +43,7 @@ func TestRecentArchivesForUser_NegativeLimit(t *testing.T) {
 func TestRecentArchivesForUser_OnlyVideos(t *testing.T) {
 	db := setupEnrichDB(t)
 	now := time.Now()
-	v := model.Video{UserID: 1, Title: "Test Video", CoverURL: "cover.jpg", Status: "published", CreatedAt: now}
+	v := video.Video{UserID: 1, Title: "Test Video", CoverURL: "cover.jpg", Status: "published", CreatedAt: now}
 	require.NoError(t, db.Create(&v).Error)
 
 	items := recentArchivesForUser(db, 1, 3)
@@ -56,7 +58,7 @@ func TestRecentArchivesForUser_LimitVideos(t *testing.T) {
 	db := setupEnrichDB(t)
 	now := time.Now()
 	for i := 0; i < 5; i++ {
-		v := model.Video{UserID: 1, Title: "V", CoverURL: "c.jpg", Status: "published", CreatedAt: now.Add(time.Duration(i) * time.Second)}
+		v := video.Video{UserID: 1, Title: "V", CoverURL: "c.jpg", Status: "published", CreatedAt: now.Add(time.Duration(i) * time.Second)}
 		require.NoError(t, db.Create(&v).Error)
 	}
 
@@ -67,9 +69,9 @@ func TestRecentArchivesForUser_LimitVideos(t *testing.T) {
 func TestRecentArchivesForUser_VideosAndArticles(t *testing.T) {
 	db := setupEnrichDB(t)
 	now := time.Now()
-	v := model.Video{UserID: 1, Title: "Video", CoverURL: "v.jpg", Status: "published", CreatedAt: now}
+	v := video.Video{UserID: 1, Title: "Video", CoverURL: "v.jpg", Status: "published", CreatedAt: now}
 	require.NoError(t, db.Create(&v).Error)
-	a := model.Article{UserID: 1, Title: "Article", CoverURL: "a.jpg", Status: "published", CreatedAt: now}
+	a := article.Article{UserID: 1, Title: "Article", CoverURL: "a.jpg", Status: "published", CreatedAt: now}
 	require.NoError(t, db.Create(&a).Error)
 
 	items := recentArchivesForUser(db, 1, 3)
@@ -79,9 +81,9 @@ func TestRecentArchivesForUser_VideosAndArticles(t *testing.T) {
 func TestRecentArchivesForUser_OnlyUnpublished(t *testing.T) {
 	db := setupEnrichDB(t)
 	now := time.Now()
-	v := model.Video{UserID: 1, Title: "Draft", CoverURL: "c.jpg", Status: "draft", CreatedAt: now}
+	v := video.Video{UserID: 1, Title: "Draft", CoverURL: "c.jpg", Status: "draft", CreatedAt: now}
 	require.NoError(t, db.Create(&v).Error)
-	a := model.Article{UserID: 1, Title: "Draft Article", CoverURL: "c.jpg", Status: "draft", CreatedAt: now}
+	a := article.Article{UserID: 1, Title: "Draft Article", CoverURL: "c.jpg", Status: "draft", CreatedAt: now}
 	require.NoError(t, db.Create(&a).Error)
 
 	items := recentArchivesForUser(db, 1, 3)

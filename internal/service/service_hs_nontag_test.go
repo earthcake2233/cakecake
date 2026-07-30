@@ -1,9 +1,9 @@
 package service
 
 import (
+	"minibili/internal/model/admin"
 	"context"
 	"testing"
-	"minibili/internal/model"
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
@@ -73,13 +73,13 @@ func TestHS_ListHotSearchMergedLegacy(t *testing.T) {
 	rec := &SearchHotRecorder{Rdb: rdb}
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&model.HotSearchOp{}))
+	require.NoError(t, db.AutoMigrate(&admin.HotSearchOp{}))
 	items, err := listHotSearchMergedLegacy(context.Background(), nil, rec, 10)
 	require.NoError(t, err)
 	require.NotNil(t, items)
 	now := time.Now()
 	end := now.Add(24 * time.Hour)
-	op := model.HotSearchOp{Keyword: "news", OpType: "pin", PinRank: 1, Enabled: true, StartAt: &now, EndAt: &end}
+	op := admin.HotSearchOp{Keyword: "news", OpType: "pin", PinRank: 1, Enabled: true, StartAt: &now, EndAt: &end}
 	require.NoError(t, db.Create(&op).Error)
 	items, err = listHotSearchMergedLegacy(context.Background(), db, rec, 10)
 	require.NoError(t, err)

@@ -1,6 +1,9 @@
 package search
 
 import (
+	"minibili/internal/model/article"
+	"minibili/internal/model/user"
+	"minibili/internal/model/video"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -13,7 +16,6 @@ import (
 
 	"gorm.io/gorm"
 
-	"minibili/internal/model"
 )
 
 type videoDoc struct {
@@ -164,14 +166,14 @@ func (c *Client) IndexVideoFromDB(ctx context.Context, db *gorm.DB, videoID uint
 	if !c.Enabled() {
 		return nil
 	}
-	var v model.Video
+	var v video.Video
 	if err := db.First(&v, videoID).Error; err != nil {
 		return err
 	}
 	if v.Status != "published" {
 		return c.deleteDoc(ctx, IndexVideos, strconv.FormatUint(videoID, 10))
 	}
-	var u model.User
+	var u user.User
 	_ = db.First(&u, v.UserID).Error
 	zone := normalizeVideoZoneForSearch(v.Zone)
 	parent, _ := splitVideoZoneForSearch(zone)
@@ -181,7 +183,7 @@ func (c *Client) IndexVideoFromDB(ctx context.Context, db *gorm.DB, videoID uint
 		Title:        v.Title,
 		Description:  v.Description,
 		Tags:         tagsPlain(v.TagsJSON),
-		Uploader:     model.DisplayUsername(&u),
+		Uploader:     user.DisplayUsername(&u),
 		CoverURL:     v.CoverURL,
 		PlayCount:    v.PlayCount,
 		DanmakuCount: v.DanmakuCount,
@@ -205,7 +207,7 @@ func (c *Client) IndexArticleFromDB(ctx context.Context, db *gorm.DB, articleID 
 	if !c.Enabled() {
 		return nil
 	}
-	var a model.Article
+	var a article.Article
 	if err := db.First(&a, articleID).Error; err != nil {
 		return err
 	}
@@ -216,7 +218,7 @@ func (c *Client) IndexArticleFromDB(ctx context.Context, db *gorm.DB, articleID 
 	if len(body) > 8000 {
 		body = body[:8000]
 	}
-	var u model.User
+	var u user.User
 	_ = db.First(&u, a.UserID).Error
 	doc := articleDoc{
 		ID:           a.ID,
@@ -224,7 +226,7 @@ func (c *Client) IndexArticleFromDB(ctx context.Context, db *gorm.DB, articleID 
 		Title:        a.Title,
 		Body:         body,
 		Excerpt:      articleExcerpt(a.BodyMD, 120),
-		Author:       model.DisplayUsername(&u),
+		Author:       user.DisplayUsername(&u),
 		AuthorAvatar: strings.TrimSpace(u.AvatarURL),
 		CoverURL:     a.CoverURL,
 		ViewCount:    a.ViewCount,
@@ -248,11 +250,11 @@ func (c *Client) IndexUserFromDB(ctx context.Context, db *gorm.DB, userID uint64
 	if !c.Enabled() {
 		return nil
 	}
-	var u model.User
+	var u user.User
 	if err := db.First(&u, userID).Error; err != nil {
 		return err
 	}
-	if model.IsUserAnonymized(&u) {
+	if user.IsUserAnonymized(&u) {
 		return c.deleteDoc(ctx, IndexUsers, strconv.FormatUint(userID, 10))
 	}
 	doc := userDoc{
@@ -276,7 +278,7 @@ func (c *Client) ReindexAll(ctx context.Context, db *gorm.DB) error {
 		return nil
 	}
 	var vids []uint64
-	if err := db.Model(&model.Video{}).Where("status = ?", "published").Pluck("id", &vids).Error; err != nil {
+	if err := db.Model(&video.Video{}).Where("status = ?", "published").Pluck("id", &vids).Error; err != nil {
 		return err
 	}
 	for _, id := range vids {
@@ -285,7 +287,7 @@ func (c *Client) ReindexAll(ctx context.Context, db *gorm.DB) error {
 		}
 	}
 	var aids []uint64
-	if err := db.Model(&model.Article{}).Where("status = ?", "published").Pluck("id", &aids).Error; err != nil {
+	if err := db.Model(&article.Article{}).Where("status = ?", "published").Pluck("id", &aids).Error; err != nil {
 		return err
 	}
 	for _, id := range aids {
@@ -294,7 +296,7 @@ func (c *Client) ReindexAll(ctx context.Context, db *gorm.DB) error {
 		}
 	}
 	var uids []uint64
-	if err := db.Model(&model.User{}).Where("anonymized_at IS NULL").Pluck("id", &uids).Error; err != nil {
+	if err := db.Model(&user.User{}).Where("anonymized_at IS NULL").Pluck("id", &uids).Error; err != nil {
 		return err
 	}
 	for _, id := range uids {

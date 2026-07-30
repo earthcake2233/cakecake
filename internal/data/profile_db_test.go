@@ -1,20 +1,20 @@
 package data
 
 import (
+	"minibili/internal/model/agent"
 	"testing"
 
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 
-	"minibili/internal/model"
 )
 
 func setupProfileDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&model.AgentProfile{}))
+	require.NoError(t, db.AutoMigrate(&agent.AgentProfile{}))
 	return db
 }
 
@@ -27,7 +27,7 @@ func TestProfileCount_Zero(t *testing.T) {
 
 func TestProfileCount_One(t *testing.T) {
 	db := setupProfileDB(t)
-	require.NoError(t, db.Create(&model.AgentProfile{Slug: "test", DisplayName: "Test", BotUserID: 1}).Error)
+	require.NoError(t, db.Create(&agent.AgentProfile{Slug: "test", DisplayName: "Test", BotUserID: 1}).Error)
 	n, err := ProfileCount(db)
 	require.NoError(t, err)
 	if n != 1 { t.Errorf("expected 1, got %d", n) }
@@ -48,8 +48,8 @@ func TestGetAgentProfile_NotFound(t *testing.T) {
 
 func TestGetAgentProfile_Found(t *testing.T) {
 	db := setupProfileDB(t)
-	require.NoError(t, db.Create(&model.AgentProfile{Slug: "test_bot", DisplayName: "Test", BotUserID: 1}).Error)
-	var created model.AgentProfile
+	require.NoError(t, db.Create(&agent.AgentProfile{Slug: "test_bot", DisplayName: "Test", BotUserID: 1}).Error)
+	var created agent.AgentProfile
 	db.First(&created)
 	p, err := GetAgentProfile(db, created.ID)
 	require.NoError(t, err)
@@ -58,7 +58,7 @@ func TestGetAgentProfile_Found(t *testing.T) {
 
 func TestGetAgentProfileByBotUserID_Found(t *testing.T) {
 	db := setupProfileDB(t)
-	require.NoError(t, db.Create(&model.AgentProfile{Slug: "test_bot", DisplayName: "Test", BotUserID: 42}).Error)
+	require.NoError(t, db.Create(&agent.AgentProfile{Slug: "test_bot", DisplayName: "Test", BotUserID: 42}).Error)
 	p, err := GetAgentProfileByBotUserID(db, 42)
 	require.NoError(t, err)
 	if p == nil || p.BotUserID != 42 { t.Errorf("got %v", p) }
@@ -71,7 +71,7 @@ func TestPickWelcomeMessage_NilProfile(t *testing.T) {
 
 func TestPickWelcomeMessage_Custom(t *testing.T) {
 	msg, _ := MarshalWelcomeList([]string{"Custom Welcome"})
-	p := &model.AgentProfile{WelcomeMessagesJSON: msg}
+	p := &agent.AgentProfile{WelcomeMessagesJSON: msg}
 	got := PickWelcomeMessage(p)
 	if got != "Custom Welcome" { t.Errorf("got %q", got) }
 }
@@ -95,14 +95,14 @@ func TestEnsureAgentConversationForProfile_NilDB(t *testing.T) {
 
 func TestEnsureAgentConversationForProfile_Invalid(t *testing.T) {
 	db := setupProfileDB(t)
-	_, _, err := EnsureAgentConversationForProfile(db, 0, &model.AgentProfile{BotUserID: 0})
+	_, _, err := EnsureAgentConversationForProfile(db, 0, &agent.AgentProfile{BotUserID: 0})
 	if err == nil { t.Error("expected error") }
 }
 
 func TestRenameAgentProfileSlug_NilParams(t *testing.T) {
 	db := setupProfileDB(t)
 	if err := RenameAgentProfileSlug(nil, nil, "x"); err == nil { t.Error("expected error") }
-	if err := RenameAgentProfileSlug(nil, &model.AgentProfile{}, "x"); err == nil { t.Error("expected error") }
+	if err := RenameAgentProfileSlug(nil, &agent.AgentProfile{}, "x"); err == nil { t.Error("expected error") }
 	if err := RenameAgentProfileSlug(db, nil, "x"); err == nil { t.Error("expected error") }
 }
 

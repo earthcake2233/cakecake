@@ -3,13 +3,15 @@
 package dailyreward
 
 import (
+	"minibili/internal/model/extra"
+	"minibili/internal/model/user"
+	"minibili/internal/model/video"
 	"testing"
 	"time"
 
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 
-	"minibili/internal/model"
 )
 
 func setupDailyRewardDB(t *testing.T) *gorm.DB {
@@ -18,7 +20,7 @@ func setupDailyRewardDB(t *testing.T) *gorm.DB {
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
 	}
-	if err := db.AutoMigrate(&model.User{}, &model.UserDailyTask{}, &model.CoinLedger{}, &model.VideoCoin{}); err != nil {
+	if err := db.AutoMigrate(&user.User{}, &extra.UserDailyTask{}, &user.CoinLedger{}, &video.VideoCoin{}); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
 	return db
@@ -26,7 +28,7 @@ func setupDailyRewardDB(t *testing.T) *gorm.DB {
 
 func createDailyUser(t *testing.T, db *gorm.DB, id uint64) {
 	t.Helper()
-	u := model.User{
+	u := user.User{
 		ID:               id,
 		Username:         "dailyuser",
 		PasswordHash:     "hash",
@@ -48,7 +50,7 @@ func TestMarkLogin_Integration(t *testing.T) {
 	}
 
 	// Check user daily task
-	var task model.UserDailyTask
+	var task extra.UserDailyTask
 	if err := db.Where("user_id = ?", 1).First(&task).Error; err != nil {
 		t.Fatalf("find task: %v", err)
 	}
@@ -57,7 +59,7 @@ func TestMarkLogin_Integration(t *testing.T) {
 	}
 
 	// Check experience added
-	var u model.User
+	var u user.User
 	db.First(&u, 1)
 	if u.Experience != ExpLogin {
 		t.Errorf("Experience = %d, want %d", u.Experience, ExpLogin)
@@ -70,7 +72,7 @@ func TestMarkLogin_Integration(t *testing.T) {
 
 	// Check ledger
 	var ledgerCount int64
-	db.Model(&model.CoinLedger{}).Where("user_id = ?", 1).Count(&ledgerCount)
+	db.Model(&user.CoinLedger{}).Where("user_id = ?", 1).Count(&ledgerCount)
 	if ledgerCount != 1 {
 		t.Errorf("expected 1 ledger row, got %d", ledgerCount)
 	}
@@ -85,7 +87,7 @@ func TestMarkLogin_Idempotent(t *testing.T) {
 		t.Fatalf("first MarkLogin: %v", err)
 	}
 
-	var u1 model.User
+	var u1 user.User
 	db.First(&u1, 1)
 	exp1 := u1.Experience
 	coin1 := u1.CoinBalanceTenths
@@ -95,7 +97,7 @@ func TestMarkLogin_Idempotent(t *testing.T) {
 		t.Fatalf("second MarkLogin: %v", err)
 	}
 
-	var u2 model.User
+	var u2 user.User
 	db.First(&u2, 1)
 	if u2.Experience != exp1 {
 		t.Errorf("experience changed from %d to %d", exp1, u2.Experience)
@@ -114,7 +116,7 @@ func TestMarkWatch_Integration(t *testing.T) {
 		t.Fatalf("MarkWatch: %v", err)
 	}
 
-	var task model.UserDailyTask
+	var task extra.UserDailyTask
 	if err := db.Where("user_id = ?", 1).First(&task).Error; err != nil {
 		t.Fatalf("find task: %v", err)
 	}
@@ -122,7 +124,7 @@ func TestMarkWatch_Integration(t *testing.T) {
 		t.Error("WatchDone should be true")
 	}
 
-	var u model.User
+	var u user.User
 	db.First(&u, 1)
 	if u.Experience != ExpWatch {
 		t.Errorf("Experience = %d, want %d", u.Experience, ExpWatch)
@@ -136,13 +138,13 @@ func TestMarkWatch_Idempotent(t *testing.T) {
 	if err := MarkWatch(db, 1); err != nil {
 		t.Fatalf("first MarkWatch: %v", err)
 	}
-	var u1 model.User
+	var u1 user.User
 	db.First(&u1, 1)
 
 	if err := MarkWatch(db, 1); err != nil {
 		t.Fatalf("second MarkWatch: %v", err)
 	}
-	var u2 model.User
+	var u2 user.User
 	db.First(&u2, 1)
 	if u2.Experience != u1.Experience {
 		t.Errorf("experience changed from %d to %d", u1.Experience, u2.Experience)
@@ -215,7 +217,7 @@ func TestBuildSnapshot_WithCoinProgress(t *testing.T) {
 	createDailyUser(t, db, 1)
 
 	// Add a video coin record for today
-	vc := model.VideoCoin{
+	vc := video.VideoCoin{
 		UserID:    1,
 		VideoID:   100,
 		Amount:    2,
@@ -247,7 +249,7 @@ func TestCoinProgress_Integration(t *testing.T) {
 	}
 
 	// Add coins
-	vc := model.VideoCoin{
+	vc := video.VideoCoin{
 		UserID:    1,
 		VideoID:   100,
 		Amount:    1,
@@ -267,7 +269,7 @@ func TestCoinProgress_Capped(t *testing.T) {
 
 	// Add coins that would exceed max
 	for i := uint64(1); i <= 10; i++ {
-		vc := model.VideoCoin{
+		vc := video.VideoCoin{
 			UserID:    1,
 			VideoID:   i,
 			Amount:    2,

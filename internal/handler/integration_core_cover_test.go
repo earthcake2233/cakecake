@@ -3,6 +3,7 @@
 package handler
 
 import (
+	"minibili/internal/model/dynamic"
 	"encoding/json"
 	"fmt"
 	"net/http/httptest"
@@ -10,7 +11,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	"minibili/internal/model"
 )
 
 func codeFromResp(t *testing.T, w *httptest.ResponseRecorder) int {
@@ -64,7 +64,7 @@ func Test_DailyRewardFlow(t *testing.T) {
 func Test_AdminDeleteDynamicFlow(t *testing.T) {
 	api, r, _ := newTestAPI(t)
 	u := seedUser(t, api, "add1", "ADD1", 0)
-	dyn := model.UserDynamic{UserID: u.ID, Title: "test", Content: "test", ImagesJSON: "[]", CreatedAt: time.Now()}
+	dyn := dynamic.UserDynamic{UserID: u.ID, Title: "test", Content: "test", ImagesJSON: "[]", CreatedAt: time.Now()}
 	require.NoError(t, api.DB.Create(&dyn).Error)
 	atk := admintok(t, api)
 	srve(r, areq("DELETE", fmt.Sprintf("/api/v1/admin/dynamics/%d", dyn.ID), atk, nil))

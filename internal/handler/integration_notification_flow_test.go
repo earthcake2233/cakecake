@@ -3,6 +3,8 @@
 package handler
 
 import (
+	"minibili/internal/model/notification"
+	"minibili/internal/model/video"
 	"encoding/json"
 	"fmt"
 	"testing"
@@ -10,7 +12,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"minibili/internal/model"
 )
 
 func Test_NotificationFullFlow_SeedAndList(t *testing.T) {
@@ -19,7 +20,7 @@ func Test_NotificationFullFlow_SeedAndList(t *testing.T) {
 	tk := tok(t, api, u.ID)
 	for i := 0; i < 5; i++ { seedNotification(t, api, u.ID, "reply", uint64(i+100)) }
 	for i := 0; i < 3; i++ {
-		n := model.Notification{
+		n := notification.Notification{
 			RecipientID: u.ID,
 			Type: "like_aggregation",
 			RelatedID: uint64(i + 200),
@@ -52,7 +53,7 @@ func Test_NotificationCommentReplyAndLike(t *testing.T) {
 	api, r, _ := newTestAPI(t)
 	u := seedUser(t, api, "ncr1", "NCR1", 10)
 	tk := tok(t, api, u.ID)
-	n := model.Notification{
+	n := notification.Notification{
 		RecipientID: u.ID,
 		Type: "reply",
 		RelatedID: 0,
@@ -70,7 +71,7 @@ func Test_NotificationLikeLikers(t *testing.T) {
 	api, r, _ := newTestAPI(t)
 	u := seedUser(t, api, "nll1", "NLL1", 10)
 	tk := tok(t, api, u.ID)
-	n := model.Notification{
+	n := notification.Notification{
 		RecipientID: u.ID,
 		Type: "like_aggregation",
 		RelatedID: 0,
@@ -215,7 +216,7 @@ func Test_AdminVideoFullCRUD(t *testing.T) {
 	api, r, _ := newTestAPI(t)
 	u := seedUser(t, api, "avc1", "AVC1", 10)
 	at := admintok(t, api)
-	v := model.Video{UserID: u.ID, Title: "Admin CRUD Video", Status: "pending_review", VideoURL: "https://example.com/avc.mp4", CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	v := video.Video{UserID: u.ID, Title: "Admin CRUD Video", Status: "pending_review", VideoURL: "https://example.com/avc.mp4", CreatedAt: time.Now(), UpdatedAt: time.Now()}
 	require.NoError(t, api.DB.Create(&v).Error)
 	srve(r, areq("GET", "/api/v1/admin/videos?page=1&page_size=10", at, nil))
 	srve(r, areq("GET", fmt.Sprintf("/api/v1/admin/videos/%d", v.ID), at, nil))

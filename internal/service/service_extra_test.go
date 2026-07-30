@@ -1,13 +1,14 @@
 package service
 
 import (
+	"minibili/internal/model/admin"
+	"minibili/internal/model/dm"
 	"testing"
 	"time"
 
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 
-	"minibili/internal/model"
 )
 
 // ---------- IsAgentConversation ----------
@@ -16,13 +17,13 @@ func TestIsAgentConversation(t *testing.T) {
 	s := &AgentService{}
 	tests := []struct {
 		name string
-		conv *model.DmConversation
+		conv *dm.DmConversation
 		want bool
 	}{
 		{"nil conv", nil, false},
-		{"empty kind", &model.DmConversation{}, false},
-		{"wrong kind", &model.DmConversation{Kind: "normal"}, false},
-		{"agent kind", &model.DmConversation{Kind: model.DmKindAgent}, true},
+		{"empty kind", &dm.DmConversation{}, false},
+		{"wrong kind", &dm.DmConversation{Kind: "normal"}, false},
+		{"agent kind", &dm.DmConversation{Kind: dm.DmKindAgent}, true},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -128,7 +129,7 @@ func TestActiveHotSearchOpFlags(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		_ = db.AutoMigrate(&model.HotSearchOp{})
+		_ = db.AutoMigrate(&admin.HotSearchOp{})
 		m := ActiveHotSearchOpFlags(db)
 		if len(m) != 0 {
 			t.Errorf("expected empty map, got %d entries", len(m))
@@ -140,7 +141,7 @@ func TestActiveHotSearchOpFlags(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		_ = db.AutoMigrate(&model.HotSearchOp{})
+		_ = db.AutoMigrate(&admin.HotSearchOp{})
 		// Use raw SQL to ensure Enabled=false is persisted
 		db.Exec("INSERT INTO hot_search_ops (op_type, keyword, enabled) VALUES (?, ?, ?)",
 			"block", "badword", false)
@@ -155,8 +156,8 @@ func TestActiveHotSearchOpFlags(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		_ = db.AutoMigrate(&model.HotSearchOp{})
-		db.Create(&model.HotSearchOp{
+		_ = db.AutoMigrate(&admin.HotSearchOp{})
+		db.Create(&admin.HotSearchOp{
 			OpType:  "block",
 			Keyword: "spam",
 			Enabled: true,
@@ -182,8 +183,8 @@ func TestActiveHotSearchOpFlags(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		_ = db.AutoMigrate(&model.HotSearchOp{})
-		db.Create(&model.HotSearchOp{
+		_ = db.AutoMigrate(&admin.HotSearchOp{})
+		db.Create(&admin.HotSearchOp{
 			OpType:  "pin",
 			Keyword: "important",
 			Enabled: true,
@@ -203,8 +204,8 @@ func TestActiveHotSearchOpFlags(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		_ = db.AutoMigrate(&model.HotSearchOp{})
-		db.Create(&model.HotSearchOp{
+		_ = db.AutoMigrate(&admin.HotSearchOp{})
+		db.Create(&admin.HotSearchOp{
 			OpType:  "manual",
 			Keyword: "curated",
 			Enabled: true,
@@ -221,13 +222,13 @@ func TestActiveHotSearchOpFlags(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		_ = db.AutoMigrate(&model.HotSearchOp{})
-		db.Create(&model.HotSearchOp{
+		_ = db.AutoMigrate(&admin.HotSearchOp{})
+		db.Create(&admin.HotSearchOp{
 			OpType:  "block",
 			Keyword: "word",
 			Enabled: true,
 		})
-		db.Create(&model.HotSearchOp{
+		db.Create(&admin.HotSearchOp{
 			OpType:  "pin",
 			Keyword: "word",
 			Enabled: true,
@@ -244,9 +245,9 @@ func TestActiveHotSearchOpFlags(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		_ = db.AutoMigrate(&model.HotSearchOp{})
+		_ = db.AutoMigrate(&admin.HotSearchOp{})
 		past := time.Now().Add(-2 * time.Hour)
-		db.Select("OpType", "Keyword", "Enabled", "EndAt").Create(&model.HotSearchOp{
+		db.Select("OpType", "Keyword", "Enabled", "EndAt").Create(&admin.HotSearchOp{
 			OpType:  "block",
 			Keyword: "old",
 			Enabled: true,
@@ -263,8 +264,8 @@ func TestActiveHotSearchOpFlags(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		_ = db.AutoMigrate(&model.HotSearchOp{})
-		db.Create(&model.HotSearchOp{
+		_ = db.AutoMigrate(&admin.HotSearchOp{})
+		db.Create(&admin.HotSearchOp{
 			OpType:  "block",
 			Keyword: "  Hello World  ",
 			Enabled: true,

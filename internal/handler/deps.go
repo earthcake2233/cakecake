@@ -39,12 +39,23 @@ type Dependencies struct {
 	Agent        *service.AgentService
 
 	// Phase 1 domain services (thin service layer over business logic).
+	VideoSvc    *service.VideoService
+	DmSvc      *service.DmService
+	FavoriteSvc *service.FavoriteService
+	ArticleSvc  *service.ArticleService
+	DynamicSvc  *service.DynamicService
+	EngagementSvc *service.EngagementService
+	ViewHistorySvc *service.ViewHistoryService
+	VideoDraftSvc *service.VideoDraftService
+	CreatorCommentSvc *service.CreatorCommentService
 	AuthSvc    *service.AuthService
 	FollowSvc  *service.FollowService
 	DanmakuSvc *service.DanmakuService
 	CommentSvc *service.CommentService
 	NotifSvc   *service.NotificationService
 	UserSvc    *service.UserService
+	SearchHistorySvc *service.SearchHistoryService
+	HotSearchSvc   *service.HotSearchService
 
 	// hotRecCh buffers SearchHot.Record requests (async, best-effort).
 	hotRecCh chan<- hotRecordReq

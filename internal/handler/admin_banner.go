@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"minibili/internal/model/admin"
 	"net/http"
 	"strconv"
 	"strings"
@@ -9,7 +10,6 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"minibili/internal/errcode"
-	"minibili/internal/model"
 	"minibili/internal/pkg/resp"
 )
 
@@ -32,7 +32,7 @@ func parseOptionalUnix(p *int64) *time.Time {
 	return &t
 }
 
-func bannerToJSON(b *model.HomeBanner) gin.H {
+func bannerToJSON(b *admin.HomeBanner) gin.H {
 	return gin.H{
 		"id":          b.ID,
 		"title":       b.Title,
@@ -50,8 +50,8 @@ func bannerToJSON(b *model.HomeBanner) gin.H {
 
 // AdminListBanners GET /api/v1/admin/home-banners
 func (a *API) AdminListBanners(c *gin.Context) {
-	var rows []model.HomeBanner
-	if err := a.DB.Order("sort_order ASC, id ASC").Find(&rows).Error; err != nil {
+	rows, err := a.VideoSvc.ListBanners(c.Request.Context())
+	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
@@ -83,7 +83,8 @@ func (a *API) AdminCreateBanner(c *gin.Context) {
 	if req.Enabled != nil {
 		en = *req.Enabled
 	}
-	b := model.HomeBanner{
+	var b admin.HomeBanner
+	b = admin.HomeBanner{
 		Title:      title,
 		ImageURL:   img,
 		LinkType:   lt,
@@ -93,7 +94,7 @@ func (a *API) AdminCreateBanner(c *gin.Context) {
 		StartAt:    parseOptionalUnix(req.StartAt),
 		EndAt:      parseOptionalUnix(req.EndAt),
 	}
-	if err := a.DB.Create(&b).Error; err != nil {
+	if err := a.VideoSvc.CreateBanner(c.Request.Context(), &b); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
@@ -107,8 +108,8 @@ func (a *API) AdminUpdateBanner(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	var b model.HomeBanner
-	if err := a.DB.First(&b, id).Error; err != nil {
+	b, err := a.VideoSvc.GetBanner(c.Request.Context(), id)
+	if err != nil {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
@@ -139,15 +140,15 @@ func (a *API) AdminUpdateBanner(c *gin.Context) {
 	if req.EndAt != nil {
 		updates["end_at"] = parseOptionalUnix(req.EndAt)
 	}
-	if err := a.DB.Model(&b).Updates(updates).Error; err != nil {
+	if err := a.VideoSvc.UpdateBanner(c.Request.Context(), id, updates); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	_ = a.DB.First(&b, id)
+	b, _ = a.VideoSvc.GetBanner(c.Request.Context(), id)
 	if u := strings.TrimSpace(req.ImageURL); u != "" && u != oldURL {
 		purgeBannerImageURL(a.Cfg, a.OSS, a.Log, oldURL)
 	}
-	resp.OK(c, bannerToJSON(&b))
+	resp.OK(c, bannerToJSON(b))
 }
 
 // AdminDeleteBanner DELETE /api/v1/admin/home-banners/:id
@@ -157,15 +158,15 @@ func (a *API) AdminDeleteBanner(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	var b model.HomeBanner
-	if err := a.DB.First(&b, id).Error; err != nil {
+	b, err := a.VideoSvc.GetBanner(c.Request.Context(), id)
+	if err != nil {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
-	if err := a.DB.Delete(&model.HomeBanner{}, id).Error; err != nil {
+	if err := a.VideoSvc.DeleteBanner(c.Request.Context(), id); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	purgeBannerOSSObjects(a.Cfg, a.OSS, a.Log, b)
+	purgeBannerOSSObjects(a.Cfg, a.OSS, a.Log, *b)
 	resp.OK(c, gin.H{"deleted": true})
 }

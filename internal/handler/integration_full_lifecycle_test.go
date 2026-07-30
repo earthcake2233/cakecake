@@ -3,6 +3,8 @@
 package handler
 
 import (
+	"minibili/internal/model/article"
+	"minibili/internal/model/video"
 	"encoding/json"
 	"fmt"
 	"testing"
@@ -10,7 +12,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"minibili/internal/model"
 )
 
 func Test_FullVideoLifecycle(t *testing.T) {
@@ -21,7 +22,7 @@ func Test_FullVideoLifecycle(t *testing.T) {
 	tk2 := tok(t, api, u2.ID)
 	
 	// Publish video via DB (simulates upload+approve workflow)
-	v := model.Video{UserID: u2.ID, Title: "Lifecycle Video", Status: "published", VideoURL: "https://cdn.example.com/lc.mp4", CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	v := video.Video{UserID: u2.ID, Title: "Lifecycle Video", Status: "published", VideoURL: "https://cdn.example.com/lc.mp4", CreatedAt: time.Now(), UpdatedAt: time.Now()}
 	require.NoError(t, api.DB.Create(&v).Error)
 	
 	// Like video
@@ -61,7 +62,7 @@ func Test_FullArticleLifecycle(t *testing.T) {
 	tk := tok(t, api, u.ID)
 	
 	// Publish article
-	art := model.Article{UserID: u.ID, Title: "Full Lifecycle Article", BodyMD: "# Hello World", Status: "published", CreatedAt: time.Now()}
+	art := article.Article{UserID: u.ID, Title: "Full Lifecycle Article", BodyMD: "# Hello World", Status: "published", CreatedAt: time.Now()}
 	require.NoError(t, api.DB.Create(&art).Error)
 	
 	// Post view

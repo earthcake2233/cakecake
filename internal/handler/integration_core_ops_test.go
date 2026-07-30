@@ -3,28 +3,30 @@
 package handler
 
 import (
+	"minibili/internal/model/article"
+	"minibili/internal/model/comment"
+	"minibili/internal/model/video"
     "encoding/json"
     "net/http/httptest"
     "strconv"
     "testing"
 
     "github.com/stretchr/testify/require"
-    "minibili/internal/model"
 )
 
-func decodeDataVideo(t *testing.T, w *httptest.ResponseRecorder) model.Video {
+func decodeDataVideo(t *testing.T, w *httptest.ResponseRecorder) video.Video {
     t.Helper()
     var r struct {
-        Data model.Video `json:"data"`
+        Data video.Video `json:"data"`
     }
     json.Unmarshal(w.Body.Bytes(), &r)
     return r.Data
 }
 
-func decodeDataArticle(t *testing.T, w *httptest.ResponseRecorder) model.Article {
+func decodeDataArticle(t *testing.T, w *httptest.ResponseRecorder) article.Article {
     t.Helper()
     var r struct {
-        Data model.Article `json:"data"`
+        Data article.Article `json:"data"`
     }
     json.Unmarshal(w.Body.Bytes(), &r)
     return r.Data
@@ -37,11 +39,11 @@ func Test_CommentBasicOps(t *testing.T) {
     v := seedVideoWithAPI(t, api, u.ID, "CBO Video")
     tk := tok(t, api, u.ID)
 
-    var cm model.Comment
+    var cm comment.Comment
     w := srve(r, areq("POST", "/api/v1/videos/"+strconv.FormatUint(v.ID, 10)+"/comments", tk, `{"content":"hello"}`))
     require.Equal(t, 0, decodeCode(t, w), "post comment should succeed")
 
-    var resp struct { Data model.Comment `json:"data"` }
+    var resp struct { Data comment.Comment `json:"data"` }
     json.Unmarshal(w.Body.Bytes(), &resp)
     cm = resp.Data
     if cm.ID == 0 {

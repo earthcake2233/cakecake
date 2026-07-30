@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"minibili/internal/model/article"
 	"fmt"
 	"regexp"
 	"strings"
@@ -8,14 +9,13 @@ import (
 	"go.uber.org/zap"
 
 	"minibili/internal/config"
-	"minibili/internal/model"
 	"minibili/internal/storage"
 )
 
 var articleCoverOSSExts = []string{"jpg", "jpeg", "png", "webp", "gif", "bmp"}
 var articleMDImageURLRe = regexp.MustCompile(`!\[[^\]]*\]\(([^)]+)\)`)
 
-func articleOSSObjectKeys(cfg *config.C, art model.Article) []string {
+func articleOSSObjectKeys(cfg *config.C, art article.Article) []string {
 	seen := make(map[string]struct{})
 	out := make([]string, 0, 4)
 	add := func(key string) {
@@ -46,7 +46,7 @@ func articleOSSObjectKeys(cfg *config.C, art model.Article) []string {
 	return out
 }
 
-func purgeArticleOSSObjects(cfg *config.C, ossClient *storage.OSS, log *zap.Logger, art model.Article) {
+func purgeArticleOSSObjects(cfg *config.C, ossClient *storage.OSS, log *zap.Logger, art article.Article) {
 	if ossClient == nil {
 		return
 	}

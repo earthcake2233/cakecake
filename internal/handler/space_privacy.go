@@ -1,13 +1,14 @@
 package handler
 
 import (
+	"minibili/internal/model/user"
 	"net/http"
+
 
 	"github.com/gin-gonic/gin"
 
 	"minibili/internal/errcode"
 	"minibili/internal/middleware"
-	"minibili/internal/model"
 	"minibili/internal/pkg/resp"
 )
 
@@ -19,7 +20,7 @@ type spacePrivacyPayload struct {
 	PublicBirthday    bool `json:"public_birthday"`
 }
 
-func spacePrivacyFromUser(u *model.User) spacePrivacyPayload {
+func spacePrivacyFromUser(u *user.User) spacePrivacyPayload {
 	return spacePrivacyPayload{
 		PublicFavorites:   u.PrivacyPublicFavorites,
 		PublicRecentCoins: u.PrivacyPublicRecentCoins,
@@ -43,12 +44,12 @@ func (a *API) GetMeSpacePrivacy(c *gin.Context) {
 		resp.Err(c, http.StatusUnauthorized, errcode.CodeUnauthorized)
 		return
 	}
-	var u model.User
-	if err := a.DB.First(&u, uid).Error; err != nil {
+	u, err := a.UserSvc.GetPrivacySettings(c.Request.Context(), uid)
+	if err != nil {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
-	resp.OK(c, spacePrivacyFromUser(&u))
+	resp.OK(c, spacePrivacyFromUser(u))
 }
 
 type updateSpacePrivacyReq struct {
@@ -71,8 +72,8 @@ func (a *API) UpdateMeSpacePrivacy(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	var u model.User
-	if err := a.DB.First(&u, uid).Error; err != nil {
+	u, err := a.UserSvc.GetPrivacySettings(c.Request.Context(), uid)
+	if err != nil {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
@@ -96,10 +97,10 @@ func (a *API) UpdateMeSpacePrivacy(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	if err := a.DB.Model(&u).Updates(updates).Error; err != nil {
+	if err := a.UserSvc.UpdatePrivacySettings(c.Request.Context(), uid, updates); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	_ = a.DB.First(&u, uid)
-	resp.OK(c, spacePrivacyFromUser(&u))
+	u, _ = a.UserSvc.GetPrivacySettings(c.Request.Context(), uid)
+	resp.OK(c, spacePrivacyFromUser(u))
 }

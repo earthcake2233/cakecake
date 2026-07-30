@@ -1,6 +1,8 @@
 package data
 
 import (
+	"minibili/internal/model/agent"
+	"minibili/internal/model/user"
 	"strings"
 	"testing"
 
@@ -10,14 +12,13 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"minibili/internal/model"
 )
 
 func newAgentSettingsDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&model.AgentSettings{}))
+	require.NoError(t, db.AutoMigrate(&agent.AgentSettings{}))
 	return db
 }
 
@@ -26,8 +27,8 @@ func TestEnsureDefaultAgentSettings_Creates(t *testing.T) {
 	err := EnsureDefaultAgentSettings(db, zap.NewNop())
 	require.NoError(t, err)
 
-	var st model.AgentSettings
-	err = db.First(&st, model.AgentSettingsRowID).Error
+	var st agent.AgentSettings
+	err = db.First(&st, agent.AgentSettingsRowID).Error
 	require.NoError(t, err)
 	assert.Equal(t, defaultAgentDisplayName, st.DisplayName)
 	assert.Equal(t, defaultAgentSign, st.Sign)
@@ -42,7 +43,7 @@ func TestEnsureDefaultAgentSettings_AlreadyExists(t *testing.T) {
 	require.NoError(t, EnsureDefaultAgentSettings(db, zap.NewNop()))
 
 	var count int64
-	db.Model(&model.AgentSettings{}).Count(&count)
+	db.Model(&agent.AgentSettings{}).Count(&count)
 	assert.Equal(t, int64(1), count)
 }
 
@@ -83,7 +84,7 @@ func TestAgentWelcomeMessage_Default(t *testing.T) {
 func TestAgentWelcomeMessage_Custom(t *testing.T) {
 	db := newAgentSettingsDB(t)
 	require.NoError(t, EnsureDefaultAgentSettings(db, nil))
-	db.Model(&model.AgentSettings{}).Where("id = ?", model.AgentSettingsRowID).
+	db.Model(&agent.AgentSettings{}).Where("id = ?", agent.AgentSettingsRowID).
 		Update("welcome_message", "Custom welcome!")
 
 	msg := AgentWelcomeMessage(db)
@@ -93,7 +94,7 @@ func TestAgentWelcomeMessage_Custom(t *testing.T) {
 func TestAgentWelcomeMessage_EmptyCustom(t *testing.T) {
 	db := newAgentSettingsDB(t)
 	require.NoError(t, EnsureDefaultAgentSettings(db, nil))
-	db.Model(&model.AgentSettings{}).Where("id = ?", model.AgentSettingsRowID).
+	db.Model(&agent.AgentSettings{}).Where("id = ?", agent.AgentSettingsRowID).
 		Update("welcome_message", "   ")
 
 	msg := AgentWelcomeMessage(db)
@@ -102,12 +103,12 @@ func TestAgentWelcomeMessage_EmptyCustom(t *testing.T) {
 
 func TestSyncAgentBotProfile_Success(t *testing.T) {
 	db := newAgentSettingsDB(t)
-	require.NoError(t, db.AutoMigrate(&model.User{}))
+	require.NoError(t, db.AutoMigrate(&user.User{}))
 
-	botUser := model.User{Nickname: "old", AvatarURL: "", Sign: ""}
+	botUser := user.User{Nickname: "old", AvatarURL: "", Sign: ""}
 	require.NoError(t, db.Create(&botUser).Error)
 
-	st := &model.AgentSettings{
+	st := &agent.AgentSettings{
 		DisplayName: "New Bot Name",
 		AvatarURL:   "https://example.com/avatar.png",
 		Sign:        "I am a bot",
@@ -115,7 +116,7 @@ func TestSyncAgentBotProfile_Success(t *testing.T) {
 	err := SyncAgentBotProfile(db, botUser.ID, st)
 	require.NoError(t, err)
 
-	var updated model.User
+	var updated user.User
 	require.NoError(t, db.First(&updated, botUser.ID).Error)
 	assert.Equal(t, "New Bot Name", updated.Nickname)
 	assert.Equal(t, "https://example.com/avatar.png", updated.AvatarURL)
@@ -129,16 +130,16 @@ func TestSyncAgentBotProfile_NilParams(t *testing.T) {
 
 func TestSyncAgentBotProfile_EmptyNameDefaults(t *testing.T) {
 	db := newAgentSettingsDB(t)
-	require.NoError(t, db.AutoMigrate(&model.User{}))
+	require.NoError(t, db.AutoMigrate(&user.User{}))
 
-	botUser := model.User{Nickname: "old", AvatarURL: "", Sign: ""}
+	botUser := user.User{Nickname: "old", AvatarURL: "", Sign: ""}
 	require.NoError(t, db.Create(&botUser).Error)
 
-	st := &model.AgentSettings{DisplayName: "   "}
+	st := &agent.AgentSettings{DisplayName: "   "}
 	err := SyncAgentBotProfile(db, botUser.ID, st)
 	require.NoError(t, err)
 
-	var updated model.User
+	var updated user.User
 	require.NoError(t, db.First(&updated, botUser.ID).Error)
 	assert.Equal(t, defaultAgentDisplayName, updated.Nickname)
 }
@@ -154,7 +155,7 @@ func TestGetGlobalSystemPrompt_Default(t *testing.T) {
 func TestGetGlobalSystemPrompt_Custom(t *testing.T) {
 	db := newAgentSettingsDB(t)
 	require.NoError(t, EnsureDefaultAgentSettings(db, nil))
-	db.Model(&model.AgentSettings{}).Where("id = ?", model.AgentSettingsRowID).
+	db.Model(&agent.AgentSettings{}).Where("id = ?", agent.AgentSettingsRowID).
 		Update("system_prompt", "Custom prompt")
 
 	prompt := GetGlobalSystemPrompt(db)
@@ -164,7 +165,7 @@ func TestGetGlobalSystemPrompt_Custom(t *testing.T) {
 func TestGetGlobalSystemPrompt_EmptyFallback(t *testing.T) {
 	db := newAgentSettingsDB(t)
 	require.NoError(t, EnsureDefaultAgentSettings(db, nil))
-	db.Model(&model.AgentSettings{}).Where("id = ?", model.AgentSettingsRowID).
+	db.Model(&agent.AgentSettings{}).Where("id = ?", agent.AgentSettingsRowID).
 		Update("system_prompt", "   ")
 
 	prompt := GetGlobalSystemPrompt(db)

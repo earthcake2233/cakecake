@@ -1,6 +1,7 @@
 package data
 
 import (
+	"minibili/internal/model/admin"
 	"strings"
 
 	"go.uber.org/zap"
@@ -8,7 +9,6 @@ import (
 	"gorm.io/gorm"
 
 	"minibili/internal/config"
-	"minibili/internal/model"
 )
 
 // SeedDefaultAdmin creates the first admin when table is empty and env seed is set.
@@ -22,7 +22,7 @@ func SeedDefaultAdmin(db *gorm.DB, cfg *config.C, lg *zap.Logger) error {
 		return nil
 	}
 	var n int64
-	if err := db.Model(&model.Admin{}).Count(&n).Error; err != nil {
+	if err := db.Model(&admin.Admin{}).Count(&n).Error; err != nil {
 		return err
 	}
 	if n > 0 {
@@ -32,7 +32,7 @@ func SeedDefaultAdmin(db *gorm.DB, cfg *config.C, lg *zap.Logger) error {
 	if err != nil {
 		return err
 	}
-	a := model.Admin{
+	a := admin.Admin{
 		Username:     user,
 		PasswordHash: string(hash),
 		DisplayName:  "运营管理员",

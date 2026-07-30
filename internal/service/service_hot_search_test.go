@@ -1,20 +1,20 @@
 package service
 
 import (
+	"minibili/internal/model/admin"
 	"testing"
 
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 
-	"minibili/internal/model"
 )
 
 func svcDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&model.HotSearchDisplayLayout{}, &model.HotSearchOp{}))
+	require.NoError(t, db.AutoMigrate(&admin.HotSearchDisplayLayout{}, &admin.HotSearchOp{}))
 	return db
 }
 

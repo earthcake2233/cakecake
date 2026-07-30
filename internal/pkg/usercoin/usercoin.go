@@ -1,11 +1,11 @@
 package usercoin
 
 import (
+	"minibili/internal/model/user"
 	"errors"
 
 	"gorm.io/gorm"
 
-	"minibili/internal/model"
 )
 
 const (
@@ -42,7 +42,7 @@ func AddTenths(db *gorm.DB, uid uint64, delta int64) error {
 	if delta <= 0 {
 		return nil
 	}
-	return db.Model(&model.User{}).Where("id = ?", uid).
+	return db.Model(&user.User{}).Where("id = ?", uid).
 		UpdateColumn("coin_balance_tenths", gorm.Expr("coin_balance_tenths + ?", delta)).Error
 }
 
@@ -62,7 +62,7 @@ func SpendWholeCoins(tx *gorm.DB, uid uint64, wholeCoins int) error {
 		return nil
 	}
 	cost := CostTenths(wholeCoins)
-	res := tx.Model(&model.User{}).
+	res := tx.Model(&user.User{}).
 		Where("id = ? AND coin_balance_tenths >= ?", uid, cost).
 		UpdateColumn("coin_balance_tenths", gorm.Expr("coin_balance_tenths - ?", cost))
 	if res.Error != nil {
@@ -79,7 +79,7 @@ func SpendOnVideoCoin(tx *gorm.DB, viewerID, uploaderID, videoID uint64, amount 
 	cost := CostTenths(amount)
 	share := CreatorShareTenths(amount)
 
-	res := tx.Model(&model.User{}).
+	res := tx.Model(&user.User{}).
 		Where("id = ? AND coin_balance_tenths >= ?", viewerID, cost).
 		UpdateColumn("coin_balance_tenths", gorm.Expr("coin_balance_tenths - ?", cost))
 	if res.Error != nil {
@@ -92,7 +92,7 @@ func SpendOnVideoCoin(tx *gorm.DB, viewerID, uploaderID, videoID uint64, amount 
 		return err
 	}
 	if share > 0 {
-		if err := tx.Model(&model.User{}).Where("id = ?", uploaderID).
+		if err := tx.Model(&user.User{}).Where("id = ?", uploaderID).
 			UpdateColumn("coin_balance_tenths", gorm.Expr("coin_balance_tenths + ?", share)).Error; err != nil {
 			return err
 		}
@@ -106,7 +106,7 @@ func SpendOnArticleCoin(tx *gorm.DB, viewerID, authorID, articleID uint64, amoun
 	cost := CostTenths(amount)
 	share := CreatorShareTenths(amount)
 
-	res := tx.Model(&model.User{}).
+	res := tx.Model(&user.User{}).
 		Where("id = ? AND coin_balance_tenths >= ?", viewerID, cost).
 		UpdateColumn("coin_balance_tenths", gorm.Expr("coin_balance_tenths - ?", cost))
 	if res.Error != nil {
@@ -119,7 +119,7 @@ func SpendOnArticleCoin(tx *gorm.DB, viewerID, authorID, articleID uint64, amoun
 		return err
 	}
 	if share > 0 {
-		if err := tx.Model(&model.User{}).Where("id = ?", authorID).
+		if err := tx.Model(&user.User{}).Where("id = ?", authorID).
 			UpdateColumn("coin_balance_tenths", gorm.Expr("coin_balance_tenths + ?", share)).Error; err != nil {
 			return err
 		}

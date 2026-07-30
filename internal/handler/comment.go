@@ -14,7 +14,6 @@ import (
 
 	"minibili/internal/errcode"
 	"minibili/internal/middleware"
-	"minibili/internal/model"
 	"minibili/internal/pkg/iplocate"
 	"minibili/internal/pkg/netutil"
 	"minibili/internal/pkg/resp"
@@ -78,9 +77,6 @@ func (a *API) PostComment(c *gin.Context) {
 	if !ok { resp.Err(c, http.StatusUnauthorized, errcode.CodeUnauthorized); return }
 	vid, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil || vid == 0 { resp.Err(c, http.StatusBadRequest, errcode.CodeParamError); return }
-	var v model.Video
-	if err := a.DB.First(&v, vid).Error; err != nil || v.Status != "published" { resp.Err(c, http.StatusNotFound, errcode.CodeNotFound); return }
-	if v.CommentsClosed { resp.Err(c, http.StatusForbidden, errcode.CodeCommentsClosed); return }
 	var req commentPost
 	if err := c.ShouldBindJSON(&req); err != nil { resp.Err(c, http.StatusBadRequest, errcode.CodeParamError); return }
 	content := strings.TrimSpace(req.Content)
@@ -91,7 +87,7 @@ func (a *API) PostComment(c *gin.Context) {
 	uploadedAt := time.Now().Format("2006-01-02 15:04:05")
 	if !cm.CreatedAt.IsZero() { uploadedAt = cm.CreatedAt.Format("2006-01-02 15:04:05") }
 	r := gin.H{"id": cm.ID, "user_id": cm.UserID, "content": cm.Content, "like_count": 0,
-		"created_at": uploadedAt, "level": cm.Level, "liked_by_me": false, "pinned": false, "approved": !v.CommentsCurated}
+		"created_at": uploadedAt, "level": cm.Level, "liked_by_me": false, "pinned": false, "approved": cm.Approved}
 	if req.ParentID != 0 { r["parent_id"] = req.ParentID } else { r["parent_id"] = nil }
 	resp.JSON(c, http.StatusCreated, errcode.CodeSuccess, r)
 }
@@ -102,14 +98,7 @@ func (a *API) DeleteComment(c *gin.Context) {
 	if !ok { resp.Err(c, http.StatusUnauthorized, errcode.CodeUnauthorized); return }
 	cid, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil || cid == 0 { resp.Err(c, http.StatusBadRequest, errcode.CodeParamError); return }
-	var cm model.Comment
-	if err := a.DB.First(&cm, cid).Error; err != nil { resp.Err(c, http.StatusNotFound, errcode.CodeNotFound); return }
-	isUploader := uid != cm.UserID
-	if isUploader {
-		var v model.Video
-		if err := a.DB.First(&v, cm.VideoID).Error; err == nil && v.UserID == uid { isUploader = true } else { isUploader = false }
-	} else { isUploader = false }
-	if err := a.CommentSvc.DeleteComment(c.Request.Context(), uid, cid, isUploader); err != nil {
+	if err := a.CommentSvc.DeleteComment(c.Request.Context(), uid, cid, false); err != nil {
 		resp.Err(c, httpStatusFromSvc(errCodeFromSvc(err)), errCodeFromSvc(err)); return
 	}
 	resp.OK(c, gin.H{"ok": true})
@@ -121,11 +110,7 @@ func (a *API) PinComment(c *gin.Context) {
 	if !ok { resp.Err(c, http.StatusUnauthorized, errcode.CodeUnauthorized); return }
 	cid, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil || cid == 0 { resp.Err(c, http.StatusBadRequest, errcode.CodeParamError); return }
-	var cm model.Comment
-	if err := a.DB.First(&cm, cid).Error; err != nil { resp.Err(c, http.StatusNotFound, errcode.CodeNotFound); return }
-	var v model.Video
-	if err := a.DB.First(&v, cm.VideoID).Error; err != nil || v.UserID != uid { resp.Err(c, http.StatusForbidden, errcode.CodeForbidden); return }
-	pinned, svcErr := a.CommentSvc.PinComment(c.Request.Context(), cm.VideoID, cid)
+	pinned, svcErr := a.CommentSvc.PinComment(c.Request.Context(), uid, cid)
 	if svcErr != nil { resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError); return }
 	resp.OK(c, gin.H{"pinned": pinned})
 }
@@ -249,15 +234,9 @@ func (a *API) MuteLikeNotification(c *gin.Context) {
 	if !ok { resp.Err(c, http.StatusUnauthorized, errcode.CodeUnauthorized); return }
 	nid, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil { resp.Err(c, http.StatusBadRequest, errcode.CodeParamError); return }
-	var n model.Notification
-	if err := a.DB.Where("id = ? AND recipient_id = ?", nid, uid).First(&n).Error; err != nil {
-		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound); return
-	}
-	if n.Type != "like_aggregation" || n.RelatedID == 0 {
-		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError); return
-	}
-	mute := model.LikeNotifMute{RecipientID: uid, CommentID: n.RelatedID}
-	if err := a.DB.Where("recipient_id = ? AND comment_id = ?", uid, n.RelatedID).FirstOrCreate(&mute).Error; err != nil {
+	if err := a.NotifSvc.MuteLikeNotification(c.Request.Context(), uid, nid); err != nil {
+		if errors.Is(err, service.ErrNotFound) { resp.Err(c, http.StatusNotFound, errcode.CodeNotFound); return }
+		if errors.Is(err, service.ErrParamError) { resp.Err(c, http.StatusBadRequest, errcode.CodeParamError); return }
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError); return
 	}
 	resp.OK(c, gin.H{"likes_muted": true})
@@ -269,8 +248,8 @@ func (a *API) ToggleNotificationCommentLike(c *gin.Context) {
 	if !ok { resp.Err(c, http.StatusUnauthorized, errcode.CodeUnauthorized); return }
 	nid, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil { resp.Err(c, http.StatusBadRequest, errcode.CodeParamError); return }
-	var n model.Notification
-	if err := a.DB.Where("id = ? AND recipient_id = ?", nid, uid).First(&n).Error; err != nil {
+	n, err := a.NotifSvc.GetNotification(c.Request.Context(), nid, uid)
+	if err != nil {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound); return
 	}
 	c.Params = gin.Params{{Key: "id", Value: strconv.FormatUint(n.RelatedID, 10)}}
@@ -283,15 +262,15 @@ func (a *API) PostNotificationCommentReply(c *gin.Context) {
 	if !ok { resp.Err(c, http.StatusUnauthorized, errcode.CodeUnauthorized); return }
 	nid, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil { resp.Err(c, http.StatusBadRequest, errcode.CodeParamError); return }
-	var n model.Notification
-	if err := a.DB.Where("id = ? AND recipient_id = ?", nid, uid).First(&n).Error; err != nil {
+	n, err := a.NotifSvc.GetNotification(c.Request.Context(), nid, uid)
+	if err != nil {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound); return
 	}
 	var body struct{ Content string `json:"content"` }
 	if err := c.ShouldBindJSON(&body); err != nil { resp.Err(c, http.StatusBadRequest, errcode.CodeParamError); return }
 	if n.RelatedID == 0 { resp.Err(c, http.StatusNotFound, errcode.CodeNotFound); return }
-	var cm model.Comment
-	if err := a.DB.First(&cm, n.RelatedID).Error; err != nil { resp.Err(c, http.StatusNotFound, errcode.CodeNotFound); return }
+	cm, err := a.CommentSvc.GetCommentByID(c.Request.Context(), n.RelatedID)
+	if err != nil { resp.Err(c, http.StatusNotFound, errcode.CodeNotFound); return }
 	payload, _ := json.Marshal(commentPost{Content: body.Content, ParentID: cm.ID})
 	c.Request.Body = io.NopCloser(bytes.NewReader(payload))
 	c.Request.ContentLength = int64(len(payload))
@@ -305,20 +284,13 @@ func (a *API) ListNotificationLikeLikers(c *gin.Context) {
 	if !ok { resp.Err(c, http.StatusUnauthorized, errcode.CodeUnauthorized); return }
 	nid, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil { resp.Err(c, http.StatusBadRequest, errcode.CodeParamError); return }
-	var n model.Notification
-	if err := a.DB.Where("id = ? AND recipient_id = ?", nid, uid).First(&n).Error; err != nil {
+	users, err := a.NotifSvc.ListNotificationLikers(c.Request.Context(), uid, nid)
+	if err != nil {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound); return
 	}
-	var commentLikes []model.CommentLike
-	a.DB.Where("comment_id = ?", n.RelatedID).Find(&commentLikes)
-	uids := make([]uint64, 0, len(commentLikes))
-	for _, l := range commentLikes { uids = append(uids, l.UserID) }
-	var users []model.User
-	if len(uids) > 0 { a.DB.Where("id IN ?", uids).Find(&users) }
 	out := make([]gin.H, 0, len(users))
 	for _, u := range users {
-		name := u.Username; if u.Nickname != "" { name = u.Nickname }
-		out = append(out, gin.H{"user_id": u.ID, "username": name})
+		out = append(out, gin.H{"user_id": u.ID, "username": u.Nickname})
 	}
 	resp.OK(c, gin.H{"items": out})
 }

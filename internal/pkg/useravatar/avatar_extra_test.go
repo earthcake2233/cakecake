@@ -1,10 +1,10 @@
 package useravatar
 
 import (
+	"minibili/internal/model/user"
 	"testing"
 	"time"
 
-	"minibili/internal/model"
 )
 
 func TestPublicURL_NilUser(t *testing.T) {
@@ -15,7 +15,7 @@ func TestPublicURL_NilUser(t *testing.T) {
 
 func TestPublicURL_AnonymizedUser(t *testing.T) {
 	now := time.Now()
-	u := &model.User{
+	u := &user.User{
 		AvatarURL:    "https://example.com/avatar.jpg",
 		AnonymizedAt: &now,
 	}
@@ -25,7 +25,7 @@ func TestPublicURL_AnonymizedUser(t *testing.T) {
 }
 
 func TestPublicURL_EmptyURL(t *testing.T) {
-	u := &model.User{
+	u := &user.User{
 		AvatarURL: "",
 		UpdatedAt: time.Unix(1000, 0),
 	}
@@ -35,7 +35,7 @@ func TestPublicURL_EmptyURL(t *testing.T) {
 }
 
 func TestPublicURL_WhitespaceURL(t *testing.T) {
-	u := &model.User{
+	u := &user.User{
 		AvatarURL: "   ",
 	}
 	if PublicURL(u) != "" {
@@ -44,7 +44,7 @@ func TestPublicURL_WhitespaceURL(t *testing.T) {
 }
 
 func TestPublicURL_NoUpdatedAt(t *testing.T) {
-	u := &model.User{
+	u := &user.User{
 		AvatarURL: "https://example.com/avatar.jpg",
 	}
 	got := PublicURL(u)
@@ -56,7 +56,7 @@ func TestPublicURL_NoUpdatedAt(t *testing.T) {
 
 func TestPublicURL_WithExistingQueryParams(t *testing.T) {
 	ts := time.Unix(1700000000, 0)
-	u := &model.User{
+	u := &user.User{
 		AvatarURL: "https://example.com/avatar.jpg?x=1",
 		UpdatedAt: ts,
 	}
@@ -69,7 +69,7 @@ func TestPublicURL_WithExistingQueryParams(t *testing.T) {
 
 func TestPublicURL_WithMultipleExistingParams(t *testing.T) {
 	ts := time.Unix(1700000000, 0)
-	u := &model.User{
+	u := &user.User{
 		AvatarURL: "https://example.com/avatar.jpg?a=1&b=2",
 		UpdatedAt: ts,
 	}
@@ -83,7 +83,7 @@ func TestPublicURL_WithMultipleExistingParams(t *testing.T) {
 func TestPublicURL_CacheBustValueChanges(t *testing.T) {
 	ts1 := time.Unix(1000, 0)
 	ts2 := time.Unix(2000, 0)
-	u := &model.User{
+	u := &user.User{
 		AvatarURL: "https://example.com/avatar.jpg",
 	}
 	u.UpdatedAt = ts1
@@ -103,7 +103,7 @@ func TestPublicURL_CacheBustValueChanges(t *testing.T) {
 
 func TestPublicURL_AllFieldsUser(t *testing.T) {
 	ts := time.Unix(987654321, 0)
-	u := &model.User{
+	u := &user.User{
 		ID:        42,
 		Username:  "testuser",
 		Nickname:  "Test",

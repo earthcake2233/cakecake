@@ -1,11 +1,11 @@
 package service
 
 import (
+	"minibili/internal/model/admin"
 	"strings"
 	"testing"
 	"time"
 
-	"minibili/internal/model"
 )
 
 func TestNormalizeSearchKeyword(t *testing.T) {
@@ -168,14 +168,14 @@ func ptrTime(t time.Time) *time.Time {
 func TestHotSearchDisplayTitle(t *testing.T) {
 	tests := []struct {
 		name string
-		op   *model.HotSearchOp
+		op   *admin.HotSearchOp
 		want string
 	}{
-		{"display title set", &model.HotSearchOp{Keyword: "kw", DisplayTitle: "Display"}, "Display"},
-		{"no display title", &model.HotSearchOp{Keyword: "keyword"}, "keyword"},
-		{"empty", &model.HotSearchOp{}, ""},
-		{"only spaces", &model.HotSearchOp{Keyword: "  ", DisplayTitle: "  "}, ""},
-		{"trimmed display", &model.HotSearchOp{Keyword: "kw", DisplayTitle: "  Title  "}, "Title"},
+		{"display title set", &admin.HotSearchOp{Keyword: "kw", DisplayTitle: "Display"}, "Display"},
+		{"no display title", &admin.HotSearchOp{Keyword: "keyword"}, "keyword"},
+		{"empty", &admin.HotSearchOp{}, ""},
+		{"only spaces", &admin.HotSearchOp{Keyword: "  ", DisplayTitle: "  "}, ""},
+		{"trimmed display", &admin.HotSearchOp{Keyword: "kw", DisplayTitle: "  Title  "}, "Title"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

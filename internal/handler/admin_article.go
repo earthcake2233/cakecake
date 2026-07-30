@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"minibili/internal/model/article"
+	"minibili/internal/model/user"
 	"context"
 	"net/http"
 	"strconv"
@@ -13,7 +15,6 @@ import (
 
 	"minibili/internal/errcode"
 	"minibili/internal/middleware"
-	"minibili/internal/model"
 	"minibili/internal/pkg/markdown"
 	"minibili/internal/pkg/resp"
 	"minibili/internal/service"
@@ -34,7 +35,7 @@ func adminArticleStatusFilter(q string) []string {
 	}
 }
 
-func adminArticleToJSON(art *model.Article, uploaderName string) gin.H {
+func adminArticleToJSON(art *article.Article, uploaderName string) gin.H {
 	bodyHTML, _, _ := markdown.Render(art.BodyMD)
 	pubAt := ""
 	if art.PublishedAt != nil {
@@ -66,6 +67,7 @@ func adminArticleToJSON(art *model.Article, uploaderName string) gin.H {
 }
 
 // AdminListArticles GET /api/v1/admin/articles
+
 func (a *API) AdminListArticles(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
@@ -78,56 +80,44 @@ func (a *API) AdminListArticles(c *gin.Context) {
 	statusQ := c.DefaultQuery("status", "pending_review")
 	titleQ := strings.TrimSpace(c.Query("q"))
 
-	q := a.DB.Model(&model.Article{})
-	if sts := adminArticleStatusFilter(statusQ); len(sts) > 0 {
-		q = q.Where("status IN ?", sts)
-	}
-	if titleQ != "" {
-		q = q.Where("title LIKE ?", "%"+titleQ+"%")
-	}
-	var total int64
-	if err := q.Count(&total).Error; err != nil {
+	statuses := adminArticleStatusFilter(statusQ)
+	result, err := a.ArticleSvc.AdminListArticles(c.Request.Context(), statuses, titleQ, page, pageSize)
+	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	totalPages := int((total + int64(pageSize) - 1) / int64(pageSize))
+
+	totalPages := int((result.Total + int64(pageSize) - 1) / int64(pageSize))
 	if totalPages < 1 {
 		totalPages = 1
 	}
 	if page > totalPages {
 		page = totalPages
 	}
-	offset := (page - 1) * pageSize
-	var rows []model.Article
-	if err := q.Order("created_at DESC, id DESC").Offset(offset).Limit(pageSize).Find(&rows).Error; err != nil {
-		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
-		return
-	}
-	uids := make([]uint64, 0, len(rows))
-	for i := range rows {
-		uids = append(uids, rows[i].UserID)
+
+	uids := make([]uint64, 0, len(result.Rows))
+	for i := range result.Rows {
+		uids = append(uids, result.Rows[i].UserID)
 	}
 	names := map[uint64]string{}
 	if len(uids) > 0 {
-		var users []model.User
-		_ = a.DB.Where("id IN ?", uids).Find(&users).Error
-		for i := range users {
-			names[users[i].ID] = model.DisplayUsername(&users[i])
+		usersMap := a.UserSvc.BatchGetUsers(c.Request.Context(), uids)
+		for id, u := range usersMap {
+			names[id] = user.DisplayUsername(u)
 		}
 	}
-	items := make([]gin.H, 0, len(rows))
-	for i := range rows {
-		items = append(items, adminArticleToJSON(&rows[i], names[rows[i].UserID]))
+	items := make([]gin.H, 0, len(result.Rows))
+	for i := range result.Rows {
+		items = append(items, adminArticleToJSON(&result.Rows[i], names[result.Rows[i].UserID]))
 	}
-	var pending int64
-	_ = a.DB.Model(&model.Article{}).Where("status = ?", "pending_review").Count(&pending).Error
+
 	resp.OK(c, gin.H{
 		"items":         items,
 		"page":          page,
 		"page_size":     pageSize,
-		"total":         total,
+		"total":         result.Total,
 		"total_pages":   totalPages,
-		"pending_count": pending,
+		"pending_count": result.PendingCount,
 	})
 }
 
@@ -138,14 +128,13 @@ func (a *API) AdminGetArticle(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	var art model.Article
-	if err := a.DB.First(&art, id).Error; err != nil {
+	art, err := a.ArticleSvc.GetArticleByID(c.Request.Context(), id)
+	if err != nil {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
-	var u model.User
-	_ = a.DB.First(&u, art.UserID).Error
-	resp.OK(c, adminArticleToJSON(&art, model.DisplayUsername(&u)))
+	u, _ := a.UserSvc.GetUserByID(c.Request.Context(), art.UserID)
+	resp.OK(c, adminArticleToJSON(art, user.DisplayUsername(u)))
 }
 
 type adminArticleRejectReq struct {
@@ -164,8 +153,8 @@ func (a *API) AdminApproveArticle(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	var art model.Article
-	if err := a.DB.First(&art, id).Error; err != nil {
+	art, err := a.ArticleSvc.GetArticleByID(c.Request.Context(), id)
+	if err != nil {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
@@ -181,11 +170,10 @@ func (a *API) AdminApproveArticle(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	_ = a.DB.First(&art, id)
-	var u model.User
-	_ = a.DB.First(&u, art.UserID).Error
+	art, _ = a.ArticleSvc.GetArticleByID(c.Request.Context(), id)
+	u, _ := a.UserSvc.GetUserByID(c.Request.Context(), art.UserID)
 	a.Log.Info("admin approved article", zap.Uint64("article_id", id), zap.Uint64("admin_id", adminID))
-	resp.OK(c, adminArticleToJSON(&art, model.DisplayUsername(&u)))
+	resp.OK(c, adminArticleToJSON(art, user.DisplayUsername(u)))
 }
 
 // AdminRejectArticle POST /api/v1/admin/articles/:id/reject
@@ -206,8 +194,8 @@ func (a *API) AdminRejectArticle(c *gin.Context) {
 	if reason == "" {
 		reason = "内容不符合社区规范"
 	}
-	var art model.Article
-	if err := a.DB.First(&art, id).Error; err != nil {
+	art, err := a.ArticleSvc.GetArticleByID(c.Request.Context(), id)
+	if err != nil {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
@@ -216,13 +204,13 @@ func (a *API) AdminRejectArticle(c *gin.Context) {
 		return
 	}
 	now := time.Now()
-	if err := a.DB.Model(&art).Updates(map[string]any{
+	if err := a.ArticleSvc.AdminUpdateArticle(c.Request.Context(), id, map[string]interface{}{
 		"status":               articleStatusRejected,
 		"fail_reason":          reason,
 		"published_at":         nil,
 		"reviewed_at":          now,
 		"reviewed_by_admin_id": adminID,
-	}).Error; err != nil {
+	}); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
@@ -231,11 +219,10 @@ func (a *API) AdminRejectArticle(c *gin.Context) {
 		_ = a.ES.DeleteArticle(ictx, id)
 		cancel()
 	}
-	_ = a.DB.First(&art, id)
-	var u model.User
-	_ = a.DB.First(&u, art.UserID).Error
+	art, _ = a.ArticleSvc.GetArticleByID(c.Request.Context(), id)
+	u, _ := a.UserSvc.GetUserByID(c.Request.Context(), art.UserID)
 	a.Log.Info("admin rejected article", zap.Uint64("article_id", id), zap.Uint64("admin_id", adminID))
-	resp.OK(c, adminArticleToJSON(&art, model.DisplayUsername(&u)))
+	resp.OK(c, adminArticleToJSON(art, user.DisplayUsername(u)))
 }
 
 // AdminDeleteArticle POST /api/v1/admin/articles/:id/delete 或 DELETE /api/v1/admin/articles/:id
@@ -250,8 +237,8 @@ func (a *API) AdminDeleteArticle(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	var art model.Article
-	if err := a.DB.First(&art, id).Error; err != nil {
+	art, err := a.ArticleSvc.GetArticleByID(c.Request.Context(), id)
+	if err != nil {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
@@ -259,14 +246,14 @@ func (a *API) AdminDeleteArticle(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	if err := a.DB.Transaction(func(tx *gorm.DB) error {
+	if err := a.ArticleSvc.AdminDeleteArticleCascade(c.Request.Context(), id, func(tx *gorm.DB) error {
 		return deleteArticleCascade(tx, id)
 	}); err != nil {
 		a.Log.Error("admin delete article", zap.Error(err), zap.Uint64("article_id", id))
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	purgeArticleOSSObjects(a.Cfg, a.OSS, a.Log, art)
+	purgeArticleOSSObjects(a.Cfg, a.OSS, a.Log, *art)
 	a.esDeleteArticle(id)
 	a.Log.Info("admin deleted article",
 		zap.Uint64("article_id", id),

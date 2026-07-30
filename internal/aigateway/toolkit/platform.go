@@ -1,6 +1,10 @@
 package toolkit
 
 import (
+	"minibili/internal/model/comment"
+	"minibili/internal/model/danmaku"
+	"minibili/internal/model/user"
+	"minibili/internal/model/video"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -8,7 +12,6 @@ import (
 
 	"gorm.io/gorm"
 
-	"minibili/internal/model"
 	"minibili/internal/pkg/sensitive"
 	"minibili/internal/search"
 )
@@ -104,7 +107,7 @@ func (p *PlatformExecutor) searchVideos(ctx context.Context, raw json.RawMessage
 		return string(b), nil
 	}
 	// Fallback: simple DB search
-	var videos []model.Video
+	var videos []video.Video
 	if err := p.DB.WithContext(ctx).
 		Where("status = ? AND title LIKE ?", "published", "%"+args.Keyword+"%").
 		Order("play_count DESC").
@@ -120,11 +123,11 @@ func (p *PlatformExecutor) searchVideos(ctx context.Context, raw json.RawMessage
 	}
 	userMap := make(map[uint64]string)
 	if len(userIDs) > 0 {
-		var users []model.User
+		var users []user.User
 		p.DB.WithContext(ctx).Where("id IN ?", userIDs).Find(&users)
 		for _, u := range users {
 			name := u.Username
-			if n := strings.TrimSpace(u.Nickname); n != "" && !model.IsUserAnonymized(&u) {
+			if n := strings.TrimSpace(u.Nickname); n != "" && !user.IsUserAnonymized(&u) {
 				name = n
 			}
 			userMap[u.ID] = name
@@ -165,14 +168,14 @@ func (p *PlatformExecutor) getVideoDetail(ctx context.Context, raw json.RawMessa
 	if args.VideoID == 0 {
 		return "", fmt.Errorf("video_id is required")
 	}
-	var v model.Video
+	var v video.Video
 	if err := p.DB.WithContext(ctx).First(&v, args.VideoID).Error; err != nil {
 		return fmt.Sprintf(`{"error": "video not found", "video_id": %d}`, args.VideoID), nil
 	}
-	var u model.User
+	var u user.User
 	uploaderName := "unknown"
 	if err := p.DB.WithContext(ctx).First(&u, v.UserID).Error; err == nil {
-		if n := strings.TrimSpace(u.Nickname); n != "" && !model.IsUserAnonymized(&u) {
+		if n := strings.TrimSpace(u.Nickname); n != "" && !user.IsUserAnonymized(&u) {
 			uploaderName = n
 		} else {
 			uploaderName = u.Username
@@ -216,7 +219,7 @@ func (p *PlatformExecutor) getTrending(ctx context.Context, raw json.RawMessage)
 	if args.Limit < 1 || args.Limit > 20 {
 		args.Limit = 10
 	}
-	var videos []model.Video
+	var videos []video.Video
 	if err := p.DB.WithContext(ctx).
 		Where("status = ?", "published").
 		Order("play_count DESC").
@@ -231,11 +234,11 @@ func (p *PlatformExecutor) getTrending(ctx context.Context, raw json.RawMessage)
 	}
 	userMap := make(map[uint64]string)
 	if len(userIDs) > 0 {
-		var users []model.User
+		var users []user.User
 		p.DB.WithContext(ctx).Where("id IN ?", userIDs).Find(&users)
 		for _, u := range users {
 			name := u.Username
-			if n := strings.TrimSpace(u.Nickname); n != "" && !model.IsUserAnonymized(&u) {
+			if n := strings.TrimSpace(u.Nickname); n != "" && !user.IsUserAnonymized(&u) {
 				name = n
 			}
 			userMap[u.ID] = name
@@ -286,7 +289,7 @@ func (p *PlatformExecutor) getVideoComments(ctx context.Context, raw json.RawMes
 	if args.PageSize < 1 || args.PageSize > 20 {
 		args.PageSize = 10
 	}
-	var comments []model.Comment
+	var comments []comment.Comment
 	if err := p.DB.WithContext(ctx).
 		Where(`video_id = ?`, args.VideoID).
 		Order("id ASC").
@@ -300,9 +303,9 @@ func (p *PlatformExecutor) getVideoComments(ctx context.Context, raw json.RawMes
 	for _, c := range comments {
 		userIDs = append(userIDs, c.UserID)
 	}
-	userMap := make(map[uint64]*model.User)
+	userMap := make(map[uint64]*user.User)
 	if len(userIDs) > 0 {
-		var users []model.User
+		var users []user.User
 		p.DB.WithContext(ctx).Where("id IN ?", userIDs).Find(&users)
 		for i := range users {
 			userMap[users[i].ID] = &users[i]
@@ -322,7 +325,7 @@ func (p *PlatformExecutor) getVideoComments(ctx context.Context, raw json.RawMes
 		userAvatar := ""
 		if u, ok := userMap[c.UserID]; ok {
 			userName = u.Username
-			if n := strings.TrimSpace(u.Nickname); n != "" && !model.IsUserAnonymized(u) {
+			if n := strings.TrimSpace(u.Nickname); n != "" && !user.IsUserAnonymized(u) {
 				userName = n
 			}
 			userAvatar = u.AvatarURL
@@ -352,7 +355,7 @@ func (p *PlatformExecutor) getVideoDanmaku(ctx context.Context, raw json.RawMess
 	if args.Limit < 1 || args.Limit > 50 {
 		args.Limit = 20
 	}
-	var danmakus []model.Danmaku
+	var danmakus []danmaku.Danmaku
 	if err := p.DB.WithContext(ctx).
 		Where(`video_id = ?`, args.VideoID).
 		Order("id DESC").
@@ -368,11 +371,11 @@ func (p *PlatformExecutor) getVideoDanmaku(ctx context.Context, raw json.RawMess
 	userMap := make(map[uint64]string)
 	avatarMap := make(map[uint64]string)
 	if len(userIDs) > 0 {
-		var users []model.User
+		var users []user.User
 		p.DB.WithContext(ctx).Where("id IN ?", userIDs).Find(&users)
 		for _, u := range users {
 			name := u.Username
-			if n := strings.TrimSpace(u.Nickname); n != "" && !model.IsUserAnonymized(&u) {
+			if n := strings.TrimSpace(u.Nickname); n != "" && !user.IsUserAnonymized(&u) {
 				name = n
 			}
 			userMap[u.ID] = name

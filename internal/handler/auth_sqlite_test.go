@@ -85,6 +85,11 @@ func newTestAPI(t *testing.T) (*API, *gin.Engine, *jwttoken.Manager) {
 	commentSvc.SetProviders(userProv, videoProv, articleProv, dynamicProv)
 	notifSvc := service.NewNotificationService(db, rdb, log)
 	userSvc := service.NewUserService(db, log)
+	videoSvc := service.NewVideoService(db, rdb, log)
+	dmSvc := service.NewDmService(db, rdb, log)
+	favoriteSvc := service.NewFavoriteService(db, rdb, log)
+	articleSvc := service.NewArticleService(db, rdb, log)
+	dynamicSvc := service.NewDynamicService(db, rdb, log)
 	api := &API{
 		Dependencies: &Dependencies{
 			Cfg:          cfg,
@@ -104,6 +109,11 @@ func newTestAPI(t *testing.T) (*API, *gin.Engine, *jwttoken.Manager) {
 			CommentSvc: commentSvc,
 			NotifSvc:   notifSvc,
 			UserSvc:    userSvc,
+			VideoSvc:   videoSvc,
+			DmSvc:      dmSvc,
+			FavoriteSvc: favoriteSvc,
+			ArticleSvc:  articleSvc,
+			DynamicSvc:  dynamicSvc,
 		},
 	}
 	r := gin.New()

@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"minibili/internal/model/dynamic"
+	"minibili/internal/model/user"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -11,7 +13,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
-	"minibili/internal/model"
 	"minibili/internal/pkg/sensitive"
 	"minibili/internal/pkg/usercoin"
 )
@@ -21,17 +22,17 @@ import (
 func TestCoinLedgerReasonText(t *testing.T) {
 	tests := []struct {
 		name string
-		row  *model.CoinLedger
+		row  *user.CoinLedger
 		want string
 	}{
-		{name: "login reward", row: &model.CoinLedger{ReasonType: usercoin.ReasonLoginReward}, want: "登录奖励"},
-		{name: "nickname change", row: &model.CoinLedger{ReasonType: usercoin.ReasonNicknameChange}, want: "修改昵称"},
-		{name: "video tip with id", row: &model.CoinLedger{ReasonType: usercoin.ReasonVideoTip, VideoID: 42}, want: "给视频 BV42 打赏"},
-		{name: "video tip no id", row: &model.CoinLedger{ReasonType: usercoin.ReasonVideoTip}, want: "给视频打赏"},
-		{name: "video tip income with id", row: &model.CoinLedger{ReasonType: usercoin.ReasonVideoTipIncome, VideoID: 99}, want: "给视频 BV99 打赏"},
-		{name: "video tip income no id", row: &model.CoinLedger{ReasonType: usercoin.ReasonVideoTipIncome}, want: "给视频打赏"},
-		{name: "default", row: &model.CoinLedger{ReasonType: "unknown_type"}, want: "硬币变动"},
-		{name: "empty", row: &model.CoinLedger{ReasonType: ""}, want: "硬币变动"},
+		{name: "login reward", row: &user.CoinLedger{ReasonType: usercoin.ReasonLoginReward}, want: "登录奖励"},
+		{name: "nickname change", row: &user.CoinLedger{ReasonType: usercoin.ReasonNicknameChange}, want: "修改昵称"},
+		{name: "video tip with id", row: &user.CoinLedger{ReasonType: usercoin.ReasonVideoTip, VideoID: 42}, want: "给视频 BV42 打赏"},
+		{name: "video tip no id", row: &user.CoinLedger{ReasonType: usercoin.ReasonVideoTip}, want: "给视频打赏"},
+		{name: "video tip income with id", row: &user.CoinLedger{ReasonType: usercoin.ReasonVideoTipIncome, VideoID: 99}, want: "给视频 BV99 打赏"},
+		{name: "video tip income no id", row: &user.CoinLedger{ReasonType: usercoin.ReasonVideoTipIncome}, want: "给视频打赏"},
+		{name: "default", row: &user.CoinLedger{ReasonType: "unknown_type"}, want: "硬币变动"},
+		{name: "empty", row: &user.CoinLedger{ReasonType: ""}, want: "硬币变动"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -49,11 +50,11 @@ func TestFormatCoinLedgerItem(t *testing.T) {
 	now := time.Date(2025, 6, 15, 10, 30, 0, 0, time.UTC)
 	tests := []struct {
 		name string
-		row  *model.CoinLedger
+		row  *user.CoinLedger
 	}{
-		{name: "positive delta", row: &model.CoinLedger{CreatedAt: now, DeltaTenths: 10, ReasonType: usercoin.ReasonLoginReward}},
-		{name: "negative delta", row: &model.CoinLedger{CreatedAt: now, DeltaTenths: -60, ReasonType: usercoin.ReasonNicknameChange}},
-		{name: "zero delta", row: &model.CoinLedger{CreatedAt: now, DeltaTenths: 0, ReasonType: ""}},
+		{name: "positive delta", row: &user.CoinLedger{CreatedAt: now, DeltaTenths: 10, ReasonType: usercoin.ReasonLoginReward}},
+		{name: "negative delta", row: &user.CoinLedger{CreatedAt: now, DeltaTenths: -60, ReasonType: usercoin.ReasonNicknameChange}},
+		{name: "zero delta", row: &user.CoinLedger{CreatedAt: now, DeltaTenths: 0, ReasonType: ""}},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -111,22 +112,22 @@ func TestBannerSlideURL(t *testing.T) {
 func TestSpacePrivacyFromUser(t *testing.T) {
 	tests := []struct {
 		name string
-		u    *model.User
+		u    *user.User
 		want spacePrivacyPayload
 	}{
 		{
 			name: "all true",
-			u:    &model.User{PrivacyPublicFavorites: true, PrivacyPublicRecentCoins: true, PrivacyPublicFollowing: true, PrivacyPublicFans: true, PrivacyPublicBirthday: true},
+			u:    &user.User{PrivacyPublicFavorites: true, PrivacyPublicRecentCoins: true, PrivacyPublicFollowing: true, PrivacyPublicFans: true, PrivacyPublicBirthday: true},
 			want: spacePrivacyPayload{true, true, true, true, true},
 		},
 		{
 			name: "all false",
-			u:    &model.User{},
+			u:    &user.User{},
 			want: spacePrivacyPayload{false, false, false, false, false},
 		},
 		{
 			name: "mixed",
-			u:    &model.User{PrivacyPublicFavorites: true, PrivacyPublicFollowing: true, PrivacyPublicBirthday: true},
+			u:    &user.User{PrivacyPublicFavorites: true, PrivacyPublicFollowing: true, PrivacyPublicBirthday: true},
 			want: spacePrivacyPayload{true, false, true, false, true},
 		},
 	}
@@ -341,16 +342,16 @@ func TestPreviewCommentContent(t *testing.T) {
 func TestDynamicDisplayTitle(t *testing.T) {
 	tests := []struct {
 		name string
-		d    *model.UserDynamic
+		d    *dynamic.UserDynamic
 		want string
 	}{
 		{name: "nil dynamic", d: nil, want: ""},
-		{name: "has title", d: &model.UserDynamic{Title: "My Title"}, want: "My Title"},
-		{name: "title with spaces", d: &model.UserDynamic{Title: "  Spaced Title  "}, want: "Spaced Title"},
-		{name: "empty title, has content", d: &model.UserDynamic{Title: "", Content: "Some content here"}, want: "Some content here"},
-		{name: "long content truncated", d: &model.UserDynamic{Title: "", Content: "This is a very long content that should be truncated after forty characters"}, want: "This is a very long content that should \u2026"},
-		{name: "empty everything", d: &model.UserDynamic{Title: "", Content: ""}, want: "图文动态"},
-		{name: "spaces only in content", d: &model.UserDynamic{Title: "", Content: "   "}, want: "图文动态"},
+		{name: "has title", d: &dynamic.UserDynamic{Title: "My Title"}, want: "My Title"},
+		{name: "title with spaces", d: &dynamic.UserDynamic{Title: "  Spaced Title  "}, want: "Spaced Title"},
+		{name: "empty title, has content", d: &dynamic.UserDynamic{Title: "", Content: "Some content here"}, want: "Some content here"},
+		{name: "long content truncated", d: &dynamic.UserDynamic{Title: "", Content: "This is a very long content that should be truncated after forty characters"}, want: "This is a very long content that should \u2026"},
+		{name: "empty everything", d: &dynamic.UserDynamic{Title: "", Content: ""}, want: "图文动态"},
+		{name: "spaces only in content", d: &dynamic.UserDynamic{Title: "", Content: "   "}, want: "图文动态"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -367,17 +368,17 @@ func TestDynamicDisplayTitle(t *testing.T) {
 func TestDynamicCoverURL(t *testing.T) {
 	tests := []struct {
 		name string
-		d    *model.UserDynamic
+		d    *dynamic.UserDynamic
 		want string
 	}{
 		{name: "nil dynamic", d: nil, want: ""},
-		{name: "empty images json", d: &model.UserDynamic{ImagesJSON: ""}, want: ""},
-		{name: "empty array", d: &model.UserDynamic{ImagesJSON: "[]"}, want: ""},
-		{name: "single image", d: &model.UserDynamic{ImagesJSON: "[\"https://example.com/img.jpg\"]"}, want: "https://example.com/img.jpg"},
-		{name: "multiple images returns first", d: &model.UserDynamic{ImagesJSON: "[\"https://example.com/1.jpg\",\"https://example.com/2.jpg\"]"}, want: "https://example.com/1.jpg"},
-		{name: "invalid json", d: &model.UserDynamic{ImagesJSON: "not-json"}, want: ""},
-		{name: "whitespace jpg", d: &model.UserDynamic{ImagesJSON: "[\"  https://example.com/img.jpg  \"]"}, want: "https://example.com/img.jpg"},
-		{name: "empty strings in array", d: &model.UserDynamic{ImagesJSON: "[\"\",\"https://example.com/img.jpg\"]"}, want: "https://example.com/img.jpg"},
+		{name: "empty images json", d: &dynamic.UserDynamic{ImagesJSON: ""}, want: ""},
+		{name: "empty array", d: &dynamic.UserDynamic{ImagesJSON: "[]"}, want: ""},
+		{name: "single image", d: &dynamic.UserDynamic{ImagesJSON: "[\"https://example.com/img.jpg\"]"}, want: "https://example.com/img.jpg"},
+		{name: "multiple images returns first", d: &dynamic.UserDynamic{ImagesJSON: "[\"https://example.com/1.jpg\",\"https://example.com/2.jpg\"]"}, want: "https://example.com/1.jpg"},
+		{name: "invalid json", d: &dynamic.UserDynamic{ImagesJSON: "not-json"}, want: ""},
+		{name: "whitespace jpg", d: &dynamic.UserDynamic{ImagesJSON: "[\"  https://example.com/img.jpg  \"]"}, want: "https://example.com/img.jpg"},
+		{name: "empty strings in array", d: &dynamic.UserDynamic{ImagesJSON: "[\"\",\"https://example.com/img.jpg\"]"}, want: "https://example.com/img.jpg"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

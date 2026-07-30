@@ -3,6 +3,7 @@
 package handler
 
 import (
+	"minibili/internal/model/dm"
 	"encoding/json"
 	"fmt"
 	"testing"
@@ -11,7 +12,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"minibili/internal/config"
 
-	"minibili/internal/model"
 )
 
 
@@ -98,7 +98,7 @@ func TestDmPairIDs(t *testing.T) {
 }
 
 func TestDmPeerID(t *testing.T) {
-	conv := &model.DmConversation{UserLow: 1, UserHigh: 2}
+	conv := &dm.DmConversation{UserLow: 1, UserHigh: 2}
 	require.Equal(t, uint64(2), dmPeerID(conv, 1))
 	require.Equal(t, uint64(1), dmPeerID(conv, 2))
 }

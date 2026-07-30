@@ -3,6 +3,7 @@
 package handler
 
 import (
+	"minibili/internal/model/dynamic"
 	"encoding/json"
 	"fmt"
 	"testing"
@@ -10,7 +11,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"minibili/internal/model"
 )
 
 func Test_ArticleEngagementFavoriteAndCoin(t *testing.T) {
@@ -31,7 +31,7 @@ func Test_DynamicCommentFullFlow(t *testing.T) {
 	u2 := seedUser(t, api, "dcf2", "DCF2", 10)
 	tk := tok(t, api, u.ID)
 	tk2 := tok(t, api, u2.ID)
-	dyn := model.UserDynamic{UserID: u.ID, Title: "DCF Dynamic", Content: "Test content for comments", ImagesJSON: "[]", CreatedAt: time.Now()}
+	dyn := dynamic.UserDynamic{UserID: u.ID, Title: "DCF Dynamic", Content: "Test content for comments", ImagesJSON: "[]", CreatedAt: time.Now()}
 	require.NoError(t, api.DB.Create(&dyn).Error)
 	body := fmt.Sprintf(`{"content":"Nice dynamic!","dynamic_id":%d}`, dyn.ID)
 	w := srve(r, areq("POST", fmt.Sprintf("/api/v1/user-dynamics/%d/comments", dyn.ID), tk2, body))
@@ -61,7 +61,7 @@ func Test_UserDynamicUpdateAndList(t *testing.T) {
 		srve(r, areq("PATCH", fmt.Sprintf("/api/v1/users/me/dynamics/%d/playback", did), tk, `{"current_time":30.0}`))
 	}
 	srve(r, areq("GET", fmt.Sprintf("/api/v1/space/%d/dynamics", u.ID), "", nil))
-	dyn2 := model.UserDynamic{UserID: u2.ID, Title: "Other Dynamic", Content: "Other", ImagesJSON: "[]", CreatedAt: time.Now()}
+	dyn2 := dynamic.UserDynamic{UserID: u2.ID, Title: "Other Dynamic", Content: "Other", ImagesJSON: "[]", CreatedAt: time.Now()}
 	require.NoError(t, api.DB.Create(&dyn2).Error)
 	srve(r, areq("GET", fmt.Sprintf("/api/v1/user-dynamics/%d", dyn2.ID), "", nil))
 }

@@ -1,6 +1,8 @@
 package service
 
 import (
+	"minibili/internal/model/agent"
+	"minibili/internal/model/dm"
 	"context"
 	"os"
 	"path/filepath"
@@ -17,7 +19,6 @@ import (
 	"minibili/internal/aigateway"
 	"minibili/internal/config"
 	"minibili/internal/data"
-	"minibili/internal/model"
 	"minibili/internal/pkg/sensitive"
 )
 
@@ -40,9 +41,9 @@ func newAgentTestRedis(t *testing.T) (*miniredis.Miniredis, *redis.Client) {
 	return mr, rdb
 }
 
-func seedAgentProfile(t *testing.T, db *gorm.DB) *model.AgentProfile {
+func seedAgentProfile(t *testing.T, db *gorm.DB) *agent.AgentProfile {
 	t.Helper()
-	p := &model.AgentProfile{
+	p := &agent.AgentProfile{
 		Slug:                "test-assistant",
 		BotUserID:           1001,
 		DisplayName:         "Test Assistant",
@@ -55,16 +56,16 @@ func seedAgentProfile(t *testing.T, db *gorm.DB) *model.AgentProfile {
 	return p
 }
 
-func seedAgentConversation(t *testing.T, db *gorm.DB, humanID, botID uint64, profileID uint64) *model.DmConversation {
+func seedAgentConversation(t *testing.T, db *gorm.DB, humanID, botID uint64, profileID uint64) *dm.DmConversation {
 	t.Helper()
 	low, high := humanID, botID
 	if low > high {
 		low, high = high, low
 	}
-	conv := &model.DmConversation{
+	conv := &dm.DmConversation{
 		UserLow:        low,
 		UserHigh:       high,
-		Kind:           model.DmKindAgent,
+		Kind:           dm.DmKindAgent,
 		AgentProfileID: profileID,
 		LastPreview:    "Welcome!",
 	}
@@ -240,9 +241,9 @@ func TestAgentService_EnsureForUser(t *testing.T) {
 func TestAgentService_IsAgentConversation_More(t *testing.T) {
 	s := &AgentService{}
 	require.False(t, s.IsAgentConversation(nil))
-	require.False(t, s.IsAgentConversation(&model.DmConversation{}))
-	require.False(t, s.IsAgentConversation(&model.DmConversation{Kind: "human"}))
-	require.True(t, s.IsAgentConversation(&model.DmConversation{Kind: model.DmKindAgent}))
+	require.False(t, s.IsAgentConversation(&dm.DmConversation{}))
+	require.False(t, s.IsAgentConversation(&dm.DmConversation{Kind: "human"}))
+	require.True(t, s.IsAgentConversation(&dm.DmConversation{Kind: dm.DmKindAgent}))
 }
 
 // ---------- IsBotUser ----------
@@ -288,7 +289,7 @@ func TestAgentService_profileForConversation(t *testing.T) {
 		db := newAgentTestDB(t)
 		prof := seedAgentProfile(t, db)
 		s := &AgentService{DB: db}
-		p, err := s.profileForConversation(&model.DmConversation{AgentProfileID: prof.ID})
+		p, err := s.profileForConversation(&dm.DmConversation{AgentProfileID: prof.ID})
 		require.NoError(t, err)
 		require.Equal(t, prof.ID, p.ID)
 	})
@@ -307,7 +308,7 @@ func TestAgentService_profileForConversation(t *testing.T) {
 	t.Run("no matching profile", func(t *testing.T) {
 		db := newAgentTestDB(t)
 		s := &AgentService{DB: db}
-		p, err := s.profileForConversation(&model.DmConversation{
+		p, err := s.profileForConversation(&dm.DmConversation{
 			UserLow:  1,
 			UserHigh: 2,
 		})
@@ -330,7 +331,7 @@ func TestAgentService_PostAssistantMessage(t *testing.T) {
 	t.Run("no matching profile", func(t *testing.T) {
 		db := newAgentTestDB(t)
 		s := &AgentService{DB: db}
-		msg, err := s.PostAssistantMessage(&model.DmConversation{ID: 1}, 42, "hello")
+		msg, err := s.PostAssistantMessage(&dm.DmConversation{ID: 1}, 42, "hello")
 		require.Error(t, err)
 		require.Nil(t, msg)
 	})
@@ -349,7 +350,7 @@ func TestAgentService_PostAssistantMessage(t *testing.T) {
 		db := newAgentTestDB(t)
 		prof := seedAgentProfile(t, db)
 		conv := seedAgentConversation(t, db, 42, prof.BotUserID, prof.ID)
-		require.NoError(t, db.Create(&model.DmParticipant{
+		require.NoError(t, db.Create(&dm.DmParticipant{
 			ConversationID: conv.ID,
 			UserID:         42,
 			UnreadCount:    0,
@@ -363,7 +364,7 @@ func TestAgentService_PostAssistantMessage(t *testing.T) {
 		require.Equal(t, "Hello! How can I help?", msg.Content)
 		require.Equal(t, prof.BotUserID, msg.SenderID)
 
-		var updated model.DmConversation
+		var updated dm.DmConversation
 		require.NoError(t, db.First(&updated, conv.ID).Error)
 		require.Contains(t, updated.LastPreview, "Hello!")
 	})
@@ -372,7 +373,7 @@ func TestAgentService_PostAssistantMessage(t *testing.T) {
 		db := newAgentTestDB(t)
 		prof := seedAgentProfile(t, db)
 		conv := seedAgentConversation(t, db, 42, prof.BotUserID, prof.ID)
-		require.NoError(t, db.Create(&model.DmParticipant{
+		require.NoError(t, db.Create(&dm.DmParticipant{
 			ConversationID: conv.ID,
 			UserID:         42,
 		}).Error)
@@ -419,7 +420,7 @@ func TestAgentService_applyDynamicGatewayConfig(t *testing.T) {
 func TestAgentService_GenerateReply(t *testing.T) {
 	t.Run("gateway not ready", func(t *testing.T) {
 		s := &AgentService{}
-		_, err := s.GenerateReply(context.Background(), &model.DmConversation{ID: 1}, "hello")
+		_, err := s.GenerateReply(context.Background(), &dm.DmConversation{ID: 1}, "hello")
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "not configured")
 	})
@@ -435,7 +436,7 @@ func TestAgentService_GenerateReply(t *testing.T) {
 			},
 			Gateway: &aigateway.Gateway{LLM: &aigateway.Client{APIKey: "sk-test"}},
 		}
-		_, err := s.GenerateReply(context.Background(), &model.DmConversation{
+		_, err := s.GenerateReply(context.Background(), &dm.DmConversation{
 			ID:       1,
 			UserLow:  1,
 			UserHigh: 2,
@@ -520,7 +521,7 @@ func TestAgentService_ResetConversation(t *testing.T) {
 
 	t.Run("nil DB", func(t *testing.T) {
 		s := &AgentService{}
-		msg, err := s.ResetConversation(context.Background(), &model.DmConversation{}, 0)
+		msg, err := s.ResetConversation(context.Background(), &dm.DmConversation{}, 0)
 		require.Error(t, err)
 		require.Nil(t, msg)
 	})
@@ -535,7 +536,7 @@ func TestAgentService_ResetConversation(t *testing.T) {
 	t.Run("zero human", func(t *testing.T) {
 		db := newAgentTestDB(t)
 		s := &AgentService{DB: db}
-		msg, err := s.ResetConversation(context.Background(), &model.DmConversation{ID: 1}, 0)
+		msg, err := s.ResetConversation(context.Background(), &dm.DmConversation{ID: 1}, 0)
 		require.Error(t, err)
 		require.Nil(t, msg)
 	})
@@ -543,7 +544,7 @@ func TestAgentService_ResetConversation(t *testing.T) {
 	t.Run("no matching profile", func(t *testing.T) {
 		db := newAgentTestDB(t)
 		s := &AgentService{DB: db}
-		conv := &model.DmConversation{ID: 1, UserLow: 1, UserHigh: 2}
+		conv := &dm.DmConversation{ID: 1, UserLow: 1, UserHigh: 2}
 		msg, err := s.ResetConversation(context.Background(), conv, 1)
 		require.Error(t, err)
 		require.Nil(t, msg)
@@ -553,7 +554,7 @@ func TestAgentService_ResetConversation(t *testing.T) {
 		db := newAgentTestDB(t)
 		prof := seedAgentProfile(t, db)
 		conv := seedAgentConversation(t, db, 42, prof.BotUserID, prof.ID)
-		require.NoError(t, db.Create(&model.DmParticipant{
+		require.NoError(t, db.Create(&dm.DmParticipant{
 			ConversationID: conv.ID,
 			UserID:         42,
 			UnreadCount:    5,
@@ -568,10 +569,10 @@ func TestAgentService_ResetConversation(t *testing.T) {
 		require.Equal(t, "Hello!", msg.Content)
 
 		var count int64
-		db.Model(&model.DmMessage{}).Where("conversation_id = ?", conv.ID).Count(&count)
+		db.Model(&dm.DmMessage{}).Where("conversation_id = ?", conv.ID).Count(&count)
 		require.Equal(t, int64(1), count)
 
-		var part model.DmParticipant
+		var part dm.DmParticipant
 		require.NoError(t, db.Where("conversation_id = ? AND user_id = ?", conv.ID, 42).First(&part).Error)
 		require.Equal(t, uint32(0), part.UnreadCount)
 	})

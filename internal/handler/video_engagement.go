@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"minibili/internal/model/video"
+	"context"
 	"errors"
 	"net/http"
 	"strconv"
@@ -11,25 +13,12 @@ import (
 
 	"minibili/internal/errcode"
 	"minibili/internal/middleware"
-	"minibili/internal/model"
-	"minibili/internal/pkg/dailyreward"
 	"minibili/internal/pkg/resp"
 	"minibili/internal/pkg/usercoin"
 )
 
-func videoFavsByViewer(db *gorm.DB, viewer uint64, ids []uint64) map[uint64]bool {
-	out := make(map[uint64]bool)
-	if viewer == 0 || len(ids) == 0 {
-		return out
-	}
-	var rows []model.VideoFavorite
-	if err := db.Where("user_id = ? AND video_id IN ?", viewer, ids).Find(&rows).Error; err != nil {
-		return out
-	}
-	for i := range rows {
-		out[rows[i].VideoID] = true
-	}
-	return out
+func (a *API) userVideoFavoriteCount(uid, vid uint64) (int64, error) {
+	return a.EngagementSvc.UserFavoriteCount(context.Background(), uid, vid)
 }
 
 func videoCoinsByViewer(db *gorm.DB, viewer uint64, ids []uint64) map[uint64]int {
@@ -37,7 +26,7 @@ func videoCoinsByViewer(db *gorm.DB, viewer uint64, ids []uint64) map[uint64]int
 	if viewer == 0 || len(ids) == 0 {
 		return out
 	}
-	var rows []model.VideoCoin
+	var rows []video.VideoCoin
 	if err := db.Where("user_id = ? AND video_id IN ?", viewer, ids).Find(&rows).Error; err != nil {
 		return out
 	}
@@ -54,15 +43,15 @@ func videoCoinsByViewer(db *gorm.DB, viewer uint64, ids []uint64) map[uint64]int
 	return out
 }
 
-func videoEngagementByViewer(db *gorm.DB, viewer uint64, ids []uint64) map[uint64]videoEngagement {
+func (a *API) engagementByViewer(viewer uint64, ids []uint64) map[uint64]videoEngagement {
 	out := make(map[uint64]videoEngagement, len(ids))
 	if viewer == 0 || len(ids) == 0 {
 		return out
 	}
-	liked := videoLikesByViewer(db, viewer, ids)
-	faved := videoFavsByViewer(db, viewer, ids)
-	coined := videoCoinsByViewer(db, viewer, ids)
-	later := watchLaterByViewer(db, viewer, ids)
+	liked := a.EngagementSvc.BatchVideoLikes(context.Background(), viewer, ids)
+	faved := a.EngagementSvc.BatchFavoritedByUser(context.Background(), viewer, ids)
+	coined := a.EngagementSvc.BatchCoinedByUser(context.Background(), viewer, ids)
+	later := a.EngagementSvc.BatchWatchLater(context.Background(), viewer, ids)
 	for _, id := range ids {
 		coinAmt := coined[id]
 		out[id] = videoEngagement{
@@ -76,12 +65,14 @@ func videoEngagementByViewer(db *gorm.DB, viewer uint64, ids []uint64) map[uint6
 	return out
 }
 
+
+
 func watchLaterByViewer(db *gorm.DB, viewer uint64, ids []uint64) map[uint64]bool {
 	out := make(map[uint64]bool)
 	if viewer == 0 || len(ids) == 0 {
 		return out
 	}
-	var rows []model.WatchLater
+	var rows []video.WatchLater
 	if err := db.Where("user_id = ? AND video_id IN ?", viewer, ids).Find(&rows).Error; err != nil {
 		return out
 	}
@@ -91,13 +82,11 @@ func watchLaterByViewer(db *gorm.DB, viewer uint64, ids []uint64) map[uint64]boo
 	return out
 }
 
-func loadPublishedVideo(a *API, vid uint64) (model.Video, bool) {
-	var v model.Video
-	if err := a.DB.First(&v, vid).Error; err != nil {
-		return v, false
-	}
-	if v.Status != "published" {
-		return v, false
+
+func loadPublishedVideo(a *API, vid uint64) (*video.Video, bool) {
+	v, err := a.VideoSvc.GetPublishedVideo(context.Background(), vid)
+	if err != nil {
+		return nil, false
 	}
 	return v, true
 }
@@ -126,39 +115,18 @@ func (a *API) ToggleVideoFavorite(c *gin.Context) {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
-	var rows []model.VideoFavorite
-	res := a.DB.Where("user_id = ? AND video_id = ?", uid, vid).Find(&rows)
-	if res.Error != nil {
+	def, err := a.ensureDefaultFavoriteFolder(uid)
+	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	if len(rows) == 0 {
-		def, err := a.ensureDefaultFavoriteFolder(uid)
-		if err != nil {
-			resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
-			return
-		}
-		row := model.VideoFavorite{UserID: uid, VideoID: vid, FolderID: def.ID}
-		if err := a.DB.Create(&row).Error; err != nil {
-			resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
-			return
-		}
-		_ = a.DB.Model(&model.Video{}).Where("id = ?", vid).UpdateColumn("fav_count", gorm.Expr("fav_count + ?", 1)).Error
-		var v model.Video
-		_ = a.DB.First(&v, vid).Error
-		resp.OK(c, gin.H{"favorited": true, "fav_count": v.FavCount})
-		return
-	}
-	if err := a.DB.Where("user_id = ? AND video_id = ?", uid, vid).Delete(&model.VideoFavorite{}).Error; err != nil {
+	favorited, favCount, err := a.EngagementSvc.ToggleVideoFavoriteWithFolder(context.Background(), uid, vid, def.ID)
+	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	_ = a.DB.Model(&model.Video{}).Where("id = ?", vid).UpdateColumn("fav_count", gorm.Expr("CASE WHEN fav_count - ? < 0 THEN 0 ELSE fav_count - ? END", 1, 1)).Error
-	var v model.Video
-	_ = a.DB.First(&v, vid).Error
-	resp.OK(c, gin.H{"favorited": false, "fav_count": v.FavCount})
+	resp.OK(c, gin.H{"favorited": favorited, "fav_count": favCount})
 }
-
 const favoriteFolderCapacity = 999
 
 type setVideoFavoriteFoldersJSON struct {
@@ -195,14 +163,6 @@ func (a *API) GetVideoFavoritePicker(c *gin.Context) {
 		return
 	}
 	selected := make(map[uint64]bool)
-	var favRows []model.VideoFavorite
-	if err := a.DB.Where("user_id = ? AND video_id = ?", uid, vid).Find(&favRows).Error; err != nil {
-		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
-		return
-	}
-	for i := range favRows {
-		selected[favRows[i].FolderID] = true
-	}
 	items := make([]gin.H, 0, len(folderRows))
 	for _, row := range folderRows {
 		id, _ := row["id"].(uint64)
@@ -212,23 +172,17 @@ func (a *API) GetVideoFavoritePicker(c *gin.Context) {
 		if !isDefault {
 			countLabel = strconv.FormatInt(videoCount, 10) + "/" + strconv.Itoa(favoriteFolderCapacity)
 		}
-		items = append(items, gin.H{
-			"id":           id,
-			"title":        row["title"],
-			"is_default":   isDefault,
-			"video_count":  videoCount,
-			"count_label":  countLabel,
-			"selected":     selected[id],
+		inFolder, _ := a.FavoriteSvc.CheckFavoriteExists(context.Background(), uid, id, vid)
+		if inFolder { selected[id] = true }
+		items = append(items, gin.H{"id": id, "title": row["title"],
+			"is_default": isDefault, "video_count": videoCount,
+			"count_label": countLabel, "selected": selected[id],
 		})
 	}
-	var v model.Video
-	_ = a.DB.First(&v, vid).Error
-	resp.OK(c, gin.H{
-		"favorited":  len(favRows) > 0,
-		"fav_count":  v.FavCount,
-		"folder_ids": folderIDsFromMap(selected),
-		"items":      items,
-	})
+	v, _ := a.VideoSvc.GetPublishedVideo(context.Background(), vid)
+	var favCount uint64
+	if v != nil { favCount = v.FavCount }
+	resp.OK(c, gin.H{"favorited": len(selected) > 0, "fav_count": favCount, "folder_ids": folderIDsFromMap(selected), "items": items})
 }
 
 func folderIDsFromMap(m map[uint64]bool) []uint64 {
@@ -271,115 +225,35 @@ func (a *API) SetVideoFavoriteFolders(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	want := make(map[uint64]bool)
-	for _, fid := range body.FolderIDs {
-		if fid > 0 {
-			want[fid] = true
-		}
-	}
 	if _, err := a.ensureDefaultFavoriteFolder(uid); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	if len(want) > 0 {
-		var owned int64
-		ids := make([]uint64, 0, len(want))
-		for fid := range want {
-			ids = append(ids, fid)
-		}
-		if err := a.DB.Model(&model.FavoriteFolder{}).
-			Where("user_id = ? AND id IN ?", uid, ids).
-			Count(&owned).Error; err != nil {
-			resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
-			return
-		}
-		if int(owned) != len(ids) {
-			resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
-			return
-		}
-		for fid := range want {
-			var cnt int64
-			_ = a.DB.Model(&model.VideoFavorite{}).Where("folder_id = ?", fid).Count(&cnt).Error
-			var already bool
-			var row model.VideoFavorite
-			if err := a.DB.Where("user_id = ? AND video_id = ? AND folder_id = ?", uid, vid, fid).
-				Limit(1).Find(&row).Error; err == nil && row.ID > 0 {
-				already = true
-			}
-			if !already && cnt >= favoriteFolderCapacity {
-				resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
-				return
-			}
-		}
-	}
-	var existing []model.VideoFavorite
-	if err := a.DB.Where("user_id = ? AND video_id = ?", uid, vid).Find(&existing).Error; err != nil {
+	result, err := a.FavoriteSvc.SetVideoFavoriteFolders(context.Background(), uid, vid, body.FolderIDs)
+	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	existingSet := make(map[uint64]bool, len(existing))
-	for i := range existing {
-		existingSet[existing[i].FolderID] = true
+	if result == nil {
+		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
+		return
 	}
-	wasFavorited := len(existing) > 0
-	for fid := range want {
-		if existingSet[fid] {
-			continue
-		}
-		row := model.VideoFavorite{UserID: uid, VideoID: vid, FolderID: fid}
-		if err := a.DB.Create(&row).Error; err != nil {
-			resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
-			return
-		}
-	}
-	for i := range existing {
-		if want[existing[i].FolderID] {
-			continue
-		}
-		if err := a.DB.Delete(&existing[i]).Error; err != nil {
-			resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
-			return
-		}
-	}
-	willFavorited := len(want) > 0
-	if !wasFavorited && willFavorited {
-		_ = a.DB.Model(&model.Video{}).Where("id = ?", vid).UpdateColumn("fav_count", gorm.Expr("fav_count + ?", 1)).Error
-	} else if wasFavorited && !willFavorited {
-		_ = a.DB.Model(&model.Video{}).Where("id = ?", vid).UpdateColumn("fav_count", gorm.Expr("CASE WHEN fav_count - ? < 0 THEN 0 ELSE fav_count - ? END", 1, 1)).Error
-	}
-	var v model.Video
-	_ = a.DB.First(&v, vid).Error
-	resp.OK(c, gin.H{
-		"favorited":  willFavorited,
-		"fav_count":  v.FavCount,
-		"folder_ids": folderIDsFromMap(want),
-	})
+	resp.OK(c, gin.H{"favorited": result.Favorited, "fav_count": result.FavCount, "folder_ids": result.FolderIDs})
 }
 
-func (a *API) userVideoFavoriteCount(uid, vid uint64) (int64, error) {
-	var cnt int64
-	err := a.DB.Model(&model.VideoFavorite{}).
-		Where("user_id = ? AND video_id = ?", uid, vid).
-		Count(&cnt).Error
-	return cnt, err
-}
+
 
 func (a *API) syncVideoFavCountAfterUserChange(vid uint64, before, after int64) {
 	if before == 0 && after > 0 {
-		_ = a.DB.Model(&model.Video{}).Where("id = ?", vid).
-			UpdateColumn("fav_count", gorm.Expr("fav_count + ?", 1)).Error
+		_ = a.EngagementSvc.AdjustVideoFavCount(context.Background(), vid, 1)
 	} else if before > 0 && after == 0 {
-		_ = a.DB.Model(&model.Video{}).Where("id = ?", vid).
-			UpdateColumn("fav_count", gorm.Expr("CASE WHEN fav_count - ? < 0 THEN 0 ELSE fav_count - ? END", 1, 1)).Error
+		_ = a.EngagementSvc.AdjustVideoFavCount(context.Background(), vid, -1)
 	}
 }
 
 func (a *API) validateFolderOwned(uid, folderID uint64) bool {
-	var cnt int64
-	_ = a.DB.Model(&model.FavoriteFolder{}).
-		Where("user_id = ? AND id = ?", uid, folderID).
-		Count(&cnt).Error
-	return cnt > 0
+	f, err := a.FavoriteSvc.GetFolderByID(context.Background(), folderID)
+	return err == nil && f.UserID == uid
 }
 
 // RemoveVideoFromFavoriteFolder removes the video from one folder (current-folder unfavorite).
@@ -415,15 +289,13 @@ func (a *API) RemoveVideoFromFavoriteFolder(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	res := a.DB.Where("user_id = ? AND video_id = ? AND folder_id = ?", uid, vid, folderID).
-		Delete(&model.VideoFavorite{})
-	if res.Error != nil {
+	if err := a.FavoriteSvc.RemoveFavorite(context.Background(), folderID, vid); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
 	after, _ := a.userVideoFavoriteCount(uid, vid)
 	a.syncVideoFavCountAfterUserChange(vid, before, after)
-	resp.OK(c, gin.H{"ok": true, "removed": res.RowsAffected > 0})
+	resp.OK(c, gin.H{"ok": true, "removed": after < before})
 }
 
 // AddVideoToFavoriteFolder copies the video into another folder.
@@ -454,18 +326,20 @@ func (a *API) AddVideoToFavoriteFolder(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	var exists model.VideoFavorite
-	if err := a.DB.Where("user_id = ? AND video_id = ? AND folder_id = ?", uid, vid, folderID).
-		Limit(1).Find(&exists).Error; err != nil {
+	exists, err := a.FavoriteSvc.CheckFavoriteExists(context.Background(), uid, folderID, vid)
+	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	if exists.ID > 0 {
+	if exists {
 		resp.OK(c, gin.H{"ok": true, "copied": false})
 		return
 	}
-	var cnt int64
-	_ = a.DB.Model(&model.VideoFavorite{}).Where("folder_id = ?", folderID).Count(&cnt).Error
+	cnt, err := a.FavoriteSvc.CountFavoritesInFolder(context.Background(), folderID)
+	if err != nil {
+		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
+		return
+	}
 	if cnt >= favoriteFolderCapacity {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
@@ -475,8 +349,7 @@ func (a *API) AddVideoToFavoriteFolder(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	row := model.VideoFavorite{UserID: uid, VideoID: vid, FolderID: folderID}
-	if err := a.DB.Create(&row).Error; err != nil {
+	if err := a.FavoriteSvc.AddFavorite(context.Background(), folderID, vid, uid); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
@@ -527,39 +400,38 @@ func (a *API) MoveVideoFavoriteFolder(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	var inFrom model.VideoFavorite
-	if err := a.DB.Where("user_id = ? AND video_id = ? AND folder_id = ?", uid, vid, body.FromFolderID).
-		Limit(1).Find(&inFrom).Error; err != nil {
+	inFrom, err := a.FavoriteSvc.CheckFavoriteExists(context.Background(), uid, body.FromFolderID, vid)
+	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	if inFrom.ID == 0 {
+	if !inFrom {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	var inTo model.VideoFavorite
-	_ = a.DB.Where("user_id = ? AND video_id = ? AND folder_id = ?", uid, vid, body.ToFolderID).
-		Limit(1).Find(&inTo).Error
-	if inTo.ID > 0 {
-		if err := a.DB.Delete(&inFrom).Error; err != nil {
+	inTo, _ := a.FavoriteSvc.CheckFavoriteExists(context.Background(), uid, body.ToFolderID, vid)
+	if inTo {
+		if err := a.FavoriteSvc.DeleteFavoriteByVideo(context.Background(), uid, body.FromFolderID, vid); err != nil {
 			resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 			return
 		}
 		resp.OK(c, gin.H{"ok": true, "moved": true})
 		return
 	}
-	var cnt int64
-	_ = a.DB.Model(&model.VideoFavorite{}).Where("folder_id = ?", body.ToFolderID).Count(&cnt).Error
+	cnt, err := a.FavoriteSvc.CountFavoritesInFolder(context.Background(), body.ToFolderID)
+	if err != nil {
+		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
+		return
+	}
 	if cnt >= favoriteFolderCapacity {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	if err := a.DB.Delete(&inFrom).Error; err != nil {
+	if err := a.FavoriteSvc.DeleteFavoriteByVideo(context.Background(), uid, body.FromFolderID, vid); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	row := model.VideoFavorite{UserID: uid, VideoID: vid, FolderID: body.ToFolderID}
-	if err := a.DB.Create(&row).Error; err != nil {
+	if err := a.FavoriteSvc.AddFavorite(context.Background(), body.ToFolderID, vid, uid); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
@@ -620,82 +492,29 @@ func (a *API) PostVideoCoin(c *gin.Context) {
 	if amount != 1 && amount != 2 {
 		amount = 1
 	}
-	var exist model.VideoCoin
-	res := a.DB.Where("user_id = ? AND video_id = ?", uid, vid).Limit(1).Find(&exist)
-	if res.Error != nil {
+	result, err := a.EngagementSvc.PostVideoCoin(context.Background(), uid, vid, v.UserID, amount)
+	if err != nil {
+		if errors.Is(err, usercoin.ErrInsufficientCoins) {
+			resp.Err(c, http.StatusBadRequest, errcode.CodeInsufficientCoins)
+			return
+		}
+		a.Log.Error("post video coin", zap.Error(err))
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	coinBefore := dailyreward.CoinProgress(a.DB, uid)
-	var viewer model.User
-	var spentAmount int
-	var myCoinAmount int
-
-	if res.RowsAffected > 0 {
-		if exist.Amount >= 2 {
-			resp.Err(c, http.StatusBadRequest, errcode.CodeAlreadyCoined)
-			return
-		}
-		spentAmount = 1
-		myCoinAmount = 2
-		if err := a.DB.Transaction(func(tx *gorm.DB) error {
-			if err := usercoin.SpendOnVideoCoin(tx, uid, v.UserID, vid, spentAmount); err != nil {
-				return err
-			}
-			if err := tx.Model(&exist).Update("amount", 2).Error; err != nil {
-				return err
-			}
-			return tx.Model(&model.Video{}).Where("id = ?", vid).
-				UpdateColumn("coin_count", gorm.Expr("coin_count + ?", 1)).Error
-		}); err != nil {
-			if errors.Is(err, usercoin.ErrInsufficientCoins) {
-				resp.Err(c, http.StatusBadRequest, errcode.CodeInsufficientCoins)
-				return
-			}
-			a.Log.Error("post video coin add", zap.Error(err))
-			resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
-			return
-		}
-	} else {
-		if amount != 1 && amount != 2 {
-			amount = 1
-		}
-		spentAmount = amount
-		myCoinAmount = amount
-		if err := a.DB.Transaction(func(tx *gorm.DB) error {
-			if err := usercoin.SpendOnVideoCoin(tx, uid, v.UserID, vid, spentAmount); err != nil {
-				return err
-			}
-			row := model.VideoCoin{UserID: uid, VideoID: vid, Amount: amount}
-			if err := tx.Create(&row).Error; err != nil {
-				return err
-			}
-			return tx.Model(&model.Video{}).Where("id = ?", vid).
-				UpdateColumn("coin_count", gorm.Expr("coin_count + ?", amount)).Error
-		}); err != nil {
-			if errors.Is(err, usercoin.ErrInsufficientCoins) {
-				resp.Err(c, http.StatusBadRequest, errcode.CodeInsufficientCoins)
-				return
-			}
-			a.Log.Error("post video coin", zap.Error(err))
-			resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
-			return
-		}
+	if result == nil {
+		resp.Err(c, http.StatusBadRequest, errcode.CodeAlreadyCoined)
+		return
 	}
-
-	coinAfter := dailyreward.CoinProgress(a.DB, uid)
-	_ = dailyreward.GrantCoinExp(a.DB, uid, coinBefore, coinAfter)
-	_ = a.DB.First(&v, vid).Error
-	_ = a.DB.First(&viewer, uid).Error
 	resp.OK(c, gin.H{
 		"coined":                  true,
-		"coin_count":              v.CoinCount,
-		"amount":                  spentAmount,
-		"my_coin_amount":          myCoinAmount,
+		"coin_count":              result.CoinCount,
+		"amount":                  result.Amount,
+		"my_coin_amount":          result.MyCoinAmount,
 		"coined_by_me":            true,
-		"coin_balance":            usercoin.BalanceFloat(viewer.CoinBalanceTenths),
-		"daily_coin_exp_progress": coinAfter,
-		"daily_coin_exp_max":      dailyreward.ExpCoinMax,
+		"coin_balance":            result.CoinBalance,
+		"daily_coin_exp_progress": result.DailyProgress,
+		"daily_coin_exp_max":      result.DailyMax,
 	})
 }
 
@@ -723,26 +542,12 @@ func (a *API) ToggleWatchLater(c *gin.Context) {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
-	var wl model.WatchLater
-	res := a.DB.Where("user_id = ? AND video_id = ?", uid, vid).Limit(1).Find(&wl)
-	if res.Error != nil {
+	added, err := a.EngagementSvc.ToggleWatchLater(context.Background(), uid, vid)
+	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	if res.RowsAffected == 0 {
-		row := model.WatchLater{UserID: uid, VideoID: vid}
-		if err := a.DB.Create(&row).Error; err != nil {
-			resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
-			return
-		}
-		resp.OK(c, gin.H{"in_watch_later": true})
-		return
-	}
-	if err := a.DB.Delete(&wl).Error; err != nil {
-		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
-		return
-	}
-	resp.OK(c, gin.H{"in_watch_later": false})
+	resp.OK(c, gin.H{"in_watch_later": added})
 }
 
 const watchLaterMaxItems = 100
@@ -763,84 +568,17 @@ func (a *API) ListMyWatchLater(c *gin.Context) {
 		resp.Err(c, http.StatusUnauthorized, errcode.CodeUnauthorized)
 		return
 	}
-	var total int64
-	if err := a.DB.Model(&model.WatchLater{}).Where("user_id = ?", uid).Count(&total).Error; err != nil {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	if page < 1 { page = 1 }
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	if pageSize < 1 { pageSize = 20 }
+	if pageSize > 50 { pageSize = 50 }
+	items, total, err := a.EngagementSvc.ListWatchLaterWithVideos(context.Background(), uid, page, pageSize)
+	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	limit := watchLaterMaxItems
-	if raw := c.Query("limit"); raw != "" {
-		if n, err := strconv.Atoi(raw); err == nil && n > 0 && n <= watchLaterMaxItems {
-			limit = n
-		}
-	}
-	var rows []model.WatchLater
-	if err := a.DB.Where("user_id = ?", uid).
-		Order("created_at DESC, id DESC").
-		Limit(limit).
-		Find(&rows).Error; err != nil {
-		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
-		return
-	}
-	if len(rows) == 0 {
-		resp.OK(c, gin.H{
-			"items":     []gin.H{},
-			"total":     total,
-			"max_limit": watchLaterMaxItems,
-		})
-		return
-	}
-	vids := make([]uint64, 0, len(rows))
-	for i := range rows {
-		vids = append(vids, rows[i].VideoID)
-	}
-	var videos []model.Video
-	if err := a.DB.Where("id IN ? AND status = ?", vids, "published").Find(&videos).Error; err != nil {
-		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
-		return
-	}
-	byID := make(map[uint64]model.Video, len(videos))
-	uids := make([]uint64, 0, len(videos))
-	for i := range videos {
-		byID[videos[i].ID] = videos[i]
-		uids = append(uids, videos[i].UserID)
-	}
-	var users []model.User
-	if len(uids) > 0 {
-		_ = a.DB.Where("id IN ?", uids).Find(&users).Error
-	}
-	userByID := map[uint64]model.User{}
-	for i := range users {
-		userByID[users[i].ID] = users[i]
-	}
-	items := make([]gin.H, 0, len(rows))
-	for i := range rows {
-		v, ok := byID[rows[i].VideoID]
-		if !ok {
-			continue
-		}
-		pc, _ := a.Play.Display(c.Request.Context(), &v)
-		u := userByID[v.UserID]
-		items = append(items, gin.H{
-			"id":                  v.ID,
-			"title":               v.Title,
-			"cover_url":           v.CoverURL,
-			"play_count":          pc,
-			"danmaku_count":       v.DanmakuCount,
-			"duration":            v.DurationSec,
-			"uploader":            model.DisplayUsername(&u),
-			"uploader_id":         v.UserID,
-			"uploader_avatar_url": uploaderAvatarForAPI(&u),
-			"watched":             rows[i].Watched,
-			"created_at":          v.CreatedAt.Format("2006-01-02 15:04:05"),
-			"added_at":            rows[i].CreatedAt.Format("2006-01-02 15:04:05"),
-		})
-	}
-	resp.OK(c, gin.H{
-		"items":     items,
-		"total":     total,
-		"max_limit": watchLaterMaxItems,
-	})
+	resp.OK(c, gin.H{"items": items, "total": total})
 }
 
 // ClearMyWatchLater removes all watch-later entries for the current user.
@@ -857,11 +595,11 @@ func (a *API) ClearMyWatchLater(c *gin.Context) {
 		resp.Err(c, http.StatusUnauthorized, errcode.CodeUnauthorized)
 		return
 	}
-	if err := a.DB.Where("user_id = ?", uid).Delete(&model.WatchLater{}).Error; err != nil {
+	if err := a.EngagementSvc.ClearWatchLater(context.Background(), uid); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	resp.OK(c, gin.H{"ok": true})
+	resp.OK(c, gin.H{"msg": "ok"})
 }
 
 // ClearWatchedWatchLater removes watched entries from the user's watch-later queue.
@@ -878,11 +616,11 @@ func (a *API) ClearWatchedWatchLater(c *gin.Context) {
 		resp.Err(c, http.StatusUnauthorized, errcode.CodeUnauthorized)
 		return
 	}
-	if err := a.DB.Where("user_id = ? AND watched = ?", uid, true).Delete(&model.WatchLater{}).Error; err != nil {
+	if err := a.EngagementSvc.ClearWatchedWatchLater(context.Background(), uid); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	resp.OK(c, gin.H{"ok": true})
+	resp.OK(c, gin.H{"msg": "ok"})
 }
 
 // MarkWatchLaterWatched marks a watch-later item as watched.
@@ -905,107 +643,33 @@ func (a *API) MarkWatchLaterWatched(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	res := a.DB.Model(&model.WatchLater{}).
-		Where("user_id = ? AND video_id = ?", uid, vid).
-		Update("watched", true)
-	if res.Error != nil {
+	if err := a.EngagementSvc.MarkWatchLaterWatched(context.Background(), uid, vid); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	if res.RowsAffected == 0 {
-		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
-		return
-	}
-	resp.OK(c, gin.H{"watched": true})
+	resp.OK(c, gin.H{"msg": "ok"})
 }
 
-func (a *API) favoriteListItems(c *gin.Context, ownerID uint64, limit int, folderID uint64, filterFolder bool) ([]gin.H, int64, error) {
+func (a *API) favoriteListItems(ctx context.Context, ownerID uint64, limit int, folderID uint64, filterFolder bool) ([]gin.H, int64, error) {
 	if _, err := a.ensureDefaultFavoriteFolder(ownerID); err != nil {
 		return nil, 0, err
 	}
-	base := a.DB.Model(&model.VideoFavorite{}).Where("user_id = ?", ownerID)
-	if filterFolder {
-		base = base.Where("folder_id = ?", folderID)
-	}
-	var total int64
-	if filterFolder {
-		if err := base.Count(&total).Error; err != nil {
-			return nil, 0, err
-		}
-	} else {
-		if err := base.Select("COUNT(DISTINCT video_id)").Scan(&total).Error; err != nil {
-			return nil, 0, err
-		}
-	}
-	if limit <= 0 || limit > 200 {
-		limit = 200
-	}
-	q := a.DB.Where("user_id = ?", ownerID)
-	if filterFolder {
-		q = q.Where("folder_id = ?", folderID)
-	}
-	var rows []model.VideoFavorite
-	if err := q.Order("created_at DESC, id DESC").
-		Limit(limit).
-		Find(&rows).Error; err != nil {
+	result, err := a.FavoriteSvc.ListUserFavoriteVideos(ctx, ownerID, limit, folderID, filterFolder)
+	if err != nil {
 		return nil, 0, err
 	}
-	if len(rows) == 0 {
-		return []gin.H{}, total, nil
-	}
-	vids := make([]uint64, 0, len(rows))
-	for i := range rows {
-		vids = append(vids, rows[i].VideoID)
-	}
-	var videos []model.Video
-	if err := a.DB.Where("id IN ? AND status = ?", vids, "published").Find(&videos).Error; err != nil {
-		return nil, 0, err
-	}
-	byID := make(map[uint64]model.Video, len(videos))
-	uids := make([]uint64, 0, len(videos))
-	for i := range videos {
-		byID[videos[i].ID] = videos[i]
-		uids = append(uids, videos[i].UserID)
-	}
-	var users []model.User
-	if len(uids) > 0 {
-		_ = a.DB.Where("id IN ?", uids).Find(&users).Error
-	}
-	userByID := map[uint64]model.User{}
-	for i := range users {
-		userByID[users[i].ID] = users[i]
-	}
-	items := make([]gin.H, 0, len(rows))
-	seenVideo := make(map[uint64]struct{})
-	for i := range rows {
-		v, ok := byID[rows[i].VideoID]
-		if !ok {
-			continue
-		}
-		if !filterFolder {
-			if _, dup := seenVideo[rows[i].VideoID]; dup {
-				continue
-			}
-			seenVideo[rows[i].VideoID] = struct{}{}
-		}
-		pc, _ := a.Play.Display(c.Request.Context(), &v)
-		u := userByID[v.UserID]
+	items := make([]gin.H, 0, len(result.Items))
+	for _, item := range result.Items {
 		items = append(items, gin.H{
-			"id":                  v.ID,
-			"title":               v.Title,
-			"cover_url":           v.CoverURL,
-			"play_count":          pc,
-			"danmaku_count":       v.DanmakuCount,
-			"duration":            v.DurationSec,
-			"uploader":            model.DisplayUsername(&u),
-			"uploader_id":         v.UserID,
-			"uploader_avatar_url": uploaderAvatarForAPI(&u),
-			"created_at":          v.CreatedAt.Format("2006-01-02 15:04:05"),
-			"favorited_at":        rows[i].CreatedAt.Format("2006-01-02 15:04:05"),
-			"folder_id":           rows[i].FolderID,
+			"id": item.ID, "title": item.Title, "cover_url": item.CoverURL,
+			"play_count": item.PlayCount, "danmaku_count": item.DanmakuCount, "duration": item.Duration,
+			"uploader": item.UploaderName, "uploader_id": item.UploaderID,
+			"uploader_avatar_url": item.UploaderAvatar,
+			"created_at": item.CreatedAt, "favorited_at": item.FavoritedAt,
+			"folder_id": item.FolderID,
 		})
 	}
-	return items, total, nil
+	return items, result.Total, nil
 }
 
 // ListMyFavorites returns the caller's favorited published videos (newest favorite first).
@@ -1041,21 +705,19 @@ func (a *API) ListUserFavorites(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	var u model.User
-	if err := a.DB.First(&u, ownerID).Error; err != nil {
+	up, err := a.UserSvc.GetUserPublic(context.Background(), ownerID)
+	if err != nil {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
 	viewer, viewerOK := middleware.UserID(c)
-	if !spaceViewerCanSee(ownerID, viewerOK, viewer, u.PrivacyPublicFavorites) {
+	if !spaceViewerCanSee(ownerID, viewerOK, viewer, up.PrivacyPublicFavorites) {
 		resp.OK(c, gin.H{"items": []gin.H{}, "total": 0})
 		return
 	}
 	limit := 200
 	if raw := c.Query("limit"); raw != "" {
-		if n, err := strconv.Atoi(raw); err == nil && n > 0 && n <= 200 {
-			limit = n
-		}
+		if n, err := strconv.Atoi(raw); err == nil && n > 0 && n <= 200 { limit = n }
 	}
 	folderID, filterFolder, err := parseFolderIDQuery(c)
 	if err != nil {
@@ -1063,17 +725,17 @@ func (a *API) ListUserFavorites(c *gin.Context) {
 		return
 	}
 	if filterFolder {
-		var folder model.FavoriteFolder
-		if err := a.DB.Where("id = ? AND user_id = ?", folderID, ownerID).First(&folder).Error; err != nil {
+		f, err := a.FavoriteSvc.GetFolderByID(context.Background(), folderID)
+		if err != nil || f.UserID != ownerID {
 			resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 			return
 		}
-		if !folder.IsPublic {
+		if !f.IsPublic {
 			resp.Err(c, http.StatusForbidden, errcode.CodeForbidden)
 			return
 		}
 	}
-	items, total, err := a.favoriteListItems(c, ownerID, limit, folderID, filterFolder)
+	items, total, err := a.favoriteListItems(context.Background(), ownerID, limit, folderID, filterFolder)
 	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
@@ -1081,84 +743,20 @@ func (a *API) ListUserFavorites(c *gin.Context) {
 	resp.OK(c, gin.H{"items": items, "total": total})
 }
 
-func (a *API) coinRecentListItems(c *gin.Context, ownerID uint64, limit int) ([]gin.H, int64, error) {
-	var coins []model.VideoCoin
-	if err := a.DB.Where("user_id = ?", ownerID).
-		Order("created_at DESC").
-		Limit(limit).
-		Find(&coins).Error; err != nil {
-		return nil, 0, err
-	}
-	var total int64
-	_ = a.DB.Model(&model.VideoCoin{}).Where("user_id = ?", ownerID).Count(&total).Error
-	if len(coins) == 0 {
-		return []gin.H{}, total, nil
-	}
-	vids := make([]uint64, 0, len(coins))
-	seen := make(map[uint64]struct{}, len(coins))
-	for i := range coins {
-		vid := coins[i].VideoID
-		if _, ok := seen[vid]; ok {
-			continue
-		}
-		seen[vid] = struct{}{}
-		vids = append(vids, vid)
-	}
-	var videos []model.Video
-	if err := a.DB.Where("id IN ? AND status = ?", vids, "published").Find(&videos).Error; err != nil {
-		return nil, 0, err
-	}
-	vmap := make(map[uint64]model.Video, len(videos))
-	uids := make([]uint64, 0, len(videos))
-	uidSeen := make(map[uint64]struct{})
-	for i := range videos {
-		vmap[videos[i].ID] = videos[i]
-		if _, ok := uidSeen[videos[i].UserID]; !ok {
-			uidSeen[videos[i].UserID] = struct{}{}
-			uids = append(uids, videos[i].UserID)
-		}
-	}
-	users := make(map[uint64]model.User)
-	if len(uids) > 0 {
-		var urows []model.User
-		_ = a.DB.Where("id IN ?", uids).Find(&urows).Error
-		for i := range urows {
-			users[urows[i].ID] = urows[i]
-		}
-	}
-	viewer, viewerOK := middleware.UserID(c)
-	var viewerID uint64
-	if viewerOK {
-		viewerID = viewer
-	}
-	eng := videoEngagementByViewer(a.DB, viewerID, vids)
-	items := make([]gin.H, 0, len(coins))
-	for i := range coins {
-		v, ok := vmap[coins[i].VideoID]
-		if !ok {
-			continue
-		}
-		u := users[v.UserID]
-		e := eng[v.ID]
-		items = append(items, gin.H{
-			"id":                  v.ID,
-			"title":               v.Title,
-			"cover_url":           v.CoverURL,
-			"play_count":          v.PlayCount,
-			"danmaku_count":       v.DanmakuCount,
-			"comment_count":       v.CommentCount,
-			"duration":            v.DurationSec,
-			"uploader":            uploaderNameForAPI(&u),
-			"uploader_avatar_url": uploaderAvatarForAPI(&u),
-			"created_at":          v.CreatedAt,
-			"coined_at":           coins[i].CreatedAt,
-			"liked_by_me":         e.LikedByMe,
-			"favorited_by_me":     e.FavoritedByMe,
-			"coined_by_me":        e.CoinedByMe,
-			"in_watch_later":      e.InWatchLater,
+func (a *API) coinRecentListItems(ctx context.Context, ownerID uint64, limit int) ([]gin.H, int64, error) {
+	items, total, err := a.EngagementSvc.ListUserCoinedVideos(ctx, ownerID, limit)
+	if err != nil { return nil, 0, err }
+	result := make([]gin.H, 0, len(items))
+	for _, item := range items {
+		result = append(result, gin.H{
+			"id": item.ID, "title": item.Title, "cover_url": item.CoverURL,
+			"play_count": item.PlayCount, "danmaku_count": item.DanmakuCount,
+			"comment_count": item.CommentCount, "duration": item.Duration,
+			"uploader": item.UploaderName, "uploader_avatar_url": item.UploaderAvatar,
+			"created_at": item.CreatedAt, "coined_at": item.CoinedAt,
 		})
 	}
-	return items, total, nil
+	return result, total, nil
 }
 
 // ListUserRecentCoinVideos returns videos the user recently coined (owner-only).
@@ -1168,22 +766,20 @@ func (a *API) ListUserRecentCoinVideos(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	var u model.User
-	if err := a.DB.First(&u, ownerID).Error; err != nil {
+	up, err := a.UserSvc.GetUserPublic(context.Background(), ownerID)
+	if err != nil {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
 	viewer, viewerOK := middleware.UserID(c)
 	isOwner := viewerOK && viewer == ownerID
-	if !isOwner && !u.PrivacyPublicRecentCoins {
+	if !isOwner && !up.PrivacyPublicRecentCoins {
 		resp.OK(c, gin.H{"items": []gin.H{}, "total": 0})
 		return
 	}
 	limit := 20
 	if raw := c.Query("limit"); raw != "" {
-		if n, err := strconv.Atoi(raw); err == nil && n > 0 && n <= 50 {
-			limit = n
-		}
+		if n, err := strconv.Atoi(raw); err == nil && n > 0 && n <= 50 { limit = n }
 	}
 	items, total, err := a.coinRecentListItems(c, ownerID, limit)
 	if err != nil {

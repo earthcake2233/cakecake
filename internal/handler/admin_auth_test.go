@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"minibili/internal/model/admin"
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
@@ -20,16 +21,15 @@ import (
 	"gorm.io/gorm"
 
 	"minibili/internal/data"
-	"minibili/internal/model"
 	"minibili/internal/pkg/jwttoken"
 	"minibili/internal/ws"
 )
 
-func seedAdminUser(t *testing.T, db *gorm.DB, username, password string) *model.Admin {
+func seedAdminUser(t *testing.T, db *gorm.DB, username, password string) *admin.Admin {
 	t.Helper()
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	require.NoError(t, err)
-	adm := &model.Admin{
+	adm := &admin.Admin{
 		Username:     username,
 		PasswordHash: string(hash),
 		DisplayName:  username,

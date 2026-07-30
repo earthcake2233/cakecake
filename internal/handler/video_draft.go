@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"minibili/internal/model/video"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -18,7 +19,6 @@ import (
 	"minibili/internal/errcode"
 	"minibili/internal/ffmpeg"
 	"minibili/internal/middleware"
-	"minibili/internal/model"
 	"minibili/internal/pkg/coverval"
 	"minibili/internal/pkg/resp"
 	"minibili/internal/worker"
@@ -76,7 +76,7 @@ func validateMetadataOnlyDraft(title, desc string) bool {
 	return true
 }
 
-func removeVideoDraftFiles(v model.Video) {
+func removeVideoDraftFiles(v video.Video) {
 	if p := strings.TrimSpace(v.DraftRawPath); p != "" {
 		_ = os.Remove(p)
 	}
@@ -85,7 +85,7 @@ func removeVideoDraftFiles(v model.Video) {
 	}
 }
 
-func (a *API) uploadDraftCoverToOSS(v *model.Video, coverPath string) error {
+func (a *API) uploadDraftCoverToOSS(v *video.Video, coverPath string) error {
 	if a.OSS == nil || coverPath == "" {
 		return nil
 	}
@@ -98,7 +98,7 @@ func (a *API) uploadDraftCoverToOSS(v *model.Video, coverPath string) error {
 		return err
 	}
 	url := a.Cfg.OSSObjectURL(key)
-	return a.DB.Model(v).Update("cover_url", url).Error
+	return a.VideoDraftSvc.UpdateDraftField(context.Background(), v, "cover_url", url)
 }
 
 func (a *API) saveDraftVideoFile(fh *multipart.FileHeader, videoID uint64) (rawPath string, dur float64, err error) {
@@ -201,7 +201,7 @@ func (a *API) SaveVideoDraft(c *gin.Context) {
 		return
 	}
 	zone := normalizeVideoZone(c.PostForm("zone"))
-	v := model.Video{
+	v := video.Video{
 		UserID:      uid,
 		Title:       title,
 		Description: desc,
@@ -209,7 +209,7 @@ func (a *API) SaveVideoDraft(c *gin.Context) {
 		TagsJSON:    tagsJSON,
 		Zone:        zone,
 	}
-	if err := a.DB.Create(&v).Error; err != nil {
+	if err := a.VideoDraftSvc.CreateDraft(context.Background(), &v); err != nil {
 		a.Log.Error("create draft video", zap.Error(err))
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
@@ -219,7 +219,7 @@ func (a *API) SaveVideoDraft(c *gin.Context) {
 		if coverFh != nil {
 			coverPath, err = a.saveDraftCoverFile(coverFh, v.ID)
 			if err != nil {
-				_ = a.DB.Where("id = ?", v.ID).Delete(&model.Video{}).Error
+				_ = a.VideoDraftSvc.DeleteDraft(context.Background(), v.ID)
 				if cv, ok := err.(errCoverValidation); ok {
 					resp.Err(c, http.StatusBadRequest, cv.code)
 					return
@@ -227,17 +227,17 @@ func (a *API) SaveVideoDraft(c *gin.Context) {
 				resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 				return
 			}
-			if err := a.DB.Model(&v).Update("draft_cover_path", coverPath).Error; err != nil {
+			if err := a.VideoDraftSvc.UpdateDraftField(context.Background(), &v, "draft_cover_path", coverPath); err != nil {
 				_ = os.Remove(coverPath)
-				_ = a.DB.Where("id = ?", v.ID).Delete(&model.Video{}).Error
+				_ = a.VideoDraftSvc.DeleteDraft(context.Background(), v.ID)
 				resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 				return
 			}
-			_ = a.DB.First(&v, v.ID).Error
+			if tmp, _ := a.VideoDraftSvc.RefetchDraft(context.Background(), v.ID); tmp != nil { v = *tmp }
 			if err := a.uploadDraftCoverToOSS(&v, coverPath); err != nil {
 				a.Log.Warn("draft cover oss", zap.Error(err), zap.Uint64("video_id", v.ID))
 			} else {
-				_ = a.DB.First(&v, v.ID).Error
+				if tmp, _ := a.VideoDraftSvc.RefetchDraft(context.Background(), v.ID); tmp != nil { v = *tmp }
 			}
 		}
 		out := gin.H{
@@ -254,7 +254,7 @@ func (a *API) SaveVideoDraft(c *gin.Context) {
 	}
 	rawPath, dur, err := a.saveDraftVideoFile(fh, v.ID)
 	if err != nil {
-		_ = a.DB.Where("id = ?", v.ID).Delete(&model.Video{}).Error
+		_ = a.VideoDraftSvc.DeleteDraft(context.Background(), v.ID)
 		if err.Error() == "duration exceeded" {
 			resp.Err(c, http.StatusBadRequest, errcode.CodeVideoDurationExceeded)
 			return
@@ -272,7 +272,7 @@ func (a *API) SaveVideoDraft(c *gin.Context) {
 		coverPath, err = a.saveDraftCoverFile(coverFh, v.ID)
 		if err != nil {
 			_ = os.Remove(rawPath)
-			_ = a.DB.Where("id = ?", v.ID).Delete(&model.Video{}).Error
+			_ = a.VideoDraftSvc.DeleteDraft(context.Background(), v.ID)
 			if cv, ok := err.(errCoverValidation); ok {
 				resp.Err(c, http.StatusBadRequest, cv.code)
 				return
@@ -282,18 +282,18 @@ func (a *API) SaveVideoDraft(c *gin.Context) {
 		}
 		updates["draft_cover_path"] = coverPath
 	}
-	if err := a.DB.Model(&v).Updates(updates).Error; err != nil {
-		removeVideoDraftFiles(model.Video{DraftRawPath: rawPath, DraftCoverPath: coverPath})
-		_ = a.DB.Where("id = ?", v.ID).Delete(&model.Video{}).Error
+	if err := a.VideoDraftSvc.UpdateDraft(context.Background(), &v, updates); err != nil {
+		removeVideoDraftFiles(video.Video{DraftRawPath: rawPath, DraftCoverPath: coverPath})
+		_ = a.VideoDraftSvc.DeleteDraft(context.Background(), v.ID)
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	_ = a.DB.First(&v, v.ID).Error
+	if tmp, _ := a.VideoDraftSvc.RefetchDraft(context.Background(), v.ID); tmp != nil { v = *tmp }
 	if coverPath != "" {
 		if err := a.uploadDraftCoverToOSS(&v, coverPath); err != nil {
 			a.Log.Warn("draft cover oss", zap.Error(err), zap.Uint64("video_id", v.ID))
 		} else {
-			_ = a.DB.First(&v, v.ID).Error
+			if tmp, _ := a.VideoDraftSvc.RefetchDraft(context.Background(), v.ID); tmp != nil { v = *tmp }
 		}
 	}
 	out := gin.H{
@@ -329,8 +329,8 @@ func (a *API) UpdateVideoDraft(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	var v model.Video
-	if err := a.DB.First(&v, id).Error; err != nil {
+	v, err := a.VideoDraftSvc.GetOwnedDraft(context.Background(), id, uid)
+	if err != nil {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
@@ -452,16 +452,18 @@ func (a *API) UpdateVideoDraft(c *gin.Context) {
 		}
 	}
 
-	if err := a.DB.Model(&v).Updates(updates).Error; err != nil {
+	if err := a.VideoDraftSvc.UpdateDraft(context.Background(), v, updates); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	_ = a.DB.First(&v, id).Error
+	var rfErr error
+	v, rfErr = a.VideoDraftSvc.RefetchDraft(context.Background(), id)
+	_ = rfErr
 	if newCoverPath != "" {
-		if err := a.uploadDraftCoverToOSS(&v, newCoverPath); err != nil {
+		if err := a.uploadDraftCoverToOSS(v, newCoverPath); err != nil {
 			a.Log.Warn("draft cover oss update", zap.Error(err))
 		} else {
-			_ = a.DB.First(&v, id).Error
+			if tmp, _ := a.VideoDraftSvc.RefetchDraft(context.Background(), id); tmp != nil { v = tmp }
 		}
 	}
 	out := gin.H{
@@ -498,8 +500,8 @@ func (a *API) PublishVideoDraft(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	var v model.Video
-	if err := a.DB.First(&v, id).Error; err != nil {
+	v, err := a.VideoDraftSvc.GetOwnedDraftByStatus(context.Background(), id, uid, videoStatusDraft)
+	if err != nil {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
@@ -539,7 +541,7 @@ func (a *API) PublishVideoDraft(c *gin.Context) {
 		"draft_raw_path":   "",
 		"draft_cover_path": "",
 	}
-	if err := a.DB.Model(&v).Updates(updates).Error; err != nil {
+	if err := a.VideoDraftSvc.UpdateDraft(context.Background(), v, updates); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
@@ -582,8 +584,8 @@ func (a *API) ReplaceVideoMedia(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	var v model.Video
-	if err := a.DB.First(&v, id).Error; err != nil {
+	v, err := a.VideoDraftSvc.GetDraftByID(context.Background(), id)
+	if err != nil {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
@@ -628,9 +630,9 @@ func (a *API) ReplaceVideoMedia(c *gin.Context) {
 		return
 	}
 
-	purgeVideoOSSObjects(a.Cfg, a.OSS, a.Log, v)
+	purgeVideoOSSObjects(a.Cfg, a.OSS, a.Log, *v)
 	a.esDeleteVideo(id)
-	removeVideoDraftFiles(v)
+	removeVideoDraftFiles(*v)
 
 	rawPath, dur, err := a.saveDraftVideoFile(fh, v.ID)
 	if err != nil {
@@ -672,8 +674,8 @@ func (a *API) ReplaceVideoMedia(c *gin.Context) {
 	if z := normalizeVideoZone(c.PostForm("zone")); z != "" {
 		updates["zone"] = z
 	}
-	if err := a.DB.Model(&v).Updates(updates).Error; err != nil {
-		removeVideoDraftFiles(model.Video{DraftRawPath: rawPath, DraftCoverPath: coverPath})
+	if err := a.VideoDraftSvc.UpdateDraft(context.Background(), v, updates); err != nil {
+		removeVideoDraftFiles(video.Video{DraftRawPath: rawPath, DraftCoverPath: coverPath})
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
@@ -685,10 +687,10 @@ func (a *API) ReplaceVideoMedia(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	if err := a.DB.Model(&v).Updates(map[string]interface{}{
+	if err := a.VideoDraftSvc.UpdateDraft(context.Background(), v, map[string]interface{}{
 		"draft_raw_path":   "",
 		"draft_cover_path": "",
-	}).Error; err != nil {
+	}); err != nil {
 		a.Log.Error("clear draft paths after replace", zap.Error(err))
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
@@ -717,15 +719,12 @@ func (a *API) GetMyVideoDraftSource(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	var v model.Video
-	if err := a.DB.First(&v, id).Error; err != nil {
+	v, err := a.VideoDraftSvc.GetOwnedDraftByStatus(context.Background(), id, uid, videoStatusDraft)
+	if err != nil {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
-	if v.UserID != uid || v.Status != videoStatusDraft {
-		resp.Err(c, http.StatusForbidden, errcode.CodeForbidden)
-		return
-	}
+
 	rawPath := strings.TrimSpace(v.DraftRawPath)
 	if rawPath == "" {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)

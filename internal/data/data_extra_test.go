@@ -1,6 +1,10 @@
 package data
 
 import (
+	"minibili/internal/model/article"
+	"minibili/internal/model/comment"
+	"minibili/internal/model/user"
+	"minibili/internal/model/video"
 	"errors"
 	"testing"
 
@@ -9,7 +13,6 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"minibili/internal/model"
 )
 
 func extDB(t *testing.T) *gorm.DB {
@@ -42,13 +45,13 @@ func Test_AutoMigrateAll(t *testing.T) {
 }
 
 func Test_ResyncCuratedCountsEmpty(t *testing.T) {
-	db := extDBWithMigrate(t, &model.Video{}, &model.Article{}, &model.Comment{}, &model.ArticleComment{})
+	db := extDBWithMigrate(t, &video.Video{}, &article.Article{}, &comment.Comment{}, &comment.ArticleComment{})
 	require.NoError(t, resyncCuratedVideoCommentCounts(db, zap.NewNop()))
 	require.NoError(t, resyncCuratedArticleCommentCounts(db, zap.NewNop()))
 }
 
 func Test_BackfillUserCakeIDs(t *testing.T) {
-	db := extDBWithMigrate(t, &model.User{})
+	db := extDBWithMigrate(t, &user.User{})
 	backfillUserCakeIDs(db, zap.NewNop())
 }
 

@@ -5,12 +5,10 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/gin-gonic/gin"
 
 	"minibili/internal/errcode"
-	"minibili/internal/model"
 	"minibili/internal/pkg/resp"
 )
 
@@ -39,13 +37,8 @@ func bannerSlideURL(linkType, linkTarget string) string {
 // @Success     200 {object} map[string]interface{}
 // @Router      /home-banners [get]
 func (a *API) ListHomeBanners(c *gin.Context) {
-	now := time.Now()
-	var rows []model.HomeBanner
-	q := a.DB.Where("enabled = ?", true).
-		Where("(start_at IS NULL OR start_at <= ?)", now).
-		Where("(end_at IS NULL OR end_at >= ?)", now).
-		Order("sort_order ASC, id ASC")
-	if err := q.Find(&rows).Error; err != nil {
+	rows, err := a.VideoSvc.ListActiveBanners(c.Request.Context())
+	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}

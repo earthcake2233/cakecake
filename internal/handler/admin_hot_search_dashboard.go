@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"minibili/internal/model/admin"
 	"context"
 	"net/http"
 	"strconv"
@@ -11,7 +12,6 @@ import (
 	"go.uber.org/zap"
 
 	"minibili/internal/errcode"
-	"minibili/internal/model"
 	"minibili/internal/pkg/resp"
 	"minibili/internal/service"
 )
@@ -42,8 +42,8 @@ func (a *API) AdminHotSearchDashboard(c *gin.Context) {
 		}
 	}
 
-	var ops []model.HotSearchOp
-	if err := a.DB.Order("pin_rank ASC, id ASC").Find(&ops).Error; err != nil {
+	ops, err := a.HotSearchSvc.ListOps(c.Request.Context())
+	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
@@ -52,14 +52,14 @@ func (a *API) AdminHotSearchDashboard(c *gin.Context) {
 		opItems = append(opItems, hotSearchOpToJSON(&ops[i]))
 	}
 
-	flags := service.ActiveHotSearchOpFlags(a.DB)
+	flags := a.HotSearchSvc.ActiveOpFlags(c.Request.Context())
 
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 3*time.Second)
 	defer cancel()
 
 	merged := make([]gin.H, 0)
 	if a.SearchHot != nil {
-		items, err := service.ListHotSearchMergedDetail(ctx, a.DB, a.SearchHot, mergedLimit)
+		items, err := a.HotSearchSvc.ListMergedDetail(ctx, mergedLimit)
 		if err != nil {
 			a.Log.Error("hot search dashboard merged", zap.Error(err))
 			resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
@@ -79,7 +79,7 @@ func (a *API) AdminHotSearchDashboard(c *gin.Context) {
 
 	redisRows := make([]gin.H, 0)
 	if a.SearchHot != nil {
-		rows, err := a.SearchHot.TopWithScores(ctx, redisLimit)
+		rows, err := a.HotSearchSvc.TopWithScores(ctx, redisLimit)
 		if err != nil {
 			a.Log.Error("hot search dashboard redis", zap.Error(err))
 			resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
@@ -106,7 +106,7 @@ func (a *API) AdminHotSearchDashboard(c *gin.Context) {
 		"merged":        merged,
 		"redis":         redisRows,
 		"ops":           opItems,
-		"custom_order":  service.HasHotSearchDisplayLayout(a.DB),
+		"custom_order":  a.HotSearchSvc.HasDisplayLayout(c.Request.Context()),
 	})
 }
 
@@ -132,7 +132,7 @@ func (a *API) AdminRemoveHotSearchRedis(c *gin.Context) {
 	}
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 2*time.Second)
 	defer cancel()
-	if err := a.SearchHot.RemoveKeyword(ctx, req.Keyword); err != nil {
+	if err := a.HotSearchSvc.RemoveKeywordFromRedis(ctx, req.Keyword); err != nil {
 		a.Log.Error("hot search redis remove", zap.Error(err))
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
@@ -161,7 +161,7 @@ func (a *API) AdminBoostHotSearchRedis(c *gin.Context) {
 	}
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 2*time.Second)
 	defer cancel()
-	if err := a.SearchHot.BoostKeyword(ctx, req.Keyword, delta); err != nil {
+	if err := a.HotSearchSvc.BoostKeyword(ctx, req.Keyword, delta); err != nil {
 		a.Log.Error("hot search redis boost", zap.Error(err))
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
@@ -177,7 +177,7 @@ type hotSearchQuickOpReq struct {
 	PinRank      int    `json:"pin_rank"`
 }
 
-// AdminQuickHotSearchOp POST /api/v1/admin/hot-search/quick-op — pin/block/manual from Redis row.
+// AdminQuickHotSearchOp POST /api/v1/admin/hot-search/quick-op
 func (a *API) AdminQuickHotSearchOp(c *gin.Context) {
 	var req hotSearchQuickOpReq
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -190,82 +190,12 @@ func (a *API) AdminQuickHotSearchOp(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	norm := service.NormalizeSearchKeyword(kw)
-	var existing model.HotSearchOp
-	found := false
-	if norm != "" {
-		var rows []model.HotSearchOp
-		_ = a.DB.Find(&rows).Error
-		for i := range rows {
-			if service.NormalizeSearchKeyword(rows[i].Keyword) == norm {
-				existing = rows[i]
-				found = true
-				break
-			}
-		}
-	}
-	display := strings.TrimSpace(req.DisplayTitle)
-	if display == "" {
-		display = kw
-	}
-	pinRank := req.PinRank
-	if ot == "block" {
-		pinRank = 0
-		req.Badge = ""
-	} else if pinRank <= 0 {
-		pinRank = 1
-	}
-	if found {
-		updates := map[string]any{
-			"op_type":       ot,
-			"keyword":       kw,
-			"display_title": display,
-			"badge":         strings.TrimSpace(req.Badge),
-			"pin_rank":      pinRank,
-			"enabled":       true,
-		}
-		if err := a.DB.Model(&existing).Updates(updates).Error; err != nil {
-			resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
-			return
-		}
-		_ = a.DB.First(&existing, existing.ID)
-		a.syncHotSearchLayoutAfterOp(c, kw, display, ot, pinRank)
-		resp.OK(c, hotSearchOpToJSON(&existing))
-		return
-	}
-	op := model.HotSearchOp{
-		OpType:       ot,
-		Keyword:      kw,
-		DisplayTitle: display,
-		Badge:        strings.TrimSpace(req.Badge),
-		PinRank:      pinRank,
-		Enabled:      true,
-	}
-	if err := a.DB.Create(&op).Error; err != nil {
+	op, _, err := a.HotSearchSvc.QuickOpCreateOrUpdate(c.Request.Context(), ot, kw, req.DisplayTitle, req.Badge, req.PinRank)
+	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	a.syncHotSearchLayoutAfterOp(c, kw, display, ot, pinRank)
-	resp.JSON(c, http.StatusCreated, errcode.CodeSuccess, hotSearchOpToJSON(&op))
-}
-
-func (a *API) syncHotSearchLayoutAfterOp(c *gin.Context, keyword, title, opType string, pinRank int) {
-	if a.DB == nil {
-		return
-	}
-	ctx, cancel := context.WithTimeout(c.Request.Context(), 2*time.Second)
-	defer cancel()
-	switch opType {
-	case "block":
-		_ = service.RemoveHotSearchLayoutEntry(a.DB, keyword)
-	case "pin", "manual":
-		if service.HasHotSearchDisplayLayout(a.DB) {
-			_ = service.ApplyHotSearchLayoutMove(a.DB, keyword, title, pinRank)
-			return
-		}
-		_ = service.EnsureHotSearchLayoutFromMerged(ctx, a.DB, a.SearchHot, 10)
-		_ = service.ApplyHotSearchLayoutMove(a.DB, keyword, title, pinRank)
-	}
+	resp.JSON(c, http.StatusCreated, errcode.CodeSuccess, hotSearchOpToJSON(op))
 }
 
 type hotSearchReorderItem struct {
@@ -279,7 +209,7 @@ type hotSearchReorderReq struct {
 	Items []hotSearchReorderItem `json:"items"`
 }
 
-// AdminReorderHotSearch POST /api/v1/admin/hot-search/reorder — save drag order without pinning auto items.
+// AdminReorderHotSearch POST /api/v1/admin/hot-search/reorder
 func (a *API) AdminReorderHotSearch(c *gin.Context) {
 	var req hotSearchReorderReq
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -290,46 +220,16 @@ func (a *API) AdminReorderHotSearch(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	layout := make([]service.HotSearchLayoutEntry, 0, len(req.Items))
-	var allOps []model.HotSearchOp
-	_ = a.DB.Find(&allOps).Error
-	opByNorm := make(map[string]*model.HotSearchOp, len(allOps))
-	opByID := make(map[uint64]*model.HotSearchOp, len(allOps))
-	for i := range allOps {
-		op := &allOps[i]
-		opByID[op.ID] = op
-		if norm := service.NormalizeSearchKeyword(op.Keyword); norm != "" {
-			opByNorm[norm] = op
-		}
+	items := make([]service.ReorderItem, 0, len(req.Items))
+	for _, it := range req.Items {
+		items = append(items, service.ReorderItem{
+			Keyword: it.Keyword,
+			Title:   it.Title,
+			OpID:    it.OpID,
+			Source:  it.Source,
+		})
 	}
-	for i, it := range req.Items {
-		kw := strings.TrimSpace(it.Keyword)
-		title := strings.TrimSpace(it.Title)
-		if kw == "" {
-			kw = title
-		}
-		if kw == "" {
-			resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
-			return
-		}
-		layout = append(layout, service.HotSearchLayoutEntry{Keyword: kw, Title: title})
-		rank := i + 1
-		norm := service.NormalizeSearchKeyword(kw)
-		var existing *model.HotSearchOp
-		if it.OpID > 0 {
-			existing = opByID[it.OpID]
-		}
-		if existing == nil && norm != "" {
-			existing = opByNorm[norm]
-		}
-		if existing != nil && (existing.OpType == "pin" || existing.OpType == "manual") {
-			if err := a.DB.Model(existing).Update("pin_rank", rank).Error; err != nil {
-				resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
-				return
-			}
-		}
-	}
-	if err := service.SaveHotSearchDisplayLayout(a.DB, layout); err != nil {
+	if err := a.HotSearchSvc.ReorderItems(c.Request.Context(), items); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
@@ -338,14 +238,13 @@ func (a *API) AdminReorderHotSearch(c *gin.Context) {
 
 // AdminResetHotSearchDisplayOrder POST /api/v1/admin/hot-search/display-order/reset
 func (a *API) AdminResetHotSearchDisplayOrder(c *gin.Context) {
-	if err := service.ClearHotSearchDisplayLayout(a.DB); err != nil {
+	if err := a.HotSearchSvc.ClearDisplayLayout(c.Request.Context()); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
 	resp.OK(c, gin.H{"ok": true, "custom_order": false})
 }
-
-func hotSearchDisplayTitle(op *model.HotSearchOp) string {
+func hotSearchDisplayTitle(op *admin.HotSearchOp) string {
 	if op == nil {
 		return ""
 	}
@@ -354,3 +253,4 @@ func hotSearchDisplayTitle(op *model.HotSearchOp) string {
 	}
 	return strings.TrimSpace(op.Keyword)
 }
+

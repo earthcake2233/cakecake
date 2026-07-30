@@ -3,6 +3,7 @@
 package handler
 
 import (
+	"minibili/internal/model/dynamic"
 	"encoding/json"
 	"fmt"
 	"testing"
@@ -10,7 +11,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"minibili/internal/model"
 )
 
 func Test_DMFlow(t *testing.T) {
@@ -84,7 +84,7 @@ func Test_UserDynamicFlow(t *testing.T) {
 	tk := tok(t, api, u.ID)
 
 	// Seed a dynamic directly (PostUserDynamic/PutMyUserDynamic are multipart-only)
-	dyn := model.UserDynamic{UserID: u.ID, Title: "My Dynamic", Content: "Dynamic content", ImagesJSON: "[]", CreatedAt: time.Now()}
+	dyn := dynamic.UserDynamic{UserID: u.ID, Title: "My Dynamic", Content: "Dynamic content", ImagesJSON: "[]", CreatedAt: time.Now()}
 	require.NoError(t, api.DB.Create(&dyn).Error)
 
 	// Get dynamic

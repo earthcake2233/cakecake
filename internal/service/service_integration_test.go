@@ -3,6 +3,9 @@
 package service
 
 import (
+	"minibili/internal/model/admin"
+	"minibili/internal/model/agent"
+	"minibili/internal/model/dm"
 	"context"
 	"testing"
 	
@@ -11,7 +14,6 @@ import (
 	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 
-	"minibili/internal/model"
 )
 
 // setupSQLiteDB creates an in-memory SQLite DB with auto-migration for tests.
@@ -22,10 +24,10 @@ func setupSQLiteDB(t *testing.T) *gorm.DB {
 		t.Fatalf("failed to open sqlite: %v", err)
 	}
 	if err := db.AutoMigrate(
-		&model.HotSearchOp{},
-		&model.HotSearchDisplayLayout{},
-		&model.DmConversation{},
-		&model.AgentProfile{},
+		&admin.HotSearchOp{},
+		&admin.HotSearchDisplayLayout{},
+		&dm.DmConversation{},
+		&agent.AgentProfile{},
 	); err != nil {
 		t.Fatalf("auto migrate: %v", err)
 	}
@@ -236,13 +238,13 @@ func TestAgentService_IsAgentConversationIntegration(t *testing.T) {
 	s := &AgentService{}
 	tests := []struct {
 		name string
-		conv *model.DmConversation
+		conv *dm.DmConversation
 		want bool
 	}{
 		{"nil conv", nil, false},
-		{"empty kind", &model.DmConversation{}, false},
-		{"wrong kind", &model.DmConversation{Kind: "human"}, false},
-		{"agent kind", &model.DmConversation{Kind: model.DmKindAgent}, true},
+		{"empty kind", &dm.DmConversation{}, false},
+		{"wrong kind", &dm.DmConversation{Kind: "human"}, false},
+		{"agent kind", &dm.DmConversation{Kind: dm.DmKindAgent}, true},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

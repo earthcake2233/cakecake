@@ -1,7 +1,9 @@
-package handler
+﻿package handler
 
 import (
+	"minibili/internal/model/video"
 	"errors"
+	"context"
 	"fmt"
 	"mime/multipart"
 	"net/http"
@@ -14,11 +16,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
-	"gorm.io/gorm"
 
 	"minibili/internal/errcode"
 	"minibili/internal/middleware"
-	"minibili/internal/model"
 	"minibili/internal/pkg/coverval"
 	"minibili/internal/pkg/resp"
 )
@@ -31,63 +31,46 @@ type createFavoriteFolderJSON struct {
 	IsPublic    *bool  `json:"is_public"`
 }
 
-func (a *API) ensureDefaultFavoriteFolder(userID uint64) (model.FavoriteFolder, error) {
-	var f model.FavoriteFolder
-	err := a.DB.Where("user_id = ? AND is_default = ?", userID, true).First(&f).Error
-	if err == nil {
-		return f, nil
+func (a *API) ensureDefaultFavoriteFolder(userID uint64) (video.FavoriteFolder, error) {
+	folders, err := a.FavoriteSvc.ListFoldersByUser(context.Background(), userID)
+	if err != nil { return video.FavoriteFolder{}, err }
+	for _, ff := range folders {
+		if ff.IsDefault { return ff, nil }
 	}
-	if !errors.Is(err, gorm.ErrRecordNotFound) {
-		return f, err
-	}
-	f = model.FavoriteFolder{
+	f := video.FavoriteFolder{
 		UserID:    userID,
 		Title:     defaultFavoriteFolderTitle,
 		IsPublic:  true,
 		IsDefault: true,
 	}
-	if err := a.DB.Create(&f).Error; err != nil {
+	if err := a.FavoriteSvc.CreateFolder(context.Background(), &f); err != nil {
 		return f, err
 	}
-	_ = a.DB.Model(&model.VideoFavorite{}).
-		Where("user_id = ? AND folder_id = ?", userID, 0).
-		Update("folder_id", f.ID).Error
+	_ = a.FavoriteSvc.MigrateOrphanFavorites(context.Background(), userID, f.ID)
 	return f, nil
 }
 
-func folderCoverFromVideos(db *gorm.DB, folderID uint64) string {
-	var fav model.VideoFavorite
-	if err := db.Where("folder_id = ?", folderID).
-		Order("created_at DESC, id DESC").
-		Limit(1).
-		Find(&fav).Error; err != nil || fav.ID == 0 {
-		return ""
-	}
-	var v model.Video
-	if err := db.Select("cover_url").First(&v, fav.VideoID).Error; err != nil {
-		return ""
-	}
-	return strings.TrimSpace(v.CoverURL)
+func (a *API) folderCoverFromVideos(folderID uint64) string {
+	return a.FavoriteSvc.FolderCoverFromVideos(context.Background(), folderID)
 }
 
-func resolveFolderCoverURL(db *gorm.DB, f *model.FavoriteFolder) string {
+func (a *API) resolveFolderCoverURL(f *video.FavoriteFolder) string {
 	if u := strings.TrimSpace(f.CoverURL); u != "" {
 		return u
 	}
-	return folderCoverFromVideos(db, f.ID)
+	return a.folderCoverFromVideos(f.ID)
 }
 
-func folderRowPayload(db *gorm.DB, f *model.FavoriteFolder) gin.H {
-	var cnt int64
-	_ = db.Model(&model.VideoFavorite{}).Where("folder_id = ?", f.ID).Count(&cnt).Error
-	cover := resolveFolderCoverURL(db, f)
+func (a *API) folderRowPayload(f *video.FavoriteFolder) gin.H {
+	vCnt, _ := a.FavoriteSvc.CountFavoritesInFolder(context.Background(), f.ID)
+	cover := a.resolveFolderCoverURL(f)
 	out := gin.H{
 		"id":          f.ID,
 		"title":       f.Title,
 		"description": f.Description,
 		"is_public":   f.IsPublic,
 		"is_default":  f.IsDefault,
-		"video_count": cnt,
+		"video_count": vCnt,
 	}
 	if cover != "" {
 		out["cover_url"] = cover
@@ -101,17 +84,16 @@ func (a *API) folderListPayload(userID uint64, publicOnly bool) ([]gin.H, error)
 	if _, err := a.ensureDefaultFavoriteFolder(userID); err != nil {
 		return nil, err
 	}
-	q := a.DB.Where("user_id = ?", userID)
-	if publicOnly {
-		q = q.Where("is_public = ?", true)
-	}
-	var folders []model.FavoriteFolder
-	if err := q.Order("is_default DESC, created_at DESC, id DESC").Find(&folders).Error; err != nil {
+	folders, err := a.FavoriteSvc.ListFoldersByUser(context.Background(), userID)
+	if err != nil {
 		return nil, err
 	}
 	out := make([]gin.H, 0, len(folders))
 	for i := range folders {
-		out = append(out, folderRowPayload(a.DB, &folders[i]))
+		if publicOnly && !folders[i].IsPublic {
+			continue
+		}
+		out = append(out, a.folderRowPayload(&folders[i]))
 	}
 	return out, nil
 }
@@ -224,18 +206,18 @@ func (a *API) createFavoriteFolderJSON(c *gin.Context, uid uint64) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	row := model.FavoriteFolder{
+	row := video.FavoriteFolder{
 		UserID:      uid,
 		Title:       title,
 		Description: desc,
 		IsPublic:    isPublic,
 		IsDefault:   false,
 	}
-	if err := a.DB.Create(&row).Error; err != nil {
+	if err := a.FavoriteSvc.CreateFolder(context.Background(), &row); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	resp.OK(c, folderRowPayload(a.DB, &row))
+	resp.OK(c, a.folderRowPayload( &row))
 }
 
 func (a *API) createFavoriteFolderMultipart(c *gin.Context, uid uint64) {
@@ -258,35 +240,35 @@ func (a *API) createFavoriteFolderMultipart(c *gin.Context, uid uint64) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	row := model.FavoriteFolder{
+	row := video.FavoriteFolder{
 		UserID:      uid,
 		Title:       title,
 		Description: desc,
 		IsPublic:    isPublic,
 		IsDefault:   false,
 	}
-	if err := a.DB.Create(&row).Error; err != nil {
+	if err := a.FavoriteSvc.CreateFolder(context.Background(), &row); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
 	if fh, err := c.FormFile("cover"); err == nil && fh != nil {
 		url, code := a.uploadFavoriteFolderCover(uid, row.ID, fh)
 		if code != 0 {
-			_ = a.DB.Delete(&row).Error
+			_ = a.FavoriteSvc.DeleteFolder(context.Background(), row.ID)
 			resp.Err(c, http.StatusBadRequest, code)
 			return
 		}
 		if url != "" {
-			if err := a.DB.Model(&row).Update("cover_url", url).Error; err != nil {
+			if err := a.FavoriteSvc.UpdateFolderCover(context.Background(), row.ID, url); err != nil {
 				purgeFavoriteFolderCoverURL(a.Cfg, a.OSS, a.Log, url, uid, row.ID)
-				_ = a.DB.Delete(&row).Error
+				_ = a.FavoriteSvc.DeleteFolder(context.Background(), row.ID)
 				resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 				return
 			}
 			row.CoverURL = url
 		}
 	}
-	resp.OK(c, folderRowPayload(a.DB, &row))
+	resp.OK(c, a.folderRowPayload( &row))
 }
 
 // ListUserFavoriteFolders returns favorite folders for a user's space (public, or all if viewer is owner).
@@ -296,8 +278,8 @@ func (a *API) ListUserFavoriteFolders(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	var u model.User
-	if err := a.DB.First(&u, ownerID).Error; err != nil {
+	u, err := a.UserSvc.GetUserPublic(context.Background(), ownerID)
+	if err != nil {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
@@ -314,13 +296,10 @@ func (a *API) ListUserFavoriteFolders(c *gin.Context) {
 		return
 	}
 	var total int64
-	_ = a.DB.Model(&model.FavoriteFolder{}).Where("user_id = ?", ownerID).Count(&total).Error
+	total, _ = a.FavoriteSvc.CountFoldersByUser(context.Background(), ownerID)
 	hiddenCount := int64(0)
 	if viewerOK && viewer == ownerID {
-		var publicCnt int64
-		_ = a.DB.Model(&model.FavoriteFolder{}).
-			Where("user_id = ? AND is_public = ?", ownerID, true).
-			Count(&publicCnt).Error
+		publicCnt, _ := a.FavoriteSvc.CountPublicFoldersByUser(context.Background(), ownerID)
 		hiddenCount = total - publicCnt
 		if hiddenCount < 0 {
 			hiddenCount = 0
@@ -357,15 +336,12 @@ func parseFolderIDParam(c *gin.Context) (uint64, bool) {
 	return id, true
 }
 
-func (a *API) loadUserFavoriteFolder(uid, folderID uint64) (model.FavoriteFolder, int) {
-	var f model.FavoriteFolder
-	if err := a.DB.Where("id = ? AND user_id = ?", folderID, uid).First(&f).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return f, errcode.CodeNotFound
-		}
-		return f, errcode.CodeInternalError
+func (a *API) loadUserFavoriteFolder(uid, folderID uint64) (video.FavoriteFolder, int) {
+	f, err := a.FavoriteSvc.GetFolderByID(context.Background(), folderID)
+	if err != nil || f.UserID != uid {
+		return video.FavoriteFolder{}, errcode.CodeNotFound
 	}
-	return f, 0
+	return *f, 0
 }
 
 // UpdateFavoriteFolder updates folder metadata (json or multipart).
@@ -427,12 +403,12 @@ func (a *API) updateFavoriteFolderJSON(c *gin.Context, uid, folderID uint64) {
 		"description": desc,
 		"is_public":   isPublic,
 	}
-	if err := a.DB.Model(&row).Updates(updates).Error; err != nil {
+	if err := a.FavoriteSvc.UpdateFolder(context.Background(), row.ID, updates); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	_ = a.DB.First(&row, row.ID).Error
-	resp.OK(c, folderRowPayload(a.DB, &row))
+	ptr, _ := a.FavoriteSvc.GetFolderByID(context.Background(), row.ID); if ptr != nil { row = *ptr }
+	resp.OK(c, a.folderRowPayload( &row))
 }
 
 func (a *API) updateFavoriteFolderMultipart(c *gin.Context, uid, folderID uint64) {
@@ -473,15 +449,15 @@ func (a *API) updateFavoriteFolderMultipart(c *gin.Context, uid, folderID uint64
 			updates["cover_url"] = url
 		}
 	}
-	if err := a.DB.Model(&row).Updates(updates).Error; err != nil {
+	if err := a.FavoriteSvc.UpdateFolder(context.Background(), row.ID, updates); err != nil {
 		if uploadedCoverURL != "" {
 			purgeFavoriteFolderCoverURL(a.Cfg, a.OSS, a.Log, uploadedCoverURL, uid, row.ID)
 		}
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	_ = a.DB.First(&row, row.ID).Error
-	resp.OK(c, folderRowPayload(a.DB, &row))
+	ptr, _ := a.FavoriteSvc.GetFolderByID(context.Background(), row.ID); if ptr != nil { row = *ptr }
+	resp.OK(c, a.folderRowPayload( &row))
 }
 
 // DeleteFavoriteFolder removes a non-default folder and its favorites.
@@ -513,13 +489,7 @@ func (a *API) DeleteFavoriteFolder(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	err := a.DB.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("user_id = ? AND folder_id = ?", uid, folderID).
-			Delete(&model.VideoFavorite{}).Error; err != nil {
-			return err
-		}
-		return tx.Delete(&row).Error
-	})
+	err := a.FavoriteSvc.DeleteFolderCascade(context.Background(), folderID, uid)
 	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
@@ -529,15 +499,9 @@ func (a *API) DeleteFavoriteFolder(c *gin.Context) {
 }
 
 func (a *API) validateFolderOwnedByUser(uid, folderID uint64) bool {
-	var n int64
-	_ = a.DB.Model(&model.FavoriteFolder{}).
-		Where("id = ? AND user_id = ?", folderID, uid).
-		Count(&n).Error
-	return n > 0
+	f, err := a.FavoriteSvc.GetFolderByID(context.Background(), folderID)
+	return err == nil && f.UserID == uid
 }
-
-// ClearInvalidFavoritesInFolder removes favorites whose videos are missing or not published.
-// ClearInvalidFavoritesInFolder godoc
 // @Summary      Clear invalid favorites in folder
 // @Description  Remove references to deleted videos from a folder
 // @Tags         Favorites
@@ -560,8 +524,8 @@ func (a *API) ClearInvalidFavoritesInFolder(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	var favs []model.VideoFavorite
-	if err := a.DB.Where("user_id = ? AND folder_id = ?", uid, folderID).Find(&favs).Error; err != nil {
+	favs, _, err := a.FavoriteSvc.ListFavoritesByFolder(context.Background(), folderID, 0, 0)
+	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
@@ -573,10 +537,8 @@ func (a *API) ClearInvalidFavoritesInFolder(c *gin.Context) {
 	for i := range favs {
 		vids = append(vids, favs[i].VideoID)
 	}
-	var publishedIDs []uint64
-	if err := a.DB.Model(&model.Video{}).
-		Where("id IN ? AND status = ?", vids, "published").
-		Pluck("id", &publishedIDs).Error; err != nil {
+	publishedIDs, err := a.FavoriteSvc.FilterPublishedVideoIDs(context.Background(), vids)
+	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
@@ -600,8 +562,7 @@ func (a *API) ClearInvalidFavoritesInFolder(c *gin.Context) {
 			resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 			return
 		}
-		if err := a.DB.Where("user_id = ? AND folder_id = ? AND video_id = ?", uid, folderID, vid).
-			Delete(&model.VideoFavorite{}).Error; err != nil {
+		if err := a.FavoriteSvc.DeleteFavoriteByVideo(context.Background(), uid, folderID, vid); err != nil {
 			resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 			return
 		}
@@ -668,13 +629,12 @@ func (a *API) BatchRemoveVideosFromFavoriteFolder(c *gin.Context) {
 			resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 			return
 		}
-		res := a.DB.Where("user_id = ? AND folder_id = ? AND video_id = ?", uid, folderID, vid).
-			Delete(&model.VideoFavorite{})
-		if res.Error != nil {
+		err = a.FavoriteSvc.DeleteFavoriteByVideo(context.Background(), uid, folderID, vid)
+		if err != nil {
 			resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 			return
 		}
-		if res.RowsAffected > 0 {
+		if err == nil {
 			removed++
 		}
 		after, _ := a.userVideoFavoriteCount(uid, vid)

@@ -1,6 +1,11 @@
 package handler
 
 import (
+	"minibili/internal/model/article"
+	"minibili/internal/model/comment"
+	"minibili/internal/model/extra"
+	"minibili/internal/model/user"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -16,9 +21,9 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"minibili/internal/service"
 	"minibili/internal/errcode"
 	"minibili/internal/middleware"
-	"minibili/internal/model"
 	"minibili/internal/pkg/coverval"
 	"minibili/internal/pkg/markdown"
 	"minibili/internal/pkg/resp"
@@ -66,12 +71,27 @@ type articleEngagement struct {
 	MyCoinAmount  int
 }
 
-func loadPublishedArticle(a *API, id uint64) (model.Article, bool) {
-	var art model.Article
-	if err := a.DB.First(&art, id).Error; err != nil || art.Status != articleStatusPublished {
-		return model.Article{}, false
+func toArticleEngagement(eng *service.ArticleEngagement) articleEngagement {
+	if eng == nil {
+		return articleEngagement{}
 	}
-	return art, true
+	return articleEngagement{
+		FavoritedByMe: eng.FavoritedByMe,
+		CoinedByMe:    eng.CoinedByMe,
+		MyCoinAmount:  eng.MyCoinAmount,
+	}
+}
+
+
+func loadPublishedArticle(a *API, id uint64) (article.Article, bool) {
+	artInfo, err := a.ArticleSvc.GetPublishedArticle(context.Background(), id)
+	if err != nil {
+		return article.Article{}, false
+	}
+	return article.Article{
+		ID: artInfo.ID, UserID: artInfo.UserID, Title: artInfo.Title,
+		Status: artInfo.Status,
+	}, true
 }
 
 func articleEngagementByViewer(db *gorm.DB, viewer uint64, ids []uint64) map[uint64]articleEngagement {
@@ -80,12 +100,12 @@ func articleEngagementByViewer(db *gorm.DB, viewer uint64, ids []uint64) map[uin
 		return out
 	}
 	faved := map[uint64]bool{}
-	var favRows []model.ArticleFavorite
+	var favRows []article.ArticleFavorite
 	_ = db.Where("user_id = ? AND article_id IN ?", viewer, ids).Find(&favRows).Error
 	for i := range favRows {
 		faved[favRows[i].ArticleID] = true
 	}
-	var coinRows []model.ArticleCoin
+	var coinRows []article.ArticleCoin
 	_ = db.Where("user_id = ? AND article_id IN ?", viewer, ids).Find(&coinRows).Error
 	coinAmt := map[uint64]int{}
 	for i := range coinRows {
@@ -121,13 +141,13 @@ func parseArticleTagsJSON(raw string) []string {
 	return arr
 }
 
-func articleDetailPayload(a *API, art *model.Article, author *model.User, eng articleEngagement, viewer uint64) gin.H {
+func articleDetailPayload(a *API, art *article.Article, author *user.User, eng articleEngagement, viewer uint64) gin.H {
 	bodyHTML, toc, _ := markdown.Render(art.BodyMD)
 	upName := ""
 	avatar := ""
 	if author != nil {
-		upName = model.DisplayUsername(author)
-		if author.Nickname != "" && !model.IsUserAnonymized(author) {
+		upName = user.DisplayUsername(author)
+		if author.Nickname != "" && !user.IsUserAnonymized(author) {
 			upName = strings.TrimSpace(author.Nickname)
 		}
 		avatar = uploaderAvatarForAPI(author)
@@ -166,7 +186,7 @@ func articleDetailPayload(a *API, art *model.Article, author *model.User, eng ar
 	}
 }
 
-func articleListItem(art model.Article, authorName string, eng articleEngagement) gin.H {
+func articleListItem(art article.Article, authorName string, eng articleEngagement) gin.H {
 	pubAt := ""
 	if art.PublishedAt != nil {
 		pubAt = art.PublishedAt.Format("2006-01-02 15:04:05")
@@ -208,8 +228,8 @@ func (a *API) PatchArticlePlayback(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	var art model.Article
-	if err := a.DB.First(&art, id).Error; err != nil {
+	art, err := a.ArticleSvc.GetArticleByID(c.Request.Context(), id)
+	if err != nil {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
@@ -237,17 +257,18 @@ func (a *API) PatchArticlePlayback(c *gin.Context) {
 	if req.CommentsCurated != nil {
 		updates["comments_curated"] = *req.CommentsCurated
 	}
-	if err := a.DB.Model(&art).Updates(updates).Error; err != nil {
+	if err := a.ArticleSvc.UpdateArticle(c.Request.Context(), id, updates); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	if err := a.DB.First(&art, id).Error; err != nil {
+	updated, err := a.ArticleSvc.GetArticleByID(c.Request.Context(), id)
+	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
 	resp.OK(c, gin.H{
-		"comments_closed":  art.CommentsClosed,
-		"comments_curated": art.CommentsCurated,
+		"comments_closed":  updated.CommentsClosed,
+		"comments_curated": updated.CommentsCurated,
 	})
 }
 
@@ -327,7 +348,7 @@ func (a *API) PostArticle(c *gin.Context) {
 			publishedAt = &now
 		}
 	}
-	art := model.Article{
+	art := article.Article{
 		UserID:    uid,
 		Title:     title,
 		BodyMD:    bodyMD,
@@ -336,7 +357,7 @@ func (a *API) PostArticle(c *gin.Context) {
 		TagsJSON:  tagsJSON,
 		PublishedAt: publishedAt,
 	}
-	if err := a.DB.Create(&art).Error; err != nil {
+	if err := a.ArticleSvc.CreateArticle(c.Request.Context(), &art); err != nil {
 		a.Log.Error("create article", zap.Error(err))
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
@@ -364,8 +385,8 @@ func (a *API) PutMyArticle(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	var art model.Article
-	if err := a.DB.First(&art, id).Error; err != nil || art.UserID != uid {
+	art, err := a.ArticleSvc.GetArticleByID(c.Request.Context(), id)
+	if err != nil || art.UserID != uid {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
@@ -428,12 +449,12 @@ func (a *API) PutMyArticle(c *gin.Context) {
 		}
 	}
 	if len(updates) > 0 {
-		if err := a.DB.Model(&art).Updates(updates).Error; err != nil {
+		if err := a.ArticleSvc.UpdateArticle(c.Request.Context(), id, updates); err != nil {
 			resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 			return
 		}
 	}
-	_ = a.DB.First(&art, id).Error
+	art, _ = a.ArticleSvc.GetArticleByID(c.Request.Context(), id)
 	if art.Status == articleStatusPublished {
 		a.esIndexArticle(art.ID)
 	} else {
@@ -457,19 +478,22 @@ func (a *API) GetArticle(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	art, ok := loadPublishedArticle(a, id)
-	if !ok {
+	art, err := a.ArticleSvc.GetPublishedArticle(c.Request.Context(), id)
+	if err != nil {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
-	var author model.User
-	_ = a.DB.First(&author, art.UserID).Error
+	var author user.User
+	userPub3, _ := a.UserSvc.GetUserPublic(c.Request.Context(), art.UserID)
+	if userPub3 != nil {
+		author = user.User{ID: userPub3.ID, Username: userPub3.Username, AvatarURL: userPub3.AvatarURL}
+	}
 	var viewer uint64
 	if uid, ok := middleware.UserID(c); ok {
 		viewer = uid
 	}
-	eng := articleEngagementByViewer(a.DB, viewer, []uint64{id})[id]
-	resp.OK(c, articleDetailPayload(a, &art, &author, eng, viewer))
+	eng := toArticleEngagement(a.ArticleSvc.BatchArticleEngagementByViewer(c.Request.Context(), viewer, []uint64{id})[id])
+	resp.OK(c, articleDetailPayload(a, art, &author, eng, viewer))
 }
 
 // PostArticleView increments view count (best-effort).
@@ -491,13 +515,13 @@ func (a *API) PostArticleView(c *gin.Context) {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
-	_ = a.DB.Model(&model.Article{}).Where("id = ?", id).
-		UpdateColumn("view_count", gorm.Expr("view_count + ?", 1)).Error
+	_ = a.ArticleSvc.IncrementArticleView(c.Request.Context(), id)
 	if uid, ok := middleware.UserID(c); ok {
 		a.RecordArticleViewHistory(uid, id, "web")
 	}
-	var art model.Article
-	_ = a.DB.First(&art, id).Error
+	var art article.Article
+	art2, _ := a.ArticleSvc.GetArticleByID(c.Request.Context(), id)
+	if art2 != nil { art = *art2 }
 	resp.OK(c, gin.H{"view_count": art.ViewCount})
 }
 
@@ -537,11 +561,7 @@ func (a *API) countMyArticlesByStatus(uid uint64) gin.H {
 		N      int64
 	}
 	var rows []row
-	_ = a.DB.Model(&model.Article{}).
-		Select("status, COUNT(*) AS n").
-		Where("user_id = ?", uid).
-		Group("status").
-		Scan(&rows).Error
+	_ = a.ArticleSvc.CountArticlesByStatus(context.Background(), uid)
 	out := gin.H{
 		"draft":      int64(0),
 		"processing": int64(0),
@@ -560,8 +580,7 @@ func (a *API) countMyArticlesByStatus(uid uint64) gin.H {
 			out["rejected"] = r.N
 		}
 	}
-	var dynN int64
-	_ = a.DB.Model(&model.UserDynamic{}).Where("user_id = ?", uid).Count(&dynN).Error
+	dynN, _ := a.DynamicSvc.CountUserDynamics(context.Background(), uid)
 	out["dynamics"] = dynN
 	return out
 }
@@ -586,34 +605,19 @@ func (a *API) ListMyArticles(c *gin.Context) {
 	statusQ := strings.TrimSpace(c.Query("status"))
 	titleQ := strings.TrimSpace(c.Query("q"))
 
-	base := a.DB.Model(&model.Article{}).Where("user_id = ?", uid)
-	filtered := base
-	if dbSt := manuscriptArticleStatusToDB(statusQ); dbSt != "" {
-		filtered = filtered.Where("status = ?", dbSt)
-	} else {
-		filtered = filtered.Where("status <> ?", articleStatusDraft)
-	}
-	if titleQ != "" {
-		filtered = filtered.Where("title LIKE ?", "%"+titleQ+"%")
-	}
-	var total int64
-	if err := filtered.Count(&total).Error; err != nil {
+	result, err := a.ArticleSvc.ListMyArticlesPage(c.Request.Context(), uid, page, pageSize, statusQ, titleQ, sortKey)
+	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
+	list := result.Items
+	total := result.Total
 	totalPages := int((total + int64(pageSize) - 1) / int64(pageSize))
 	if totalPages < 1 {
 		totalPages = 1
 	}
 	if page > totalPages {
 		page = totalPages
-	}
-	offset := (page - 1) * pageSize
-	var list []model.Article
-	if err := filtered.Order(orderClauseForMyArticles(sortKey)).
-		Offset(offset).Limit(pageSize).Find(&list).Error; err != nil {
-		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
-		return
 	}
 	items := make([]gin.H, 0, len(list))
 	for _, art := range list {
@@ -653,24 +657,20 @@ func (a *API) ListUserPublishedArticles(c *gin.Context) {
 		}
 	}
 	curID, _ := strconv.ParseUint(c.Query("cursor"), 10, 64)
-	q := a.DB.Model(&model.Article{}).
-		Where("user_id = ? AND status = ?", userID, articleStatusPublished)
-	if curID > 0 {
-		q = q.Where("id < ?", curID)
-	}
-	var list []model.Article
-	if err := q.Order("id DESC").Limit(limit + 1).Find(&list).Error; err != nil {
+	result, err := a.ArticleSvc.ListUserPublishedArticlesCursor(c.Request.Context(), userID, curID, limit)
+	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	hasMore := len(list) > limit
-	if hasMore {
-		list = list[:limit]
+	list := result.Items
+	hasMore := result.HasMore
+	var author user.User
+	userPub, _ := a.UserSvc.GetUserPublic(c.Request.Context(), userID)
+	if userPub != nil {
+		author = user.User{ID: userPub.ID, Username: userPub.Username, AvatarURL: userPub.AvatarURL}
 	}
-	var author model.User
-	_ = a.DB.First(&author, userID).Error
-	name := model.DisplayUsername(&author)
-	if author.Nickname != "" && !model.IsUserAnonymized(&author) {
+	name := user.DisplayUsername(&author)
+	if author.Nickname != "" && !user.IsUserAnonymized(&author) {
 		name = strings.TrimSpace(author.Nickname)
 	}
 	var viewer uint64
@@ -681,7 +681,11 @@ func (a *API) ListUserPublishedArticles(c *gin.Context) {
 	for _, art := range list {
 		ids = append(ids, art.ID)
 	}
-	engMap := articleEngagementByViewer(a.DB, viewer, ids)
+	engMapSvc := a.ArticleSvc.BatchArticleEngagementByViewer(c.Request.Context(), viewer, ids)
+	engMap := make(map[uint64]articleEngagement, len(engMapSvc))
+	for id, e := range engMapSvc {
+		engMap[id] = toArticleEngagement(e)
+	}
 	items := make([]gin.H, 0, len(list))
 	for _, art := range list {
 		items = append(items, articleListItem(art, name, engMap[art.ID]))
@@ -696,30 +700,30 @@ func (a *API) ListUserPublishedArticles(c *gin.Context) {
 // deleteArticleCascade removes one article and related engagement rows.
 func deleteArticleCascade(tx *gorm.DB, articleID uint64) error {
 	var cids []uint64
-	if err := tx.Model(&model.ArticleComment{}).Where("article_id = ?", articleID).Pluck("id", &cids).Error; err != nil {
+	if err := tx.Model(&comment.ArticleComment{}).Where("article_id = ?", articleID).Pluck("id", &cids).Error; err != nil {
 		return err
 	}
 	if len(cids) > 0 {
-		if err := tx.Where("comment_id IN ?", cids).Delete(&model.ArticleCommentLike{}).Error; err != nil {
+		if err := tx.Where("comment_id IN ?", cids).Delete(&comment.ArticleCommentLike{}).Error; err != nil {
 			return err
 		}
-		if err := tx.Where("comment_id IN ?", cids).Delete(&model.ArticleCommentDislike{}).Error; err != nil {
+		if err := tx.Where("comment_id IN ?", cids).Delete(&comment.ArticleCommentDislike{}).Error; err != nil {
 			return err
 		}
-		if err := tx.Where("id IN ?", cids).Delete(&model.ArticleComment{}).Error; err != nil {
+		if err := tx.Where("id IN ?", cids).Delete(&comment.ArticleComment{}).Error; err != nil {
 			return err
 		}
 	}
-	if err := tx.Where("article_id = ?", articleID).Delete(&model.ArticleFavorite{}).Error; err != nil {
+	if err := tx.Where("article_id = ?", articleID).Delete(&article.ArticleFavorite{}).Error; err != nil {
 		return err
 	}
-	if err := tx.Where("article_id = ?", articleID).Delete(&model.ArticleCoin{}).Error; err != nil {
+	if err := tx.Where("article_id = ?", articleID).Delete(&article.ArticleCoin{}).Error; err != nil {
 		return err
 	}
-	if err := tx.Where("article_id = ?", articleID).Delete(&model.ArticleViewHistory{}).Error; err != nil {
+	if err := tx.Where("article_id = ?", articleID).Delete(&extra.ArticleViewHistory{}).Error; err != nil {
 		return err
 	}
-	return tx.Where("id = ?", articleID).Delete(&model.Article{}).Error
+	return tx.Where("id = ?", articleID).Delete(&article.Article{}).Error
 }
 
 // DeleteMyArticle removes an article owned by the current user.
@@ -734,18 +738,16 @@ func (a *API) DeleteMyArticle(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	var art model.Article
-	if err := a.DB.First(&art, id).Error; err != nil || art.UserID != uid {
+	art, err := a.ArticleSvc.GetArticleByID(c.Request.Context(), id)
+	if err != nil || art.UserID != uid {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
-	if err := a.DB.Transaction(func(tx *gorm.DB) error {
-		return deleteArticleCascade(tx, id)
-	}); err != nil {
+	if err := a.ArticleSvc.DeleteArticle(c.Request.Context(), id); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	purgeArticleOSSObjects(a.Cfg, a.OSS, a.Log, art)
+	purgeArticleOSSObjects(a.Cfg, a.OSS, a.Log, *art)
 	a.esDeleteArticle(id)
 	resp.OK(c, gin.H{"ok": true})
 }
@@ -762,8 +764,8 @@ func (a *API) UpdateArticleCover(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	var art model.Article
-	if err := a.DB.First(&art, id).Error; err != nil || art.UserID != uid {
+	art, err := a.ArticleSvc.GetArticleByID(c.Request.Context(), id)
+	if err != nil || art.UserID != uid {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
@@ -805,7 +807,7 @@ func (a *API) UpdateArticleCover(c *gin.Context) {
 		return
 	}
 	url := a.Cfg.OSSObjectURL(key)
-	if err := a.DB.Model(&art).Update("cover_url", url).Error; err != nil {
+	if err := a.ArticleSvc.UpdateArticle(c.Request.Context(), id, map[string]interface{}{"cover_url": url}); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}

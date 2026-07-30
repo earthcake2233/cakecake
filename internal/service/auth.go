@@ -1,6 +1,8 @@
 package service
 
 import (
+	"minibili/internal/model/admin"
+	"minibili/internal/model/user"
 	"context"
 	"strings"
 
@@ -10,7 +12,7 @@ import (
 	"gorm.io/gorm"
 
 	"minibili/internal/data"
-	"minibili/internal/model"
+	"time"
 	"minibili/internal/pkg/dailyreward"
 	"minibili/internal/pkg/jwttoken"
 	"minibili/internal/pkg/username"
@@ -43,7 +45,7 @@ type UserBrief struct {
 
 // LookupUser returns a user by username (for pre-authentication checks in handler).
 func (s *AuthService) LookupUser(ctx context.Context, reqUsername string) (*UserBrief, error) {
-	var u model.User
+	var u user.User
 	if err := s.db.WithContext(ctx).Where("username = ?", strings.TrimSpace(reqUsername)).First(&u).Error; err != nil {
 		return nil, err
 	}
@@ -72,12 +74,12 @@ func (s *AuthService) Register(ctx context.Context, reqUsername, reqPassword str
 	if err != nil {
 		return nil, ErrInternalError
 	}
-	u := model.User{Username: uname, PasswordHash: string(hash)}
+	u := user.User{Username: uname, PasswordHash: string(hash)}
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(&u).Error; err != nil {
 			return err
 		}
-		cid := model.FormatCakeID(u.ID)
+		cid := user.FormatCakeID(u.ID)
 		return tx.Model(&u).Update("cake_id", cid).Error
 	})
 	if err != nil {
@@ -102,11 +104,11 @@ type AuthenticateResult struct {
 
 // Authenticate verifies password and issues JWT pair for an existing user.
 func (s *AuthService) Authenticate(ctx context.Context, userID uint64, password string) (*AuthenticateResult, error) {
-	var u model.User
+	var u user.User
 	if err := s.db.WithContext(ctx).First(&u, userID).Error; err != nil {
 		return nil, &SvcError{Code: 40100, Msg: "user not found"}
 	}
-	if model.IsUserAnonymized(&u) {
+	if user.IsUserAnonymized(&u) {
 		return nil, &SvcError{Code: 40100, Msg: "invalid credentials"}
 	}
 	if bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(password)) != nil {
@@ -138,8 +140,8 @@ func (s *AuthService) Refresh(ctx context.Context, refreshToken string) (*Refres
 	if err != nil {
 		return nil, ErrUnauthorized
 	}
-	var u model.User
-	if err := s.db.WithContext(ctx).First(&u, uid).Error; err == nil && model.IsUserAnonymized(&u) {
+	var u user.User
+	if err := s.db.WithContext(ctx).First(&u, uid).Error; err == nil && user.IsUserAnonymized(&u) {
 		return nil, &SvcError{Code: 40302, Msg: "account closed"}
 	}
 	if s.rdb.Exists(ctx, data.RefreshInvalidKey(tokenID)).Val() == 1 {
@@ -151,4 +153,27 @@ func (s *AuthService) Refresh(ctx context.Context, refreshToken string) (*Refres
 		return nil, ErrInternalError
 	}
 	return &RefreshResult{AccessToken: access, RefreshToken: refresh}, nil
+}
+
+// FindAdminByUsername looks up an admin by username.
+func (s *AuthService) FindAdminByUsername(ctx context.Context, username string) (*admin.Admin, error) {
+	var adm admin.Admin
+	if err := s.db.WithContext(ctx).Where("username = ?", username).First(&adm).Error; err != nil {
+		return nil, err
+	}
+	return &adm, nil
+}
+
+// GetAdminByID looks up an admin by ID.
+func (s *AuthService) GetAdminByID(ctx context.Context, id uint64) (*admin.Admin, error) {
+	var adm admin.Admin
+	if err := s.db.WithContext(ctx).First(&adm, id).Error; err != nil {
+		return nil, err
+	}
+	return &adm, nil
+}
+
+// UpdateAdminLoginTime records the admin login timestamp.
+func (s *AuthService) UpdateAdminLoginTime(ctx context.Context, id uint64, t time.Time) error {
+	return s.db.WithContext(ctx).Model(&admin.Admin{}).Where("id = ?", id).Update("last_login_at", t).Error
 }

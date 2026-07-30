@@ -1,6 +1,7 @@
 package service
 
 import (
+	"minibili/internal/model/admin"
 	"context"
 	"encoding/json"
 	"strings"
@@ -8,7 +9,6 @@ import (
 
 	"gorm.io/gorm"
 
-	"minibili/internal/model"
 )
 
 const hotSearchLayoutSingletonID uint64 = 1
@@ -21,7 +21,7 @@ type HotSearchLayoutEntry struct {
 
 type hotSearchMergePools struct {
 	blocked  map[string]struct{}
-	opByNorm map[string]model.HotSearchOp
+	opByNorm map[string]admin.HotSearchOp
 	autoBy   map[string]HotSearchItem
 }
 
@@ -29,7 +29,7 @@ func loadHotSearchLayout(db *gorm.DB) []HotSearchLayoutEntry {
 	if db == nil {
 		return nil
 	}
-	var row model.HotSearchDisplayLayout
+	var row admin.HotSearchDisplayLayout
 	if err := db.First(&row, hotSearchLayoutSingletonID).Error; err != nil {
 		return nil
 	}
@@ -71,7 +71,7 @@ func SaveHotSearchDisplayLayout(db *gorm.DB, entries []HotSearchLayoutEntry) err
 	if err != nil {
 		return err
 	}
-	row := model.HotSearchDisplayLayout{
+	row := admin.HotSearchDisplayLayout{
 		ID:        hotSearchLayoutSingletonID,
 		OrderJSON: string(b),
 		UpdatedAt: time.Now(),
@@ -84,7 +84,7 @@ func ClearHotSearchDisplayLayout(db *gorm.DB) error {
 	if db == nil {
 		return nil
 	}
-	return db.Delete(&model.HotSearchDisplayLayout{}, hotSearchLayoutSingletonID).Error
+	return db.Delete(&admin.HotSearchDisplayLayout{}, hotSearchLayoutSingletonID).Error
 }
 
 // HasHotSearchDisplayLayout reports whether a custom drag order exists.
@@ -95,14 +95,14 @@ func HasHotSearchDisplayLayout(db *gorm.DB) bool {
 func buildHotSearchMergePools(ctx context.Context, db *gorm.DB, rec *SearchHotRecorder, limit int) hotSearchMergePools {
 	pools := hotSearchMergePools{
 		blocked:  make(map[string]struct{}),
-		opByNorm: make(map[string]model.HotSearchOp),
+		opByNorm: make(map[string]admin.HotSearchOp),
 		autoBy:   make(map[string]HotSearchItem),
 	}
 	if db == nil {
 		return pools
 	}
 	now := time.Now()
-	var ops []model.HotSearchOp
+	var ops []admin.HotSearchOp
 	_ = db.Where("enabled = ?", true).Find(&ops).Error
 	for i := range ops {
 		op := ops[i]

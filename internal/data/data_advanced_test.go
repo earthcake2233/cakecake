@@ -1,6 +1,13 @@
 package data
 
 import (
+	"minibili/internal/model/admin"
+	"minibili/internal/model/article"
+	"minibili/internal/model/comment"
+	"minibili/internal/model/danmaku"
+	"minibili/internal/model/notification"
+	"minibili/internal/model/user"
+	"minibili/internal/model/video"
 	"errors"
 	"testing"
 	"time"
@@ -12,7 +19,6 @@ import (
 	"gorm.io/gorm"
 
 	"minibili/internal/config"
-	"minibili/internal/model"
 )
 
 func setupDataDB(t *testing.T) *gorm.DB {
@@ -28,15 +34,15 @@ func TestAutoMigrateAll(t *testing.T) {
 	err := AutoMigrateAll(db, lg)
 	require.NoError(t, err)
 
-	assert.True(t, db.Migrator().HasTable(&model.User{}))
-	assert.True(t, db.Migrator().HasTable(&model.Video{}))
-	assert.True(t, db.Migrator().HasTable(&model.Comment{}))
-	assert.True(t, db.Migrator().HasTable(&model.Article{}))
-	assert.True(t, db.Migrator().HasTable(&model.Admin{}))
-	assert.True(t, db.Migrator().HasTable(&model.Danmaku{}))
-	assert.True(t, db.Migrator().HasTable(&model.UserFollow{}))
-	assert.True(t, db.Migrator().HasTable(&model.Notification{}))
-	assert.True(t, db.Migrator().HasTable(&model.HomeBanner{}))
+	assert.True(t, db.Migrator().HasTable(&user.User{}))
+	assert.True(t, db.Migrator().HasTable(&video.Video{}))
+	assert.True(t, db.Migrator().HasTable(&comment.Comment{}))
+	assert.True(t, db.Migrator().HasTable(&article.Article{}))
+	assert.True(t, db.Migrator().HasTable(&admin.Admin{}))
+	assert.True(t, db.Migrator().HasTable(&danmaku.Danmaku{}))
+	assert.True(t, db.Migrator().HasTable(&user.UserFollow{}))
+	assert.True(t, db.Migrator().HasTable(&notification.Notification{}))
+	assert.True(t, db.Migrator().HasTable(&admin.HomeBanner{}))
 }
 
 func TestAutoMigrateAll_Idempotent(t *testing.T) {
@@ -52,18 +58,18 @@ func TestAutoMigrateAll_NilLogger(t *testing.T) {
 	db := setupDataDB(t)
 	err := AutoMigrateAll(db, nil)
 	require.NoError(t, err)
-	assert.True(t, db.Migrator().HasTable(&model.User{}))
+	assert.True(t, db.Migrator().HasTable(&user.User{}))
 }
 
 func TestSeedDefaultAdmin(t *testing.T) {
 	db := setupDataDB(t)
-	require.NoError(t, db.AutoMigrate(&model.Admin{}))
+	require.NoError(t, db.AutoMigrate(&admin.Admin{}))
 
 	cfg := &config.C{AdminSeedUsername: "admin", AdminSeedPassword: "secret123"}
 	err := SeedDefaultAdmin(db, cfg, zap.NewNop())
 	require.NoError(t, err)
 
-	var admins []model.Admin
+	var admins []admin.Admin
 	db.Find(&admins)
 	require.Len(t, admins, 1)
 	assert.Equal(t, "admin", admins[0].Username)
@@ -72,19 +78,19 @@ func TestSeedDefaultAdmin(t *testing.T) {
 
 func TestSeedDefaultAdmin_SkipNoConfig(t *testing.T) {
 	db := setupDataDB(t)
-	require.NoError(t, db.AutoMigrate(&model.Admin{}))
+	require.NoError(t, db.AutoMigrate(&admin.Admin{}))
 
 	err := SeedDefaultAdmin(db, nil, zap.NewNop())
 	require.NoError(t, err)
 
 	var count int64
-	db.Model(&model.Admin{}).Count(&count)
+	db.Model(&admin.Admin{}).Count(&count)
 	assert.Equal(t, int64(0), count)
 }
 
 func TestSeedDefaultAdmin_Idempotent(t *testing.T) {
 	db := setupDataDB(t)
-	require.NoError(t, db.AutoMigrate(&model.Admin{}))
+	require.NoError(t, db.AutoMigrate(&admin.Admin{}))
 
 	cfg := &config.C{AdminSeedUsername: "admin", AdminSeedPassword: "pass"}
 	err := SeedDefaultAdmin(db, cfg, zap.NewNop())
@@ -94,13 +100,13 @@ func TestSeedDefaultAdmin_Idempotent(t *testing.T) {
 	require.NoError(t, err)
 
 	var count int64
-	db.Model(&model.Admin{}).Count(&count)
+	db.Model(&admin.Admin{}).Count(&count)
 	assert.Equal(t, int64(1), count)
 }
 
 func TestDBColumnExists(t *testing.T) {
 	db := setupDataDB(t)
-	require.NoError(t, db.AutoMigrate(&model.Video{}, &model.Comment{}))
+	require.NoError(t, db.AutoMigrate(&video.Video{}, &comment.Comment{}))
 
 	assert.True(t, dbColumnExists(db, "videos", "comments_closed"))
 	assert.True(t, dbColumnExists(db, "videos", "comments_curated"))
@@ -114,16 +120,16 @@ func TestDBColumnExists(t *testing.T) {
 
 func TestBackfillUserCakeIDs(t *testing.T) {
 	db := setupDataDB(t)
-	require.NoError(t, db.AutoMigrate(&model.User{}))
+	require.NoError(t, db.AutoMigrate(&user.User{}))
 
-	db.Create(&model.User{ID: 1, Username: "user1", Nickname: "User One"})
-	db.Create(&model.User{ID: 2, Username: "user2", Nickname: "User Two"})
-	db.Create(&model.User{ID: 3, Username: "user3", Nickname: "User Three", CakeID: "existing_cake"})
+	db.Create(&user.User{ID: 1, Username: "user1", Nickname: "User One"})
+	db.Create(&user.User{ID: 2, Username: "user2", Nickname: "User Two"})
+	db.Create(&user.User{ID: 3, Username: "user3", Nickname: "User Three", CakeID: "existing_cake"})
 
 	err := backfillUserCakeIDs(db, zap.NewNop())
 	require.NoError(t, err)
 
-	var u1, u2, u3 model.User
+	var u1, u2, u3 user.User
 	db.First(&u1, 1)
 	db.First(&u2, 2)
 	db.First(&u3, 3)

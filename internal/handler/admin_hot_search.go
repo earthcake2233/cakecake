@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"minibili/internal/model/admin"
 	"net/http"
 	"strconv"
 	"strings"
@@ -8,9 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"minibili/internal/errcode"
-	"minibili/internal/model"
 	"minibili/internal/pkg/resp"
-	"minibili/internal/service"
 )
 
 type hotSearchOpReq struct {
@@ -24,7 +23,7 @@ type hotSearchOpReq struct {
 	EndAt        *int64 `json:"end_at"`
 }
 
-func hotSearchOpToJSON(op *model.HotSearchOp) gin.H {
+func hotSearchOpToJSON(op *admin.HotSearchOp) gin.H {
 	return gin.H{
 		"id":            op.ID,
 		"op_type":       op.OpType,
@@ -42,8 +41,8 @@ func hotSearchOpToJSON(op *model.HotSearchOp) gin.H {
 
 // AdminListHotSearchOps GET /api/v1/admin/hot-search/ops
 func (a *API) AdminListHotSearchOps(c *gin.Context) {
-	var rows []model.HotSearchOp
-	if err := a.DB.Order("pin_rank ASC, id ASC").Find(&rows).Error; err != nil {
+	rows, err := a.HotSearchSvc.ListOps(c.Request.Context())
+	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
@@ -71,7 +70,7 @@ func (a *API) AdminCreateHotSearchOp(c *gin.Context) {
 	if req.Enabled != nil {
 		en = *req.Enabled
 	}
-	op := model.HotSearchOp{
+	op := admin.HotSearchOp{
 		OpType:       ot,
 		Keyword:      kw,
 		DisplayTitle: strings.TrimSpace(req.DisplayTitle),
@@ -81,7 +80,7 @@ func (a *API) AdminCreateHotSearchOp(c *gin.Context) {
 		StartAt:      parseOptionalUnix(req.StartAt),
 		EndAt:        parseOptionalUnix(req.EndAt),
 	}
-	if err := a.DB.Create(&op).Error; err != nil {
+	if err := a.HotSearchSvc.CreateOp(c.Request.Context(), &op); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
@@ -93,11 +92,6 @@ func (a *API) AdminUpdateHotSearchOp(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil || id == 0 {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
-		return
-	}
-	var op model.HotSearchOp
-	if err := a.DB.First(&op, id).Error; err != nil {
-		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
 	var req hotSearchOpReq
@@ -124,12 +118,16 @@ func (a *API) AdminUpdateHotSearchOp(c *gin.Context) {
 	if req.EndAt != nil {
 		updates["end_at"] = parseOptionalUnix(req.EndAt)
 	}
-	if err := a.DB.Model(&op).Updates(updates).Error; err != nil {
+	if err := a.HotSearchSvc.UpdateOp(c.Request.Context(), id, updates); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	_ = a.DB.First(&op, id)
-	resp.OK(c, hotSearchOpToJSON(&op))
+	op, err := a.HotSearchSvc.GetOp(c.Request.Context(), id)
+	if err != nil {
+		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
+		return
+	}
+	resp.OK(c, hotSearchOpToJSON(op))
 }
 
 // AdminDeleteHotSearchOp DELETE /api/v1/admin/hot-search/ops/:id
@@ -139,7 +137,7 @@ func (a *API) AdminDeleteHotSearchOp(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	if err := a.DB.Delete(&model.HotSearchOp{}, id).Error; err != nil {
+	if err := a.HotSearchSvc.DeleteOp(c.Request.Context(), id); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
@@ -154,7 +152,7 @@ func (a *API) AdminPreviewHotSearch(c *gin.Context) {
 			limit = n
 		}
 	}
-	items, err := service.ListHotSearchMerged(c.Request.Context(), a.DB, a.SearchHot, limit)
+	items, err := a.HotSearchSvc.ListMerged(c.Request.Context(), limit)
 	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return

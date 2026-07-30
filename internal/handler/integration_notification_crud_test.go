@@ -4,6 +4,9 @@
 package handler
 
 import (
+	"minibili/internal/model/article"
+	"minibili/internal/model/dynamic"
+	"minibili/internal/model/notification"
 	"encoding/json"
 	"fmt"
 	"testing"
@@ -11,13 +14,12 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"minibili/internal/model"
 )
 
 func seedNotification(t *testing.T, api *API, recipientID uint64, notifType string, relatedID uint64) uint64 {
 	t.Helper()
 	payload := fmt.Sprintf(`{"like_subject":"comment","article_id":0,"article_title":"","cover_url":""}`)
-	n := model.Notification{
+	n := notification.Notification{
 		RecipientID:     recipientID,
 		Type:            notifType,
 		RelatedID:       relatedID,
@@ -201,7 +203,7 @@ func Test_UserDynamicLikeAndView(t *testing.T) {
 	u := seedUser(t, api, "udl3", "UDL3", 10)
 	u2 := seedUser(t, api, "udl4", "UDL4", 10)
 	tk2 := tok(t, api, u2.ID)
-	dyn := model.UserDynamic{UserID: u.ID, Title: "Dynamic Like Test", Content: "Test content", ImagesJSON: "[]", CreatedAt: time.Now()}
+	dyn := dynamic.UserDynamic{UserID: u.ID, Title: "Dynamic Like Test", Content: "Test content", ImagesJSON: "[]", CreatedAt: time.Now()}
 	require.NoError(t, api.DB.Create(&dyn).Error)
 	srve(r, areq("POST", fmt.Sprintf("/api/v1/user-dynamics/%d/like", dyn.ID), tk2, nil))
 	srve(r, areq("GET", fmt.Sprintf("/api/v1/user-dynamics/%d", dyn.ID), "", nil))
@@ -355,13 +357,13 @@ func Test_AdminArticleRejectApproveDelete(t *testing.T) {
 	api, r, _ := newTestAPI(t)
 	u := seedUser(t, api, "aar1", "AAR1", 10)
 	at := admintok(t, api)
-	art := model.Article{UserID: u.ID, Title: "Admin Pending Article", BodyMD: "# Content", Status: "pending_review", CreatedAt: time.Now()}
+	art := article.Article{UserID: u.ID, Title: "Admin Pending Article", BodyMD: "# Content", Status: "pending_review", CreatedAt: time.Now()}
 	require.NoError(t, api.DB.Create(&art).Error)
 	srve(r, areq("POST", fmt.Sprintf("/api/v1/admin/articles/%d/approve", art.ID), at, nil))
-	art2 := model.Article{UserID: u.ID, Title: "Admin Pending Article 2", BodyMD: "# Content", Status: "pending_review", CreatedAt: time.Now()}
+	art2 := article.Article{UserID: u.ID, Title: "Admin Pending Article 2", BodyMD: "# Content", Status: "pending_review", CreatedAt: time.Now()}
 	require.NoError(t, api.DB.Create(&art2).Error)
 	srve(r, areq("POST", fmt.Sprintf("/api/v1/admin/articles/%d/reject", art2.ID), at, `{"reason":"Not good enough"}`))
-	art3 := model.Article{UserID: u.ID, Title: "Admin Pending Article 3", BodyMD: "# Content", Status: "pending_review", CreatedAt: time.Now()}
+	art3 := article.Article{UserID: u.ID, Title: "Admin Pending Article 3", BodyMD: "# Content", Status: "pending_review", CreatedAt: time.Now()}
 	require.NoError(t, api.DB.Create(&art3).Error)
 	srve(r, areq("DELETE", fmt.Sprintf("/api/v1/admin/articles/%d", art3.ID), at, nil))
 }
@@ -370,7 +372,7 @@ func Test_AdminDynamicGetDelete(t *testing.T) {
 	api, r, _ := newTestAPI(t)
 	u := seedUser(t, api, "adg1", "ADG1", 10)
 	at := admintok(t, api)
-	dyn := model.UserDynamic{UserID: u.ID, Title: "Admin Dynamic Test", Content: "Content", ImagesJSON: "[]", CreatedAt: time.Now()}
+	dyn := dynamic.UserDynamic{UserID: u.ID, Title: "Admin Dynamic Test", Content: "Content", ImagesJSON: "[]", CreatedAt: time.Now()}
 	require.NoError(t, api.DB.Create(&dyn).Error)
 	srve(r, areq("GET", fmt.Sprintf("/api/v1/admin/dynamics/%d", dyn.ID), at, nil))
 	srve(r, areq("DELETE", fmt.Sprintf("/api/v1/admin/dynamics/%d", dyn.ID), at, nil))

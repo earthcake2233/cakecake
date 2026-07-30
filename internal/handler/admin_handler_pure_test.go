@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"minibili/internal/model/admin"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -8,7 +9,6 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"minibili/internal/config"
-	"minibili/internal/model"
 )
 
 // ---------- adminHotSearchLimit ----------
@@ -52,17 +52,17 @@ func TestAdminHotSearchLimit(t *testing.T) {
 func TestHotSearchDisplayTitleHandler(t *testing.T) {
 	tests := []struct {
 		name string
-		op   *model.HotSearchOp
+		op   *admin.HotSearchOp
 		want string
 	}{
 		{"nil op", nil, ""},
-		{"display title set", &model.HotSearchOp{Keyword: "kw", DisplayTitle: "Display"}, "Display"},
-		{"no display title", &model.HotSearchOp{Keyword: "keyword"}, "keyword"},
-		{"empty keyword and display", &model.HotSearchOp{}, ""},
-		{"both spaces", &model.HotSearchOp{Keyword: "  ", DisplayTitle: "  "}, ""},
-		{"trimmed display", &model.HotSearchOp{Keyword: "kw", DisplayTitle: "  Title  "}, "Title"},
-		{"trimmed keyword fallback", &model.HotSearchOp{Keyword: "  kw2  "}, "kw2"},
-		{"only display spaces", &model.HotSearchOp{Keyword: "real", DisplayTitle: "  "}, "real"},
+		{"display title set", &admin.HotSearchOp{Keyword: "kw", DisplayTitle: "Display"}, "Display"},
+		{"no display title", &admin.HotSearchOp{Keyword: "keyword"}, "keyword"},
+		{"empty keyword and display", &admin.HotSearchOp{}, ""},
+		{"both spaces", &admin.HotSearchOp{Keyword: "  ", DisplayTitle: "  "}, ""},
+		{"trimmed display", &admin.HotSearchOp{Keyword: "kw", DisplayTitle: "  Title  "}, "Title"},
+		{"trimmed keyword fallback", &admin.HotSearchOp{Keyword: "  kw2  "}, "kw2"},
+		{"only display spaces", &admin.HotSearchOp{Keyword: "real", DisplayTitle: "  "}, "real"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

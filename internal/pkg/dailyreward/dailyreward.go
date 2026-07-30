@@ -1,11 +1,13 @@
 package dailyreward
 
 import (
+	"minibili/internal/model/extra"
+	"minibili/internal/model/user"
+	"minibili/internal/model/video"
 	"time"
 
 	"gorm.io/gorm"
 
-	"minibili/internal/model"
 	"minibili/internal/pkg/usercoin"
 )
 
@@ -63,7 +65,7 @@ type RewardsSnapshot struct {
 func CoinProgress(db *gorm.DB, uid uint64) int {
 	start, end := dayBounds()
 	var sum int64
-	_ = db.Model(&model.VideoCoin{}).
+	_ = db.Model(&video.VideoCoin{}).
 		Where("user_id = ? AND created_at >= ? AND created_at < ?", uid, start, end).
 		Select("COALESCE(SUM(amount), 0)").
 		Scan(&sum).Error
@@ -74,12 +76,12 @@ func CoinProgress(db *gorm.DB, uid uint64) int {
 	return p
 }
 
-func ensureRow(db *gorm.DB, uid uint64) (*model.UserDailyTask, error) {
+func ensureRow(db *gorm.DB, uid uint64) (*extra.UserDailyTask, error) {
 	date := TodayDate()
-	var row model.UserDailyTask
+	var row extra.UserDailyTask
 	err := db.Where("user_id = ? AND task_date = ?", uid, date).First(&row).Error
 	if err == gorm.ErrRecordNotFound {
-		row = model.UserDailyTask{UserID: uid, TaskDate: date}
+		row = extra.UserDailyTask{UserID: uid, TaskDate: date}
 		if err := db.Create(&row).Error; err != nil {
 			return nil, err
 		}
@@ -95,7 +97,7 @@ func addUserExp(db *gorm.DB, uid uint64, delta uint64) error {
 	if delta == 0 {
 		return nil
 	}
-	return db.Model(&model.User{}).Where("id = ?", uid).
+	return db.Model(&user.User{}).Where("id = ?", uid).
 		UpdateColumn("experience", gorm.Expr("experience + ?", delta)).Error
 }
 

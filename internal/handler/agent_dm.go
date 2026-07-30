@@ -1,16 +1,16 @@
-package handler
+﻿package handler
 
 import (
+	"minibili/internal/model/dm"
 	"context"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
-	"minibili/internal/model"
 )
 
-func (a *API) dmIsAgentConv(conv *model.DmConversation) bool {
+func (a *API) dmIsAgentConv(conv *dm.DmConversation) bool {
 	return a.Agent != nil && a.Agent.IsAgentConversation(conv)
 }
 
@@ -24,7 +24,7 @@ func (a *API) ensureAgentConversationFor(uid uint64) {
 }
 
 // runAgentReply generates and delivers an assistant message asynchronously.
-func (a *API) runAgentReply(humanID uint64, conv *model.DmConversation, userText string) {
+func (a *API) runAgentReply(humanID uint64, conv *dm.DmConversation, userText string) {
 	if a.Agent == nil || conv == nil {
 		return
 	}
@@ -60,7 +60,7 @@ func (a *API) runAgentReply(humanID uint64, conv *model.DmConversation, userText
 	}()
 }
 
-func (a *API) pushAgentFallback(humanID uint64, conv *model.DmConversation, text string) {
+func (a *API) pushAgentFallback(humanID uint64, conv *dm.DmConversation, text string) {
 	msg, err := a.Agent.PostAssistantMessage(conv, humanID, text)
 	if err != nil {
 		a.Log.Error("agent fallback message", zap.Error(err))
@@ -69,17 +69,16 @@ func (a *API) pushAgentFallback(humanID uint64, conv *model.DmConversation, text
 	a.dmPushAgentMessage(humanID, conv, msg)
 }
 
-func (a *API) dmPushAgentMessage(humanID uint64, conv *model.DmConversation, msg *model.DmMessage) {
+func (a *API) dmPushAgentMessage(humanID uint64, conv *dm.DmConversation, msg *dm.DmMessage) {
 	if msg == nil || conv == nil {
 		return
 	}
-	senderName, senderAvatar := a.dmUserBrief(a.DB, msg.SenderID)
+	senderName, senderAvatar := a.dmUserBrief(context.Background(), msg.SenderID)
 	out := a.dmFormatMessage(msg, senderName, senderAvatar)
-	var part model.DmParticipant
-	_ = a.DB.Where("conversation_id = ? AND user_id = ?", conv.ID, humanID).First(&part).Error
-	convPayload := a.dmFormatConversation(conv, humanID, &part)
+	part, _ := a.DmSvc.GetParticipant(context.Background(), conv.ID, humanID)
+	convPayload := a.dmFormatConversation(conv, humanID, part)
 	event := gin.H{"type": "dm_message", "message": out}
-	if !part.Muted {
+	if part == nil || !part.Muted {
 		a.dmPushEvent(humanID, event)
 	}
 	a.dmPushEvent(humanID, gin.H{"type": "dm_conversation", "conversation": convPayload})

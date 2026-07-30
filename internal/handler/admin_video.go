@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"minibili/internal/model/user"
+	"minibili/internal/model/video"
 	"context"
 	"net/http"
 	"strconv"
@@ -13,7 +15,6 @@ import (
 
 	"minibili/internal/errcode"
 	"minibili/internal/middleware"
-	"minibili/internal/model"
 	"minibili/internal/pkg/resp"
 	"minibili/internal/service"
 )
@@ -37,7 +38,7 @@ func adminVideoStatusFilter(q string) []string {
 	}
 }
 
-func adminVideoToJSON(v *model.Video, uploaderName string) gin.H {
+func adminVideoToJSON(v *video.Video, uploaderName string) gin.H {
 	out := gin.H{
 		"id":            v.ID,
 		"title":         v.Title,
@@ -64,6 +65,7 @@ func adminVideoToJSON(v *model.Video, uploaderName string) gin.H {
 }
 
 // AdminListVideos GET /api/v1/admin/videos
+
 func (a *API) AdminListVideos(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
@@ -76,56 +78,44 @@ func (a *API) AdminListVideos(c *gin.Context) {
 	statusQ := c.DefaultQuery("status", "pending_review")
 	titleQ := strings.TrimSpace(c.Query("q"))
 
-	q := a.DB.Model(&model.Video{})
-	if sts := adminVideoStatusFilter(statusQ); len(sts) > 0 {
-		q = q.Where("status IN ?", sts)
-	}
-	if titleQ != "" {
-		q = q.Where("title LIKE ?", "%"+titleQ+"%")
-	}
-	var total int64
-	if err := q.Count(&total).Error; err != nil {
+	statuses := adminVideoStatusFilter(statusQ)
+	result, err := a.VideoSvc.AdminListVideos(c.Request.Context(), statuses, titleQ, page, pageSize)
+	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	totalPages := int((total + int64(pageSize) - 1) / int64(pageSize))
+
+	totalPages := int((result.Total + int64(pageSize) - 1) / int64(pageSize))
 	if totalPages < 1 {
 		totalPages = 1
 	}
 	if page > totalPages {
 		page = totalPages
 	}
-	offset := (page - 1) * pageSize
-	var rows []model.Video
-	if err := q.Order("created_at DESC, id DESC").Offset(offset).Limit(pageSize).Find(&rows).Error; err != nil {
-		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
-		return
-	}
-	uids := make([]uint64, 0, len(rows))
-	for i := range rows {
-		uids = append(uids, rows[i].UserID)
+
+	uids := make([]uint64, 0, len(result.Rows))
+	for i := range result.Rows {
+		uids = append(uids, result.Rows[i].UserID)
 	}
 	names := map[uint64]string{}
 	if len(uids) > 0 {
-		var users []model.User
-		_ = a.DB.Where("id IN ?", uids).Find(&users).Error
-		for i := range users {
-			names[users[i].ID] = model.DisplayUsername(&users[i])
+		usersMap := a.UserSvc.BatchGetUsers(c.Request.Context(), uids)
+		for id, u := range usersMap {
+			names[id] = user.DisplayUsername(u)
 		}
 	}
-	items := make([]gin.H, 0, len(rows))
-	for i := range rows {
-		items = append(items, adminVideoToJSON(&rows[i], names[rows[i].UserID]))
+	items := make([]gin.H, 0, len(result.Rows))
+	for i := range result.Rows {
+		items = append(items, adminVideoToJSON(&result.Rows[i], names[result.Rows[i].UserID]))
 	}
-	var pending int64
-	_ = a.DB.Model(&model.Video{}).Where("status = ?", "pending_review").Count(&pending).Error
+
 	resp.OK(c, gin.H{
 		"items":         items,
 		"page":          page,
 		"page_size":     pageSize,
-		"total":         total,
+		"total":         result.Total,
 		"total_pages":   totalPages,
-		"pending_count": pending,
+		"pending_count": result.PendingCount,
 	})
 }
 
@@ -136,14 +126,13 @@ func (a *API) AdminGetVideo(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	var v model.Video
-	if err := a.DB.First(&v, id).Error; err != nil {
+	v, err := a.VideoSvc.GetVideoByID(c.Request.Context(), id)
+	if err != nil {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
-	var u model.User
-	_ = a.DB.First(&u, v.UserID).Error
-	resp.OK(c, adminVideoToJSON(&v, model.DisplayUsername(&u)))
+	u, _ := a.UserSvc.GetUserByID(c.Request.Context(), v.UserID)
+	resp.OK(c, adminVideoToJSON(v, user.DisplayUsername(u)))
 }
 
 type adminVideoRejectReq struct {
@@ -162,8 +151,8 @@ func (a *API) AdminApproveVideo(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	var v model.Video
-	if err := a.DB.First(&v, id).Error; err != nil {
+	v, err := a.VideoSvc.GetVideoByID(c.Request.Context(), id)
+	if err != nil {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
@@ -183,11 +172,10 @@ func (a *API) AdminApproveVideo(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	_ = a.DB.First(&v, id)
-	var u model.User
-	_ = a.DB.First(&u, v.UserID).Error
+	v, _ = a.VideoSvc.GetVideoByID(c.Request.Context(), id)
+	u, _ := a.UserSvc.GetUserByID(c.Request.Context(), v.UserID)
 	a.Log.Info("admin approved video", zap.Uint64("video_id", id), zap.Uint64("admin_id", adminID))
-	resp.OK(c, adminVideoToJSON(&v, model.DisplayUsername(&u)))
+	resp.OK(c, adminVideoToJSON(v, user.DisplayUsername(u)))
 }
 
 // AdminRejectVideo POST /api/v1/admin/videos/:id/reject
@@ -208,8 +196,8 @@ func (a *API) AdminRejectVideo(c *gin.Context) {
 	if reason == "" {
 		reason = "内容不符合社区规范"
 	}
-	var v model.Video
-	if err := a.DB.First(&v, id).Error; err != nil {
+	v, err := a.VideoSvc.GetVideoByID(c.Request.Context(), id)
+	if err != nil {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
@@ -218,12 +206,12 @@ func (a *API) AdminRejectVideo(c *gin.Context) {
 		return
 	}
 	now := time.Now()
-	if err := a.DB.Model(&v).Updates(map[string]any{
+	if err := a.VideoSvc.AdminUpdateVideo(c.Request.Context(), id, map[string]interface{}{
 		"status":               "rejected",
 		"fail_reason":          reason,
 		"reviewed_at":          now,
 		"reviewed_by_admin_id": adminID,
-	}).Error; err != nil {
+	}); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
@@ -232,11 +220,10 @@ func (a *API) AdminRejectVideo(c *gin.Context) {
 		_ = a.ES.DeleteVideo(ictx, id)
 		cancel()
 	}
-	_ = a.DB.First(&v, id)
-	var u model.User
-	_ = a.DB.First(&u, v.UserID).Error
+	v, _ = a.VideoSvc.GetVideoByID(c.Request.Context(), id)
+	u, _ := a.UserSvc.GetUserByID(c.Request.Context(), v.UserID)
 	a.Log.Info("admin rejected video", zap.Uint64("video_id", id), zap.Uint64("admin_id", adminID))
-	resp.OK(c, adminVideoToJSON(&v, model.DisplayUsername(&u)))
+	resp.OK(c, adminVideoToJSON(v, user.DisplayUsername(u)))
 }
 
 // AdminDeleteVideo POST /api/v1/admin/videos/:id/delete 或 DELETE /api/v1/admin/videos/:id
@@ -252,8 +239,8 @@ func (a *API) AdminDeleteVideo(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	var v model.Video
-	if err := a.DB.First(&v, id).Error; err != nil {
+	v, err := a.VideoSvc.GetVideoByID(c.Request.Context(), id)
+	if err != nil {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
@@ -261,15 +248,15 @@ func (a *API) AdminDeleteVideo(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	removeVideoDraftFiles(v)
-	if err := a.DB.Transaction(func(tx *gorm.DB) error {
+	removeVideoDraftFiles(*v)
+	if err := a.VideoSvc.AdminDeleteVideoCascade(c.Request.Context(), id, func(tx *gorm.DB) error {
 		return deleteVideoCascade(tx, id)
 	}); err != nil {
 		a.Log.Error("admin delete video", zap.Error(err), zap.Uint64("video_id", id))
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	purgeVideoOSSObjects(a.Cfg, a.OSS, a.Log, v)
+	purgeVideoOSSObjects(a.Cfg, a.OSS, a.Log, *v)
 	a.esDeleteVideo(id)
 	a.Log.Info("admin deleted video",
 		zap.Uint64("video_id", id),

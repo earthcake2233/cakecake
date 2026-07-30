@@ -1,19 +1,19 @@
 package service
 
 import (
+	"minibili/internal/model/article"
 	"context"
 	"time"
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"minibili/internal/model"
 	"minibili/internal/search"
 )
 
 // PublishArticle marks an article published and indexes search (post-review or direct publish).
 func PublishArticle(ctx context.Context, db *gorm.DB, esc *search.Client, log *zap.Logger, articleID uint64, adminID *uint64) error {
-	var art model.Article
+	var art article.Article
 	if err := db.First(&art, articleID).Error; err != nil {
 		return err
 	}

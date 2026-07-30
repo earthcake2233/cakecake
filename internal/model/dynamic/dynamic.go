@@ -1,8 +1,5 @@
-package model
-
+package dynamic
 import "time"
-
-// UserDynamic is a user-published image/text feed post (动态图文).
 type UserDynamic struct {
 	ID         uint64 `gorm:"primaryKey"`
 	UserID     uint64 `gorm:"index:idx_dyn_user_created;not null"`

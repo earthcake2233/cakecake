@@ -1,19 +1,19 @@
 package handler
 
 import (
+	"minibili/internal/model/admin"
 	"fmt"
 	"strings"
 
 	"go.uber.org/zap"
 
 	"minibili/internal/config"
-	"minibili/internal/model"
 	"minibili/internal/storage"
 )
 
 var bannerImageOSSExts = []string{"jpg", "jpeg", "png", "webp", "gif", "bmp"}
 
-func bannerOSSObjectKeys(cfg *config.C, b model.HomeBanner) []string {
+func bannerOSSObjectKeys(cfg *config.C, b admin.HomeBanner) []string {
 	seen := make(map[string]struct{})
 	out := make([]string, 0, 4)
 	add := func(key string) {
@@ -36,7 +36,7 @@ func bannerOSSObjectKeys(cfg *config.C, b model.HomeBanner) []string {
 	return out
 }
 
-func purgeBannerOSSObjects(cfg *config.C, ossClient *storage.OSS, log *zap.Logger, b model.HomeBanner) {
+func purgeBannerOSSObjects(cfg *config.C, ossClient *storage.OSS, log *zap.Logger, b admin.HomeBanner) {
 	if ossClient == nil {
 		return
 	}

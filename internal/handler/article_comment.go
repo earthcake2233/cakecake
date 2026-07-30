@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"minibili/internal/model/user"
 	"net/http"
 	"strconv"
 	"strings"
@@ -9,7 +10,6 @@ import (
 
 	"minibili/internal/errcode"
 	"minibili/internal/middleware"
-	"minibili/internal/model"
 	"minibili/internal/pkg/iplocate"
 	"minibili/internal/pkg/resp"
 	"minibili/internal/service"
@@ -41,8 +41,8 @@ func (a *API) PostArticleComment(c *gin.Context) {
 	if !ok { resp.Err(c, http.StatusUnauthorized, errcode.CodeUnauthorized); return }
 	aid, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil || aid == 0 { resp.Err(c, http.StatusBadRequest, errcode.CodeParamError); return }
-	var art model.Article
-	if err := a.DB.First(&art, aid).Error; err != nil || art.Status != "published" {
+	art, err := a.ArticleSvc.GetPublishedArticle(c.Request.Context(), aid)
+	if err != nil {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound); return
 	}
 	if art.CommentsClosed { resp.Err(c, http.StatusForbidden, errcode.CodeCommentsClosed); return }
@@ -76,12 +76,12 @@ func (a *API) DeleteArticleComment(c *gin.Context) {
 	if !ok { resp.Err(c, http.StatusUnauthorized, errcode.CodeUnauthorized); return }
 	cid, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil { resp.Err(c, http.StatusBadRequest, errcode.CodeParamError); return }
-	var cm model.ArticleComment
-	if err := a.DB.First(&cm, cid).Error; err != nil { resp.Err(c, http.StatusNotFound, errcode.CodeNotFound); return }
+	cm, findErr := a.CommentSvc.GetArticleComment(c.Request.Context(), cid)
+	if findErr != nil { resp.Err(c, http.StatusNotFound, errcode.CodeNotFound); return }
 	isAuthor := false
 	if uid != cm.UserID {
-		var art model.Article
-		if err := a.DB.First(&art, cm.ArticleID).Error; err == nil && art.UserID == uid { isAuthor = true }
+		art, artErr := a.ArticleSvc.GetArticleByID(c.Request.Context(), cm.ArticleID)
+		if artErr == nil && art.UserID == uid { isAuthor = true }
 	}
 	err = a.CommentSvc.DeleteArticleComment(c.Request.Context(), uid, cid, isAuthor)
 	if err != nil { resp.Err(c, httpStatusFromSvc(errCodeFromSvc(err)), errCodeFromSvc(err)); return }
@@ -93,10 +93,10 @@ func (a *API) PinArticleComment(c *gin.Context) {
 	if !ok { resp.Err(c, http.StatusUnauthorized, errcode.CodeUnauthorized); return }
 	cid, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil { resp.Err(c, http.StatusBadRequest, errcode.CodeParamError); return }
-	var cm model.ArticleComment
-	if err := a.DB.First(&cm, cid).Error; err != nil { resp.Err(c, http.StatusNotFound, errcode.CodeNotFound); return }
-	var art model.Article
-	if err := a.DB.First(&art, cm.ArticleID).Error; err != nil || art.UserID != uid {
+	cm, findErr := a.CommentSvc.GetArticleComment(c.Request.Context(), cid)
+	if findErr != nil { resp.Err(c, http.StatusNotFound, errcode.CodeNotFound); return }
+	art, artErr := a.ArticleSvc.GetArticleByID(c.Request.Context(), cm.ArticleID)
+	if artErr != nil || art.UserID != uid {
 		resp.Err(c, http.StatusForbidden, errcode.CodeForbidden); return
 	}
 	pinned, svcErr := a.CommentSvc.PinArticleComment(c.Request.Context(), cm.ArticleID, cid)
@@ -147,12 +147,13 @@ func (a *API) GetMyArticle(c *gin.Context) {
 	if !ok { resp.Err(c, http.StatusUnauthorized, errcode.CodeUnauthorized); return }
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil || id == 0 { resp.Err(c, http.StatusBadRequest, errcode.CodeParamError); return }
-	var art model.Article
-	if err := a.DB.First(&art, id).Error; err != nil || art.UserID != uid {
+	art, err := a.ArticleSvc.GetOwnedArticle(c.Request.Context(), id, uid)
+	if err != nil {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound); return
 	}
-	var author model.User
-	_ = a.DB.First(&author, uid).Error
-	eng := articleEngagementByViewer(a.DB, uid, []uint64{id})[id]
-	resp.OK(c, articleDetailPayload(a, &art, &author, eng, uid))
+	var author user.User
+	userPub, _ := a.UserSvc.GetUserPublic(c.Request.Context(), uid)
+	if userPub != nil { author = user.User{ID: userPub.ID, Username: userPub.Username, AvatarURL: userPub.AvatarURL} }
+	eng := toArticleEngagement(a.ArticleSvc.BatchArticleEngagementByViewer(c.Request.Context(), uid, []uint64{id})[id])
+	resp.OK(c, articleDetailPayload(a, art, &author, eng, uid))
 }

@@ -1,19 +1,20 @@
 package service
 
 import (
+	"minibili/internal/model/user"
+	"minibili/internal/model/video"
 	"context"
 	"time"
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"minibili/internal/model"
 	"minibili/internal/search"
 )
 
 // PublishVideo marks a video published and indexes search (post-review or direct publish).
 func PublishVideo(ctx context.Context, db *gorm.DB, esc *search.Client, log *zap.Logger, videoID uint64, adminID *uint64) error {
-	var v model.Video
+	var v video.Video
 	if err := db.First(&v, videoID).Error; err != nil {
 		return err
 	}
@@ -31,7 +32,7 @@ func PublishVideo(ctx context.Context, db *gorm.DB, esc *search.Client, log *zap
 	if err := db.Model(&v).Updates(updates).Error; err != nil {
 		return err
 	}
-	_ = db.Model(&model.User{}).
+	_ = db.Model(&user.User{}).
 		Where("id = ? AND first_published_at IS NULL", v.UserID).
 		Update("first_published_at", v.CreatedAt).Error
 	if esc != nil && esc.Enabled() {

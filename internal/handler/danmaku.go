@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"minibili/internal/model/danmaku"
+	"minibili/internal/model/user"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -11,7 +13,6 @@ import (
 
 	"minibili/internal/errcode"
 	"minibili/internal/middleware"
-	"minibili/internal/model"
 	"minibili/internal/pkg/resp"
 )
 
@@ -32,7 +33,7 @@ func normalizeDanmakuFontSize(raw string) string {
 	}
 }
 
-func danmakuFontSizeField(d model.Danmaku) string {
+func danmakuFontSizeField(d danmaku.Danmaku) string {
 	if fs := strings.TrimSpace(d.FontSize); fs != "" {
 		return normalizeDanmakuFontSize(fs)
 	}
@@ -97,7 +98,7 @@ func (a *API) PostDanmaku(c *gin.Context) {
 		return
 	}
 	d := result.Danmaku
-	displayName := model.DisplayUsername(result.User)
+	displayName := user.DisplayUsername(result.User)
 
 	payload := gin.H{
 		"type": "danmaku",

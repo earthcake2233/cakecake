@@ -3,6 +3,9 @@
 package handler
 
 import (
+	"minibili/internal/model/article"
+	"minibili/internal/model/user"
+	"minibili/internal/model/video"
 	"encoding/json"
 	"fmt"
 	"net/http/httptest"
@@ -14,7 +17,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 
-	"minibili/internal/model"
 )
 
 func TestAdminBannerCRUD(t *testing.T) {
@@ -62,10 +64,10 @@ func TestAdminApproveVideo(t *testing.T) {
 	access, _, _, err := jm.IssueAdminPair(1)
 	require.NoError(t, err)
 
-	user := model.User{Username: fmt.Sprintf("vu%d", time.Now().UnixNano()), PasswordHash: "hash", CoinBalanceTenths: 230}
+	user := user.User{Username: fmt.Sprintf("vu%d", time.Now().UnixNano()), PasswordHash: "hash", CoinBalanceTenths: 230}
 	require.NoError(t, api.DB.Create(&user).Error)
 
-	v := model.Video{UserID: user.ID, Title: "Admin Test", Status: "pending_review", VideoURL: "https://cdn.example.com/video.mp4", CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	v := video.Video{UserID: user.ID, Title: "Admin Test", Status: "pending_review", VideoURL: "https://cdn.example.com/video.mp4", CreatedAt: time.Now(), UpdatedAt: time.Now()}
 	require.NoError(t, api.DB.Create(&v).Error)
 
 	// Approve
@@ -81,10 +83,10 @@ func TestAdminApproveArticle(t *testing.T) {
 	access, _, _, err := jm.IssueAdminPair(1)
 	require.NoError(t, err)
 
-	user := model.User{Username: fmt.Sprintf("au%d", time.Now().UnixNano()), PasswordHash: "hash", CoinBalanceTenths: 230}
+	user := user.User{Username: fmt.Sprintf("au%d", time.Now().UnixNano()), PasswordHash: "hash", CoinBalanceTenths: 230}
 	require.NoError(t, api.DB.Create(&user).Error)
 
-	a := model.Article{UserID: user.ID, Title: "Admin Art", BodyMD: "# H", Status: "pending_review", CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	a := article.Article{UserID: user.ID, Title: "Admin Art", BodyMD: "# H", Status: "pending_review", CreatedAt: time.Now(), UpdatedAt: time.Now()}
 	require.NoError(t, api.DB.Create(&a).Error)
 
 	req := httptest.NewRequest("POST", "/api/v1/admin/articles/"+strconv.Itoa(int(a.ID))+"/approve", nil)

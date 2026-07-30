@@ -3,6 +3,8 @@
 package handler
 
 import (
+	"minibili/internal/model/dynamic"
+	"minibili/internal/model/video"
 	"encoding/json"
 	"fmt"
 	"testing"
@@ -10,7 +12,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"minibili/internal/model"
 )
 
 func Test_NotificationBatchAndCategoryRead(t *testing.T) {
@@ -59,7 +60,7 @@ func Test_DynamicCommentOperations(t *testing.T) {
 	u2 := seedUser(t, api, "dco2", "DCO2", 10)
 	tk := tok(t, api, u.ID)
 	tk2 := tok(t, api, u2.ID)
-	dyn := model.UserDynamic{UserID: u.ID, Title: "DCO Dynamic", Content: "DCO content", ImagesJSON: "[]", CreatedAt: time.Now()}
+	dyn := dynamic.UserDynamic{UserID: u.ID, Title: "DCO Dynamic", Content: "DCO content", ImagesJSON: "[]", CreatedAt: time.Now()}
 	require.NoError(t, api.DB.Create(&dyn).Error)
 	w := srve(r, areq("POST", fmt.Sprintf("/api/v1/user-dynamics/%d/comments", dyn.ID), tk2, fmt.Sprintf(`{"content":"DCO comment","dynamic_id":%d}`, dyn.ID)))
 	var dcr struct { Code int `json:"code"`; Data struct { ID uint64 `json:"id"`} }
@@ -137,7 +138,7 @@ func Test_AdminVideoApproveRejectDelete(t *testing.T) {
 	api, r, _ := newTestAPI(t)
 	u := seedUser(t, api, "avd1", "AVD1", 10)
 	at := admintok(t, api)
-	v := model.Video{UserID: u.ID, Title: "Admin Test Video", Status: "pending_review", VideoURL: "https://cdn.example.com/avd.mp4", CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	v := video.Video{UserID: u.ID, Title: "Admin Test Video", Status: "pending_review", VideoURL: "https://cdn.example.com/avd.mp4", CreatedAt: time.Now(), UpdatedAt: time.Now()}
 	require.NoError(t, api.DB.Create(&v).Error)
 	srve(r, areq("POST", fmt.Sprintf("/api/v1/admin/videos/%d/approve", v.ID), at, nil))
 	srve(r, areq("POST", fmt.Sprintf("/api/v1/admin/videos/%d/reject", v.ID), at, `{"reason":"Test reject"}`))

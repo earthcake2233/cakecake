@@ -1,10 +1,10 @@
 package handler
 
 import (
+	"minibili/internal/model/admin"
 	"testing"
 
 	"minibili/internal/config"
-	"minibili/internal/model"
 )
 
 func TestBannerOSSObjectKeys(t *testing.T) {
@@ -13,7 +13,7 @@ func TestBannerOSSObjectKeys(t *testing.T) {
 		OSSEndpoint:        "https://oss-cn-beijing.aliyuncs.com",
 		OSSPublicURLPrefix: "https://your-bucket.oss-cn-beijing.aliyuncs.com",
 	}
-	b := model.HomeBanner{
+	b := admin.HomeBanner{
 		ID:       3,
 		ImageURL: "https://your-bucket.oss-cn-beijing.aliyuncs.com/home-banners/abc.jpg",
 	}

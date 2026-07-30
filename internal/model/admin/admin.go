@@ -1,8 +1,5 @@
-package model
-
+package admin
 import "time"
-
-// Admin is an internal operations account (not linked to users).
 type Admin struct {
 	ID           uint64 `gorm:"primaryKey"`
 	Username     string `gorm:"size:64;uniqueIndex;not null"`
@@ -13,8 +10,6 @@ type Admin struct {
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 }
-
-// HomeBanner is a homepage carousel slide (chief recommend).
 type HomeBanner struct {
 	ID         uint64 `gorm:"primaryKey"`
 	Title      string `gorm:"size:120;not null"`
@@ -28,8 +23,6 @@ type HomeBanner struct {
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
 }
-
-// HotSearchOp is manual hot-search intervention (pin / block / manual).
 type HotSearchOp struct {
 	ID           uint64 `gorm:"primaryKey"`
 	OpType       string `gorm:"size:16;not null;index"` // pin | block | manual
@@ -43,8 +36,6 @@ type HotSearchOp struct {
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 }
-
-// HotSearchDisplayLayout stores admin drag order for the merged display list (singleton id=1).
 type HotSearchDisplayLayout struct {
 	ID        uint64 `gorm:"primaryKey"`
 	OrderJSON string `gorm:"type:text;not null"`

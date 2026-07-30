@@ -1,6 +1,11 @@
 package handler
 
 import (
+	"minibili/internal/model/comment"
+	"minibili/internal/model/danmaku"
+	"minibili/internal/model/extra"
+	"minibili/internal/model/user"
+	"minibili/internal/model/video"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -11,7 +16,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
 	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
@@ -22,28 +26,27 @@ import (
 	"minibili/internal/errcode"
 	"minibili/internal/ffmpeg"
 	"minibili/internal/middleware"
-	"minibili/internal/model"
 	"minibili/internal/pkg/coverval"
-	"minibili/internal/pkg/cursor"
 	"minibili/internal/pkg/dailyreward"
 	"minibili/internal/pkg/resp"
+	"minibili/internal/service"
 	"minibili/internal/queue"
 	"minibili/internal/worker"
 )
 
-func uploaderAvatarForAPI(u *model.User) string {
+func uploaderAvatarForAPI(u *user.User) string {
 	return avatarURLForAPI(u)
 }
 
 // uploaderNameForAPI is the UP display name on video cards (nickname if set, else username).
-func uploaderNameForAPI(u *model.User) string {
+func uploaderNameForAPI(u *user.User) string {
 	if u == nil {
 		return ""
 	}
-	if nick := strings.TrimSpace(u.Nickname); nick != "" && !model.IsUserAnonymized(u) {
+	if nick := strings.TrimSpace(u.Nickname); nick != "" && !user.IsUserAnonymized(u) {
 		return nick
 	}
-	return model.DisplayUsername(u)
+	return user.DisplayUsername(u)
 }
 
 func videoLikesByViewer(db *gorm.DB, viewer uint64, ids []uint64) map[uint64]bool {
@@ -51,7 +54,7 @@ func videoLikesByViewer(db *gorm.DB, viewer uint64, ids []uint64) map[uint64]boo
 	if viewer == 0 || len(ids) == 0 {
 		return out
 	}
-	var rows []model.VideoLike
+	var rows []video.VideoLike
 	if err := db.Where("user_id = ? AND video_id IN ?", viewer, ids).Find(&rows).Error; err != nil {
 		return out
 	}
@@ -213,7 +216,7 @@ func (a *API) UploadVideo(c *gin.Context) {
 		}
 	}
 	zone := normalizeVideoZone(c.PostForm("zone"))
-	v := model.Video{
+	v := video.Video{
 		UserID:       uid,
 		Title:        title,
 		Description:  desc,
@@ -225,7 +228,7 @@ func (a *API) UploadVideo(c *gin.Context) {
 		TagsJSON:     tagsJSON,
 		Zone:         zone,
 	}
-	if err := a.DB.Create(&v).Error; err != nil {
+	if err := a.VideoSvc.CreateVideoRecord(c.Request.Context(), &v); err != nil {
 		_ = os.Remove(rawPath)
 		if coverPath != "" {
 			_ = os.Remove(coverPath)
@@ -237,7 +240,7 @@ func (a *API) UploadVideo(c *gin.Context) {
 	job := worker.TranscodeJob{VideoID: v.ID, RawPath: rawPath, CoverPath: coverPath, RetryCount: 0}
 	body, _ := json.Marshal(job)
 	if err := a.MQ.PublishTranscode(context.Background(), body); err != nil {
-		_ = a.DB.Where("id = ?", v.ID).Delete(&model.Video{}).Error
+		_ = a.VideoSvc.DeleteVideoByID(c.Request.Context(), v.ID)
 		_ = os.Remove(rawPath)
 		if coverPath != "" {
 			_ = os.Remove(coverPath)
@@ -316,103 +319,28 @@ func (a *API) ListPublishedVideos(c *gin.Context) {
 			arcType = n
 		}
 	}
-	q := a.DB.Model(&model.Video{}).Where("status = ?", "published")
-	if zoneParent != "" {
-		q = q.Where("zone = ? OR zone LIKE ?", zoneParent, zoneParent+"-%")
-	}
 	recentOnly := days > 0 && arcType == 1
-	if recentOnly {
-		cutoff := time.Now().AddDate(0, 0, -days)
-		q = q.Where("created_at >= ?", cutoff)
-	}
-	useHotCursor := zoneParent == "" && sortKey != "time" && !recentOnly
-	var orderClause string
-	switch sortKey {
-	case "time":
-		orderClause = "created_at DESC, id DESC"
-	default:
-		orderClause = "play_count DESC, created_at DESC, danmaku_count DESC, id DESC"
-	}
-	cur, _ := cursor.Decode(c.Query("cursor"))
-	if useHotCursor && cur != nil {
-		q = q.Where(
-			"(play_count < ?) OR (play_count = ? AND created_at < ?) OR (play_count = ? AND created_at = ? AND danmaku_count < ?) OR (play_count = ? AND created_at = ? AND danmaku_count = ? AND id < ?)",
-			cur.PlayCount, cur.PlayCount, cur.CreatedAt,
-			cur.PlayCount, cur.CreatedAt, cur.DanmakuCount,
-			cur.PlayCount, cur.CreatedAt, cur.DanmakuCount, cur.ID,
-		)
-	}
-	fetchLimit := limit + 1
-	if !useHotCursor {
-		fetchLimit = limit
-	}
-	var list []model.Video
-	if err := q.Order(orderClause).Limit(fetchLimit).Find(&list).Error; err != nil {
-		a.Log.Error("list videos", zap.Error(err))
+	res, err := a.VideoSvc.ListPublishedVideos(c.Request.Context(), service.VideoListOpts{
+		Limit:      limit,
+		SortKey:    sortKey,
+		ZoneParent: zoneParent,
+		Days:       days,
+		RecentOnly: recentOnly,
+		Cursor:     c.Query("cursor"),
+	})
+	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	hasMore := useHotCursor && len(list) > limit
-	if hasMore {
-		list = list[:limit]
+	items := make([]gin.H, 0, len(res.Videos))
+	for _, v := range res.Videos {
+		pc, _ := a.Play.Display(context.Background(), &v)
+		items = append(items, videoCard(v, user.DisplayUsername(&user.User{Username: ""}), pc, videoEngagement{}))
 	}
-	var uids []uint64
-	for _, v := range list {
-		uids = append(uids, v.UserID)
-	}
-	usernames := map[uint64]string{}
-	if len(uids) > 0 {
-		var users []model.User
-		_ = a.DB.Where("id IN ?", uids).Find(&users).Error
-		for i := range users {
-			usr := &users[i]
-			usernames[usr.ID] = model.DisplayUsername(usr)
-		}
-	}
-	ctx := context.Background()
-	var viewer uint64
-	if uid, ok := middleware.UserID(c); ok {
-		viewer = uid
-	}
-	ids := make([]uint64, 0, len(list))
-	for _, v := range list {
-		ids = append(ids, v.ID)
-	}
-	eng := videoEngagementByViewer(a.DB, viewer, ids)
-	items := make([]gin.H, 0, len(list))
-	for _, v := range list {
-		pc, _ := a.Play.Display(ctx, &v)
-		items = append(items, videoCard(v, usernames[v.UserID], pc, eng[v.ID]))
-	}
-	next := ""
-	if hasMore && len(list) > 0 {
-		last := list[len(list)-1]
-		next = cursor.Encode(cursor.VideoListC{
-			PlayCount: last.PlayCount, CreatedAt: last.CreatedAt, DanmakuCount: last.DanmakuCount, ID: last.ID,
-		})
-	}
-	payload := gin.H{"items": items, "next_cursor": next}
-	if zoneParent != "" {
-		payload["zone_video_count"] = a.countZoneVideos(zoneParent)
-	}
-	resp.OK(c, payload)
+	resp.OK(c, gin.H{"items": items, "next_cursor": res.NextCursor, "zone_video_count": res.ZoneVideoCount, "has_more": res.HasMore})
 }
-
-// countZoneVideos counts all published videos in zone_parent (including sub-zones).
 func (a *API) countZoneVideos(zoneParent string) int64 {
-	if zoneParent == "" {
-		return 0
-	}
-	var n int64
-	err := a.DB.Model(&model.Video{}).
-		Where("status = ?", "published").
-		Where("zone = ? OR zone LIKE ?", zoneParent, zoneParent+"-%").
-		Count(&n).Error
-	if err != nil {
-		a.Log.Warn("count zone videos", zap.String("zone", zoneParent), zap.Error(err))
-		return 0
-	}
-	return n
+	return a.VideoSvc.CountZoneVideos(zoneParent)
 }
 
 func manuscriptVideoStatusToDB(st string) string {
@@ -464,35 +392,11 @@ func orderClauseForMyVideos(sort string) string {
 }
 
 func (a *API) countMyVideosByStatus(uid uint64) gin.H {
-	type row struct {
-		Status string
-		N      int64
+	result := gin.H{}
+	for st, n := range a.VideoSvc.CountMyVideosByStatus(uid) {
+		result[st] = n
 	}
-	var rows []row
-	_ = a.DB.Model(&model.Video{}).
-		Select("status, COUNT(*) AS n").
-		Where("user_id = ?", uid).
-		Group("status").
-		Scan(&rows).Error
-	out := gin.H{
-		"draft":      int64(0),
-		"processing": int64(0),
-		"passed":     int64(0),
-		"rejected":   int64(0),
-	}
-	for _, r := range rows {
-		switch r.Status {
-		case "draft":
-			out["draft"] = r.N
-		case "processing", "pending_review":
-			out["processing"] = out["processing"].(int64) + r.N
-		case "published":
-			out["passed"] = r.N
-		case "failed", "rejected":
-			out["rejected"] = out["rejected"].(int64) + r.N
-		}
-	}
-	return out
+	return result
 }
 
 // ListMyVideos lists all statuses for the uploader (F2-b).
@@ -515,40 +419,22 @@ func (a *API) ListMyVideos(c *gin.Context) {
 	statusQ := strings.TrimSpace(c.Query("status"))
 	titleQ := strings.TrimSpace(c.Query("q"))
 
-	base := a.DB.Model(&model.Video{}).Where("user_id = ?", uid)
-	filtered := base
+	f := service.MyVideoFilter{UserID: uid, TitleQ: titleQ, SortKey: sortKey, Page: page, PageSize: pageSize}
 	if statusQ != "" && statusQ != "all" {
 		if single, multi := manuscriptVideoStatusFilter(statusQ); single != "" {
-			filtered = filtered.Where("status = ?", single)
+			f.Status = single
 		} else if len(multi) > 0 {
-			filtered = filtered.Where("status IN ?", multi)
+			f.Statuses = multi
 		}
 	}
-	if titleQ != "" {
-		filtered = filtered.Where("title LIKE ?", "%"+titleQ+"%")
-	}
-	var total int64
-	if err := filtered.Count(&total).Error; err != nil {
-		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
-		return
-	}
-	totalPages := int((total + int64(pageSize) - 1) / int64(pageSize))
-	if totalPages < 1 {
-		totalPages = 1
-	}
-	if page > totalPages {
-		page = totalPages
-	}
-	offset := (page - 1) * pageSize
-	var list []model.Video
-	if err := filtered.Order(orderClauseForMyVideos(sortKey)).
-		Offset(offset).Limit(pageSize).Find(&list).Error; err != nil {
+	res, err := a.VideoSvc.ListMyVideosAdvanced(c.Request.Context(), f)
+	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
 	ctx := context.Background()
-	items := make([]gin.H, 0, len(list))
-	for _, v := range list {
+	items := make([]gin.H, 0, len(res.Videos))
+	for _, v := range res.Videos {
 		pc, _ := a.Play.Display(ctx, &v)
 		items = append(items, gin.H{
 			"id":            v.ID,
@@ -571,8 +457,8 @@ func (a *API) ListMyVideos(c *gin.Context) {
 		"items":       items,
 		"page":        page,
 		"page_size":   pageSize,
-		"total":       total,
-		"total_pages": totalPages,
+		"total":       res.Total,
+		"total_pages": res.TotalPages,
 		"counts":      a.countMyVideosByStatus(uid),
 	})
 }
@@ -592,8 +478,8 @@ func (a *API) GetVideo(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	var v model.Video
-	if err := a.DB.First(&v, id).Error; err != nil {
+	v, err := a.VideoSvc.GetVideoByID(c.Request.Context(), id)
+	if err != nil {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
@@ -607,25 +493,25 @@ func (a *API) GetVideo(c *gin.Context) {
 	}
 	if v.Status == "published" {
 		_ = a.Play.Incr(context.Background(), v.ID)
-		_ = a.DB.First(&v, id).Error
 	}
-	pc, _ := a.Play.Display(context.Background(), &v)
-	var u model.User
-	_ = a.DB.First(&u, v.UserID).Error
+	pc, _ := a.Play.Display(context.Background(), v)
+	var u user.User
+	uPub, _ := a.UserSvc.GetUserPublic(c.Request.Context(), v.UserID)
+	if uPub != nil { u = user.User{ID: uPub.ID, Username: uPub.Username, AvatarURL: uPub.AvatarURL, Nickname: uPub.Nickname, Sign: uPub.Sign} }
 	watching := 0
 	if a.Hub != nil {
 		watching = a.Hub.RoomSize(id)
 	}
-	eng := videoEngagementFlags(a.DB, viewer, v.ID)
-	detail := videoDetail(v, u, pc, watching, eng)
+	eng := a.getVideoEngagementFlags(viewer, v.ID)
+	detail := videoDetail(*v, u, pc, watching, eng)
 	if v.Status == videoStatusDraft && viewer == v.UserID {
 		detail["draft_has_source"] = strings.TrimSpace(v.DraftRawPath) != ""
 	}
-	_, followerCnt := userFollowCounts(a.DB, v.UserID)
+	_, followerCnt := a.getFollowCounts(v.UserID)
 	detail["uploader_follower_count"] = followerCnt
-	detail["uploader_published_count"] = uploaderPublishedCount(a.DB, v.UserID)
+	detail["uploader_published_count"] = a.getUploaderPublishedCount(v.UserID)
 	if viewer > 0 && v.UserID != viewer {
-		detail["followed_by_me"] = userFollows(a.DB, viewer, v.UserID)
+		detail["followed_by_me"] = a.isFollowing(viewer, v.UserID)
 		detail["daily_coin_exp_progress"] = dailyreward.CoinProgress(a.DB, viewer)
 		detail["daily_coin_exp_max"] = dailyreward.ExpCoinMax
 	} else {
@@ -662,8 +548,8 @@ func (a *API) UpdateMyVideo(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	var v model.Video
-	if err := a.DB.First(&v, id).Error; err != nil {
+	v, err := a.VideoSvc.GetVideoByID(c.Request.Context(), id)
+	if err != nil {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
@@ -701,7 +587,7 @@ func (a *API) UpdateMyVideo(c *gin.Context) {
 	if z := normalizeVideoZone(req.Zone); z != "" {
 		updates["zone"] = z
 	}
-	if err := a.DB.Model(&v).Updates(updates).Error; err != nil {
+	if err := a.VideoSvc.UpdateVideo(c.Request.Context(), v, updates); err != nil {
 		a.Log.Error("update my video", zap.Error(err), zap.Uint64("video_id", id))
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
@@ -724,8 +610,8 @@ func (a *API) UpdateVideoCover(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	var v model.Video
-	if err := a.DB.First(&v, id).Error; err != nil || v.UserID != uid {
+	v, err := a.VideoSvc.GetVideoByID(c.Request.Context(), id)
+	if err != nil || v.UserID != uid {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
@@ -771,7 +657,7 @@ func (a *API) UpdateVideoCover(c *gin.Context) {
 		return
 	}
 	url := a.Cfg.OSSObjectURL(key)
-	if err := a.DB.Model(&v).Update("cover_url", url).Error; err != nil {
+	if err := a.VideoSvc.UpdateVideo(c.Request.Context(), v, map[string]interface{}{"cover_url": url}); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
@@ -805,8 +691,8 @@ func (a *API) PatchVideoPlayback(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	var v model.Video
-	if err := a.DB.First(&v, id).Error; err != nil {
+	v, err := a.VideoSvc.GetVideoByID(c.Request.Context(), id)
+	if err != nil {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
@@ -837,12 +723,13 @@ func (a *API) PatchVideoPlayback(c *gin.Context) {
 	if req.DanmakuClosed != nil {
 		updates["danmaku_closed"] = *req.DanmakuClosed
 	}
-	if err := a.DB.Model(&v).Updates(updates).Error; err != nil {
+	if err := a.VideoSvc.UpdateVideo(c.Request.Context(), v, updates); err != nil {
 		a.Log.Error("patch video playback", zap.Error(err), zap.Uint64("video_id", id))
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	if err := a.DB.First(&v, id).Error; err != nil {
+	v, err = a.VideoSvc.GetVideoByID(c.Request.Context(), id)
+	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
@@ -861,21 +748,20 @@ type videoEngagement struct {
 	InWatchLater  bool
 }
 
-func videoEngagementFlags(db *gorm.DB, viewer, videoID uint64) videoEngagement {
+func (a *API) getVideoEngagementFlags(viewer, videoID uint64) videoEngagement {
 	var e videoEngagement
 	if viewer == 0 || videoID == 0 {
 		return e
 	}
-	var cnt int64
-	_ = db.Model(&model.VideoLike{}).Where("user_id = ? AND video_id = ?", viewer, videoID).Count(&cnt).Error
-	e.LikedByMe = cnt > 0
-	cnt = 0
-	_ = db.Model(&model.VideoFavorite{}).Where("user_id = ? AND video_id = ?", viewer, videoID).Count(&cnt).Error
-	e.FavoritedByMe = cnt > 0
-	var coinRow model.VideoCoin
-	if err := db.Where("user_id = ? AND video_id = ?", viewer, videoID).Limit(1).Find(&coinRow).Error; err == nil && coinRow.ID > 0 {
+	ctx := context.Background()
+	liked := a.EngagementSvc.BatchVideoLikes(ctx, viewer, []uint64{videoID})
+	e.LikedByMe = liked[videoID]
+	fav := a.EngagementSvc.BatchFavoritedByUser(ctx, viewer, []uint64{videoID})
+	e.FavoritedByMe = fav[videoID]
+	coinMap := a.EngagementSvc.BatchCoinedByUser(ctx, viewer, []uint64{videoID})
+	if amt, ok := coinMap[videoID]; ok && amt > 0 {
 		e.CoinedByMe = true
-		e.MyCoinAmount = coinRow.Amount
+		e.MyCoinAmount = amt
 		if e.MyCoinAmount < 0 {
 			e.MyCoinAmount = 0
 		}
@@ -883,13 +769,12 @@ func videoEngagementFlags(db *gorm.DB, viewer, videoID uint64) videoEngagement {
 			e.MyCoinAmount = 2
 		}
 	}
-	cnt = 0
-	_ = db.Model(&model.WatchLater{}).Where("user_id = ? AND video_id = ?", viewer, videoID).Count(&cnt).Error
-	e.InWatchLater = cnt > 0
+	wl := a.EngagementSvc.BatchWatchLater(ctx, viewer, []uint64{videoID})
+	e.InWatchLater = wl[videoID]
 	return e
 }
 
-func videoCard(v model.Video, up string, play uint64, eng videoEngagement) gin.H {
+func videoCard(v video.Video, up string, play uint64, eng videoEngagement) gin.H {
 	m := gin.H{
 		"id":              v.ID,
 		"user_id":         v.UserID,
@@ -917,7 +802,7 @@ func videoCard(v model.Video, up string, play uint64, eng videoEngagement) gin.H
 	return m
 }
 
-func videoDetail(v model.Video, u model.User, play uint64, watching int, eng videoEngagement) gin.H {
+func videoDetail(v video.Video, u user.User, play uint64, watching int, eng videoEngagement) gin.H {
 	m := gin.H{
 		"id":                  v.ID,
 		"user_id":             v.UserID,
@@ -936,7 +821,7 @@ func videoDetail(v model.Video, u model.User, play uint64, watching int, eng vid
 		"in_watch_later":      eng.InWatchLater,
 		"watching_count":      watching,
 		"duration":            v.DurationSec,
-		"uploader":            model.DisplayUsername(&u),
+		"uploader":            user.DisplayUsername(&u),
 		"uploader_sign":       strings.TrimSpace(u.Sign),
 		"uploader_avatar_url": uploaderAvatarForAPI(&u),
 		"created_at":          v.CreatedAt.Format("2006-01-02 15:04:05"),
@@ -956,48 +841,48 @@ func videoDetail(v model.Video, u model.User, play uint64, watching int, eng vid
 // deleteVideoCascade removes one video and its comments, likes, danmaku (same package as account deletion).
 func deleteVideoCascade(tx *gorm.DB, videoID uint64) error {
 	var cids []uint64
-	if err := tx.Model(&model.Comment{}).Where("video_id = ?", videoID).Pluck("id", &cids).Error; err != nil {
+	if err := tx.Model(&comment.Comment{}).Where("video_id = ?", videoID).Pluck("id", &cids).Error; err != nil {
 		return err
 	}
 	if len(cids) > 0 {
-		if err := tx.Where("comment_id IN ?", cids).Delete(&model.CommentLike{}).Error; err != nil {
+		if err := tx.Where("comment_id IN ?", cids).Delete(&comment.CommentLike{}).Error; err != nil {
 			return err
 		}
-		if err := tx.Where("comment_id IN ?", cids).Delete(&model.CommentDislike{}).Error; err != nil {
+		if err := tx.Where("comment_id IN ?", cids).Delete(&comment.CommentDislike{}).Error; err != nil {
 			return err
 		}
-		if err := tx.Where("id IN ?", cids).Delete(&model.Comment{}).Error; err != nil {
+		if err := tx.Where("id IN ?", cids).Delete(&comment.Comment{}).Error; err != nil {
 			return err
 		}
 	}
-	if err := tx.Where("video_id = ?", videoID).Delete(&model.VideoLike{}).Error; err != nil {
+	if err := tx.Where("video_id = ?", videoID).Delete(&video.VideoLike{}).Error; err != nil {
 		return err
 	}
-	if err := tx.Where("video_id = ?", videoID).Delete(&model.VideoFavorite{}).Error; err != nil {
+	if err := tx.Where("video_id = ?", videoID).Delete(&video.VideoFavorite{}).Error; err != nil {
 		return err
 	}
-	if err := tx.Where("video_id = ?", videoID).Delete(&model.VideoCoin{}).Error; err != nil {
+	if err := tx.Where("video_id = ?", videoID).Delete(&video.VideoCoin{}).Error; err != nil {
 		return err
 	}
-	if err := tx.Where("video_id = ?", videoID).Delete(&model.WatchLater{}).Error; err != nil {
+	if err := tx.Where("video_id = ?", videoID).Delete(&video.WatchLater{}).Error; err != nil {
 		return err
 	}
-	if err := tx.Where("video_id = ?", videoID).Delete(&model.VideoViewHistory{}).Error; err != nil {
+	if err := tx.Where("video_id = ?", videoID).Delete(&extra.VideoViewHistory{}).Error; err != nil {
 		return err
 	}
 	var dmIDs []uint64
-	if err := tx.Model(&model.Danmaku{}).Where("video_id = ?", videoID).Pluck("id", &dmIDs).Error; err != nil {
+	if err := tx.Model(&danmaku.Danmaku{}).Where("video_id = ?", videoID).Pluck("id", &dmIDs).Error; err != nil {
 		return err
 	}
 	if len(dmIDs) > 0 {
-		if err := tx.Where("danmaku_id IN ?", dmIDs).Delete(&model.DanmakuLike{}).Error; err != nil {
+		if err := tx.Where("danmaku_id IN ?", dmIDs).Delete(&danmaku.DanmakuLike{}).Error; err != nil {
 			return err
 		}
 	}
-	if err := tx.Where("video_id = ?", videoID).Delete(&model.Danmaku{}).Error; err != nil {
+	if err := tx.Where("video_id = ?", videoID).Delete(&danmaku.Danmaku{}).Error; err != nil {
 		return err
 	}
-	return tx.Where("id = ?", videoID).Delete(&model.Video{}).Error
+	return tx.Where("id = ?", videoID).Delete(&video.Video{}).Error
 }
 
 // DeleteMyVideo deletes the caller's own video by id (comments, likes, danmaku cascade in DB).
@@ -1012,8 +897,8 @@ func (a *API) DeleteMyVideo(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	var v model.Video
-	if err := a.DB.First(&v, id).Error; err != nil {
+	v, err := a.VideoSvc.GetVideoByID(c.Request.Context(), id)
+	if err != nil {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
@@ -1021,15 +906,13 @@ func (a *API) DeleteMyVideo(c *gin.Context) {
 		resp.Err(c, http.StatusForbidden, errcode.CodeForbidden)
 		return
 	}
-	removeVideoDraftFiles(v)
-	if err := a.DB.Transaction(func(tx *gorm.DB) error {
-		return deleteVideoCascade(tx, id)
-	}); err != nil {
+	removeVideoDraftFiles(*v)
+	if err := a.VideoSvc.DeleteVideoWithCascade(c.Request.Context(), id, nil); err != nil {
 		a.Log.Error("delete my video", zap.Error(err), zap.Uint64("video_id", id))
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	purgeVideoOSSObjects(a.Cfg, a.OSS, a.Log, v)
+	purgeVideoOSSObjects(a.Cfg, a.OSS, a.Log, *v)
 	a.esDeleteVideo(id)
 	resp.OK(c, gin.H{"ok": true})
 }

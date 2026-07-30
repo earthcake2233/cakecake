@@ -1,9 +1,9 @@
 package userlevel
 
 import (
+	"minibili/internal/model/user"
 	"gorm.io/gorm"
 
-	"minibili/internal/model"
 )
 
 // BatchCurrentLevels maps user id to account level (1–6) from stored experience.
@@ -27,7 +27,7 @@ func BatchCurrentLevels(db *gorm.DB, uids []uint64) map[uint64]int {
 	if len(uniq) == 0 {
 		return out
 	}
-	var users []model.User
+	var users []user.User
 	_ = db.Select("id", "experience").Where("id IN ?", uniq).Find(&users).Error
 	for i := range users {
 		u := &users[i]

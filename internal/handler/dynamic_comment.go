@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"minibili/internal/model/dynamic"
+	"context"
 	"net/http"
 	"strconv"
 	"strings"
@@ -9,7 +11,6 @@ import (
 
 	"minibili/internal/errcode"
 	"minibili/internal/middleware"
-	"minibili/internal/model"
 	"minibili/internal/pkg/iplocate"
 	"minibili/internal/pkg/resp"
 	"minibili/internal/service"
@@ -58,12 +59,12 @@ func (a *API) DeleteDynamicComment(c *gin.Context) {
 	if !ok { resp.Err(c, http.StatusUnauthorized, errcode.CodeUnauthorized); return }
 	cid, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil { resp.Err(c, http.StatusBadRequest, errcode.CodeParamError); return }
-	var cm model.DynamicComment
-	if err := a.DB.First(&cm, cid).Error; err != nil { resp.Err(c, http.StatusNotFound, errcode.CodeNotFound); return }
+	cm, err := a.CommentSvc.GetDynamicCommentByID(c.Request.Context(), cid)
+	if err != nil { resp.Err(c, http.StatusNotFound, errcode.CodeNotFound); return }
 	isUploader := false
 	if uid != cm.UserID {
-		var d model.UserDynamic
-		if err := a.DB.First(&d, cm.DynamicID).Error; err == nil && d.UserID == uid { isUploader = true }
+		d, err := a.DynamicSvc.GetDynamicByID(c.Request.Context(), cm.DynamicID)
+		if err == nil && d.UserID == uid { isUploader = true }
 	}
 	err = a.CommentSvc.DeleteDynamicComment(c.Request.Context(), uid, cid, isUploader)
 	if err != nil { resp.Err(c, httpStatusFromSvc(errCodeFromSvc(err)), errCodeFromSvc(err)); return }
@@ -108,8 +109,8 @@ func (a *API) IgnoreCuratedDynamicComment(c *gin.Context) {
 	}
 	resp.OK(c, gin.H{"ok": true})
 }
-func loadUserDynamic(a *API, id uint64) (*model.UserDynamic, bool) {
-	var dyn model.UserDynamic
-	if err := a.DB.First(&dyn, id).Error; err != nil { return nil, false }
-	return &dyn, true
+func loadUserDynamic(a *API, id uint64) (*dynamic.UserDynamic, bool) {
+	dyn, err := a.DynamicSvc.GetDynamicByID(context.Background(), id)
+	if err != nil { return nil, false }
+	return dyn, true
 }

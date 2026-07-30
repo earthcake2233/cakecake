@@ -3,24 +3,25 @@
 package handler
 
 import (
+	"minibili/internal/model/comment"
+	"minibili/internal/model/notification"
 	"testing"
 	"time"
 
 	"strconv"
 
-	"minibili/internal/model"
 )
 
 func Test_likeNotifPayloadSubject(t *testing.T) {
 	api, _, _ := newTestAPI(t)
 	tests := []struct {
 		name string
-		n    model.Notification
+		n    notification.Notification
 		want string
 	}{
-		{name: "empty payload", n: model.Notification{PayloadJSON: ""}, want: ""},
-		{name: "article_comment", n: model.Notification{PayloadJSON: `{"like_subject":"article_comment"}`}, want: "article_comment"},
-		{name: "danmaku", n: model.Notification{PayloadJSON: `{"like_subject":"danmaku"}`}, want: "danmaku"},
+		{name: "empty payload", n: notification.Notification{PayloadJSON: ""}, want: ""},
+		{name: "article_comment", n: notification.Notification{PayloadJSON: `{"like_subject":"article_comment"}`}, want: "article_comment"},
+		{name: "danmaku", n: notification.Notification{PayloadJSON: `{"like_subject":"danmaku"}`}, want: "danmaku"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -36,7 +37,7 @@ func Test_consolidateDuplicateLikeAggregations(t *testing.T) {
 	api, _, _ := newTestAPI(t)
 	u := seedUser(t, api, "cda1", "CDA1", 10)
 	for i := 0; i < 4; i++ {
-		n := model.Notification{
+		n := notification.Notification{
 			RecipientID:     u.ID,
 			Type:            "like_aggregation",
 			RelatedID:       100,
@@ -50,7 +51,7 @@ func Test_consolidateDuplicateLikeAggregations(t *testing.T) {
 	}
 	api.consolidateDuplicateLikeAggregations(u.ID)
 	var count int64
-	api.DB.Model(&model.Notification{}).Where("recipient_id = ? AND type = ? AND related_id = ?", u.ID, "like_aggregation", 100).Count(&count)
+	api.DB.Model(&notification.Notification{}).Where("recipient_id = ? AND type = ? AND related_id = ?", u.ID, "like_aggregation", 100).Count(&count)
 	t.Logf("remaining: %d", count)
 }
 
@@ -58,7 +59,7 @@ func Test_consolidateLikeAggregationNotifs(t *testing.T) {
 	api, _, _ := newTestAPI(t)
 	u := seedUser(t, api, "cln1", "CLN1", 10)
 	for i := 0; i < 3; i++ {
-		n := model.Notification{
+		n := notification.Notification{
 			RecipientID:     u.ID,
 			Type:            "like_aggregation",
 			RelatedID:       uint64(100 + i),
@@ -72,7 +73,7 @@ func Test_consolidateLikeAggregationNotifs(t *testing.T) {
 	}
 	api.consolidateLikeAggregationNotifs(u.ID, 100)
 	var count int64
-	api.DB.Model(&model.Notification{}).Where("recipient_id = ?", u.ID).Count(&count)
+	api.DB.Model(&notification.Notification{}).Where("recipient_id = ?", u.ID).Count(&count)
 	t.Logf("remaining: %d", count)
 }
 
@@ -95,7 +96,7 @@ func Test_likeAggTopLikerNames(t *testing.T) {
 func Test_formatNotificationBasic(t *testing.T) {
 	api, _, _ := newTestAPI(t)
 	u := seedUser(t, api, "fnb1", "FNB1", 10)
-	n := model.Notification{
+	n := notification.Notification{
 		ID: 1, RecipientID: u.ID, Type: "reply", SenderNamesJSON: `["sender"]`, TotalLikes: 0,
 		CommentPreview: "Test", PayloadJSON: `{}`, IsRead: true, CreatedAt: time.Now(),
 	}
@@ -108,7 +109,7 @@ func Test_formatNotificationBasic(t *testing.T) {
 func Test_formatNotificationLikeAgg(t *testing.T) {
 	api, _, _ := newTestAPI(t)
 	u := seedUser(t, api, "fna1", "FNA1", 10)
-	n := model.Notification{
+	n := notification.Notification{
 		ID: 2, RecipientID: u.ID, Type: "like_aggregation", SenderNamesJSON: `["a","b"]`,
 		TotalLikes: 5, PayloadJSON: `{"like_subject":"comment"}`, IsRead: false, CreatedAt: time.Now(),
 	}
@@ -121,7 +122,7 @@ func Test_formatNotificationLikeAgg(t *testing.T) {
 func Test_formatNotificationDanmakuLike(t *testing.T) {
 	api, _, _ := newTestAPI(t)
 	u := seedUser(t, api, "fnd1", "FND1", 10)
-	n := model.Notification{
+	n := notification.Notification{
 		ID: 3, RecipientID: u.ID, Type: "like_aggregation", SenderNamesJSON: `["dl"]`,
 		TotalLikes: 3, PayloadJSON: `{"like_subject":"danmaku"}`, IsRead: false, CreatedAt: time.Now(),
 	}
@@ -149,7 +150,7 @@ func Test_clearCommentDislike(t *testing.T) {
 func Test_clearCommentLike(t *testing.T) {
 	api, _, _ := newTestAPI(t)
 	// non-existent comment ID
-	var cm model.Comment
+	var cm comment.Comment
 	ok, err := api.clearCommentLike(1, 99999, &cm)
 	if err != nil { t.Fatal(err) }
 	if ok { t.Error("expected false") }
@@ -159,7 +160,7 @@ func Test_resolveReplyInboxTarget(t *testing.T) {
 	api, _, _ := newTestAPI(t)
 	u := seedUser(t, api, "rir1", "RIR1", 10)
 	v := seedVideoWithAPI(t, api, u.ID, "Test Video")
-	cm := model.Comment{
+	cm := comment.Comment{
 		UserID:  u.ID,
 		VideoID: v.ID,
 		Content: "test comment",
@@ -167,15 +168,15 @@ func Test_resolveReplyInboxTarget(t *testing.T) {
 	api.DB.Create(&cm)
 	tests := []struct {
 		name string
-		n    model.Notification
+		n    notification.Notification
 		want replyInboxTarget
 		ok   bool
 	}{
-		{name: "reply_received", n: model.Notification{
+		{name: "reply_received", n: notification.Notification{
 			Type: "reply_received", RelatedID: cm.ID,
 			PayloadJSON: `{"video_id":` + strconv.FormatUint(v.ID, 10) + `}`,
 		}, want: replyInboxTarget{CommentID: cm.ID, VideoID: v.ID}, ok: true},
-		{name: "like_agg", n: model.Notification{Type: "like_aggregation"},
+		{name: "like_agg", n: notification.Notification{Type: "like_aggregation"},
 			want: replyInboxTarget{}, ok: false},
 	}
 	for _, tt := range tests {

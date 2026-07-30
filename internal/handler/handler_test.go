@@ -1,13 +1,16 @@
 package handler
 
 import (
+	"minibili/internal/model/admin"
+	"minibili/internal/model/danmaku"
+	"minibili/internal/model/user"
+	"minibili/internal/model/video"
 	"path/filepath"
 	"testing"
 
 	"github.com/gin-gonic/gin"
 
 	"minibili/internal/config"
-	"minibili/internal/model"
 )
 
 func TestNormalizeDanmakuFontSize(t *testing.T) {
@@ -36,14 +39,14 @@ func TestNormalizeDanmakuFontSize(t *testing.T) {
 
 func TestDanmakuFontSizeField(t *testing.T) {
 	tests := []struct {
-		dm   model.Danmaku
+		dm   danmaku.Danmaku
 		want string
 	}{
-		{model.Danmaku{FontSize: "sm"}, "sm"},
-		{model.Danmaku{FontSize: "lg"}, "lg"},
-		{model.Danmaku{FontSize: ""}, "md"},
-		{model.Danmaku{FontSize: "  "}, "md"},
-		{model.Danmaku{}, "md"},
+		{danmaku.Danmaku{FontSize: "sm"}, "sm"},
+		{danmaku.Danmaku{FontSize: "lg"}, "lg"},
+		{danmaku.Danmaku{FontSize: ""}, "md"},
+		{danmaku.Danmaku{FontSize: "  "}, "md"},
+		{danmaku.Danmaku{}, "md"},
 	}
 	for _, tc := range tests {
 		got := danmakuFontSizeField(tc.dm)
@@ -246,13 +249,13 @@ func TestValidateArticleContent(t *testing.T) {
 func TestUploaderNameForAPI(t *testing.T) {
 	tests := []struct {
 		name string
-		u    *model.User
+		u    *user.User
 		want string
 	}{
 		{"nil user", nil, ""},
-		{"nickname set", &model.User{Nickname: "Alice", Username: "alice"}, "Alice"},
-		{"no nickname", &model.User{Nickname: "", Username: "bob"}, "bob"},
-		{"nickname spaces", &model.User{Nickname: "  ", Username: "charlie"}, "charlie"},
+		{"nickname set", &user.User{Nickname: "Alice", Username: "alice"}, "Alice"},
+		{"no nickname", &user.User{Nickname: "", Username: "bob"}, "bob"},
+		{"nickname spaces", &user.User{Nickname: "  ", Username: "charlie"}, "charlie"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -348,7 +351,7 @@ func TestBannerOSSObjectKeysExtended(t *testing.T) {
 		OSSEndpoint:        "https://oss-cn-beijing.aliyuncs.com",
 		OSSPublicURLPrefix: "https://bucket.oss-cn-beijing.aliyuncs.com",
 	}
-	b := model.HomeBanner{
+	b := admin.HomeBanner{
 		ID:       3,
 		ImageURL: "https://bucket.oss-cn-beijing.aliyuncs.com/home-banners/abc.jpg",
 	}
@@ -362,7 +365,7 @@ func TestVideoOSSObjectKeysExtended(t *testing.T) {
 	cfg := &config.C{
 		OSSPublicURLPrefix: "https://bucket.oss.aliyuncs.com",
 	}
-	v := model.Video{
+	v := video.Video{
 		ID:       7,
 		VideoURL: "https://bucket.oss.aliyuncs.com/videos/7.mp4",
 		CoverURL: "https://bucket.oss.aliyuncs.com/covers/7.png",
