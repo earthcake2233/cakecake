@@ -7,6 +7,7 @@ import (
 	"minibili/internal/model/dynamic"
 	"minibili/internal/model/user"
 	"minibili/internal/model/video"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -26,7 +27,7 @@ func seedUser(t *testing.T, api *API, username, nickname string, coin int) user.
 	t.Helper()
 	u := user.User{Username: username, PasswordHash: "hash", Nickname: nickname, CoinBalanceTenths: int64(coin * 10)}
 	require.NoError(t, api.DB.Create(&u).Error)
-	ensureUserCakeID(api.DB, &u)
+	api.UserSvc.EnsureCakeID(context.Background(), &u)
 	return u
 }
 
