@@ -173,3 +173,34 @@ As the project evolves, Rule entries will grow. When a Rule is repeatedly violat
 | **R-SHUTDOWN-1** | **Graceful shutdown with timeout is REQUIRED** | All background goroutines (transcode consumer, playcount flush, danmaku relay, HTTP Server, etc.) MUST be tracked via sync.WaitGroup. On SIGTERM, execute in order: (1) cancel context (2) http.Server.Shutdown() drain HTTP connections (3) wg.Wait() for background tasks with SHUTDOWN_TIMEOUT (default 30s) (4) force exit on timeout. NEVER just time.Sleep and exit. |
 | **R-SHUTDOWN-2** | **PlayCount must do final flush on exit** | PlayCount flush goroutine MUST execute a final Flush() in defer. |
 | **R-SHUTDOWN-3** | **Resource close order must be correct** | defer-registered Close calls execute in reverse order. |
+
+
+
+---
+
+### 14. Code Organization
+
+| ID | Rule | Description |
+| :--- | :--- | :--- |
+| **R-ORG-1** | **Script files MUST live in `scripts/`** | All `.py`, `.sh`, and other helper scripts MUST reside under `scripts/` at the project root. They MUST NOT be scattered inside `internal/` or other business-logic directories. Handler, service, and model packages may only contain `.go` source and `_test.go` test files. |
+| **R-ORG-2** | **Business code directories MUST NOT contain non-Go files** | Core packages such as `internal/handler/`, `internal/service/`, and `internal/model/` MUST NOT contain Python scripts, temporary files, or data files. Data files go in `configs/`; temporary files go in `tmp/`. |
+
+---
+
+### 15. Dependency Injection
+
+| ID | Rule | Description |
+| :--- | :--- | :--- |
+| **R-DI-1** | **Dependencies MUST be injected via constructor** | All Service dependencies (DB, Redis, Logger, other Services, Provider interfaces, etc.) MUST be passed in and assigned within the `NewXxxService()` constructor in a single call. Two-phase injection methods such as `SetXxx()` / `SetProviders()` are FORBIDDEN. This ensures missing dependencies are caught at compile time rather than causing runtime nil pointer panics. |
+| **R-DI-2** | **Constructor parameter order MUST be consistent** | All Service constructors follow a unified parameter order: `db *gorm.DB, rdb *redis.Client, log *zap.Logger` (the "three essentials") come first, followed by other Services, Provider interfaces, and external clients in dependency order. |
+| **R-DI-3** | **Circular dependencies are FORBIDDEN** | Services MUST NOT form circular dependencies (A depends on B and B depends on A). If mutual calls are genuinely needed, extract the shared logic into an independent third Service or use Provider interfaces to break the cycle. |
+
+---
+
+### 16. Comment Standards
+
+| ID | Rule | Description |
+| :--- | :--- | :--- |
+| **R-COMMENT-1** | **Code comments MUST be in English** | All package comments, function comments, struct field comments, and inline comments in `.go` source files MUST be written in English (including punctuation). Chinese is permitted ONLY in: (1) user-facing error message strings (`errcode.GetMsg()` return values), (2) Swagger `@description` annotations, (3) operator-facing hints in log output. |
+| **R-COMMENT-2** | **Exported functions MUST have English doc comments** | All exported functions, types, and constants MUST have an English comment in `// Name describes ...` format, explaining purpose, parameter semantics, and return values. Comments begin with the name of the object being described and end with a period. |
+| **R-COMMENT-3** | **Model field comments MUST explain business semantics** | Every field in GORM model structs MUST have an inline comment (`// comment`) in English explaining its business meaning, constraints, and default values. For boolean flag fields (e.g., `CommentsClosed`), the comment MUST describe the behavioral change when the field is true. |

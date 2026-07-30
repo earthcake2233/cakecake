@@ -8,7 +8,7 @@ type User struct {
 	Username     string `gorm:"size:64;uniqueIndex;not null"`
 	PasswordHash string `gorm:"size:128;not null"`
 	AvatarURL    string `gorm:"size:1024"`
-	// CakeID is the public immutable id shown as「用户名」in the personal center (cake_XXXXXXXXXXX).
+	// CakeID is the public immutable id shown as "username" in the personal center (cake_XXXXXXXXXXX).
 	CakeID   string `gorm:"size:36;index"` // immutable public id; FormatCakeID(id), filled after insert
 	Nickname string `gorm:"size:64"`
 	Sign     string `gorm:"size:500"`
@@ -25,9 +25,9 @@ type User struct {
 	CreatedAt                 time.Time `gorm:"index"`
 	UpdatedAt         time.Time
 	// FirstPublishedAt is set once when the user's first video reaches published (transcode OK);
-	// retained if that video is later deleted so「成为 UP 主」day count still has an anchor.
+	// retained if that video is later deleted so the "became a creator" day count still has an anchor.
 	FirstPublishedAt *time.Time `gorm:"index"`
-	// DeletionRequestedAt is set when the user submits account cancellation (冷静期开始).
+	// DeletionRequestedAt is set when the user submits account cancellation (cooling-off period starts).
 	DeletionRequestedAt *time.Time `gorm:"index"`
 	// DeletionEffectiveAt is when the account becomes permanently anonymized (7–30 days after request).
 	DeletionEffectiveAt *time.Time `gorm:"index"`
@@ -35,7 +35,7 @@ type User struct {
 	AnonymizedAt *time.Time `gorm:"index"`
 	// Experience is total user EXP for account level (Lv1–Lv6 thresholds in userlevel package).
 	Experience uint64 `gorm:"not null;default:0"`
-	// CoinBalanceTenths is the user's 硬币 balance in 0.1-coin units (230 = 23.0 coins).
+	// CoinBalanceTenths is the user's coin balance in 0.1-coin units (230 = 23.0 coins).
 	CoinBalanceTenths int64 `gorm:"not null;default:230"`
 	// ViewHistoryPaused stops recording new watch-history entries when true.
 	ViewHistoryPaused bool `gorm:"not null;default:0"`

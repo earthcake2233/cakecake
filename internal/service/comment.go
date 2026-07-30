@@ -1,4 +1,4 @@
-package service
+﻿package service
 
 import (
 	"minibili/internal/model/comment"
@@ -26,16 +26,10 @@ type CommentService struct {
 	dynamics DynamicProvider
 }
 
-func NewCommentService(db *gorm.DB, rdb *redis.Client, log *zap.Logger, sens *sensitive.Filter) *CommentService {
-	return &CommentService{db: db, rdb: rdb, log: log, sens: sens}
+func NewCommentService(db *gorm.DB, rdb *redis.Client, log *zap.Logger, sens *sensitive.Filter, notifSvc *NotificationService, users UserProvider, videos VideoProvider, articles ArticleProvider, dynamics DynamicProvider) *CommentService {
+	return &CommentService{db: db, rdb: rdb, log: log, sens: sens, notifSvc: notifSvc, users: users, videos: videos, articles: articles, dynamics: dynamics}
 }
 
-func (s *CommentService) SetNotificationService(ns *NotificationService) { s.notifSvc = ns }
-
-// SetProviders injects domain providers (must be called before use).
-func (s *CommentService) SetProviders(users UserProvider, videos VideoProvider, articles ArticleProvider, dynamics DynamicProvider) {
-	s.users = users; s.videos = videos; s.articles = articles; s.dynamics = dynamics
-}
 
 type PostCommentReq struct {
 	Content  string

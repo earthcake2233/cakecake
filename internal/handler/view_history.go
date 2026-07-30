@@ -83,7 +83,7 @@ func (a *API) PostVideoViewHistory(c *gin.Context) {
 	resp.OK(c, gin.H{"recorded": true})
 }
 
-// RecordArticleViewHistory upserts read history for a published article (专栏).
+// RecordArticleViewHistory upserts read history for a published article.
 func (a *API) RecordArticleViewHistory(uid, articleID uint64, device string) {
 	a.ViewHistorySvc.RecordArticleViewHistory(context.Background(), uid, articleID, device)
 }

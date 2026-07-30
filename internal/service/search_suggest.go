@@ -13,7 +13,7 @@ import (
 
 )
 
-// SearchSuggestTag is one row for search box autocomplete (B 站 suggest.tag).
+// SearchSuggestTag is one row for search box autocomplete (Bilibili-style suggest.tag).
 type SearchSuggestTag struct {
 	Name  string `json:"name"`
 	Value string `json:"value"`
@@ -107,7 +107,7 @@ func SearchSuggest(ctx context.Context, db *gorm.DB, rec *SearchHotRecorder, use
 		}
 	}
 
-	// 无匹配（或库内暂无词条）时回退展示合并热搜榜前 N 条。
+	// When there are no matches (or no entries in the database yet), fall back to showing the top N merged hot search items.
 	if len(cands) == 0 {
 		items, _ := ListHotSearchMerged(ctx, db, rec, limit)
 		for i, it := range items {

@@ -539,7 +539,7 @@ func (c *Client) searchUsers(ctx context.Context, keyword string, highlight bool
 		},
 	}
 	if kw != "" {
-		// 支持昵称/用户名子串（如 earthcake 搜 cake）
+		// Supports nickname/username substring matching (e.g. searching "cake" matches "earthcake").
 		should = append(should, map[string]any{
 			"query_string": map[string]any{
 				"query":            "*" + escapeQueryString(kw) + "*",

@@ -27,7 +27,7 @@ func FFprobeExe() string { return ffprobeExe }
 // FFmpegExe returns the configured ffmpeg command (for logs).
 func FFmpegExe() string { return ffmpegExe }
 
-// CheckFFprobe runs ffprobe -version once at startup to surface PATH / 安装问题。
+// CheckFFprobe runs ffprobe -version once at startup to surface PATH / installation issues.
 func CheckFFprobe() error {
 	return exec.Command(ffprobeExe, "-version").Run()
 }

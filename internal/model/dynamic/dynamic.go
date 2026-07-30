@@ -8,9 +8,9 @@ type UserDynamic struct {
 	ImagesJSON    string `gorm:"type:text;not null"`
 	LikeCount     uint64 `gorm:"not null;default:0"`
 	CommentCount  uint64 `gorm:"not null;default:0"`
-	// CommentsClosed：作者关闭评论区后禁止新发评论；列表对访客返回空。
+	// CommentsClosed: when the author closes comments, new comments are blocked; list returns empty for visitors.
 	CommentsClosed bool `gorm:"not null;default:0"`
-	// CommentsCurated：开启评论精选后，新评论需作者确认才对所有人可见。
+	// CommentsCurated: when curation is enabled, new comments require author approval before being visible to all.
 	CommentsCurated bool `gorm:"not null;default:0"`
 	CreatedAt     time.Time `gorm:"index:idx_dyn_user_created"`
 }

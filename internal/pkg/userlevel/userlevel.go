@@ -27,7 +27,7 @@ func FromExperience(exp uint64) Info {
 	curMin := Thresholds[lv-1]
 	var nextExp uint64
 	if lv >= MaxLevel {
-		// 满级后展示为 当前经验/2880（Lv6 门槛），进度条视为已满。
+		// At max level, displayed as current_exp/2880 (Lv6 threshold); progress bar treated as full.
 		nextExp = Thresholds[MaxLevel-1]
 	} else {
 		nextExp = Thresholds[lv]

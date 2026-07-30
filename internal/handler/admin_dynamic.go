@@ -39,7 +39,7 @@ func adminDynamicToJSON(d *dynamic.UserDynamic, authorName string) gin.H {
 	}
 }
 
-// AdminListDynamics GET /api/v1/admin/dynamics — 动态无需审核，运营可查看与删除。
+// AdminListDynamics GET /api/v1/admin/dynamics — dynamics do not require review; ops can view and delete.
 
 func (a *API) AdminListDynamics(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
@@ -114,7 +114,7 @@ func (a *API) AdminGetDynamic(c *gin.Context) {
 	resp.OK(c, adminDynamicToJSON(dyn, name))
 }
 
-// AdminDeleteDynamic POST /api/v1/admin/dynamics/:id/delete 或 DELETE /api/v1/admin/dynamics/:id
+// AdminDeleteDynamic POST /api/v1/admin/dynamics/:id/delete or DELETE /api/v1/admin/dynamics/:id
 func (a *API) AdminDeleteDynamic(c *gin.Context) {
 	adminID, ok := middleware.AdminID(c)
 	if !ok {

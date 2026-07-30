@@ -1,4 +1,4 @@
-package service
+﻿package service
 
 import (
 	"minibili/internal/model/video"
@@ -24,15 +24,10 @@ type FavoriteService struct {
 	videos VideoProvider
 }
 
-func NewFavoriteService(db *gorm.DB, rdb *redis.Client, log *zap.Logger) *FavoriteService {
-	return &FavoriteService{db: db, rdb: rdb, log: log}
+func NewFavoriteService(db *gorm.DB, rdb *redis.Client, log *zap.Logger, users UserProvider, videos VideoProvider) *FavoriteService {
+	return &FavoriteService{db: db, rdb: rdb, log: log, users: users, videos: videos}
 }
 
-// SetProviders injects domain providers (must be called before use).
-func (s *FavoriteService) SetProviders(users UserProvider, videos VideoProvider) {
-	s.users = users
-	s.videos = videos
-}
 
 // CreateFolder creates a new favorite folder.
 func (s *FavoriteService) CreateFolder(ctx context.Context, folder *video.FavoriteFolder) error {

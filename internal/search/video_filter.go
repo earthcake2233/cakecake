@@ -2,7 +2,7 @@ package search
 
 import "strings"
 
-// VideoFilter from search UI (综合/视频 Tab).
+// VideoFilter from search UI (All / Videos tab).
 type VideoFilter struct {
 	Order      string // default | click | pubdate | dm | fav
 	Duration   string // all | lt10 | m10_30 | m30_60 | gt60

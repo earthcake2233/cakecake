@@ -67,14 +67,14 @@ func setupHandlerIntegrationDB(t *testing.T) (*API, *gin.Engine, string) {
 			UserSvc:      service.NewUserService(db, zap.NewNop()),
 			FollowSvc:    service.NewFollowService(db, zap.NewNop()),
 			DanmakuSvc:   service.NewDanmakuService(db, rdb, zap.NewNop(), nil),
-			CommentSvc:   service.NewCommentService(db, rdb, zap.NewNop(), nil),
-			NotifSvc:     service.NewNotificationService(db, rdb, zap.NewNop()),
+			CommentSvc:   service.NewCommentService(db, rdb, zap.NewNop(), nil, nil, nil, nil, nil, nil),
+			NotifSvc:     service.NewNotificationService(db, rdb, zap.NewNop(), nil),
 			VideoSvc:     service.NewVideoService(db, rdb, zap.NewNop()),
 			DmSvc:        service.NewDmService(db, rdb, zap.NewNop()),
-			FavoriteSvc:  service.NewFavoriteService(db, rdb, zap.NewNop()),
-			ArticleSvc:   service.NewArticleService(db, rdb, zap.NewNop()),
+			FavoriteSvc:  service.NewFavoriteService(db, rdb, zap.NewNop(), nil, nil),
+			ArticleSvc:   service.NewArticleService(db, rdb, zap.NewNop(), nil),
 			DynamicSvc:   service.NewDynamicService(db, rdb, zap.NewNop()),
-			EngagementSvc:     service.NewEngagementService(db, rdb, zap.NewNop()),
+			EngagementSvc:     service.NewEngagementService(db, rdb, zap.NewNop(), nil, nil),
 			ViewHistorySvc:    service.NewViewHistoryService(db, rdb, zap.NewNop()),
 			VideoDraftSvc:     service.NewVideoDraftService(db, rdb, zap.NewNop()),
 			CreatorCommentSvc: service.NewCreatorCommentService(db, rdb, zap.NewNop()),
@@ -83,15 +83,6 @@ func setupHandlerIntegrationDB(t *testing.T) (*API, *gin.Engine, string) {
 			HotSearchSvc:      service.NewHotSearchService(db, &service.SearchHotRecorder{Rdb: rdb, Sens: nil}),
 		},
 	}
-	commentSvc := api.CommentSvc
-	commentSvc.SetProviders(
-		service.NewUserProvider(db),
-		service.NewVideoProvider(db),
-		service.NewArticleProvider(db),
-		service.NewDynamicProvider(db),
-	)
-	api.FavoriteSvc.SetProviders(service.NewUserProvider(db), service.NewVideoProvider(db))
-	api.EngagementSvc.SetProviders(service.NewUserProvider(db), service.NewVideoProvider(db))
 
 	r := gin.New()
 	RegisterRoutes(r, api, jm, "test")

@@ -6,7 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// videoZoneAllowed matches顶栏 menuLeft / constants/videoZones.js.
+// videoZoneAllowed matches the top bar menuLeft / constants/videoZones.js.
 var videoZoneAllowed = initVideoZoneAllowed()
 
 func normalizeVideoZone(raw string) string {

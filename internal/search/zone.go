@@ -25,7 +25,7 @@ func splitVideoZoneForSearch(zone string) (parent, child string) {
 	return z, ""
 }
 
-// videoSearchTypeName is the compact zone tag on search list rows (e.g. 动画综合).
+// videoSearchTypeName is the compact zone tag on search list rows (e.g. Anime General).
 func videoSearchTypeName(zone string) string {
 	parent, child := splitVideoZoneForSearch(zone)
 	if parent == "" {

@@ -1,4 +1,4 @@
-package data
+﻿package data
 
 import (
 	"minibili/internal/model/agent"
@@ -208,7 +208,7 @@ func PickWelcomeMessage(p *agent.AgentProfile) string {
 	return list[n.Int64()]
 }
 
-// EnsureAgentConversationForProfile creates a user鈫攂ot thread for one persona.
+// EnsureAgentConversationForProfile creates a user<->bot thread for one persona.
 func EnsureAgentConversationForProfile(db *gorm.DB, humanID uint64, profile *agent.AgentProfile) (*dm.DmConversation, bool, error) {
 	if db == nil || profile == nil || humanID == 0 || profile.BotUserID == 0 || humanID == profile.BotUserID {
 		return nil, false, fmt.Errorf("invalid agent conversation")

@@ -1,4 +1,4 @@
-package service
+﻿package service
 
 import (
 	"minibili/internal/model/article"
@@ -48,8 +48,8 @@ type ListArticlesCursorResult struct {
 	HasMore bool
 }
 
-func NewArticleService(db *gorm.DB, rdb *redis.Client, log *zap.Logger) *ArticleService {
-	return &ArticleService{db: db, rdb: rdb, log: log}
+func NewArticleService(db *gorm.DB, rdb *redis.Client, log *zap.Logger, us *UserService) *ArticleService {
+	return &ArticleService{db: db, rdb: rdb, log: log, us: us}
 }
 
 // CreateArticle inserts a new article.
@@ -357,9 +357,6 @@ func (s *ArticleService) CountFavoritedArticles(ctx context.Context, userID uint
 
 
 // SetUserService sets UserService for cross-domain queries.
-func (s *ArticleService) SetUserService(us *UserService) {
-	s.us = us
-}
 
 func manuscriptStatusToDB(status string) string {
 	switch status {

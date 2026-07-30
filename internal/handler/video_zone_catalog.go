@@ -1,6 +1,6 @@
 package handler
 
-// videoZoneCatalog mirrors cakecake-vue/src/constants/videoZones.js (menuLeft 分区).
+// videoZoneCatalog mirrors cakecake-vue/src/constants/videoZones.js (menuLeft zones).
 var videoZoneCatalog = []struct {
 	parent string
 	subs   []string

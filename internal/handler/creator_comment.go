@@ -21,7 +21,7 @@ import (
 
 const creatorCommentsMaxTotal = 50000
 
-// ListCreatorComments lists comments on the authenticated uploader's videos or articles (创作中心 · 评论管理).
+// ListCreatorComments lists comments on the authenticated uploader's videos or articles (Creator Hub comment management).
 func (a *API) ListCreatorComments(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -171,7 +171,7 @@ func previewCommentContent(s string, maxRunes int) string {
 	return string(runes[:maxRunes]) + "…"
 }
 
-// listCreatorArticleComments lists comments on the authenticated user's published articles (专栏评论).
+// listCreatorArticleComments lists comments on the authenticated user's published articles.
 func (a *API) listCreatorArticleComments(c *gin.Context, uid uint64) {
 	page := queryIntDefault(c.Query("page"), 1)
 	if page < 1 { page = 1 }

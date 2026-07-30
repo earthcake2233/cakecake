@@ -448,7 +448,7 @@ func (a *API) DeleteMyDynamic(c *gin.Context) {
 }
 
 
-// ListMyDynamics lists the current user's image/text dynamics (稿件管理).
+// ListMyDynamics lists the current user's image/text dynamics (content management).
 // Query: page, page_size, sort(time|reply|like), q(title or content).
 func (a *API) ListMyDynamics(c *gin.Context) {
 	uid, ok := middleware.UserID(c)

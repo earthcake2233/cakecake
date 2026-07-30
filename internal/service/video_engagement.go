@@ -1,4 +1,4 @@
-package service
+﻿package service
 
 import (
 	"minibili/internal/model/user"
@@ -23,14 +23,10 @@ type EngagementService struct {
 	videos VideoProvider
 }
 
-func NewEngagementService(db *gorm.DB, rdb *redis.Client, log *zap.Logger) *EngagementService {
-	return &EngagementService{db: db, rdb: rdb, log: log}
+func NewEngagementService(db *gorm.DB, rdb *redis.Client, log *zap.Logger, users UserProvider, videos VideoProvider) *EngagementService {
+	return &EngagementService{db: db, rdb: rdb, log: log, users: users, videos: videos}
 }
 
-func (s *EngagementService) SetProviders(users UserProvider, videos VideoProvider) {
-	s.users = users
-	s.videos = videos
-}
 
 
 

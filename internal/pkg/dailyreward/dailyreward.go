@@ -159,7 +159,7 @@ func BuildSnapshot(db *gorm.DB, uid uint64) (RewardsSnapshot, error) {
 			Progress: cp,
 			Max:      ExpCoinMax,
 		},
-		// PC 端无客户端分享链路，保持未完成。
+		// PC clients have no native share flow; keep as incomplete.
 		Share: TaskItem{Exp: ExpShare, Done: false},
 	}, nil
 }

@@ -226,7 +226,7 @@ func (a *API) AdminRejectVideo(c *gin.Context) {
 	resp.OK(c, adminVideoToJSON(v, user.DisplayUsername(u)))
 }
 
-// AdminDeleteVideo POST /api/v1/admin/videos/:id/delete 或 DELETE /api/v1/admin/videos/:id
+// AdminDeleteVideo POST /api/v1/admin/videos/:id/delete or DELETE /api/v1/admin/videos/:id
 // Removes published or rejected videos from DB and OSS (same cascade as uploader delete).
 func (a *API) AdminDeleteVideo(c *gin.Context) {
 	adminID, ok := middleware.AdminID(c)

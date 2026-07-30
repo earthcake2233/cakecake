@@ -16,17 +16,17 @@ type Video struct {
 	LikeCount    uint64  `gorm:"default:0"`
 	FavCount     uint64  `gorm:"default:0"`
 	CoinCount    uint64  `gorm:"default:0"`
-	// CommentsClosed：UP 关闭评论区后禁止新发评论；列表对访客返回空。
+	// CommentsClosed: when the uploader closes comments, new comments are blocked; list returns empty for visitors.
 	CommentsClosed bool `gorm:"not null;default:0"`
-	// CommentsCurated：开启评论精选后，新评论需 UP 确认才对所有人可见。
+	// CommentsCurated: when curation is enabled, new comments require uploader approval before being visible to all.
 	CommentsCurated bool `gorm:"not null;default:0"`
-	// DanmakuClosed：UP 关闭弹幕后禁止新发弹幕。
+	// DanmakuClosed: when the uploader closes danmaku, new danmaku are blocked.
 	DanmakuClosed bool `gorm:"not null;default:0"`
-	// TagsJSON is a JSON array of strings, e.g. ["录屏","教程"]；空串表示无标签。
+	// TagsJSON is a JSON array of strings, e.g. ["tutorial","guide"]; empty string means no tags.
 	TagsJSON string `gorm:"type:text"`
-	// Zone is the publish partition, e.g. "动画" or "生活-日常".
+	// Zone is the publish partition, e.g. "anime" or "lifestyle-daily".
 	Zone string `gorm:"size:64"`
-	// DraftRawPath / DraftCoverPath：status=draft 时本地暂存路径，投稿转码前使用。
+	// DraftRawPath / DraftCoverPath: local staging paths when status=draft, used before submission transcoding.
 	DraftRawPath   string    `gorm:"size:1024"`
 	DraftCoverPath string    `gorm:"size:1024"`
 	ReviewedAt     *time.Time

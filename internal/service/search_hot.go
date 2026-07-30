@@ -20,7 +20,7 @@ const (
 	prefixHotSearchDed = "hotsearch:dedup:"
 	prefixHotSearchNew = "hotsearch:badge:new:"
 
-	// HotSearchDedupTTL 同一用户/IP 在窗口内重复搜索同一词只计一次。
+	// HotSearchDedupTTL: the same user/IP searching the same term within the window counts only once.
 	HotSearchDedupTTL = 10 * time.Minute
 	hotSearchNewTTL   = 48 * time.Hour
 )

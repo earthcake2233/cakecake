@@ -225,7 +225,7 @@ func (a *API) AdminRejectArticle(c *gin.Context) {
 	resp.OK(c, adminArticleToJSON(art, user.DisplayUsername(u)))
 }
 
-// AdminDeleteArticle POST /api/v1/admin/articles/:id/delete 或 DELETE /api/v1/admin/articles/:id
+// AdminDeleteArticle POST /api/v1/admin/articles/:id/delete or DELETE /api/v1/admin/articles/:id
 func (a *API) AdminDeleteArticle(c *gin.Context) {
 	adminID, ok := middleware.AdminID(c)
 	if !ok {

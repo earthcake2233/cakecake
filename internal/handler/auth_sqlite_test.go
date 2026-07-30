@@ -1,4 +1,4 @@
-package handler
+﻿package handler
 
 import (
 	"bytes"
@@ -77,28 +77,25 @@ func newTestAPI(t *testing.T) (*API, *gin.Engine, *jwttoken.Manager) {
 	authSvc := service.NewAuthService(db, rdb, log, jm, service.AuthConfig{})
 	followSvc := service.NewFollowService(db, log)
 	danmakuSvc := service.NewDanmakuService(db, rdb, log, sens)
-	commentSvc := service.NewCommentService(db, rdb, log, sens)
 	userProv := service.NewUserProvider(db)
 	videoProv := service.NewVideoProvider(db)
 	articleProv := service.NewArticleProvider(db)
 	dynamicProv := service.NewDynamicProvider(db)
-	commentSvc.SetProviders(userProv, videoProv, articleProv, dynamicProv)
-	notifSvc := service.NewNotificationService(db, rdb, log)
+	notifSvc := service.NewNotificationService(db, rdb, log, userProv)
+	commentSvc := service.NewCommentService(db, rdb, log, sens, notifSvc, userProv, videoProv, articleProv, dynamicProv)
 	userSvc := service.NewUserService(db, log)
 	videoSvc := service.NewVideoService(db, rdb, log)
 	dmSvc := service.NewDmService(db, rdb, log)
-	favoriteSvc := service.NewFavoriteService(db, rdb, log)
-	articleSvc := service.NewArticleService(db, rdb, log)
+	favoriteSvc := service.NewFavoriteService(db, rdb, log, userProv, videoProv)
+	articleSvc := service.NewArticleService(db, rdb, log, userSvc)
 	dynamicSvc := service.NewDynamicService(db, rdb, log)
 	searchHot := &service.SearchHotRecorder{Rdb: rdb, Sens: sens}
 	hotSearchSvc := service.NewHotSearchService(db, searchHot)
-	engagementSvc := service.NewEngagementService(db, rdb, log)
+	engagementSvc := service.NewEngagementService(db, rdb, log, userProv, videoProv)
 	viewHistorySvc := service.NewViewHistoryService(db, rdb, log)
 	videoDraftSvc := service.NewVideoDraftService(db, rdb, log)
 	creatorCommentSvc := service.NewCreatorCommentService(db, rdb, log)
 	searchHistorySvc := service.NewSearchHistoryService(db, log)
-	favoriteSvc.SetProviders(userProv, videoProv)
-	engagementSvc.SetProviders(userProv, videoProv)
 	api := &API{
 		Dependencies: &Dependencies{
 			Cfg:          cfg,

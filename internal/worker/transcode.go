@@ -111,7 +111,7 @@ func handleDelivery(ctx context.Context, cfg *config.C, db *gorm.DB, ch, pubCh *
 			coverExt = "jpg"
 		}
 	} else {
-		// 默认封面：对已转码的 H.264 MP4 截帧（比直接截原始容器更稳）
+		// Default cover: captures a frame from the transcoded H.264 MP4 (more reliable than capturing from the source container).
 		se, err := ffmpeg.ScreenshotJPEG(outMP4, coverOut, 1)
 		if err != nil {
 			lg.Warn("ffmpeg screenshot failed", zap.Error(err), zap.String("stderr", se))
@@ -136,7 +136,7 @@ func handleDelivery(ctx context.Context, cfg *config.C, db *gorm.DB, ch, pubCh *
 	if err := ossClient.UploadFile(videoKey, outMP4); err != nil {
 		lg.Error("oss upload video", zap.Error(err))
 		if requeueOrFail(ctx, cfg, db, pubCh, lg, job, err.Error(), outMP4, coverOut, finalCoverPath) {
-			// 重试仍依赖 RawPath / 用户封面：只删可再生中间产物（下一轮会重新转码 / 截帧）
+			// Retries still depend on RawPath / user cover: only delete regenerable intermediate artifacts (next round will re-transcode / re-capture).
 			cleanupPaths(outMP4, coverOut)
 		}
 		_ = d.Ack(false)
@@ -203,8 +203,8 @@ func truncate(s string, n int) string {
 	return s[:n]
 }
 
-// requeueOrFail 在可重试时重新入队并返回 true（调用方须保留 RawPath / 用户封面）。
-// 终局失败时返回 false，并已删除 RawPath、CoverPath 及 terminalLocalExtras 中的本地文件。
+// requeueOrFail re-enqueues on retryable failure and returns true (caller must preserve RawPath / user cover).
+// On terminal failure returns false, and has already deleted RawPath, CoverPath and local files in terminalLocalExtras.
 func requeueOrFail(ctx context.Context, cfg *config.C, db *gorm.DB, pubCh *amqp.Channel, lg *zap.Logger, job TranscodeJob, reason string, terminalLocalExtras ...string) bool {
 	if job.RetryCount >= 3 {
 		failVideo(db, job.VideoID, reason)

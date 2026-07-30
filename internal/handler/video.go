@@ -278,7 +278,7 @@ func saveUploadedFile(fh *multipart.FileHeader, dst string) error {
 }
 
 // ListPublishedVideos is the home feed (F10, AC-4).
-// Query: limit, cursor, zone_parent, sort=hot|time, days=1|3|7|30, arc_type=0|1 (1=仅近期投稿).
+// Query: limit, cursor, zone_parent, sort=hot|time, days=1|3|7|30, arc_type=0|1 (1=recent uploads only).
 // ListPublishedVideos godoc
 // @Summary      List published videos
 // @Description  Get paginated list of published videos

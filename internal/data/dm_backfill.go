@@ -26,7 +26,7 @@ func ensureDmParticipantHiddenAt(db *gorm.DB, lg *zap.Logger) error {
 // backfillDmParticipantPins repairs legacy rows where one user had multiple pinned DM threads.
 // Keeps the newest pin (pinned_at, then id); clears pinned_at when pinned=false.
 func backfillDmParticipantPins(db *gorm.DB, lg *zap.Logger) error {
-	// 未置顶会话不应有 pinned_at（含历史写入的 0000-00-00）
+	// Unpinned conversations should not have a pinned_at (including historically written 0000-00-00).
 	_ = db.Model(&dm.DmParticipant{}).
 		Where("pinned = ?", false).
 		Update("pinned_at", nil).Error

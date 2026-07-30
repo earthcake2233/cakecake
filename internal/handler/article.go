@@ -295,7 +295,7 @@ func validateArticleContent(title, bodyMD string, publish bool) bool {
 		}
 		return true
 	}
-	// 草稿：标题与正文至少填一项即可保存
+	// Draft: at least one of title or body must be filled to save.
 	if title == "" && bodyMD == "" {
 		return false
 	}
@@ -308,7 +308,7 @@ func validateArticleContent(title, bodyMD string, publish bool) bool {
 	return true
 }
 
-// PostArticle creates or publishes a column article (创作中心专栏投稿).
+// PostArticle creates or publishes a column article.
 func (a *API) PostArticle(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -585,7 +585,7 @@ func (a *API) countMyArticlesByStatus(uid uint64) gin.H {
 	return out
 }
 
-// ListMyArticles lists the current user's column articles (稿件管理).
+// ListMyArticles lists the current user's column articles (content management).
 // Query: page, page_size, sort(time|view|reply|like|fav), status(all|draft|passed|processing|rejected), q(title).
 func (a *API) ListMyArticles(c *gin.Context) {
 	uid, ok := middleware.UserID(c)

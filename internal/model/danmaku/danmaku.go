@@ -7,7 +7,7 @@ type Danmaku struct {
 	Content   string  `gorm:"size:400;not null"`
 	Color     string  `gorm:"size:16;not null"`
 	Type      string  `gorm:"size:16;not null"`
-	// FontSize: sm | md | lg（弹幕字号，默认 md）
+	// FontSize: sm | md | lg (danmaku font size, default md)
 	FontSize  string  `gorm:"size:8;not null;default:md"`
 	VideoTime float64 `gorm:"column:video_time;not null"`
 	LikeCount uint64  `gorm:"default:0"`

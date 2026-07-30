@@ -24,9 +24,9 @@ var wsUpgrader = websocket.Upgrader{
 }
 
 // ServeDanmaku upgrades to WebSocket (F6, S-011).
-// 已发布稿件：无 token 也可连接，用于实时弹幕与「正在看」计数；
-// 非空但非法 token 仍返回 auth_failed。
-// 支持 current_time 参数：按播放位置加载附近弹幕，不传则加载最新 200 条。
+// Published videos: connections allowed without a token for real-time danmaku and watching count;
+// non-empty but invalid tokens still return auth_failed.
+// Supports current_time param: loads nearby danmaku by playback position; without it, loads the latest 200.
 // ServeDanmaku godoc
 // @Summary      WebSocket: danmaku stream
 // @Description  WebSocket endpoint for real-time danmaku messages
@@ -86,7 +86,7 @@ func (a *API) ServeDanmaku(c *gin.Context) {
     }()
     a.pushWatchingCount(videoID)
 
-    // ---- history: N+1 修复 + current_time 支持 ----
+    // ---- history: N+1 fix + current_time support ----
     hist, _ := a.DanmakuSvc.ListHistory(c.Request.Context(), videoID, currentTime, 200)
 
     // Batch load users (fix N+1: was doing 200 separate queries)

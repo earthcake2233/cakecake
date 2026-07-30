@@ -1,4 +1,4 @@
-// Package main Mini-Bili API.
+﻿// Package main Mini-Bili API.
 //
 // @title           Mini-Bili API
 // @version         1.0
@@ -251,24 +251,18 @@ func main() {
 	articleProv := service.NewArticleProvider(db)
 	dynamicProv := service.NewDynamicProvider(db)
 
-	commentSvc := service.NewCommentService(db, rdb, log, sens)
-	notifSvc := service.NewNotificationService(db, rdb, log)
-	commentSvc.SetNotificationService(notifSvc)
-	commentSvc.SetProviders(userProv, videoProv, articleProv, dynamicProv)
-	notifSvc.SetUserProvider(userProv)
+	notifSvc := service.NewNotificationService(db, rdb, log, userProv)
+	commentSvc := service.NewCommentService(db, rdb, log, sens, notifSvc, userProv, videoProv, articleProv, dynamicProv)
 	authSvc := service.NewAuthService(db, rdb, log, jm, service.AuthConfig{AgentBotUsername: cfg.AgentBotUsername})
 	followSvc := service.NewFollowService(db, log)
 	danmakuSvc := service.NewDanmakuService(db, rdb, log, sens)
 	userSvc := service.NewUserService(db, log)
 	videoSvc := service.NewVideoService(db, rdb, log)
 	dmSvc := service.NewDmService(db, rdb, log)
-	favoriteSvc := service.NewFavoriteService(db, rdb, log)
-	favoriteSvc.SetProviders(userProv, videoProv)
-	articleSvc := service.NewArticleService(db, rdb, log)
-	articleSvc.SetUserService(userSvc)
+	favoriteSvc := service.NewFavoriteService(db, rdb, log, userProv, videoProv)
+	articleSvc := service.NewArticleService(db, rdb, log, userSvc)
 	dynamicSvc := service.NewDynamicService(db, rdb, log)
-	engagementSvc := service.NewEngagementService(db, rdb, log)
-	engagementSvc.SetProviders(userProv, videoProv)
+	engagementSvc := service.NewEngagementService(db, rdb, log, userProv, videoProv)
 	viewHistorySvc := service.NewViewHistoryService(db, rdb, log)
 	videoDraftSvc := service.NewVideoDraftService(db, rdb, log)
 	creatorCommentSvc := service.NewCreatorCommentService(db, rdb, log)

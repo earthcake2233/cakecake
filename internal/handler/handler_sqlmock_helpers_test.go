@@ -29,11 +29,11 @@ func newMockGORM(t *testing.T) (*gorm.DB, sqlmock.Sqlmock) {
 
 func newMockAPISimple(t *testing.T, gormDB *gorm.DB) *API {
 	t.Helper()
-	commentSvc := service.NewCommentService(gormDB, nil, zap.NewNop(), nil)
+	commentSvc := service.NewCommentService(gormDB, nil, zap.NewNop(), nil, nil, nil, nil, nil, nil)
 	viewHistorySvc := service.NewViewHistoryService(gormDB, nil, zap.NewNop())
 	videoSvc := service.NewVideoService(gormDB, nil, zap.NewNop())
 	hotSearchSvc := service.NewHotSearchService(gormDB, nil)
-	articleSvc := service.NewArticleService(gormDB, nil, zap.NewNop())
+	articleSvc := service.NewArticleService(gormDB, nil, zap.NewNop(), nil)
 	userSvc := service.NewUserService(gormDB, zap.NewNop())
 	dynamicSvc := service.NewDynamicService(gormDB, nil, zap.NewNop())
 	return &API{

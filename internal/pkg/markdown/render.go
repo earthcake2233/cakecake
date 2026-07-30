@@ -30,7 +30,7 @@ var (
 
 var md = goldmark.New(
 	goldmark.WithExtensions(extension.GFM),
-	// 标题 id 由 buildToc + injectHeadingIDs 统一注入，勿用 AutoHeadingID（会与目录 id 不一致）
+	// Heading IDs are injected uniformly by buildToc + injectHeadingIDs; do not use AutoHeadingID (would conflict with TOC IDs).
 	goldmark.WithRendererOptions(html.WithHardWraps()),
 )
 

@@ -15,7 +15,7 @@ import (
 	"minibili/internal/pkg/usercoin"
 )
 
-// ToggleArticleFavorite toggles favorite on an article (图文收藏夹).
+// ToggleArticleFavorite toggles favorite on an article.
 func (a *API) ToggleArticleFavorite(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {

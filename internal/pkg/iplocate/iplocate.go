@@ -32,7 +32,7 @@ func (s *Searcher) Close() {
 	s.svc.Close()
 }
 
-// Province returns a Bilibili-style location label, e.g. "广东", "北京".
+// Province returns a Bilibili-style location label, e.g. "Guangdong", "Beijing".
 func (s *Searcher) Province(ip string) string {
 	if s == nil || s.svc == nil {
 		return ""

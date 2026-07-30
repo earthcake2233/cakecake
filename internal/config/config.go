@@ -39,7 +39,7 @@ type C struct {
 
 	SensitiveWordsFile string
 	TempUploadDir      string
-	// FFprobePath / FFmpegPath：可执行文件绝对路径或 PATH 中的名称；空则默认 ffprobe / ffmpeg（进程环境 PATH 需能找到）。
+	// FFprobePath / FFmpegPath: absolute path or name in PATH; empty defaults to ffprobe / ffmpeg (must be findable via process environment PATH).
 	FFprobePath string
 	FFmpegPath  string
 

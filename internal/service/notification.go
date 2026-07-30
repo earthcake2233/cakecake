@@ -1,4 +1,4 @@
-package service
+﻿package service
 
 import (
 	"minibili/internal/model/comment"
@@ -23,12 +23,10 @@ type NotificationService struct {
 	users UserProvider
 }
 
-func NewNotificationService(db *gorm.DB, rdb *redis.Client, log *zap.Logger) *NotificationService {
-	return &NotificationService{db: db, rdb: rdb, log: log}
+func NewNotificationService(db *gorm.DB, rdb *redis.Client, log *zap.Logger, users UserProvider) *NotificationService {
+	return &NotificationService{db: db, rdb: rdb, log: log, users: users}
 }
 
-// SetUserProvider injects the UserProvider for cross-domain user data.
-func (ns *NotificationService) SetUserProvider(users UserProvider) { ns.users = users }
 
 func truncateStr(s string, max int) string {
 	runes := []rune(s)

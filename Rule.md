@@ -259,3 +259,34 @@
 | **R-SHUTDOWN-1** | **必须实现带超时的优雅关闭** | 所有后台 goroutine（转码消费、播放量刷写、弹幕中继、HTTP Server 等）必须通过 sync.WaitGroup 追踪，收到 SIGTERM 后按顺序执行：① cancel context 停止接收新任务 → ② http.Server.Shutdown() 排空 HTTP 连接 → ③ wg.Wait() 等待后台任务完成（带 SHUTDOWN_TIMEOUT 超时，默认 30s）→ ④ 超时后强制退出。禁止仅 time.Sleep 后直接退出。关闭超时通过 SHUTDOWN_TIMEOUT 环境变量配置。 |
 | **R-SHUTDOWN-2** | **播放量刷写必须做退出前最终刷写** | PlayCount flush goroutine 退出前（defer 中）必须执行最后一次 Flush()，避免 Redis 增量数据丢失。 |
 | **R-SHUTDOWN-3** | **资源关闭顺序必须正确** | defer 注册的 Close 按逆序执行（后注册先关闭），确保 MQ Channel → MQ Connection → ES 等资源的关闭顺序与依赖关系一致。 |
+
+
+
+---
+
+### 十八、代码组织规范
+
+| 编号 | 规则 | 说明 |
+| :--- | :--- | :--- |
+| **R-ORG-1** | **脚本文件必须放在 `scripts/` 目录** | 所有 `.py`、`.sh` 等辅助脚本必须放在项目根目录的 `scripts/` 下，禁止散落在 `internal/` 等业务代码目录中。handler、service、model 等包内只允许 `.go` 源码和 `_test.go` 测试文件。 |
+| **R-ORG-2** | **业务代码目录禁止混杂非 Go 文件** | `internal/handler/`、`internal/service/`、`internal/model/` 等核心包目录中，严禁出现 Python 脚本、临时文件、数据文件等非 Go 源码。数据文件统一放在 `configs/`，临时文件统一放在 `tmp/`。 |
+
+---
+
+### 十九、依赖注入规范
+
+| 编号 | 规则 | 说明 |
+| :--- | :--- | :--- |
+| **R-DI-1** | **依赖必须通过构造函数注入** | 所有 Service 的依赖（DB、Redis、Logger、其他 Service、Provider 接口等）必须在 `NewXxxService()` 构造函数中一次性传入并赋值，严禁使用 `SetXxx()` / `SetProviders()` 等二段式注入方法。这确保编译期就能发现依赖缺失，避免运行时 nil pointer。 |
+| **R-DI-2** | **构造函数参数顺序须一致** | 所有 Service 构造函数遵循统一参数顺序：`db *gorm.DB, rdb *redis.Client, log *zap.Logger` 基础三板斧在前，然后按依赖关系排列其他 Service、Provider 接口、外部客户端。 |
+| **R-DI-3** | **禁止循环依赖** | Service 之间不得形成循环依赖（A 依赖 B 且 B 依赖 A）。如确实需要互相调用，应提取公共逻辑到独立的第三方 Service 或使用 Provider 接口解耦。 |
+
+---
+
+### 二十、注释规范
+
+| 编号 | 规则 | 说明 |
+| :--- | :--- | :--- |
+| **R-COMMENT-1** | **代码注释必须使用英文** | 所有 `.go` 源文件中的包注释、函数注释、结构体字段注释、行内注释必须使用英文撰写（含标点符号）。中文仅允许出现在：① 面向用户的错误消息字符串（`errcode.GetMsg()` 返回值）、② Swagger `@description` 注解、③ 日志输出中的面向运维人员的提示信息。 |
+| **R-COMMENT-2** | **公开函数必须有英文文档注释** | 所有导出的函数、类型、常量必须以 `// Name describes ...` 格式提供英文注释，说明用途、参数含义和返回值。注释以被描述的对象名称开头，以句号结尾。 |
+| **R-COMMENT-3** | **模型字段注释须说明业务含义** | GORM 模型结构体中的每个字段应有行内注释（`// comment`），用英文说明其业务含义、约束条件和默认值。对于布尔标志位字段（如 `CommentsClosed`），须说明其为 true 时的行为变化。 |
