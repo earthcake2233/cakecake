@@ -221,7 +221,7 @@ func TestBuildSnapshot_WithCoinProgress(t *testing.T) {
 		UserID:    1,
 		VideoID:   100,
 		Amount:    2,
-		CreatedAt: time.Now(),
+		CreatedAt: time.Now().In(cnLoc),
 	}
 	if err := db.Create(&vc).Error; err != nil {
 		t.Fatalf("create VideoCoin: %v", err)
@@ -253,7 +253,7 @@ func TestCoinProgress_Integration(t *testing.T) {
 		UserID:    1,
 		VideoID:   100,
 		Amount:    1,
-		CreatedAt: time.Now(),
+		CreatedAt: time.Now().In(cnLoc),
 	}
 	db.Create(&vc)
 
@@ -273,7 +273,7 @@ func TestCoinProgress_Capped(t *testing.T) {
 			UserID:    1,
 			VideoID:   i,
 			Amount:    2,
-			CreatedAt: time.Now(),
+			CreatedAt: time.Now().In(cnLoc),
 		}
 		db.Create(&vc)
 	}
