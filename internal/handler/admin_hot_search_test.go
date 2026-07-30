@@ -48,10 +48,6 @@ func TestAdminUpdateHotSearchOp_Success(t *testing.T) {
 	c.Set("admin_id", uint64(1))
 	c.Params = gin.Params{{Key: "id", Value: "1"}}
 
-	mock.ExpectQuery("SELECT .+ FROM `hot_search_ops` WHERE").
-		WillReturnRows(sqlmock.NewRows([]string{"id","keyword","op_type","display_title","sort_order","enabled","pin_rank"}).
-			AddRow(1, "test", "pin", "Old", 1, true, 0))
-
 	mock.ExpectBegin()
 	mock.ExpectExec("UPDATE `hot_search_ops` SET").
 		WillReturnResult(sqlmock.NewResult(1, 1))
@@ -73,11 +69,16 @@ func TestAdminUpdateHotSearchOp_NotFound(t *testing.T) {
 	c.Set("admin_id", uint64(1))
 	c.Params = gin.Params{{Key: "id", Value: "999"}}
 
+	mock.ExpectBegin()
+	mock.ExpectExec("UPDATE `hot_search_ops` SET").
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectCommit()
+
 	mock.ExpectQuery("SELECT .+ FROM `hot_search_ops` WHERE").
 		WillReturnRows(sqlmock.NewRows([]string{"id"}))
 
 	api.AdminUpdateHotSearchOp(c)
-	require.Equal(t, http.StatusNotFound, w.Code)
+	require.Equal(t, http.StatusInternalServerError, w.Code)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 

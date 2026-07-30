@@ -15,7 +15,10 @@ import (
 // @Success     200 {object} map[string]interface{}
 // @Router      /stats/home [get]
 func (a *API) HomeStats(c *gin.Context) {
-	published := a.VideoSvc.CountPublishedVideos(c.Request.Context())
+	var published int64
+	if a.VideoSvc != nil {
+		published = a.VideoSvc.CountPublishedVideos(c.Request.Context())
+	}
 	webOnline := 0
 	if a.Hub != nil {
 		webOnline = a.Hub.TotalConnections()

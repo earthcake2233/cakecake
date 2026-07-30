@@ -24,12 +24,12 @@ func TestAdminListVideos_Success(t *testing.T) {
 			AddRow(1, 10, "Video1", "pending_review", "", "", "", 120, "tech", 0).
 			AddRow(2, 11, "Video2", "pending_review", "", "", "", 60, "music", 0))
 
+	mock.ExpectQuery("SELECT count(.+) FROM `videos` WHERE status =").
+		WillReturnRows(sqlmock.NewRows([]string{"count(*)"}).AddRow(2))
+
 	mock.ExpectQuery("SELECT .+ FROM `users` WHERE id IN").
 		WillReturnRows(sqlmock.NewRows([]string{"id","username","coin_balance_tenths"}).
 			AddRow(10, "user10", 230).AddRow(11, "user11", 230))
-
-	mock.ExpectQuery("SELECT count(.+) FROM `videos` WHERE status =").
-		WillReturnRows(sqlmock.NewRows([]string{"count(*)"}).AddRow(2))
 
 	api.AdminListVideos(c)
 	require.Equal(t, http.StatusOK, w.Code)
@@ -97,12 +97,12 @@ func TestAdminListArticles_Success(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"id","user_id","title","status","body_md","cover_url","view_count","comment_count"}).
 			AddRow(1, 10, "Article1", "pending_review", "# Hello", "", 0, 0))
 
+	mock.ExpectQuery("SELECT count(.+) FROM `articles` WHERE status =").
+		WillReturnRows(sqlmock.NewRows([]string{"count(*)"}).AddRow(1))
+
 	mock.ExpectQuery("SELECT .+ FROM `users` WHERE id IN").
 		WillReturnRows(sqlmock.NewRows([]string{"id","username","coin_balance_tenths"}).
 			AddRow(10, "author1", 230))
-
-	mock.ExpectQuery("SELECT count(.+) FROM `articles` WHERE status =").
-		WillReturnRows(sqlmock.NewRows([]string{"count(*)"}).AddRow(1))
 
 	api.AdminListArticles(c)
 	require.Equal(t, http.StatusOK, w.Code)

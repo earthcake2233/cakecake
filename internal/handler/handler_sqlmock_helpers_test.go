@@ -35,6 +35,7 @@ func newMockAPISimple(t *testing.T, gormDB *gorm.DB) *API {
 	hotSearchSvc := service.NewHotSearchService(gormDB, nil)
 	articleSvc := service.NewArticleService(gormDB, nil, zap.NewNop())
 	userSvc := service.NewUserService(gormDB, zap.NewNop())
+	dynamicSvc := service.NewDynamicService(gormDB, nil, zap.NewNop())
 	return &API{
 		Dependencies: &Dependencies{
 			DB:             gormDB,
@@ -46,6 +47,7 @@ func newMockAPISimple(t *testing.T, gormDB *gorm.DB) *API {
 			HotSearchSvc:   hotSearchSvc,
 			ArticleSvc:     articleSvc,
 			UserSvc:        userSvc,
+			DynamicSvc:     dynamicSvc,
 		},
 	}
 }

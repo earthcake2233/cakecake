@@ -111,11 +111,11 @@ func (a *API) DeleteDanmaku(c *gin.Context) {
 func danmakuTypeLabel(t string) string {
 	switch strings.TrimSpace(t) {
 	case "top":
-		return "??"
+		return "顶部"
 	case "bottom":
-		return "??"
+		return "底部"
 	default:
-		return "??"
+		return "普通"
 	}
 }
 
