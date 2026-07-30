@@ -1,4 +1,4 @@
-﻿<p align="center">
+<p align="center">
   <a href="README.md">
     <img src="https://img.shields.io/badge/Chinese-999999?style=flat-square" alt="Chinese">
   </a>

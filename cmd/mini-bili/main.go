@@ -1,4 +1,4 @@
-﻿// Package main Mini-Bili API.
+// Package main Mini-Bili API.
 //
 // @title           Mini-Bili API
 // @version         1.0
