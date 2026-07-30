@@ -39,7 +39,7 @@ type Client struct {
 func Dial(url string) (*Client, error) {
 	conn, err := amqp.Dial(url)
 	if err != nil {
-		return nil, fmt.Errorf("amqp dial: %w", err)
+		return nil, fmt.Errorf("amqp dial failed")
 	}
 	ch, err := conn.Channel()
 	if err != nil {

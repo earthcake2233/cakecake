@@ -23,7 +23,7 @@ func NewDB(dsn string, lg *zap.Logger, autoMigrate bool) (*gorm.DB, error) {
 		Logger: gormlogger.Default.LogMode(gormlogger.Warn),
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("mysql connect failed")
 	}
 	if autoMigrate {
 		if err := AutoMigrateAll(db, lg); err != nil {

@@ -23,11 +23,11 @@ func NewOSS(endpoint, accessKeyID, accessKeySecret, bucketName string) (*OSS, er
 	}
 	client, err := oss.New(endpoint, accessKeyID, accessKeySecret)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("oss client init failed")
 	}
 	bucket, err := client.Bucket(bucketName)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("oss bucket init failed")
 	}
 	return &OSS{bucket: bucket}, nil
 }
