@@ -97,3 +97,7 @@ _claude*
 coverage
 
 # Coverage output file
+
+# Coverage check temp files
+cover_check
+cover_full_check
