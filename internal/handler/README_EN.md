@@ -4,7 +4,8 @@
   </a>
   <strong><img src="https://img.shields.io/badge/English-00a1d6?style=flat-square" alt="English"></strong>
 </p>
-# Handler Package Reference
+
+# Handler Package Reference Index
 
 Quick lookup: which file contains which HTTP/WebSocket handlers.
 
