@@ -140,7 +140,8 @@ As the project evolves, Rule entries will grow. When a Rule is repeatedly violat
 | ID          | Rule                             | Description |
 | :---------- | :------------------------------- | :---------- |
 | **R-ENCODE-1** | **No UTF-8 BOM in project files** | BOM (Byte Order Mark) causes Go compilation failures and Markdown rendering issues. Use `python scripts/check_bom.py` to detect all `.go`, `.md`, `.yaml`, `.json`, `.py` files. Script supports `--fix` for auto-repair and `--path` for path filtering. Use `python scripts/safe_write.py` for file writes (auto-strips BOM). NEVER use `Set-Content` for text file writes. |
-| **R-ENCODE-2** | **Run BOM check before commit** | Run `python scripts/check_bom.py` scanning `internal/`, `cmd/`, `deploy/`, `scripts/`, `docs/` text files (`.go`, `.md`, `.yaml`, `.json`, `.py`) and root `.md` files. Check both file-level BOM and embedded `\ufeff` in content. Fix with `--fix` before committing. |
+| **R-ENCODE-2** | **Pre-commit BOM check is a hard gate** | `python scripts/check_pre_commit.py` runs `check_bom.py` on every commit. BOM detection blocks the commit; must run `python scripts/check_bom.py --fix` before re-committing. Skipping this check for any reason is forbidden. |
+| **R-ENCODE-3** | **File writes MUST use safe_write.py** | On Windows, PowerShell `Set-Content -Encoding UTF8` inserts a UTF-8 BOM that breaks Go compilation. Any script or tool writing `.go`, `.md`, `.yaml`, `.json`, or `.py` files MUST use `python scripts/safe_write.py --text "..." --output <path>`, which automatically strips BOM. Direct use of `Set-Content` or `Out-File` for text files is forbidden. |
 
 ---
 

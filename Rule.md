@@ -177,6 +177,7 @@
 | :--------- | :--------------------------------------- | :----------------------------------------------------------------------------------------- |
 | **R-TEST-1** | **新增业务代码必须同步编写测试**         | 新增或修改 internal/handler/、internal/service/、internal/ws/、internal/pkg/ 下的业务逻辑时，必须在同一次 commit 中提供对应的单元测试。仅依赖外部服务（ES、RabbitMQ、OSS、第三方 API）的代码可豁免，但需在 commit message 中注明豁免原因。 |
 | **R-TEST-2** | **测试必须可独立运行且不依赖外部服务**   | 单元测试必须使用 SQLite 内存库（github.com/glebarez/sqlite）+ miniredis（github.com/alicebob/miniredis/v2）模拟依赖，禁止测试直连真实 MySQL/Redis/RabbitMQ。 |
+| **R-TEST-5** | 集成测试必须注入真实 Provider 实现 | `CommentService`、`FavoriteService`、`EngagementService` 等依赖 Provider 接口的 Service，在集成测试中必须注入真实实现（如 `service.NewVideoProvider(db)`），禁止传 `nil`。传 `nil` 会导致运行时 nil pointer panic，且 `go vet` 无法在编译期检测到此问题。 |
 
 
 
@@ -236,7 +237,8 @@
 | 编号 | 规则 | 说明 |
 | :--- | :--- | :--- |
 | **R-ENCODE-1** | **禁止项目文件包含 UTF-8 BOM** | BOM（Byte Order Mark）会导致 Go 编译失败、Markdown 渲染异常等。必须使用 `python scripts/check_bom.py` 检测所有 `.go`、`.md`、`.yaml`、`.json`、`.py` 文件。脚本支持 `--fix` 自动修复和 `--path` 指定路径。文件写入必须使用 `scripts/safe_write.py`（自动剥离 BOM），严禁使用 `Set-Content` 直接写入文本文件。 |
-| **R-ENCODE-2** | **提交前运行 BOM 检查** | `python scripts/check_bom.py` 扫描 `internal/`、`cmd/`、`deploy/`、`scripts/`、`docs/` 下的文本文件（`.go`、`.md`、`.yaml`、`.json`、`.py`）及根目录 `.md` 文件。检查文件级 BOM 和内容中嵌入的 `\ufeff`。发现后用 `--fix` 修复后提交。 |
+| **R-ENCODE-2** | 提交前 BOM 检查为硬门禁 | `python scripts/check_pre_commit.py` 会在每次提交前强制运行 `check_bom.py`。发现 BOM 直接阻断提交，必须 `python scripts/check_bom.py --fix` 修复后重新提交。禁止以任何理由跳过此检查。 |
+| **R-ENCODE-3** | 文件写入必须使用 safe_write.py | 在 Windows 环境下使用 PowerShell `Set-Content -Encoding UTF8` 会写入 UTF-8 BOM，导致 Go 编译失败。任何脚本或工具向 `.go`、`.md`、`.yaml`、`.json`、`.py` 文件写入内容时，必须使用 `python scripts/safe_write.py --text "..." --output <path>`，该脚本自动剥离 BOM。禁止使用 `Set-Content` 或 `Out-File` 直接写入文本文件。 |
 
 ---
 
