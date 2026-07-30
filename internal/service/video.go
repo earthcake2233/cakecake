@@ -145,7 +145,13 @@ func (s *VideoService) UpdateVideo(ctx context.Context, v *video.Video, updates 
 
 // DeleteVideoWithCascade removes a video and its related data in a transaction.
 func (s *VideoService) DeleteVideoWithCascade(ctx context.Context, id uint64, fn func(tx *gorm.DB) error) error {
-	return s.db.WithContext(ctx).Transaction(fn)
+	if fn != nil {
+		return s.db.WithContext(ctx).Transaction(fn)
+	}
+	// default: just delete the video record inside a transaction
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		return tx.Delete(&video.Video{}, id).Error
+	})
 }
 
 // ListMyVideos queries a user's own videos with optional status filter.

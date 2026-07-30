@@ -138,7 +138,7 @@ func (s *CommentService) PostComment(ctx context.Context, userID, videoID uint64
 	}
 	v, err := s.videos.GetPublishedVideo(ctx, videoID)
 	if err != nil { return nil, ErrNotFound }
-	if v.CommentsClosed { return nil, ErrNotFound }
+	if v.CommentsClosed { return nil, ErrCommentsClosed }
 
 	var parentID uint64
 	level := 1
@@ -288,7 +288,7 @@ func (s *CommentService) PostArticleComment(ctx context.Context, userID, article
 	}
 	a, err := s.articles.GetPublishedArticle(ctx, articleID)
 	if err != nil { return nil, ErrNotFound }
-	if a.CommentsClosed { return nil, ErrNotFound }
+	if a.CommentsClosed { return nil, ErrCommentsClosed }
 
 	var parentID uint64
 	level := 1

@@ -90,6 +90,15 @@ func newTestAPI(t *testing.T) (*API, *gin.Engine, *jwttoken.Manager) {
 	favoriteSvc := service.NewFavoriteService(db, rdb, log)
 	articleSvc := service.NewArticleService(db, rdb, log)
 	dynamicSvc := service.NewDynamicService(db, rdb, log)
+	searchHot := &service.SearchHotRecorder{Rdb: rdb, Sens: sens}
+	hotSearchSvc := service.NewHotSearchService(db, searchHot)
+	engagementSvc := service.NewEngagementService(db, rdb, log)
+	viewHistorySvc := service.NewViewHistoryService(db, rdb, log)
+	videoDraftSvc := service.NewVideoDraftService(db, rdb, log)
+	creatorCommentSvc := service.NewCreatorCommentService(db, rdb, log)
+	searchHistorySvc := service.NewSearchHistoryService(db, log)
+	favoriteSvc.SetProviders(userProv, videoProv)
+	engagementSvc.SetProviders(userProv, videoProv)
 	api := &API{
 		Dependencies: &Dependencies{
 			Cfg:          cfg,
@@ -114,6 +123,14 @@ func newTestAPI(t *testing.T) (*API, *gin.Engine, *jwttoken.Manager) {
 			FavoriteSvc: favoriteSvc,
 			ArticleSvc:  articleSvc,
 			DynamicSvc:  dynamicSvc,
+			SearchHot:    searchHot,
+			HotSearchSvc: hotSearchSvc,
+			Agent:        &service.AgentService{DB: db, Log: log},
+			EngagementSvc: engagementSvc,
+			ViewHistorySvc: viewHistorySvc,
+			VideoDraftSvc: videoDraftSvc,
+			CreatorCommentSvc: creatorCommentSvc,
+			SearchHistorySvc: searchHistorySvc,
 		},
 	}
 	r := gin.New()

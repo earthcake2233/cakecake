@@ -46,7 +46,7 @@ func TestGetUserPublic(t *testing.T) {
 		Data gin.H `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	require.Equal(t, 0, resp.Code)
+	require.Equal(t, 0, resp.Code, w.Body.String())
 	require.Equal(t, float64(owner.ID), resp.Data["user_id"])
 	require.Equal(t, "SpaceOwner", resp.Data["nickname"])
 	require.Equal(t, false, resp.Data["is_owner"])
@@ -89,7 +89,7 @@ func TestListUserPublishedVideos(t *testing.T) {
 		} `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	require.Equal(t, 0, resp.Code)
+	require.Equal(t, 0, resp.Code, w.Body.String())
 	require.Len(t, resp.Data.Items, 3)
 }
 func TestListUserFavoriteFolders(t *testing.T) {
@@ -111,7 +111,7 @@ func TestListUserFavoriteFolders(t *testing.T) {
 		Data gin.H `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	require.Equal(t, 0, resp.Code)
+	require.Equal(t, 0, resp.Code, w.Body.String())
 
 	req2 := httptest.NewRequest(http.MethodGet, "/api/v1/space/0/favorite-folders", nil)
 	w2 := httptest.NewRecorder()
@@ -148,7 +148,7 @@ func TestListUserFavorites(t *testing.T) {
 		Data gin.H `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	require.Equal(t, 0, resp.Code)
+	require.Equal(t, 0, resp.Code, w.Body.String())
 	items, ok := resp.Data["items"].([]interface{})
 	require.True(t, ok)
 	require.GreaterOrEqual(t, len(items), 1)
@@ -183,7 +183,7 @@ func TestListUserRecentCoinVideos(t *testing.T) {
 		Data gin.H `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	require.Equal(t, 0, resp.Code)
+	require.Equal(t, 0, resp.Code, w.Body.String())
 	items, ok := resp.Data["items"].([]interface{})
 	require.True(t, ok)
 	require.GreaterOrEqual(t, len(items), 1)
@@ -211,7 +211,7 @@ func TestListUserFollowing(t *testing.T) {
 		Data gin.H `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	require.Equal(t, 0, resp.Code)
+	require.Equal(t, 0, resp.Code, w.Body.String())
 	items, ok := resp.Data["items"].([]interface{})
 	require.True(t, ok)
 	require.GreaterOrEqual(t, len(items), 1)
@@ -239,7 +239,7 @@ func TestListUserFollowers(t *testing.T) {
 		Data gin.H `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	require.Equal(t, 0, resp.Code)
+	require.Equal(t, 0, resp.Code, w.Body.String())
 }
 
 // ---------------------------------------------------------------------------
@@ -267,7 +267,7 @@ func TestGetVideoDetail(t *testing.T) {
 		Data gin.H `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	require.Equal(t, 0, resp.Code)
+	require.Equal(t, 0, resp.Code, w.Body.String())
 	require.Equal(t, float64(v.ID), resp.Data["id"])
 	require.Equal(t, "Detail Video", resp.Data["title"])
 	require.Equal(t, "published", resp.Data["status"])
@@ -319,7 +319,7 @@ func TestToggleVideoLike(t *testing.T) {
 		Data gin.H `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	require.Equal(t, 0, resp.Code)
+	require.Equal(t, 0, resp.Code, w.Body.String())
 	require.Equal(t, true, resp.Data["liked"])
 
 	var like video.VideoLike
@@ -369,7 +369,7 @@ func TestPostVideoCoin(t *testing.T) {
 		Data gin.H `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	require.Equal(t, 0, resp.Code)
+	require.Equal(t, 0, resp.Code, w.Body.String())
 	require.Equal(t, true, resp.Data["coined"])
 
 	var coin video.VideoCoin
@@ -413,7 +413,7 @@ func TestToggleWatchLater(t *testing.T) {
 		Data gin.H `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	require.Equal(t, 0, resp.Code)
+	require.Equal(t, 0, resp.Code, w.Body.String())
 	require.Equal(t, true, resp.Data["in_watch_later"])
 
 	req2 := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/v1/videos/%d/watch-later", v.ID), nil)
@@ -457,7 +457,7 @@ func TestToggleVideoFavorite(t *testing.T) {
 		Data gin.H `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	require.Equal(t, 0, resp.Code)
+	require.Equal(t, 0, resp.Code, w.Body.String())
 	require.Equal(t, true, resp.Data["favorited"])
 
 	req2 := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/v1/videos/%d/favorite", v.ID), nil)
@@ -506,7 +506,7 @@ func TestSetVideoFavoriteFolders(t *testing.T) {
 		Data gin.H `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	require.Equal(t, 0, resp.Code)
+	require.Equal(t, 0, resp.Code, w.Body.String())
 
 	var fav video.VideoFavorite
 	err = api.DB.Where("user_id = ? AND video_id = ? AND folder_id = ?", viewer.ID, v.ID, folder.ID).First(&fav).Error
@@ -542,7 +542,7 @@ func TestListCommentsMoreVariants(t *testing.T) {
 		Data gin.H `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	require.Equal(t, 0, resp.Code)
+	require.Equal(t, 0, resp.Code, w.Body.String())
 	items, ok := resp.Data["items"].([]interface{})
 	require.True(t, ok)
 	require.Len(t, items, 1)
@@ -629,7 +629,7 @@ func TestPinComment(t *testing.T) {
 		Data gin.H `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	require.Equal(t, 0, resp.Code)
+	require.Equal(t, 0, resp.Code, w.Body.String())
 	require.Equal(t, true, resp.Data["pinned"])
 
 	req2 := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/v1/comments/%d/pin", cmt.ID), nil)
@@ -718,7 +718,7 @@ func TestGetArticle(t *testing.T) {
 		Data gin.H `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	require.Equal(t, 0, resp.Code)
+	require.Equal(t, 0, resp.Code, w.Body.String())
 	require.Equal(t, float64(art.ID), resp.Data["id"])
 	require.Equal(t, "Test Article", resp.Data["title"])
 
@@ -773,7 +773,7 @@ func TestPostArticleView(t *testing.T) {
 		Data gin.H `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	require.Equal(t, 0, resp.Code)
+	require.Equal(t, 0, resp.Code, w.Body.String())
 	vc, ok := resp.Data["view_count"].(float64)
 	require.True(t, ok)
 	require.GreaterOrEqual(t, vc, float64(1))
@@ -810,7 +810,7 @@ func TestToggleArticleFavorite(t *testing.T) {
 		Data gin.H `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	require.Equal(t, 0, resp.Code)
+	require.Equal(t, 0, resp.Code, w.Body.String())
 	require.Equal(t, true, resp.Data["favorited"])
 
 	req2 := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/v1/articles/%d/favorite", art.ID), nil)
@@ -856,7 +856,7 @@ func TestPostArticleCoin(t *testing.T) {
 		Data gin.H `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	require.Equal(t, 0, resp.Code)
+	require.Equal(t, 0, resp.Code, w.Body.String())
 	require.Equal(t, true, resp.Data["coined"])
 
 	var coin article.ArticleCoin
@@ -916,7 +916,7 @@ func TestSearchSuggestWithParams(t *testing.T) {
 		Code int `json:"code"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	require.Equal(t, 0, resp.Code)
+	require.Equal(t, 0, resp.Code, w.Body.String())
 
 	req2 := httptest.NewRequest(http.MethodGet, "/api/v1/search/suggest", nil)
 	w2 := httptest.NewRecorder()
@@ -1116,7 +1116,7 @@ func TestBlockUser(t *testing.T) {
 		Data gin.H `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	require.Equal(t, 0, resp.Code)
+	require.Equal(t, 0, resp.Code, w.Body.String())
 	require.Equal(t, true, resp.Data["blocked"])
 
 	var block user.UserBlock
@@ -1164,7 +1164,7 @@ func TestFollowUser(t *testing.T) {
 		Data gin.H `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	require.Equal(t, 0, resp.Code)
+	require.Equal(t, 0, resp.Code, w.Body.String())
 	require.Equal(t, true, resp.Data["followed"])
 
 	var follow user.UserFollow
@@ -1230,7 +1230,7 @@ func TestListCreatorComments(t *testing.T) {
 		Data gin.H `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	require.Equal(t, 0, resp.Code)
+	require.Equal(t, 0, resp.Code, w.Body.String())
 
 	req2 := httptest.NewRequest(http.MethodGet, "/api/v1/users/me/creator/comments?pending=1&page=1&page_size=10", nil)
 	req2.Header.Set("Authorization", "Bearer "+ownerAccess)
@@ -1267,7 +1267,7 @@ func TestApproveAndIgnoreCuratedComment(t *testing.T) {
 		Data gin.H `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	require.Equal(t, 0, resp.Code)
+	require.Equal(t, 0, resp.Code, w.Body.String())
 
 	var approved comment.Comment
 	api.DB.First(&approved, cmt.ID)
@@ -1312,7 +1312,7 @@ func TestHealthAdditionalCases(t *testing.T) {
 		Data gin.H `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	require.Equal(t, 0, resp.Code)
+	require.Equal(t, 0, resp.Code, w.Body.String())
 	require.Equal(t, "ok", resp.Data["status"])
 }
 
@@ -1341,7 +1341,7 @@ func TestListUserPublishedArticles(t *testing.T) {
 		Data gin.H `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	require.Equal(t, 0, resp.Code)
+	require.Equal(t, 0, resp.Code, w.Body.String())
 	items, ok := resp.Data["items"].([]interface{})
 	require.True(t, ok)
 	require.Len(t, items, 2)

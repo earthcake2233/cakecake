@@ -74,6 +74,13 @@ func setupHandlerIntegrationDB(t *testing.T) (*API, *gin.Engine, string) {
 			FavoriteSvc:  service.NewFavoriteService(db, rdb, zap.NewNop()),
 			ArticleSvc:   service.NewArticleService(db, rdb, zap.NewNop()),
 			DynamicSvc:   service.NewDynamicService(db, rdb, zap.NewNop()),
+			EngagementSvc:     service.NewEngagementService(db, rdb, zap.NewNop()),
+			ViewHistorySvc:    service.NewViewHistoryService(db, rdb, zap.NewNop()),
+			VideoDraftSvc:     service.NewVideoDraftService(db, rdb, zap.NewNop()),
+			CreatorCommentSvc: service.NewCreatorCommentService(db, rdb, zap.NewNop()),
+			SearchHistorySvc:  service.NewSearchHistoryService(db, zap.NewNop()),
+			SearchHot:         &service.SearchHotRecorder{Rdb: rdb, Sens: nil},
+			HotSearchSvc:      service.NewHotSearchService(db, &service.SearchHotRecorder{Rdb: rdb, Sens: nil}),
 		},
 	}
 	commentSvc := api.CommentSvc
@@ -83,6 +90,8 @@ func setupHandlerIntegrationDB(t *testing.T) (*API, *gin.Engine, string) {
 		service.NewArticleProvider(db),
 		service.NewDynamicProvider(db),
 	)
+	api.FavoriteSvc.SetProviders(service.NewUserProvider(db), service.NewVideoProvider(db))
+	api.EngagementSvc.SetProviders(service.NewUserProvider(db), service.NewVideoProvider(db))
 
 	r := gin.New()
 	RegisterRoutes(r, api, jm, "test")

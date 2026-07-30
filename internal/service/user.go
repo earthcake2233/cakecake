@@ -105,7 +105,8 @@ func (s *UserService) GetUserPublic(ctx context.Context, userID uint64) (*UserPr
 		AvatarURL: u.AvatarURL, Sign: u.Sign, CakeID: u.CakeID,
 		CreatedAt: u.CreatedAt.Format("2006-01-02 15:04:05"),
 		Gender: u.Gender, Birthday: u.Birthday, Announcement: u.SpaceAnnouncement,
-	}, nil
+			PrivacyPublicFavorites: u.PrivacyPublicFavorites, PrivacyPublicRecentCoins: u.PrivacyPublicRecentCoins, PrivacyPublicFollowing: u.PrivacyPublicFollowing, PrivacyPublicFans: u.PrivacyPublicFans,
+}, nil
 }
 // GetUserBrief returns a user's display name and avatar URL.
 func (s *UserService) GetUserBrief(ctx context.Context, userID uint64) (name, avatar string, err error) {

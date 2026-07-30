@@ -253,7 +253,7 @@ func (a *API) DeleteDmConversation(c *gin.Context) {
 		resp.Err(c, http.StatusUnauthorized, errcode.CodeUnauthorized)
 		return
 	}
-	convID, err := strconv.ParseUint(c.Param("convId"), 10, 64)
+	convID, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil || convID == 0 {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
@@ -280,7 +280,7 @@ func (a *API) ResetDmAgentConversation(c *gin.Context) {
 		resp.Err(c, http.StatusUnauthorized, errcode.CodeUnauthorized)
 		return
 	}
-	convID, err := strconv.ParseUint(c.Param("convId"), 10, 64)
+	convID, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil || convID == 0 {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
@@ -308,7 +308,7 @@ func (a *API) PatchDmConversationSettings(c *gin.Context) {
 		resp.Err(c, http.StatusUnauthorized, errcode.CodeUnauthorized)
 		return
 	}
-	convID, err := strconv.ParseUint(c.Param("convId"), 10, 64)
+	convID, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil || convID == 0 {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return

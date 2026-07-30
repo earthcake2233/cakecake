@@ -18,6 +18,7 @@ import (
 	"minibili/internal/pkg/netutil"
 	"minibili/internal/pkg/resp"
 	"minibili/internal/service"
+	"minibili/internal/model/comment"
 )
 
 type commentPost struct {
@@ -110,7 +111,18 @@ func (a *API) PinComment(c *gin.Context) {
 	if !ok { resp.Err(c, http.StatusUnauthorized, errcode.CodeUnauthorized); return }
 	cid, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil || cid == 0 { resp.Err(c, http.StatusBadRequest, errcode.CodeParamError); return }
-	pinned, svcErr := a.CommentSvc.PinComment(c.Request.Context(), uid, cid)
+	// look up the comment to find the video ID, then verify caller owns the video
+	var cm comment.Comment
+	if err := a.DB.First(&cm, cid).Error; err != nil {
+		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
+		return
+	}
+	v, err := a.VideoSvc.GetVideoByID(c.Request.Context(), cm.VideoID)
+	if err != nil || v.UserID != uid {
+		resp.Err(c, http.StatusForbidden, errcode.CodeForbidden)
+		return
+	}
+	pinned, svcErr := a.CommentSvc.PinComment(c.Request.Context(), cm.VideoID, cid)
 	if svcErr != nil { resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError); return }
 	resp.OK(c, gin.H{"pinned": pinned})
 }
