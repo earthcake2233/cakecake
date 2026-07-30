@@ -303,15 +303,18 @@ func (s *EngagementService) UserFavoriteCount(ctx context.Context, userID, video
 }
 // WatchLaterVideoItem holds a watch-later entry with video details.
 type WatchLaterVideoItem struct {
-	ID                uint64
-	Title             string
-	CoverURL          string
-	PlayCount         uint64
-	Duration          float64
-	UploaderName      string
-	UploaderAvatar    string
-	CreatedAt         string
-	Watched           bool
+	ID               uint64  `json:"id"`
+	Title            string  `json:"title"`
+	CoverURL         string  `json:"cover_url"`
+	PlayCount        uint64  `json:"play_count"`
+	DanmakuCount     uint64  `json:"danmaku_count"`
+	Duration         float64 `json:"duration"`
+	UploaderName     string  `json:"uploader"`
+	UploaderAvatar   string  `json:"uploader_avatar_url"`
+	UploaderID       uint64  `json:"uploader_id"`
+	CreatedAt        string  `json:"created_at"`
+	AddedAt          string  `json:"added_at"`
+	Watched          bool    `json:"watched"`
 }
 
 // ListWatchLaterWithVideos returns watch-later items with video details.
@@ -364,11 +367,18 @@ func (s *EngagementService) ListWatchLaterWithVideos(ctx context.Context, userID
 		if !ok { continue }
 		u, _ := users_u[vi.UserID]
 		items = append(items, WatchLaterVideoItem{
-			ID: vi.ID, Title: vi.Title, CoverURL: vi.CoverURL,
-			PlayCount: vi.PlayCount, Duration: vi.DurationSec,
-			UploaderName: u.Nickname, UploaderAvatar: u.AvatarURL,
-			CreatedAt: vi.CreatedAt.Format("2006-01-02 15:04:05"),
-			Watched: wl.Watched,
+			ID:           vi.ID,
+			Title:        vi.Title,
+			CoverURL:     vi.CoverURL,
+			PlayCount:    vi.PlayCount,
+			DanmakuCount: vi.DanmakuCount,
+			Duration:     vi.DurationSec,
+			UploaderName: u.Nickname,
+			UploaderAvatar: u.AvatarURL,
+			UploaderID:   vi.UserID,
+			CreatedAt:    vi.CreatedAt.Format("2006-01-02 15:04:05"),
+			AddedAt:      wl.CreatedAt.Format("2006-01-02 15:04:05"),
+			Watched:      wl.Watched,
 		})
 	}
 	return items, total, nil

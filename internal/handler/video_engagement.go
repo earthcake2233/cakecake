@@ -578,7 +578,7 @@ func (a *API) ListMyWatchLater(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	resp.OK(c, gin.H{"items": items, "total": total})
+	resp.OK(c, gin.H{"items": items, "total": total, "max_limit": watchLaterMaxItems})
 }
 
 // ClearMyWatchLater removes all watch-later entries for the current user.
@@ -695,7 +695,7 @@ func (a *API) ListMyFavorites(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	resp.OK(c, gin.H{"items": items, "total": total})
+	resp.OK(c, gin.H{"items": items, "total": total, "max_limit": watchLaterMaxItems})
 }
 
 // ListUserFavorites returns a user's favorited published videos for their public space.
@@ -740,7 +740,7 @@ func (a *API) ListUserFavorites(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	resp.OK(c, gin.H{"items": items, "total": total})
+	resp.OK(c, gin.H{"items": items, "total": total, "max_limit": watchLaterMaxItems})
 }
 
 func (a *API) coinRecentListItems(ctx context.Context, ownerID uint64, limit int) ([]gin.H, int64, error) {
@@ -786,5 +786,5 @@ func (a *API) ListUserRecentCoinVideos(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	resp.OK(c, gin.H{"items": items, "total": total})
+	resp.OK(c, gin.H{"items": items, "total": total, "max_limit": watchLaterMaxItems})
 }

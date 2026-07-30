@@ -21,6 +21,7 @@ import (
 	"gorm.io/gorm"
 
 	"minibili/internal/data"
+	"minibili/internal/service"
 	"minibili/internal/pkg/jwttoken"
 	"minibili/internal/ws"
 )
@@ -69,13 +70,14 @@ func newTestAdminAPI(t *testing.T) (*API, *gin.Engine, *jwttoken.Manager) {
 
 	api := &API{
 		Dependencies: &Dependencies{
-			Cfg:   cfg,
-			DB:    db,
-			Redis: rdb,
-			JWT:   jm,
-			Hub:   ws.NewHub(),
-			Log:   zap.NewNop(),
-			Play:  nil,
+			Cfg:     cfg,
+			DB:      db,
+			Redis:   rdb,
+			JWT:     jm,
+			Hub:     ws.NewHub(),
+			Log:     zap.NewNop(),
+			Play:    nil,
+			AuthSvc: service.NewAuthService(db, rdb, zap.NewNop(), jm, service.AuthConfig{}),
 		},
 	}
 	r := gin.New()
