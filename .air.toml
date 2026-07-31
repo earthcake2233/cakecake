@@ -7,7 +7,6 @@ env_files = [".env"]
   args_bin = []
   entrypoint = ["./tmp/mini-bili"]
   cmd = "go build -buildvcs=false -o ./tmp/mini-bili ./cmd/mini-bili"
-  env = ["GO111MODULE=on", "GOCACHE=D:/Minibili/.gocache"]
   delay = 500
   exclude_dir = ["tmp","vendor","testdata",".git","cakecake-vue","bin","node_modules"]
   exclude_file = []
