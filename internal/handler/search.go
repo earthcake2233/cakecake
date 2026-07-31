@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -87,8 +86,7 @@ func (a *API) SearchAll(c *gin.Context) {
 	}
 
 	highlight := c.Query("highlight") == "1" || strings.EqualFold(c.Query("highlight"), "true")
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	page, pageSize := parsePagination(c, 20)
 	searchType := strings.TrimSpace(c.DefaultQuery("type", "all"))
 	sort := strings.TrimSpace(c.Query("sort"))
 	videoFilter := search.ParseVideoFilter(

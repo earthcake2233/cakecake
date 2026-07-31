@@ -37,17 +37,7 @@ func (a *API) ListCreatorComments(c *gin.Context) {
 		a.listCreatorDynamicComments(c, uid)
 		return
 	}
-	page := queryIntDefault(c.Query("page"), 1)
-	if page < 1 {
-		page = 1
-	}
-	pageSize := queryIntDefault(c.Query("page_size"), 10)
-	if pageSize < 1 {
-		pageSize = 10
-	}
-	if pageSize > 50 {
-		pageSize = 50
-	}
+	page, pageSize := parsePagination(c, 10)
 	sortKey := strings.TrimSpace(c.Query("sort"))
 	if sortKey == "" {
 		sortKey = "recent"
@@ -193,17 +183,7 @@ func previewCommentContent(s string, maxRunes int) string {
 
 // listCreatorArticleComments lists comments on the authenticated user's published articles.
 func (a *API) listCreatorArticleComments(c *gin.Context, uid uint64) {
-	page := queryIntDefault(c.Query("page"), 1)
-	if page < 1 {
-		page = 1
-	}
-	pageSize := queryIntDefault(c.Query("page_size"), 10)
-	if pageSize < 1 {
-		pageSize = 10
-	}
-	if pageSize > 50 {
-		pageSize = 50
-	}
+	page, pageSize := parsePagination(c, 10)
 	sortKey := strings.TrimSpace(c.Query("sort"))
 	if sortKey == "" {
 		sortKey = "recent"
@@ -348,17 +328,7 @@ func dynamicCoverURL(d *dynamic.UserDynamic) string {
 
 // listCreatorDynamicComments lists comments on the authenticated user's image/text dynamics.
 func (a *API) listCreatorDynamicComments(c *gin.Context, uid uint64) {
-	page := queryIntDefault(c.Query("page"), 1)
-	if page < 1 {
-		page = 1
-	}
-	pageSize := queryIntDefault(c.Query("page_size"), 10)
-	if pageSize < 1 {
-		pageSize = 10
-	}
-	if pageSize > 50 {
-		pageSize = 50
-	}
+	page, pageSize := parsePagination(c, 10)
 	sortKey := strings.TrimSpace(c.Query("sort"))
 	if sortKey == "" {
 		sortKey = "recent"

@@ -455,14 +455,7 @@ func (a *API) ListMyDynamics(c *gin.Context) {
 		resp.Err(c, http.StatusUnauthorized, errcode.CodeUnauthorized)
 		return
 	}
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "10"))
-	if page < 1 {
-		page = 1
-	}
-	if pageSize < 1 || pageSize > 50 {
-		pageSize = 10
-	}
+	page, pageSize := parsePagination(c, 10)
 	sortKey := strings.TrimSpace(c.DefaultQuery("sort", "time"))
 	titleQ := strings.TrimSpace(c.Query("q"))
 
@@ -516,12 +509,7 @@ func (a *API) ListUserPublishedDynamics(c *gin.Context) {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
-	limit := 20
-	if s := c.Query("limit"); s != "" {
-		if n, err := strconv.Atoi(s); err == nil && n > 0 && n <= 50 {
-			limit = n
-		}
-	}
+	limit := parseLimit(c, 20, 50)
 	curID, _ := strconv.ParseUint(c.Query("cursor"), 10, 64)
 	list, err := a.DynamicSvc.ListUserDynamicsCursor(c.Request.Context(), uid, curID, limit+1)
 	if err != nil {

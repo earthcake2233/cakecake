@@ -568,17 +568,7 @@ func (a *API) ListMyWatchLater(c *gin.Context) {
 		resp.Err(c, http.StatusUnauthorized, errcode.CodeUnauthorized)
 		return
 	}
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	if page < 1 {
-		page = 1
-	}
-	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
-	if pageSize < 1 {
-		pageSize = 20
-	}
-	if pageSize > 50 {
-		pageSize = 50
-	}
+	page, pageSize := parsePagination(c, 20)
 	items, total, err := a.EngagementSvc.ListWatchLaterWithVideos(context.Background(), uid, page, pageSize)
 	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
@@ -685,12 +675,7 @@ func (a *API) ListMyFavorites(c *gin.Context) {
 		resp.Err(c, http.StatusUnauthorized, errcode.CodeUnauthorized)
 		return
 	}
-	limit := 200
-	if raw := c.Query("limit"); raw != "" {
-		if n, err := strconv.Atoi(raw); err == nil && n > 0 && n <= 200 {
-			limit = n
-		}
-	}
+	limit := parseLimit(c, 200, 200)
 	folderID, filterFolder, err := parseFolderIDQuery(c)
 	if err != nil {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
@@ -721,12 +706,7 @@ func (a *API) ListUserFavorites(c *gin.Context) {
 		resp.OK(c, gin.H{"items": []gin.H{}, "total": 0})
 		return
 	}
-	limit := 200
-	if raw := c.Query("limit"); raw != "" {
-		if n, err := strconv.Atoi(raw); err == nil && n > 0 && n <= 200 {
-			limit = n
-		}
-	}
+	limit := parseLimit(c, 200, 200)
 	folderID, filterFolder, err := parseFolderIDQuery(c)
 	if err != nil {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
@@ -787,12 +767,7 @@ func (a *API) ListUserRecentCoinVideos(c *gin.Context) {
 		resp.OK(c, gin.H{"items": []gin.H{}, "total": 0})
 		return
 	}
-	limit := 20
-	if raw := c.Query("limit"); raw != "" {
-		if n, err := strconv.Atoi(raw); err == nil && n > 0 && n <= 50 {
-			limit = n
-		}
-	}
+	limit := parseLimit(c, 20, 50)
 	items, total, err := a.coinRecentListItems(c, ownerID, limit)
 	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)

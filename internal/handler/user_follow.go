@@ -119,12 +119,7 @@ func (a *API) ListUserFollowing(c *gin.Context) {
 		resp.Err(c, http.StatusForbidden, errcode.CodeForbidden)
 		return
 	}
-	limit := 200
-	if raw := c.Query("limit"); raw != "" {
-		if n, err := strconv.Atoi(raw); err == nil && n > 0 && n <= 500 {
-			limit = n
-		}
-	}
+	limit := parseLimit(c, 200, 500)
 	groupID, _ := strconv.ParseUint(strings.TrimSpace(c.Query("groupId")), 10, 64)
 	rows, svcErr := a.FollowSvc.GetFollowingList(c.Request.Context(), ownerID, limit, groupID)
 	if svcErr != nil {
@@ -162,12 +157,7 @@ func (a *API) ListUserFollowers(c *gin.Context) {
 		resp.Err(c, http.StatusForbidden, errcode.CodeForbidden)
 		return
 	}
-	limit := 200
-	if raw := c.Query("limit"); raw != "" {
-		if n, err := strconv.Atoi(raw); err == nil && n > 0 && n <= 500 {
-			limit = n
-		}
-	}
+	limit := parseLimit(c, 200, 500)
 	rows, svcErr := a.FollowSvc.GetFollowersList(c.Request.Context(), ownerID, limit)
 	if svcErr != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)

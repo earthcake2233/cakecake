@@ -67,14 +67,7 @@ func adminVideoToJSON(v *video.Video, uploaderName string) gin.H {
 // AdminListVideos GET /api/v1/admin/videos
 
 func (a *API) AdminListVideos(c *gin.Context) {
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
-	if page < 1 {
-		page = 1
-	}
-	if pageSize < 1 || pageSize > 50 {
-		pageSize = 20
-	}
+	page, pageSize := parsePagination(c, 20)
 	statusQ := c.DefaultQuery("status", "pending_review")
 	titleQ := strings.TrimSpace(c.Query("q"))
 

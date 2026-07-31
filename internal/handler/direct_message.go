@@ -384,12 +384,7 @@ func (a *API) ListDmMessages(c *gin.Context) {
 			return
 		}
 	}
-	limit := 50
-	if s := c.Query("limit"); s != "" {
-		if n, e := strconv.Atoi(s); e == nil && n > 0 && n <= 100 {
-			limit = n
-		}
-	}
+	limit := parseLimit(c, 50, 100)
 	curID, _ := strconv.ParseUint(c.Query("cursor"), 10, 64)
 	list, err := a.DmSvc.ListMessages(context.Background(), convID, curID, limit+1)
 	if err != nil {

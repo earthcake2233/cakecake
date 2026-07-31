@@ -266,8 +266,7 @@ func (a *API) ListNotifications(c *gin.Context) {
 		return
 	}
 	cat := c.Query("category")
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	page, pageSize := parsePagination(c, 20)
 	list, total, err := a.NotifSvc.ListNotifications(c.Request.Context(), uid, cat, page, pageSize)
 	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)

@@ -146,12 +146,7 @@ func (a *API) AdminDeleteHotSearchOp(c *gin.Context) {
 
 // AdminPreviewHotSearch GET /api/v1/admin/hot-search/preview?limit=10
 func (a *API) AdminPreviewHotSearch(c *gin.Context) {
-	limit := 10
-	if s := c.Query("limit"); s != "" {
-		if n, err := strconv.Atoi(s); err == nil && n > 0 && n <= 20 {
-			limit = n
-		}
-	}
+	limit := parseLimit(c, 10, 20)
 	items, err := a.HotSearchSvc.ListMerged(c.Request.Context(), limit)
 	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)

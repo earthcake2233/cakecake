@@ -3,7 +3,6 @@ package handler
 import (
 	"context"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -23,12 +22,7 @@ import (
 // @Success     200 {object} map[string]interface{}
 // @Router      /hot-search [get]
 func (a *API) HotSearchList(c *gin.Context) {
-	limit := 10
-	if s := c.Query("limit"); s != "" {
-		if n, err := strconv.Atoi(s); err == nil && n > 0 && n <= 20 {
-			limit = n
-		}
-	}
+	limit := parseLimit(c, 10, 20)
 	if a.SearchHot == nil {
 		resp.OK(c, gin.H{"items": []any{}})
 		return

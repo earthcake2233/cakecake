@@ -3,7 +3,6 @@ package handler
 import (
 	"context"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -39,7 +38,7 @@ func (a *API) SearchSuggest(c *gin.Context) {
 			return
 		}
 	}
-	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
+	limit := parseLimit(c, 10, 0)
 	var uid uint64
 	if id, ok := middleware.UserID(c); ok {
 		uid = id
