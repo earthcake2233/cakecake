@@ -62,7 +62,7 @@ func main() {
 
 	for _, table := range tables {
 		var name, ddl string
-		if err := db.QueryRow("SHOW CREATE TABLE `" + table + "`").Scan(&name, &ddl); err != nil {
+		if err := db.QueryRow("SHOW CREATE TABLE `"+table+"`").Scan(&name, &ddl); err != nil {
 			fmt.Fprintf(os.Stderr, "skip %s: %v\n", table, err)
 			continue
 		}

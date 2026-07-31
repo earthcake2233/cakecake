@@ -41,9 +41,10 @@ coverage: coverage-backend coverage-frontend
 
 fmt:
 	$(GO) fmt ./internal/... ./cmd/...
+	gofmt -w scripts
 
 fmt-check:
-	@unformatted=$$(gofmt -l internal cmd); \
+	@unformatted=$$(gofmt -l internal cmd scripts); \
 	if [ -n "$$unformatted" ]; then \
 		echo "gofmt needed on:"; \
 		echo "$$unformatted"; \
