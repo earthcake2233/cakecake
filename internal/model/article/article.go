@@ -2,6 +2,16 @@ package article
 
 import "time"
 
+const (
+	StatusPublished     = "published"
+	StatusDraft         = "draft"
+	StatusProcessing    = "processing"
+	StatusPendingReview = "pending_review"
+	StatusPassed        = "passed"
+	StatusFailed        = "failed"
+	StatusRejected      = "rejected"
+)
+
 type Article struct {
 	ID           uint64 `gorm:"primaryKey"`
 	UserID       uint64 `gorm:"index:idx_article_user;not null"`

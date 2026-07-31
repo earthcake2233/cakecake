@@ -412,7 +412,7 @@ func (s *EngagementService) ListWatchLaterWithVideos(ctx context.Context, userID
 		}
 	} else {
 		var videos []video.Video
-		if err := s.db.WithContext(ctx).Where("id IN ? AND status = ?", vids, "published").Find(&videos).Error; err != nil {
+		if err := s.db.WithContext(ctx).Where("id IN ? AND status = ?", vids, video.StatusPublished).Find(&videos).Error; err != nil {
 			return nil, 0, err
 		}
 		for i := range videos {
@@ -514,7 +514,7 @@ func (s *EngagementService) ListUserCoinedVideos(ctx context.Context, ownerID ui
 		}
 	} else {
 		var videos []video.Video
-		if err := s.db.WithContext(ctx).Where("id IN ? AND status = ?", vids, "published").Find(&videos).Error; err != nil {
+		if err := s.db.WithContext(ctx).Where("id IN ? AND status = ?", vids, video.StatusPublished).Find(&videos).Error; err != nil {
 			return nil, 0, err
 		}
 		for i := range videos {

@@ -221,7 +221,7 @@ func (a *API) UploadVideo(c *gin.Context) {
 		Title:        title,
 		Description:  desc,
 		DurationSec:  dur,
-		Status:       "processing",
+		Status:       video.StatusProcessing,
 		PlayCount:    0,
 		DanmakuCount: 0,
 		CommentCount: 0,
@@ -345,14 +345,14 @@ func (a *API) countZoneVideos(zoneParent string) int64 {
 
 func manuscriptVideoStatusToDB(st string) string {
 	switch strings.TrimSpace(st) {
-	case "draft":
-		return "draft"
-	case "processing":
-		return "processing"
-	case "passed", "published":
-		return "published"
-	case "rejected", "failed":
-		return "failed"
+	case video.StatusDraft:
+		return video.StatusDraft
+	case video.StatusProcessing:
+		return video.StatusProcessing
+	case video.StatusPassed, video.StatusPublished:
+		return video.StatusPublished
+	case video.StatusRejected, video.StatusFailed:
+		return video.StatusFailed
 	default:
 		return ""
 	}
@@ -360,14 +360,14 @@ func manuscriptVideoStatusToDB(st string) string {
 
 func manuscriptVideoStatusFilter(st string) (single string, multi []string) {
 	switch strings.TrimSpace(st) {
-	case "draft":
-		return "draft", nil
-	case "processing":
-		return "", []string{"processing", "pending_review"}
-	case "passed", "published":
-		return "published", nil
-	case "rejected":
-		return "", []string{"failed", "rejected"}
+	case video.StatusDraft:
+		return video.StatusDraft, nil
+	case video.StatusProcessing:
+		return "", []string{video.StatusProcessing, video.StatusPendingReview}
+	case video.StatusPassed, video.StatusPublished:
+		return video.StatusPublished, nil
+	case video.StatusRejected:
+		return "", []string{video.StatusFailed, video.StatusRejected}
 	default:
 		if db := manuscriptVideoStatusToDB(st); db != "" {
 			return db, nil
@@ -487,11 +487,11 @@ func (a *API) GetVideo(c *gin.Context) {
 	if uid, ok := middleware.UserID(c); ok {
 		viewer = uid
 	}
-	if v.Status != "published" && v.UserID != viewer {
+	if v.Status != video.StatusPublished && v.UserID != viewer {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
-	if v.Status == "published" {
+	if v.Status == video.StatusPublished {
 		_ = a.Play.Incr(context.Background(), v.ID)
 	}
 	pc, _ := a.Play.Display(context.Background(), v)
@@ -594,7 +594,7 @@ func (a *API) UpdateMyVideo(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	if v.Status == "published" {
+	if v.Status == video.StatusPublished {
 		a.esIndexVideo(id)
 	}
 	resp.OK(c, gin.H{"ok": true})
@@ -617,7 +617,7 @@ func (a *API) UpdateVideoCover(c *gin.Context) {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
-	if v.Status != "published" {
+	if v.Status != video.StatusPublished {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
@@ -702,7 +702,7 @@ func (a *API) PatchVideoPlayback(c *gin.Context) {
 		resp.Err(c, http.StatusForbidden, errcode.CodeForbidden)
 		return
 	}
-	if v.Status != "published" {
+	if v.Status != video.StatusPublished {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}

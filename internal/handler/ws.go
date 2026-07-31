@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"minibili/internal/model/user"
+	"minibili/internal/model/video"
 	"net/http"
 	"strconv"
 	"strings"
@@ -61,12 +62,12 @@ func (a *API) ServeDanmaku(c *gin.Context) {
 			}
 			return
 		}
-		if v.Status != "published" && v.UserID != uid {
+		if v.Status != video.StatusPublished && v.UserID != uid {
 			c.Status(http.StatusNotFound)
 			return
 		}
 	} else {
-		if v.Status != "published" {
+		if v.Status != video.StatusPublished {
 			c.Status(http.StatusNotFound)
 			return
 		}

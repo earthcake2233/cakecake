@@ -23,7 +23,7 @@ func (p *VideoProviderImpl) GetPublishedVideo(ctx context.Context, id uint64) (*
 	if err := p.db.WithContext(ctx).First(&v, id).Error; err != nil {
 		return nil, err
 	}
-	if v.Status != "published" {
+	if v.Status != video.StatusPublished {
 		return nil, gorm.ErrRecordNotFound
 	}
 	return &VideoInfo{
@@ -63,7 +63,7 @@ func (p *VideoProviderImpl) BatchGetPublishedVideos(ctx context.Context, ids []u
 		return nil, nil
 	}
 	var videos []video.Video
-	if err := p.db.WithContext(ctx).Where("id IN ? AND status = ?", ids, "published").Find(&videos).Error; err != nil {
+	if err := p.db.WithContext(ctx).Where("id IN ? AND status = ?", ids, video.StatusPublished).Find(&videos).Error; err != nil {
 		return nil, err
 	}
 	result := make(map[uint64]*VideoInfo, len(videos))
@@ -94,7 +94,7 @@ func (p *ArticleProviderImpl) GetPublishedArticle(ctx context.Context, id uint64
 	if err := p.db.WithContext(ctx).First(&a, id).Error; err != nil {
 		return nil, err
 	}
-	if a.Status != "published" {
+	if a.Status != article.StatusPublished {
 		return nil, gorm.ErrRecordNotFound
 	}
 	return &ArticleInfo{

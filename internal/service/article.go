@@ -16,11 +16,6 @@ import (
 	"minibili/internal/pkg/usercoin"
 )
 
-const (
-	articleStatusPublished = "published"
-	articleStatusDraft     = "draft"
-)
-
 // ArticleService handles article business logic.
 type ArticleService struct {
 	db  *gorm.DB
@@ -69,7 +64,7 @@ func (s *ArticleService) GetArticleByID(ctx context.Context, id uint64) (*articl
 // GetPublishedArticle returns a published article by ID.
 func (s *ArticleService) GetPublishedArticle(ctx context.Context, id uint64) (*article.Article, error) {
 	var a article.Article
-	if err := s.db.WithContext(ctx).Where("id = ? AND status = ?", id, articleStatusPublished).First(&a).Error; err != nil {
+	if err := s.db.WithContext(ctx).Where("id = ? AND status = ?", id, article.StatusPublished).First(&a).Error; err != nil {
 		return nil, err
 	}
 	return &a, nil
@@ -154,13 +149,13 @@ func (s *ArticleService) CountArticlesByStatus(ctx context.Context, userID uint6
 	}
 	for _, r := range rows {
 		switch r.Status {
-		case "draft":
+		case article.StatusDraft:
 			out["draft"] = r.N
-		case "processing":
+		case article.StatusProcessing:
 			out["processing"] = r.N
-		case "published":
+		case article.StatusPublished:
 			out["passed"] = r.N
-		case "rejected":
+		case article.StatusRejected:
 			out["rejected"] = r.N
 		}
 	}
@@ -248,7 +243,7 @@ func (s *ArticleService) DeleteArticle(ctx context.Context, id uint64) error {
 
 // ListArticlesCursor returns published articles with cursor-based pagination.
 func (s *ArticleService) ListArticlesCursor(ctx context.Context, cursor uint64, limit int, sort string) (*ListArticlesCursorResult, error) {
-	q := s.db.WithContext(ctx).Model(&article.Article{}).Where("status = ?", articleStatusPublished)
+	q := s.db.WithContext(ctx).Model(&article.Article{}).Where("status = ?", article.StatusPublished)
 	if cursor > 0 {
 		q = q.Where("id < ?", cursor)
 	}
@@ -307,7 +302,7 @@ func (s *ArticleService) ListMyArticlesPage(ctx context.Context, userID uint64, 
 	if st := manuscriptStatusToDB(status); st != "" {
 		q = q.Where("status = ?", st)
 	} else {
-		q = q.Where("status <> ?", articleStatusDraft)
+		q = q.Where("status <> ?", article.StatusDraft)
 	}
 	if titleQ != "" {
 		q = q.Where("title LIKE ?", "%"+titleQ+"%")
@@ -337,7 +332,7 @@ func (s *ArticleService) ListMyArticlesPage(ctx context.Context, userID uint64, 
 
 // ListUserPublishedArticlesCursor returns published articles for a user space with cursor pagination.
 func (s *ArticleService) ListUserPublishedArticlesCursor(ctx context.Context, userID uint64, cursor uint64, limit int) (*ListArticlesCursorResult, error) {
-	q := s.db.WithContext(ctx).Model(&article.Article{}).Where("user_id = ? AND status = ?", userID, articleStatusPublished)
+	q := s.db.WithContext(ctx).Model(&article.Article{}).Where("user_id = ? AND status = ?", userID, article.StatusPublished)
 	if cursor > 0 {
 		q = q.Where("id < ?", cursor)
 	}
@@ -377,7 +372,7 @@ func (s *ArticleService) BatchFetchArticles(ctx context.Context, ids []uint64, o
 	}
 	q := s.db.WithContext(ctx).Where("id IN ?", ids)
 	if onlyPublished {
-		q = q.Where("status = ?", articleStatusPublished)
+		q = q.Where("status = ?", article.StatusPublished)
 	}
 	var rows []article.Article
 	if err := q.Find(&rows).Error; err != nil {
@@ -394,7 +389,7 @@ func (s *ArticleService) CountFavoritedArticles(ctx context.Context, userID uint
 	q := s.db.WithContext(ctx).Table("article_favorites").
 		Joins("INNER JOIN articles ON articles.id = article_favorites.article_id")
 	if onlyPublished {
-		q = q.Where("articles.status = ?", articleStatusPublished)
+		q = q.Where("articles.status = ?", article.StatusPublished)
 	}
 	q = q.Where("article_favorites.user_id = ?", userID)
 	var total int64
@@ -408,14 +403,14 @@ func manuscriptStatusToDB(status string) string {
 	switch status {
 	case "all", "":
 		return ""
-	case "draft":
-		return "draft"
-	case "processing":
-		return "processing"
-	case "passed":
-		return "published"
-	case "rejected":
-		return "rejected"
+	case article.StatusDraft:
+		return article.StatusDraft
+	case article.StatusProcessing:
+		return article.StatusProcessing
+	case article.StatusPassed:
+		return article.StatusPublished
+	case article.StatusRejected:
+		return article.StatusRejected
 	default:
 		return ""
 	}
@@ -561,7 +556,7 @@ func (s *ArticleService) AdminListArticles(ctx context.Context, statuses []strin
 	if err := q.Order("created_at DESC, id DESC").Offset(offset).Limit(pageSize).Find(&rows).Error; err != nil {
 		return nil, err
 	}
-	pending, _ := s.CountByStatus(ctx, "pending_review")
+	pending, _ := s.CountByStatus(ctx, article.StatusPendingReview)
 	return &AdminListArticlesResult{
 		Total:        total,
 		Rows:         rows,

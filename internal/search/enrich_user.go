@@ -33,8 +33,8 @@ func EnrichUserHits(db *gorm.DB, viewer uint64, hits []UserHit) []UserHit {
 		hits[i].Level = userlevel.FromExperience(u.Experience).CurrentLevel
 
 		var videoCnt, articleCnt int64
-		_ = db.Model(&video.Video{}).Where("user_id = ? AND status = ?", u.ID, "published").Count(&videoCnt).Error
-		_ = db.Model(&article.Article{}).Where("user_id = ? AND status = ?", u.ID, "published").Count(&articleCnt).Error
+		_ = db.Model(&video.Video{}).Where("user_id = ? AND status = ?", u.ID, video.StatusPublished).Count(&videoCnt).Error
+		_ = db.Model(&article.Article{}).Where("user_id = ? AND status = ?", u.ID, article.StatusPublished).Count(&articleCnt).Error
 		hits[i].Archives = int(videoCnt + articleCnt)
 
 		var fanCnt int64
@@ -60,7 +60,7 @@ func recentArchivesForUser(db *gorm.DB, userID uint64, limit int) []UserArchiveI
 		return nil
 	}
 	var videos []video.Video
-	_ = db.Where("user_id = ? AND status = ?", userID, "published").
+	_ = db.Where("user_id = ? AND status = ?", userID, video.StatusPublished).
 		Order("id DESC").
 		Limit(limit).
 		Find(&videos).Error
@@ -79,7 +79,7 @@ func recentArchivesForUser(db *gorm.DB, userID uint64, limit int) []UserArchiveI
 	}
 	remain := limit - len(out)
 	var articles []article.Article
-	_ = db.Where("user_id = ? AND status = ?", userID, "published").
+	_ = db.Where("user_id = ? AND status = ?", userID, article.StatusPublished).
 		Order("COALESCE(published_at, created_at) DESC, id DESC").
 		Limit(remain).
 		Find(&articles).Error

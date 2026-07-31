@@ -23,16 +23,16 @@ func adminVideoStatusFilter(q string) []string {
 	switch strings.TrimSpace(q) {
 	case "", "all":
 		return nil
-	case "pending_review", "pending":
-		return []string{"pending_review"}
-	case "published", "passed":
-		return []string{"published"}
-	case "rejected":
-		return []string{"rejected"}
-	case "processing":
-		return []string{"processing"}
-	case "failed":
-		return []string{"failed"}
+	case video.StatusPendingReview, "pending":
+		return []string{video.StatusPendingReview}
+	case video.StatusPublished, video.StatusPassed:
+		return []string{video.StatusPublished}
+	case video.StatusRejected:
+		return []string{video.StatusRejected}
+	case video.StatusProcessing:
+		return []string{video.StatusProcessing}
+	case video.StatusFailed:
+		return []string{video.StatusFailed}
 	default:
 		return []string{strings.TrimSpace(q)}
 	}
@@ -68,7 +68,7 @@ func adminVideoToJSON(v *video.Video, uploaderName string) gin.H {
 
 func (a *API) AdminListVideos(c *gin.Context) {
 	page, pageSize := parsePagination(c, 20)
-	statusQ := c.DefaultQuery("status", "pending_review")
+	statusQ := c.DefaultQuery("status", video.StatusPendingReview)
 	titleQ := strings.TrimSpace(c.Query("q"))
 
 	statuses := adminVideoStatusFilter(statusQ)
@@ -149,7 +149,7 @@ func (a *API) AdminApproveVideo(c *gin.Context) {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
-	if v.Status != "pending_review" {
+	if v.Status != video.StatusPendingReview {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
@@ -194,13 +194,13 @@ func (a *API) AdminRejectVideo(c *gin.Context) {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
-	if v.Status != "pending_review" {
+	if v.Status != video.StatusPendingReview {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
 	now := time.Now()
 	if err := a.VideoSvc.AdminUpdateVideo(c.Request.Context(), id, map[string]interface{}{
-		"status":               "rejected",
+		"status":               video.StatusRejected,
 		"fail_reason":          reason,
 		"reviewed_at":          now,
 		"reviewed_by_admin_id": adminID,
@@ -237,7 +237,7 @@ func (a *API) AdminDeleteVideo(c *gin.Context) {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
-	if v.Status != "published" && v.Status != "rejected" {
+	if v.Status != video.StatusPublished && v.Status != video.StatusRejected {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}

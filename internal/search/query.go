@@ -10,7 +10,13 @@ import (
 	"strconv"
 	"strings"
 	"unicode/utf8"
+
+	"minibili/internal/model/article"
+	"minibili/internal/model/video"
 )
+
+// userDocStatusActive is the search-document status for normal (non-deleted) users.
+const userDocStatusActive = "active"
 
 // AllResult matches the bilibili-vue search store shape (F10 search page).
 type AllResult struct {
@@ -319,7 +325,7 @@ func buildVideoQuery(keyword string, highlight bool, vf VideoFilter, from, size 
 		should = append(should, map[string]any{"term": map[string]any{"id": id}})
 	}
 	filters := []any{
-		map[string]any{"term": map[string]any{"status": "published"}},
+		map[string]any{"term": map[string]any{"status": video.StatusPublished}},
 	}
 	filters = appendVideoFilters(filters, vf)
 	q := map[string]any{
@@ -448,7 +454,7 @@ func (c *Client) searchArticles(ctx context.Context, keyword string, highlight b
 		"query": map[string]any{
 			"bool": map[string]any{
 				"filter": []any{
-					map[string]any{"term": map[string]any{"status": "published"}},
+					map[string]any{"term": map[string]any{"status": article.StatusPublished}},
 				},
 				"should":               should,
 				"minimum_should_match": 1,
@@ -558,7 +564,7 @@ func (c *Client) searchUsers(ctx context.Context, keyword string, highlight bool
 		"query": map[string]any{
 			"bool": map[string]any{
 				"filter": []any{
-					map[string]any{"term": map[string]any{"status": "active"}},
+					map[string]any{"term": map[string]any{"status": userDocStatusActive}},
 				},
 				"should":               should,
 				"minimum_should_match": 1,

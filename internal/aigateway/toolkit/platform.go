@@ -109,7 +109,7 @@ func (p *PlatformExecutor) searchVideos(ctx context.Context, raw json.RawMessage
 	// Fallback: simple DB search
 	var videos []video.Video
 	if err := p.DB.WithContext(ctx).
-		Where("status = ? AND title LIKE ?", "published", "%"+args.Keyword+"%").
+		Where("status = ? AND title LIKE ?", video.StatusPublished, "%"+args.Keyword+"%").
 		Order("play_count DESC").
 		Limit(args.PageSize).
 		Offset((args.Page - 1) * args.PageSize).
@@ -221,7 +221,7 @@ func (p *PlatformExecutor) getTrending(ctx context.Context, raw json.RawMessage)
 	}
 	var videos []video.Video
 	if err := p.DB.WithContext(ctx).
-		Where("status = ?", "published").
+		Where("status = ?", video.StatusPublished).
 		Order("play_count DESC").
 		Limit(args.Limit).
 		Find(&videos).Error; err != nil {

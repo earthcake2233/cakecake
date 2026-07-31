@@ -24,12 +24,12 @@ func adminArticleStatusFilter(q string) []string {
 	switch strings.TrimSpace(q) {
 	case "", "all":
 		return nil
-	case "pending_review", "pending":
-		return []string{"pending_review"}
-	case "published", "passed":
-		return []string{"published"}
-	case "rejected":
-		return []string{"rejected"}
+	case article.StatusPendingReview, "pending":
+		return []string{article.StatusPendingReview}
+	case article.StatusPublished, article.StatusPassed:
+		return []string{article.StatusPublished}
+	case article.StatusRejected:
+		return []string{article.StatusRejected}
 	default:
 		return []string{strings.TrimSpace(q)}
 	}
@@ -77,7 +77,7 @@ func (a *API) AdminListArticles(c *gin.Context) {
 	if pageSize < 1 || pageSize > 50 {
 		pageSize = 20
 	}
-	statusQ := c.DefaultQuery("status", "pending_review")
+	statusQ := c.DefaultQuery("status", article.StatusPendingReview)
 	titleQ := strings.TrimSpace(c.Query("q"))
 
 	statuses := adminArticleStatusFilter(statusQ)
@@ -158,7 +158,7 @@ func (a *API) AdminApproveArticle(c *gin.Context) {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
-	if art.Status != articleStatusPendingReview {
+	if art.Status != article.StatusPendingReview {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
@@ -199,13 +199,13 @@ func (a *API) AdminRejectArticle(c *gin.Context) {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
-	if art.Status != articleStatusPendingReview {
+	if art.Status != article.StatusPendingReview {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
 	now := time.Now()
 	if err := a.ArticleSvc.AdminUpdateArticle(c.Request.Context(), id, map[string]interface{}{
-		"status":               articleStatusRejected,
+		"status":               article.StatusRejected,
 		"fail_reason":          reason,
 		"published_at":         nil,
 		"reviewed_at":          now,
@@ -242,7 +242,7 @@ func (a *API) AdminDeleteArticle(c *gin.Context) {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
-	if art.Status != articleStatusPublished && art.Status != articleStatusRejected {
+	if art.Status != article.StatusPublished && art.Status != article.StatusRejected {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}

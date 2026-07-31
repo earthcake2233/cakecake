@@ -176,12 +176,12 @@ func (s *FollowService) UsersBlocked(ctx context.Context, a, b uint64) (bool, er
 func (s *FollowService) GetUploaderPublishedCount(ctx context.Context, userID uint64) (int64, error) {
 	var videoN, articleN, dynN int64
 	if err := s.db.WithContext(ctx).Model(&video.Video{}).
-		Where("user_id = ? AND status = ?", userID, "published").
+		Where("user_id = ? AND status = ?", userID, video.StatusPublished).
 		Count(&videoN).Error; err != nil {
 		return 0, err
 	}
 	if err := s.db.WithContext(ctx).Model(&article.Article{}).
-		Where("user_id = ? AND status = ?", userID, "published").
+		Where("user_id = ? AND status = ?", userID, article.StatusPublished).
 		Count(&articleN).Error; err != nil {
 		return 0, err
 	}

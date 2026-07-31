@@ -159,7 +159,7 @@ func handleDelivery(ctx context.Context, cfg *config.C, db *gorm.DB, ch, pubCh *
 		"cover_url": coverURL,
 	}
 	if cfg.VideoReviewRequired {
-		updates["status"] = "pending_review"
+		updates["status"] = video.StatusPendingReview
 	}
 	if err := db.Model(&video.Video{}).Where("id = ?", job.VideoID).Updates(updates).Error; err != nil {
 		lg.Error("db update after transcode", zap.Error(err))
@@ -191,7 +191,7 @@ func failVideo(db *gorm.DB, id uint64, reason string) {
 		msg = "视频处理失败，请稍后重试。"
 	}
 	_ = db.Model(&video.Video{}).Where("id = ?", id).Updates(map[string]interface{}{
-		"status":      "failed",
+		"status":      video.StatusFailed,
 		"fail_reason": truncate(msg, 1900),
 	}).Error
 }

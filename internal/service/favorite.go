@@ -458,7 +458,7 @@ func (s *FavoriteService) FilterPublishedVideoIDs(ctx context.Context, videoIDs 
 	// Fallback to direct query (should not happen in production)
 	var publishedIDs []uint64
 	err := s.db.WithContext(ctx).Model(&video.Video{}).
-		Where("id IN ? AND status = ?", videoIDs, "published").
+		Where("id IN ? AND status = ?", videoIDs, video.StatusPublished).
 		Pluck("id", &publishedIDs).Error
 	return publishedIDs, err
 }

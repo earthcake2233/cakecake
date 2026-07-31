@@ -169,7 +169,7 @@ func (c *Client) IndexVideoFromDB(ctx context.Context, db *gorm.DB, videoID uint
 	if err := db.First(&v, videoID).Error; err != nil {
 		return err
 	}
-	if v.Status != "published" {
+	if v.Status != video.StatusPublished {
 		return c.deleteDoc(ctx, IndexVideos, strconv.FormatUint(videoID, 10))
 	}
 	var u user.User
@@ -210,7 +210,7 @@ func (c *Client) IndexArticleFromDB(ctx context.Context, db *gorm.DB, articleID 
 	if err := db.First(&a, articleID).Error; err != nil {
 		return err
 	}
-	if a.Status != "published" {
+	if a.Status != article.StatusPublished {
 		return c.deleteDoc(ctx, IndexArticles, strconv.FormatUint(articleID, 10))
 	}
 	body := strings.TrimSpace(a.BodyMD)
@@ -277,7 +277,7 @@ func (c *Client) ReindexAll(ctx context.Context, db *gorm.DB) error {
 		return nil
 	}
 	var vids []uint64
-	if err := db.Model(&video.Video{}).Where("status = ?", "published").Pluck("id", &vids).Error; err != nil {
+	if err := db.Model(&video.Video{}).Where("status = ?", video.StatusPublished).Pluck("id", &vids).Error; err != nil {
 		return err
 	}
 	for _, id := range vids {
@@ -286,7 +286,7 @@ func (c *Client) ReindexAll(ctx context.Context, db *gorm.DB) error {
 		}
 	}
 	var aids []uint64
-	if err := db.Model(&article.Article{}).Where("status = ?", "published").Pluck("id", &aids).Error; err != nil {
+	if err := db.Model(&article.Article{}).Where("status = ?", article.StatusPublished).Pluck("id", &aids).Error; err != nil {
 		return err
 	}
 	for _, id := range aids {

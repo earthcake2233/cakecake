@@ -2,6 +2,18 @@ package video
 
 import "time"
 
+const (
+	StatusPublished     = "published"
+	StatusDraft         = "draft"
+	StatusProcessing    = "processing"
+	StatusPending       = "pending"
+	StatusPendingReview = "pending_review"
+	StatusPassed        = "passed"
+	StatusFailed        = "failed"
+	StatusRejected      = "rejected"
+	StatusPrivate       = "private"
+)
+
 type Video struct {
 	ID           uint64  `gorm:"primaryKey"`
 	UserID       uint64  `gorm:"index:idx_video_user;not null"`

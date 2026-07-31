@@ -36,7 +36,7 @@ func SeedDefaultAdmin(db *gorm.DB, cfg *config.C, lg *zap.Logger) error {
 		Username:     user,
 		PasswordHash: string(hash),
 		DisplayName:  "运营管理员",
-		Status:       "active",
+		Status:       admin.StatusActive,
 	}
 	if err := db.Create(&a).Error; err != nil {
 		return err

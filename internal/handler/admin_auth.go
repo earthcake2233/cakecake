@@ -13,6 +13,7 @@ import (
 	"minibili/internal/data"
 	"minibili/internal/errcode"
 	"minibili/internal/middleware"
+	"minibili/internal/model/admin"
 	"minibili/internal/pkg/resp"
 )
 
@@ -38,7 +39,7 @@ func (a *API) AdminLogin(c *gin.Context) {
 		resp.Err(c, http.StatusUnauthorized, errcode.CodeInvalidLogin)
 		return
 	}
-	if adm.Status != "active" {
+	if adm.Status != admin.StatusActive {
 		resp.Err(c, http.StatusForbidden, errcode.CodeAdminDisabled)
 		return
 	}
@@ -70,7 +71,7 @@ func (a *API) AdminRefresh(c *gin.Context) {
 		return
 	}
 	adm, err := a.AuthSvc.GetAdminByID(c.Request.Context(), aid)
-	if err != nil || adm.Status != "active" {
+	if err != nil || adm.Status != admin.StatusActive {
 		resp.Err(c, http.StatusUnauthorized, errcode.CodeUnauthorized)
 		return
 	}

@@ -41,7 +41,7 @@ type DanmakuPostResult struct {
 func (s *DanmakuService) PostDanmaku(ctx context.Context, videoID, userID uint64, content, color, danmakuType, fontSize string, videoTime float64) (*DanmakuPostResult, error) {
 	// Validate video exists and is published
 	var v video.Video
-	if err := s.db.WithContext(ctx).First(&v, videoID).Error; err != nil || v.Status != "published" {
+	if err := s.db.WithContext(ctx).First(&v, videoID).Error; err != nil || v.Status != video.StatusPublished {
 		return nil, &SvcError{Code: 40400, Msg: "video not found"}
 	}
 	if v.DanmakuClosed {

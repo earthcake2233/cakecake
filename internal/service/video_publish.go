@@ -18,12 +18,12 @@ func PublishVideo(ctx context.Context, db *gorm.DB, esc *search.Client, log *zap
 	if err := db.First(&v, videoID).Error; err != nil {
 		return err
 	}
-	if v.Status == "published" {
+	if v.Status == video.StatusPublished {
 		return nil
 	}
 	now := time.Now()
 	updates := map[string]any{
-		"status":      "published",
+		"status":      video.StatusPublished,
 		"reviewed_at": now,
 	}
 	if adminID != nil && *adminID > 0 {

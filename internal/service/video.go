@@ -36,7 +36,7 @@ func (s *VideoService) DeleteVideoByID(ctx context.Context, id uint64) error {
 
 // ListPublishedVideos queries published videos with optional filtering and cursor-based pagination.
 func (s *VideoService) ListPublishedVideos(ctx context.Context, opts VideoListOpts) (*VideoListResult, error) {
-	q := s.db.Model(&video.Video{}).Where("status = ?", "published")
+	q := s.db.Model(&video.Video{}).Where("status = ?", video.StatusPublished)
 	if opts.ZoneParent != "" {
 		q = q.Where("zone = ? OR zone LIKE ?", opts.ZoneParent, opts.ZoneParent+"-%")
 	}
@@ -83,7 +83,7 @@ func (s *VideoService) ListPublishedVideos(ctx context.Context, opts VideoListOp
 	var zoneCount int64
 	if opts.ZoneParent != "" {
 		_ = s.db.Model(&video.Video{}).
-			Where("status = ?", "published").
+			Where("status = ?", video.StatusPublished).
 			Where("zone = ? OR zone LIKE ?", opts.ZoneParent, opts.ZoneParent+"-%").
 			Count(&zoneCount).Error
 	}
@@ -102,7 +102,7 @@ func (s *VideoService) CountZoneVideos(zoneParent string) int64 {
 	}
 	var n int64
 	_ = s.db.Model(&video.Video{}).
-		Where("status = ?", "published").
+		Where("status = ?", video.StatusPublished).
 		Where("zone = ? OR zone LIKE ?", zoneParent, zoneParent+"-%").
 		Count(&n).Error
 	return n
@@ -111,7 +111,7 @@ func (s *VideoService) CountZoneVideos(zoneParent string) int64 {
 // CountMyVideosByStatus returns counts for each status for a user.
 func (s *VideoService) CountMyVideosByStatus(uid uint64) map[string]int64 {
 	result := map[string]int64{}
-	for _, st := range []string{"processing", "pending", "rejected", "published", "private"} {
+	for _, st := range []string{video.StatusProcessing, video.StatusPending, video.StatusRejected, video.StatusPublished, video.StatusPrivate} {
 		var n int64
 		_ = s.db.Model(&video.Video{}).Where("user_id = ? AND status = ?", uid, st).Count(&n).Error
 		result[st] = n
@@ -125,7 +125,7 @@ func (s *VideoService) GetPublishedVideo(ctx context.Context, id uint64) (*video
 	if err := s.db.WithContext(ctx).First(&v, id).Error; err != nil {
 		return nil, err
 	}
-	if v.Status != "published" {
+	if v.Status != video.StatusPublished {
 		return nil, gorm.ErrRecordNotFound
 	}
 	return &v, nil
@@ -229,7 +229,7 @@ func (s *VideoService) ToggleVideoLike(ctx context.Context, userID, videoID uint
 // CountPublishedVideos returns the total number of published videos.
 func (s *VideoService) CountPublishedVideos(ctx context.Context) int64 {
 	var n int64
-	s.db.WithContext(ctx).Model(&video.Video{}).Where("status = ?", "published").Count(&n)
+	s.db.WithContext(ctx).Model(&video.Video{}).Where("status = ?", video.StatusPublished).Count(&n)
 	return n
 }
 
@@ -249,7 +249,7 @@ func (s *VideoService) ListActiveBanners(ctx context.Context) ([]admin.HomeBanne
 
 // ListUserPublishedVideosCursor lists published videos for a user with cursor-based pagination.
 func (s *VideoService) ListUserPublishedVideosCursor(ctx context.Context, uid uint64, cursorID uint64, limit int) ([]video.Video, error) {
-	q := s.db.WithContext(ctx).Model(&video.Video{}).Where("user_id = ? AND status = ?", uid, "published")
+	q := s.db.WithContext(ctx).Model(&video.Video{}).Where("user_id = ? AND status = ?", uid, video.StatusPublished)
 	if cursorID > 0 {
 		q = q.Where("id < ?", cursorID)
 	}
@@ -393,7 +393,7 @@ func (s *VideoService) AdminListVideos(ctx context.Context, statuses []string, t
 	if err := q.Order("created_at DESC, id DESC").Offset(offset).Limit(pageSize).Find(&rows).Error; err != nil {
 		return nil, err
 	}
-	pending, _ := s.CountByStatus(ctx, "pending_review")
+	pending, _ := s.CountByStatus(ctx, video.StatusPendingReview)
 	return &AdminListVideosResult{
 		Total:        total,
 		Rows:         rows,

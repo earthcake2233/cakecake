@@ -31,22 +31,18 @@ import (
 )
 
 const (
-	articleStatusDraft         = "draft"
-	articleStatusPublished     = "published"
-	articleStatusPendingReview = "pending_review"
-	articleStatusRejected      = "rejected"
-	maxArticleTitleRunes       = 80
-	maxArticleBodyRunes        = 100000
+	maxArticleTitleRunes = 80
+	maxArticleBodyRunes  = 100000
 )
 
 func (a *API) articleStatusAfterSubmit(publish bool) string {
 	if !publish {
-		return articleStatusDraft
+		return article.StatusDraft
 	}
 	if a.Cfg.ArticleReviewRequired {
-		return articleStatusPendingReview
+		return article.StatusPendingReview
 	}
-	return articleStatusPublished
+	return article.StatusPublished
 }
 
 type articlePostJSON struct {
@@ -236,7 +232,7 @@ func (a *API) PatchArticlePlayback(c *gin.Context) {
 		resp.Err(c, http.StatusForbidden, errcode.CodeForbidden)
 		return
 	}
-	if art.Status != articleStatusPublished {
+	if art.Status != article.StatusPublished {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
@@ -338,11 +334,11 @@ func (a *API) PostArticle(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	status := articleStatusDraft
+	status := article.StatusDraft
 	var publishedAt *time.Time
 	if req.Publish {
 		status = a.articleStatusAfterSubmit(true)
-		if status == articleStatusPublished {
+		if status == article.StatusPublished {
 			now := time.Now()
 			publishedAt = &now
 		}
@@ -361,7 +357,7 @@ func (a *API) PostArticle(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	if art.Status == articleStatusPublished {
+	if art.Status == article.StatusPublished {
 		a.esIndexArticle(art.ID)
 	} else {
 		a.esDeleteArticle(art.ID)
@@ -431,10 +427,10 @@ func (a *API) PutMyArticle(c *gin.Context) {
 	}
 	if req.Publish != nil {
 		if *req.Publish {
-			if art.Status != articleStatusPublished {
+			if art.Status != article.StatusPublished {
 				st := a.articleStatusAfterSubmit(true)
 				updates["status"] = st
-				if st == articleStatusPublished {
+				if st == article.StatusPublished {
 					now := time.Now()
 					updates["published_at"] = &now
 				} else {
@@ -443,7 +439,7 @@ func (a *API) PutMyArticle(c *gin.Context) {
 				}
 			}
 		} else {
-			updates["status"] = articleStatusDraft
+			updates["status"] = article.StatusDraft
 			updates["published_at"] = nil
 		}
 	}
@@ -454,7 +450,7 @@ func (a *API) PutMyArticle(c *gin.Context) {
 		}
 	}
 	art, _ = a.ArticleSvc.GetArticleByID(c.Request.Context(), id)
-	if art.Status == articleStatusPublished {
+	if art.Status == article.StatusPublished {
 		a.esIndexArticle(art.ID)
 	} else {
 		a.esDeleteArticle(art.ID)
@@ -528,14 +524,14 @@ func (a *API) PostArticleView(c *gin.Context) {
 
 func manuscriptArticleStatusToDB(st string) string {
 	switch strings.TrimSpace(st) {
-	case "draft":
-		return "draft"
-	case "passed", "published":
-		return "published"
-	case "processing":
-		return "pending_review"
-	case "rejected", "failed":
-		return "rejected"
+	case article.StatusDraft:
+		return article.StatusDraft
+	case article.StatusPassed, article.StatusPublished:
+		return article.StatusPublished
+	case article.StatusProcessing:
+		return article.StatusPendingReview
+	case article.StatusRejected, article.StatusFailed:
+		return article.StatusRejected
 	default:
 		return ""
 	}
@@ -571,13 +567,13 @@ func (a *API) countMyArticlesByStatus(uid uint64) gin.H {
 	}
 	for _, r := range rows {
 		switch r.Status {
-		case "draft":
+		case article.StatusDraft:
 			out["draft"] = r.N
-		case "published":
+		case article.StatusPublished:
 			out["passed"] = out["passed"].(int64) + r.N
-		case "pending_review":
+		case article.StatusPendingReview:
 			out["processing"] = out["processing"].(int64) + r.N
-		case "rejected":
+		case article.StatusRejected:
 			out["rejected"] = r.N
 		}
 	}

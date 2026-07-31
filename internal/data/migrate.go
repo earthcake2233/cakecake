@@ -190,7 +190,7 @@ func backfillUserFirstPublishedAt(db *gorm.DB, lg *zap.Logger) error {
 		}
 		var mt sql.NullTime
 		row := db.Model(&video.Video{}).
-			Where("user_id = ? AND status = ?", u.ID, "published").
+			Where("user_id = ? AND status = ?", u.ID, video.StatusPublished).
 			Select("MIN(created_at)").
 			Row()
 		if err := row.Scan(&mt); err != nil || !mt.Valid {
@@ -241,7 +241,7 @@ func backfillVideoCommentNotifications(db *gorm.DB, lg *zap.Logger) error {
 	for i := range roots {
 		cm := &roots[i]
 		var v video.Video
-		if err := db.First(&v, cm.VideoID).Error; err != nil || v.Status != "published" {
+		if err := db.First(&v, cm.VideoID).Error; err != nil || v.Status != video.StatusPublished {
 			continue
 		}
 		if v.UserID == 0 || cm.UserID == v.UserID {

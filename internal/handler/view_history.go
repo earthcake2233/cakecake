@@ -2,9 +2,10 @@ package handler
 
 import (
 	"context"
+	"minibili/internal/model/article"
 	"minibili/internal/model/extra"
 	"minibili/internal/model/user"
-	"minibili/internal/model/video"
+	vmodel "minibili/internal/model/video"
 	"net/http"
 	"sort"
 	"strconv"
@@ -159,7 +160,7 @@ func (a *API) viewHistoryVideoItems(rows []extra.VideoViewHistory) []gin.H {
 	for i := range rows {
 		h := rows[i]
 		video, ok := videos[h.VideoID]
-		if !ok || video.Status != "published" {
+		if !ok || video.Status != vmodel.StatusPublished {
 			continue
 		}
 		u := users[video.UserID]
@@ -168,7 +169,7 @@ func (a *API) viewHistoryVideoItems(rows []extra.VideoViewHistory) []gin.H {
 	return items
 }
 
-func (a *API) formatVideoHistoryItem(h extra.VideoViewHistory, video video.Video, u user.User) gin.H {
+func (a *API) formatVideoHistoryItem(h extra.VideoViewHistory, video vmodel.Video, u user.User) gin.H {
 	item := gin.H{
 		"media_type":   "video",
 		"video_id":     video.ID,
@@ -211,7 +212,7 @@ func (a *API) viewHistoryArticleItems(rows []extra.ArticleViewHistory) []gin.H {
 	for i := range rows {
 		h := rows[i]
 		art, ok := articles[h.ArticleID]
-		if !ok || art.Status != "published" {
+		if !ok || art.Status != article.StatusPublished {
 			continue
 		}
 		u := users[art.UserID]

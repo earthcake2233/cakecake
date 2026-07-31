@@ -2,6 +2,8 @@ package admin
 
 import "time"
 
+const StatusActive = "active"
+
 type Admin struct {
 	ID           uint64 `gorm:"primaryKey"`
 	Username     string `gorm:"size:64;uniqueIndex;not null"`

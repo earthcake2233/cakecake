@@ -24,7 +24,7 @@ import (
 	"minibili/internal/worker"
 )
 
-const videoStatusDraft = "draft"
+const videoStatusDraft = video.StatusDraft
 
 func videoDraftDir(cfgTemp string) string {
 	return filepath.Join(cfgTemp, "drafts")
@@ -547,7 +547,7 @@ func (a *API) PublishVideoDraft(c *gin.Context) {
 		return
 	}
 	updates := map[string]interface{}{
-		"status":           "processing",
+		"status":           video.StatusProcessing,
 		"draft_raw_path":   "",
 		"draft_cover_path": "",
 	}
@@ -556,12 +556,12 @@ func (a *API) PublishVideoDraft(c *gin.Context) {
 		return
 	}
 	a.Log.Info("draft published to transcode queue", zap.Uint64("video_id", v.ID))
-	resp.OK(c, gin.H{"id": v.ID, "status": "processing"})
+	resp.OK(c, gin.H{"id": v.ID, "status": video.StatusProcessing})
 }
 
 func videoStatusAllowsMediaReplace(st string) bool {
 	switch st {
-	case "failed", "rejected":
+	case video.StatusFailed, video.StatusRejected:
 		return true
 	default:
 		return false
@@ -673,7 +673,7 @@ func (a *API) ReplaceVideoMedia(c *gin.Context) {
 		"title":            title,
 		"description":      desc,
 		"tags_json":        tagsJSON,
-		"status":           "processing",
+		"status":           video.StatusProcessing,
 		"fail_reason":      "",
 		"video_url":        "",
 		"cover_url":        "",
@@ -706,7 +706,7 @@ func (a *API) ReplaceVideoMedia(c *gin.Context) {
 		return
 	}
 	a.Log.Info("video media replaced and queued for transcode", zap.Uint64("video_id", v.ID))
-	resp.OK(c, gin.H{"id": v.ID, "status": "processing"})
+	resp.OK(c, gin.H{"id": v.ID, "status": video.StatusProcessing})
 }
 
 // GetMyVideoDraftSource streams the draft raw file for the uploader preview.

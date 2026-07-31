@@ -17,12 +17,12 @@ func PublishArticle(ctx context.Context, db *gorm.DB, esc *search.Client, log *z
 	if err := db.First(&art, articleID).Error; err != nil {
 		return err
 	}
-	if art.Status == "published" {
+	if art.Status == article.StatusPublished {
 		return nil
 	}
 	now := time.Now()
 	updates := map[string]any{
-		"status":       "published",
+		"status":       article.StatusPublished,
 		"published_at": now,
 		"reviewed_at":  now,
 		"fail_reason":  "",
