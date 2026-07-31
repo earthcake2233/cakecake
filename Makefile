@@ -7,7 +7,7 @@ SHELL := cmd.exe
 .SHELLFLAGS := /c
 endif
 
-.PHONY: all test test-backend test-frontend coverage coverage-backend coverage-frontend clean help
+.PHONY: all test test-backend test-frontend coverage coverage-backend coverage-frontend clean help fmt fmt-check
 
 GO = go
 NPM = npm
@@ -36,6 +36,19 @@ coverage-frontend:
 test: test-backend test-frontend
 
 coverage: coverage-backend coverage-frontend
+
+# -- Formatting -------------------------------------------------------
+
+fmt:
+	$(GO) fmt ./internal/... ./cmd/...
+
+fmt-check:
+	@unformatted=$$(gofmt -l internal cmd); \
+	if [ -n "$$unformatted" ]; then \
+		echo "gofmt needed on:"; \
+		echo "$$unformatted"; \
+		exit 1; \
+	fi
 
 # -- Cleanup --------------------------------------------------------
 

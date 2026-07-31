@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Pre-commit gate: BOM check + go vet + sensitive data scan.
+"""Pre-commit gate: BOM check + go vet + gofmt + sensitive data scan.
 
 Hard blocks:
   - UTF-8 BOM in any .go/.md/.yaml/.json/.py file
   - go vet failures in staged packages
+  - gofmt violations in staged Go files
   - Sensitive tokens in staged files
 
 Usage: python scripts/check_pre_commit.py [--no-vet] [--yes]
@@ -75,6 +76,26 @@ def check_vet():
     return all_ok
 
 
+def check_gofmt():
+    """Run gofmt -l on staged Go files. Returns True if clean."""
+    files = get_staged_go_files()
+    if not files:
+        print("[SKIP] gofmt (no staged Go files)")
+        return True
+    out, code = run(["gofmt", "-l"] + files)
+    if code != 0:
+        print(f"[FAIL] gofmt error: {out}")
+        return False
+    if out:
+        print("[FAIL] gofmt needed on:")
+        for f in out.splitlines():
+            print(f"  {f}")
+        print("  Run: gofmt -w <files>")
+        return False
+    print(f"[OK]   gofmt ({len(files)} file(s))")
+    return True
+
+
 def check_sensitive():
     """Scan staged files for secrets. Returns True if clean."""
     patterns = [
@@ -132,6 +153,8 @@ def main():
     if not args.no_vet:
         if not check_vet():
             all_pass = False
+    if not check_gofmt():
+        all_pass = False
     if not check_sensitive():
         all_pass = False
 

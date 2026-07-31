@@ -239,6 +239,7 @@
 | **R-ENCODE-1** | **禁止项目文件包含 UTF-8 BOM** | BOM（Byte Order Mark）会导致 Go 编译失败、Markdown 渲染异常等。必须使用 `python scripts/check_bom.py` 检测所有 `.go`、`.md`、`.yaml`、`.json`、`.py` 文件。脚本支持 `--fix` 自动修复和 `--path` 指定路径。文件写入必须使用 `scripts/safe_write.py`（自动剥离 BOM），严禁使用 `Set-Content` 直接写入文本文件。 |
 | **R-ENCODE-2** | 提交前 BOM 检查为硬门禁 | `python scripts/check_pre_commit.py` 会在每次提交前强制运行 `check_bom.py`。发现 BOM 直接阻断提交，必须 `python scripts/check_bom.py --fix` 修复后重新提交。禁止以任何理由跳过此检查。 |
 | **R-ENCODE-3** | 文件写入必须使用 safe_write.py | 在 Windows 环境下使用 PowerShell `Set-Content -Encoding UTF8` 会写入 UTF-8 BOM，导致 Go 编译失败。任何脚本或工具向 `.go`、`.md`、`.yaml`、`.json`、`.py` 文件写入内容时，必须使用 `python scripts/safe_write.py --text "..." --output <path>`，该脚本自动剥离 BOM。禁止使用 `Set-Content` 或 `Out-File` 直接写入文本文件。 |
+| **R-FMT-1** | **提交前 gofmt 为硬门禁** | 所有 Go 代码必须通过 gofmt（`gofmt -l internal cmd` 输出为空）。`scripts/check_pre_commit.py` 与 GitHub CI 均会检查，未格式化的文件直接阻断提交。新增或修改 Go 文件后先执行 `gofmt -w` 再提交。 |
 
 ---
 

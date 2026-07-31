@@ -56,6 +56,15 @@ jobs:
         with:
           go-version-file: go.mod
 
+      - name: Check gofmt
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "gofmt needed on:"
+            echo "$unformatted"
+            exit 1
+          fi
+
       - name: Run Go tests with coverage
         env:
           RABBITMQ_URL: amqp://guest:guest@localhost:5672/
