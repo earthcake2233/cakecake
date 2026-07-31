@@ -1,9 +1,9 @@
 package service
 
 import (
+	"context"
 	"minibili/internal/model/agent"
 	"minibili/internal/model/dm"
-	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -431,7 +431,7 @@ func TestAgentService_GenerateReply(t *testing.T) {
 			DB: db,
 			Cfg: &config.C{
 				DeepSeekAPIKey:      "sk-test",
-				AgentEnabled: true,
+				AgentEnabled:        true,
 				AgentRequestTimeout: 30 * time.Second,
 			},
 			Gateway: &aigateway.Gateway{LLM: &aigateway.Client{APIKey: "sk-test"}},
@@ -456,7 +456,7 @@ func TestAgentService_GenerateReply(t *testing.T) {
 			DB: db,
 			Cfg: &config.C{
 				DeepSeekAPIKey:      "sk-test",
-				AgentEnabled: true,
+				AgentEnabled:        true,
 				AgentRequestTimeout: 30 * time.Second,
 			},
 			Gateway: &aigateway.Gateway{LLM: &aigateway.Client{APIKey: "sk-test"}},
@@ -482,7 +482,7 @@ func TestAgentService_GenerateReply(t *testing.T) {
 			DB: db,
 			Cfg: &config.C{
 				DeepSeekAPIKey:      "sk-test",
-				AgentEnabled: true,
+				AgentEnabled:        true,
 				AgentRequestTimeout: 30 * time.Second,
 			},
 			Gateway: &aigateway.Gateway{LLM: &aigateway.Client{APIKey: "sk-test"}},
@@ -504,7 +504,7 @@ func TestAgentService_GenerateReply(t *testing.T) {
 			DB: db,
 			Cfg: &config.C{
 				DeepSeekAPIKey:      "sk-test",
-				AgentEnabled: true,
+				AgentEnabled:        true,
 				AgentRequestTimeout: 30 * time.Second,
 			},
 			Gateway: &aigateway.Gateway{LLM: &aigateway.Client{APIKey: "sk-test"}},

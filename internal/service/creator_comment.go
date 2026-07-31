@@ -1,17 +1,16 @@
 package service
 
 import (
+	"context"
 	"minibili/internal/model/article"
 	"minibili/internal/model/comment"
 	"minibili/internal/model/dynamic"
 	"minibili/internal/model/user"
 	"minibili/internal/model/video"
-	"context"
 
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
-
 )
 
 // CreatorCommentService handles creator comment management business logic.
@@ -27,26 +26,26 @@ func NewCreatorCommentService(db *gorm.DB, rdb *redis.Client, log *zap.Logger) *
 
 // CreatorVideoCommentQuery holds filter params for listing video comments.
 type CreatorVideoCommentQuery struct {
-	UserID         uint64
-	Page           int
-	PageSize       int
-	SortKey        string
-	Pending        bool
-	PendingStatus  string
-	PendingScope   string
-	Keyword        string
-	FilterVideoID  uint64
-	ViewerID       uint64
+	UserID        uint64
+	Page          int
+	PageSize      int
+	SortKey       string
+	Pending       bool
+	PendingStatus string
+	PendingScope  string
+	Keyword       string
+	FilterVideoID uint64
+	ViewerID      uint64
 }
 
 // CreatorVideoCommentResult holds query results for video comments.
 type CreatorVideoCommentResult struct {
-	Comments    []comment.Comment
-	Total       int64
-	VideoIDs    []uint64
-	UserIDs     []uint64
-	ParentIDs   []uint64
-	CommentIDs  []uint64
+	Comments      []comment.Comment
+	Total         int64
+	VideoIDs      []uint64
+	UserIDs       []uint64
+	ParentIDs     []uint64
+	CommentIDs    []uint64
 	LikedByViewer map[uint64]bool
 }
 
@@ -109,12 +108,12 @@ func (s *CreatorCommentService) ListCreatorVideoComments(ctx context.Context, q 
 	}
 
 	result := &CreatorVideoCommentResult{
-		Comments:   list,
-		Total:      total,
-		VideoIDs:   make([]uint64, 0, len(list)),
-		UserIDs:    make([]uint64, 0, len(list)),
-		ParentIDs:  make([]uint64, 0),
-		CommentIDs: make([]uint64, len(list)),
+		Comments:      list,
+		Total:         total,
+		VideoIDs:      make([]uint64, 0, len(list)),
+		UserIDs:       make([]uint64, 0, len(list)),
+		ParentIDs:     make([]uint64, 0),
+		CommentIDs:    make([]uint64, len(list)),
 		LikedByViewer: make(map[uint64]bool),
 	}
 	for i, cm := range list {
@@ -376,26 +375,26 @@ func (s *CreatorCommentService) CheckDynamicOwnership(ctx context.Context, dynam
 
 // CreatorArticleCommentQuery holds filter params for listing article comments.
 type CreatorArticleCommentQuery struct {
-	UserID           uint64
-	Page             int
-	PageSize         int
-	SortKey          string
-	Pending          bool
-	PendingStatus    string
-	PendingScope     string
-	Keyword          string
-	FilterArticleID  uint64
-	ViewerID       uint64
+	UserID          uint64
+	Page            int
+	PageSize        int
+	SortKey         string
+	Pending         bool
+	PendingStatus   string
+	PendingScope    string
+	Keyword         string
+	FilterArticleID uint64
+	ViewerID        uint64
 }
 
 // CreatorArticleCommentResult holds query results for article comments.
 type CreatorArticleCommentResult struct {
-	Comments    []comment.ArticleComment
-	Total       int64
-	ArticleIDs  []uint64
-	UserIDs     []uint64
-	ParentIDs   []uint64
-	CommentIDs  []uint64
+	Comments      []comment.ArticleComment
+	Total         int64
+	ArticleIDs    []uint64
+	UserIDs       []uint64
+	ParentIDs     []uint64
+	CommentIDs    []uint64
 	LikedByViewer map[uint64]bool
 }
 
@@ -503,26 +502,26 @@ func (s *CreatorCommentService) BatchFetchArticles(ctx context.Context, ids []ui
 
 // CreatorDynamicCommentQuery holds filter params for listing dynamic comments.
 type CreatorDynamicCommentQuery struct {
-	UserID            uint64
-	Page              int
-	PageSize          int
-	SortKey           string
-	Pending           bool
-	PendingStatus     string
-	PendingScope      string
-	Keyword           string
-	FilterDynamicID   uint64
-	ViewerID          uint64
+	UserID          uint64
+	Page            int
+	PageSize        int
+	SortKey         string
+	Pending         bool
+	PendingStatus   string
+	PendingScope    string
+	Keyword         string
+	FilterDynamicID uint64
+	ViewerID        uint64
 }
 
 // CreatorDynamicCommentResult holds query results for dynamic comments.
 type CreatorDynamicCommentResult struct {
-	Comments    []comment.DynamicComment
-	Total       int64
-	DynamicIDs  []uint64
-	UserIDs     []uint64
-	ParentIDs   []uint64
-	CommentIDs  []uint64
+	Comments      []comment.DynamicComment
+	Total         int64
+	DynamicIDs    []uint64
+	UserIDs       []uint64
+	ParentIDs     []uint64
+	CommentIDs    []uint64
 	LikedByViewer map[uint64]bool
 }
 

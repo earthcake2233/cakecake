@@ -1,9 +1,9 @@
 package handler
 
 import (
+	"encoding/json"
 	"minibili/internal/model/admin"
 	"minibili/internal/model/agent"
-	"encoding/json"
 	"net/http"
 	"testing"
 	"time"
@@ -40,12 +40,12 @@ func TestAdminAgentProfilePayload(t *testing.T) {
 	now := time.Now()
 	p := &agent.AgentProfile{
 		ID: 1, Slug: "assistant", BotUserID: 100,
-		DisplayName: "AI Assistant",
-		AvatarURL: "https://ex.com/avatar.png",
-		Sign: "I am an AI",
-		SystemPrompt: "You are a helpful assistant",
+		DisplayName:         "AI Assistant",
+		AvatarURL:           "https://ex.com/avatar.png",
+		Sign:                "I am an AI",
+		SystemPrompt:        "You are a helpful assistant",
 		WelcomeMessagesJSON: `["Hello!","How can I help?"]`,
-		SortOrder: 1, Enabled: true, UpdatedAt: now,
+		SortOrder:           1, Enabled: true, UpdatedAt: now,
 	}
 	out := adminAgentProfilePayload(p, "")
 	require.Equal(t, uint64(1), out["id"])
@@ -72,7 +72,11 @@ func TestAdminAgentProfilePayload_EmptyWelcome(t *testing.T) {
 }
 
 func TestHotSearchDisplayTitle(t *testing.T) {
-	tests := []struct{ name string; op *admin.HotSearchOp; want string }{
+	tests := []struct {
+		name string
+		op   *admin.HotSearchOp
+		want string
+	}{
 		{"nil", nil, ""},
 		{"display title set", &admin.HotSearchOp{DisplayTitle: "Display Title", Keyword: "kw"}, "Display Title"},
 		{"empty display title", &admin.HotSearchOp{DisplayTitle: "", Keyword: "keyword"}, "keyword"},
@@ -82,6 +86,7 @@ func TestHotSearchDisplayTitle(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) { got := hotSearchDisplayTitle(tc.op); require.Equal(t, tc.want, got) })
 	}
 }
+
 // SQLMock: AdminListBanners
 
 func TestAdminListBanners_Success(t *testing.T) {
@@ -96,7 +101,10 @@ func TestAdminListBanners_Success(t *testing.T) {
 
 	api.AdminListBanners(c)
 	require.Equal(t, http.StatusOK, w.Code)
-	var resp struct { Code int `json:"code"`; Data map[string]interface{} `json:"data"` }
+	var resp struct {
+		Code int                    `json:"code"`
+		Data map[string]interface{} `json:"data"`
+	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
 	require.Equal(t, 0, resp.Code)
 	items := resp.Data["items"].([]interface{})
@@ -133,11 +141,14 @@ func TestAdminCreateBanner_BadRequest(t *testing.T) {
 	gormDB, mock := newMockGORM(t)
 	api := newMockAPISimple(t, gormDB)
 	c, w := newMockGinCtx(t, "POST", "/api/v1/admin/home-banners", []byte(`{"title":"","image_url":"img.jpg"}`))
-	api.AdminCreateBanner(c); require.Equal(t, http.StatusBadRequest, w.Code)
+	api.AdminCreateBanner(c)
+	require.Equal(t, http.StatusBadRequest, w.Code)
 	c, w = newMockGinCtx(t, "POST", "/api/v1/admin/home-banners", []byte(`{"title":"T","image_url":""}`))
-	api.AdminCreateBanner(c); require.Equal(t, http.StatusBadRequest, w.Code)
+	api.AdminCreateBanner(c)
+	require.Equal(t, http.StatusBadRequest, w.Code)
 	c, w = newMockGinCtx(t, "POST", "/api/v1/admin/home-banners", []byte(`{invalid}`))
-	api.AdminCreateBanner(c); require.Equal(t, http.StatusBadRequest, w.Code)
+	api.AdminCreateBanner(c)
+	require.Equal(t, http.StatusBadRequest, w.Code)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
@@ -152,4 +163,3 @@ func TestAdminCreateBanner_DBError(t *testing.T) {
 	require.Equal(t, http.StatusInternalServerError, w.Code)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
-

@@ -3,10 +3,10 @@
 package handler
 
 import (
-	"minibili/internal/model/video"
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"minibili/internal/model/video"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -227,11 +227,11 @@ func TestRefresh_InvalidTokens(t *testing.T) {
 func seedVideo(t *testing.T, db *gorm.DB, userID uint64, title string) uint64 {
 	t.Helper()
 	v := video.Video{
-		UserID:      userID,
-		Title:       title,
-		Status:      "published",
-		DurationSec: 120,
-		PlayCount:   100,
+		UserID:       userID,
+		Title:        title,
+		Status:       "published",
+		DurationSec:  120,
+		PlayCount:    100,
 		DanmakuCount: 5,
 		CommentCount: 2,
 	}
@@ -555,8 +555,3 @@ func TestSearchSuggest(t *testing.T) {
 	r.ServeHTTP(w2, req2)
 	require.Equal(t, http.StatusOK, w2.Code, w2.Body.String())
 }
-
-
-
-
-

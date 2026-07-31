@@ -11,7 +11,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
-
 )
 
 func newAgentSettingsDB(t *testing.T) *gorm.DB {

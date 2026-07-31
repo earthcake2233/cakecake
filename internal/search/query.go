@@ -23,25 +23,25 @@ type AllResult struct {
 }
 
 type SearchResultBuckets struct {
-	Video         []VideoHit   `json:"video"`
-	MediaBangumi  []any        `json:"media_bangumi"`
-	MediaFt       []any        `json:"media_ft"`
-	Live          []any        `json:"live"`
-	Article       []ArticleHit `json:"article"`
-	Topic         []any        `json:"topic"`
-	BiliUser      []UserHit    `json:"bili_user"`
-	Photo         []any        `json:"photo"`
+	Video        []VideoHit   `json:"video"`
+	MediaBangumi []any        `json:"media_bangumi"`
+	MediaFt      []any        `json:"media_ft"`
+	Live         []any        `json:"live"`
+	Article      []ArticleHit `json:"article"`
+	Topic        []any        `json:"topic"`
+	BiliUser     []UserHit    `json:"bili_user"`
+	Photo        []any        `json:"photo"`
 }
 
 type TopTlist struct {
-	Video         int `json:"video"`
-	MediaBangumi  int `json:"media_bangumi"`
-	Movie         int `json:"movie"`
-	Live          int `json:"live"`
-	Article       int `json:"article"`
-	Topic         int `json:"topic"`
-	BiliUser      int `json:"bili_user"`
-	Photo         int `json:"photo"`
+	Video        int `json:"video"`
+	MediaBangumi int `json:"media_bangumi"`
+	Movie        int `json:"movie"`
+	Live         int `json:"live"`
+	Article      int `json:"article"`
+	Topic        int `json:"topic"`
+	BiliUser     int `json:"bili_user"`
+	Photo        int `json:"photo"`
 }
 
 // VideoHit is one video card on /search/all.
@@ -228,7 +228,7 @@ func (c *Client) SearchAll(ctx context.Context, p SearchParams) (*AllResult, err
 				BiliUser:     []UserHit{},
 				MediaBangumi: []any{}, MediaFt: []any{}, Live: []any{}, Topic: []any{}, Photo: []any{},
 			},
-			TopTlist: TopTlist{Article: int(ap.NumResults)},
+			TopTlist:   TopTlist{Article: int(ap.NumResults)},
 			NumResults: ap.NumResults,
 			Page:       ap.Page,
 			PageSize:   ap.PageSize,
@@ -621,7 +621,7 @@ type esSearchResponse struct {
 			Value int64 `json:"value"`
 		} `json:"total"`
 		Hits []struct {
-			Source    json.RawMessage   `json:"_source"`
+			Source    json.RawMessage     `json:"_source"`
 			Highlight map[string][]string `json:"highlight"`
 		} `json:"hits"`
 	} `json:"hits"`

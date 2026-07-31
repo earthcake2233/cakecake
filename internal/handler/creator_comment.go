@@ -1,12 +1,12 @@
 package handler
 
 import (
+	"context"
+	"math"
 	"minibili/internal/model/article"
 	"minibili/internal/model/dynamic"
 	"minibili/internal/model/user"
 	"minibili/internal/model/video"
-	"context"
-	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -38,17 +38,29 @@ func (a *API) ListCreatorComments(c *gin.Context) {
 		return
 	}
 	page := queryIntDefault(c.Query("page"), 1)
-	if page < 1 { page = 1 }
+	if page < 1 {
+		page = 1
+	}
 	pageSize := queryIntDefault(c.Query("page_size"), 10)
-	if pageSize < 1 { pageSize = 10 }
-	if pageSize > 50 { pageSize = 50 }
+	if pageSize < 1 {
+		pageSize = 10
+	}
+	if pageSize > 50 {
+		pageSize = 50
+	}
 	sortKey := strings.TrimSpace(c.Query("sort"))
-	if sortKey == "" { sortKey = "recent" }
+	if sortKey == "" {
+		sortKey = "recent"
+	}
 	pending := strings.TrimSpace(c.Query("pending")) == "1"
 	pendingStatus := strings.TrimSpace(c.Query("pending_status"))
-	if pendingStatus == "" { pendingStatus = "unprocessed" }
+	if pendingStatus == "" {
+		pendingStatus = "unprocessed"
+	}
 	pendingScope := strings.TrimSpace(c.Query("scope"))
-	if pendingScope == "" { pendingScope = "all" }
+	if pendingScope == "" {
+		pendingScope = "all"
+	}
 	keyword := strings.TrimSpace(c.Query("q"))
 	var filterVideoID uint64
 	if v := strings.TrimSpace(c.Query("video_id")); v != "" {
@@ -71,11 +83,15 @@ func (a *API) ListCreatorComments(c *gin.Context) {
 	}
 	list := result.Comments
 	total := result.Total
-	if total > creatorCommentsMaxTotal { total = creatorCommentsMaxTotal }
+	if total > creatorCommentsMaxTotal {
+		total = creatorCommentsMaxTotal
+	}
 	videos := map[uint64]video.Video{}
 	if len(result.VideoIDs) > 0 {
 		vmap, err := a.CreatorCommentSvc.BatchFetchVideos(context.Background(), result.VideoIDs)
-		if err == nil { videos = vmap }
+		if err == nil {
+			videos = vmap
+		}
 	}
 	names := map[uint64]string{}
 	avatars := map[uint64]string{}
@@ -101,7 +117,9 @@ func (a *API) ListCreatorComments(c *gin.Context) {
 				for id, p := range pmap {
 					if p.UserID > 0 {
 						pname := ""
-						if pu, ok2 := pumap[p.UserID]; ok2 { pname = user.DisplayUsername(&pu) }
+						if pu, ok2 := pumap[p.UserID]; ok2 {
+							pname = user.DisplayUsername(&pu)
+						}
 						parents[id] = gin.H{
 							"id": p.ID, "user_id": p.UserID,
 							"username": pname,
@@ -114,7 +132,9 @@ func (a *API) ListCreatorComments(c *gin.Context) {
 	}
 	replyCounts := a.CreatorCommentSvc.CommentReplyCounts(context.Background(), result.CommentIDs)
 	likedByViewer := result.LikedByViewer
-	if likedByViewer == nil { likedByViewer = map[uint64]bool{} }
+	if likedByViewer == nil {
+		likedByViewer = map[uint64]bool{}
+	}
 	items := make([]gin.H, 0, len(list))
 	for _, cm := range list {
 		v := videos[cm.VideoID]
@@ -124,8 +144,8 @@ func (a *API) ListCreatorComments(c *gin.Context) {
 			"parent_id": cm.ParentID, "content": cm.Content,
 			"like_count": cm.LikeCount, "liked_by_me": likedByViewer[cm.ID],
 			"reply_count": replyCounts[cm.ID],
-			"created_at": cm.CreatedAt.Format("2006-01-02 15:04:05"),
-			"approved": cm.Approved, "curated_ignored": cm.CuratedIgnored,
+			"created_at":  cm.CreatedAt.Format("2006-01-02 15:04:05"),
+			"approved":    cm.Approved, "curated_ignored": cm.CuratedIgnored,
 			"video": gin.H{
 				"id": v.ID, "title": v.Title, "cover_url": v.CoverURL,
 			},
@@ -174,17 +194,29 @@ func previewCommentContent(s string, maxRunes int) string {
 // listCreatorArticleComments lists comments on the authenticated user's published articles.
 func (a *API) listCreatorArticleComments(c *gin.Context, uid uint64) {
 	page := queryIntDefault(c.Query("page"), 1)
-	if page < 1 { page = 1 }
+	if page < 1 {
+		page = 1
+	}
 	pageSize := queryIntDefault(c.Query("page_size"), 10)
-	if pageSize < 1 { pageSize = 10 }
-	if pageSize > 50 { pageSize = 50 }
+	if pageSize < 1 {
+		pageSize = 10
+	}
+	if pageSize > 50 {
+		pageSize = 50
+	}
 	sortKey := strings.TrimSpace(c.Query("sort"))
-	if sortKey == "" { sortKey = "recent" }
+	if sortKey == "" {
+		sortKey = "recent"
+	}
 	pending := strings.TrimSpace(c.Query("pending")) == "1"
 	pendingStatus := strings.TrimSpace(c.Query("pending_status"))
-	if pendingStatus == "" { pendingStatus = "unprocessed" }
+	if pendingStatus == "" {
+		pendingStatus = "unprocessed"
+	}
 	pendingScope := strings.TrimSpace(c.Query("scope"))
-	if pendingScope == "" { pendingScope = "all" }
+	if pendingScope == "" {
+		pendingScope = "all"
+	}
 	keyword := strings.TrimSpace(c.Query("q"))
 	var filterArticleID uint64
 	if v := strings.TrimSpace(c.Query("article_id")); v != "" {
@@ -207,11 +239,15 @@ func (a *API) listCreatorArticleComments(c *gin.Context, uid uint64) {
 	}
 	list := result.Comments
 	total := result.Total
-	if total > creatorCommentsMaxTotal { total = creatorCommentsMaxTotal }
+	if total > creatorCommentsMaxTotal {
+		total = creatorCommentsMaxTotal
+	}
 	articles := map[uint64]article.Article{}
 	if len(result.ArticleIDs) > 0 {
 		amap, err := a.CreatorCommentSvc.BatchFetchArticles(context.Background(), result.ArticleIDs)
-		if err == nil { articles = amap }
+		if err == nil {
+			articles = amap
+		}
 	}
 	names := map[uint64]string{}
 	avatars := map[uint64]string{}
@@ -237,7 +273,9 @@ func (a *API) listCreatorArticleComments(c *gin.Context, uid uint64) {
 				for id, p := range pmap {
 					if p.UserID > 0 {
 						pname := ""
-						if pu, ok2 := pumap[p.UserID]; ok2 { pname = user.DisplayUsername(&pu) }
+						if pu, ok2 := pumap[p.UserID]; ok2 {
+							pname = user.DisplayUsername(&pu)
+						}
 						parents[id] = gin.H{
 							"id": p.ID, "user_id": p.UserID,
 							"username": pname,
@@ -250,7 +288,9 @@ func (a *API) listCreatorArticleComments(c *gin.Context, uid uint64) {
 	}
 	replyCounts := a.CreatorCommentSvc.ArticleCommentReplyCounts(context.Background(), result.CommentIDs)
 	likedByViewer := result.LikedByViewer
-	if likedByViewer == nil { likedByViewer = map[uint64]bool{} }
+	if likedByViewer == nil {
+		likedByViewer = map[uint64]bool{}
+	}
 	items := make([]gin.H, 0, len(list))
 	for _, cm := range list {
 		a := articles[cm.ArticleID]
@@ -260,8 +300,8 @@ func (a *API) listCreatorArticleComments(c *gin.Context, uid uint64) {
 			"parent_id": cm.ParentID, "content": cm.Content,
 			"like_count": cm.LikeCount, "liked_by_me": likedByViewer[cm.ID],
 			"reply_count": replyCounts[cm.ID],
-			"created_at": cm.CreatedAt.Format("2006-01-02 15:04:05"),
-			"approved": cm.Approved, "curated_ignored": cm.CuratedIgnored,
+			"created_at":  cm.CreatedAt.Format("2006-01-02 15:04:05"),
+			"approved":    cm.Approved, "curated_ignored": cm.CuratedIgnored,
 			"article": gin.H{"id": a.ID, "title": a.Title},
 		}
 		if cm.ParentID > 0 {
@@ -309,17 +349,29 @@ func dynamicCoverURL(d *dynamic.UserDynamic) string {
 // listCreatorDynamicComments lists comments on the authenticated user's image/text dynamics.
 func (a *API) listCreatorDynamicComments(c *gin.Context, uid uint64) {
 	page := queryIntDefault(c.Query("page"), 1)
-	if page < 1 { page = 1 }
+	if page < 1 {
+		page = 1
+	}
 	pageSize := queryIntDefault(c.Query("page_size"), 10)
-	if pageSize < 1 { pageSize = 10 }
-	if pageSize > 50 { pageSize = 50 }
+	if pageSize < 1 {
+		pageSize = 10
+	}
+	if pageSize > 50 {
+		pageSize = 50
+	}
 	sortKey := strings.TrimSpace(c.Query("sort"))
-	if sortKey == "" { sortKey = "recent" }
+	if sortKey == "" {
+		sortKey = "recent"
+	}
 	pending := strings.TrimSpace(c.Query("pending")) == "1"
 	pendingStatus := strings.TrimSpace(c.Query("pending_status"))
-	if pendingStatus == "" { pendingStatus = "unprocessed" }
+	if pendingStatus == "" {
+		pendingStatus = "unprocessed"
+	}
 	pendingScope := strings.TrimSpace(c.Query("scope"))
-	if pendingScope == "" { pendingScope = "all" }
+	if pendingScope == "" {
+		pendingScope = "all"
+	}
 	keyword := strings.TrimSpace(c.Query("q"))
 	var filterDynamicID uint64
 	if v := strings.TrimSpace(c.Query("dynamic_id")); v != "" {
@@ -342,11 +394,15 @@ func (a *API) listCreatorDynamicComments(c *gin.Context, uid uint64) {
 	}
 	list := result.Comments
 	total := result.Total
-	if total > creatorCommentsMaxTotal { total = creatorCommentsMaxTotal }
+	if total > creatorCommentsMaxTotal {
+		total = creatorCommentsMaxTotal
+	}
 	dynamics := map[uint64]dynamic.UserDynamic{}
 	if len(result.DynamicIDs) > 0 {
 		dmap, err := a.CreatorCommentSvc.BatchFetchDynamics(context.Background(), result.DynamicIDs)
-		if err == nil { dynamics = dmap }
+		if err == nil {
+			dynamics = dmap
+		}
 	}
 	names := map[uint64]string{}
 	avatars := map[uint64]string{}
@@ -372,7 +428,9 @@ func (a *API) listCreatorDynamicComments(c *gin.Context, uid uint64) {
 				for id, p := range pmap {
 					if p.UserID > 0 {
 						pname := ""
-						if pu, ok2 := pumap[p.UserID]; ok2 { pname = user.DisplayUsername(&pu) }
+						if pu, ok2 := pumap[p.UserID]; ok2 {
+							pname = user.DisplayUsername(&pu)
+						}
 						parents[id] = gin.H{
 							"id": p.ID, "user_id": p.UserID,
 							"username": pname,
@@ -385,7 +443,9 @@ func (a *API) listCreatorDynamicComments(c *gin.Context, uid uint64) {
 	}
 	replyCounts := a.CreatorCommentSvc.DynamicCommentReplyCounts(context.Background(), result.CommentIDs)
 	likedByViewer := result.LikedByViewer
-	if likedByViewer == nil { likedByViewer = map[uint64]bool{} }
+	if likedByViewer == nil {
+		likedByViewer = map[uint64]bool{}
+	}
 	items := make([]gin.H, 0, len(list))
 	for _, cm := range list {
 		d := dynamics[cm.DynamicID]
@@ -395,8 +455,8 @@ func (a *API) listCreatorDynamicComments(c *gin.Context, uid uint64) {
 			"parent_id": cm.ParentID, "content": cm.Content,
 			"like_count": cm.LikeCount, "liked_by_me": likedByViewer[cm.ID],
 			"reply_count": replyCounts[cm.ID],
-			"created_at": cm.CreatedAt.Format("2006-01-02 15:04:05"),
-			"approved": cm.Approved, "curated_ignored": cm.CuratedIgnored,
+			"created_at":  cm.CreatedAt.Format("2006-01-02 15:04:05"),
+			"approved":    cm.Approved, "curated_ignored": cm.CuratedIgnored,
 			"dynamic": gin.H{"id": d.ID, "title": dynamicDisplayTitle(&d)},
 		}
 		if cm.ParentID > 0 {

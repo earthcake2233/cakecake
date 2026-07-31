@@ -1,16 +1,16 @@
 package handler
 
 import (
-	"minibili/internal/model/comment"
-	"minibili/internal/model/danmaku"
-	"minibili/internal/model/extra"
-	"minibili/internal/model/user"
-	"minibili/internal/model/video"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"mime/multipart"
+	"minibili/internal/model/comment"
+	"minibili/internal/model/danmaku"
+	"minibili/internal/model/extra"
+	"minibili/internal/model/user"
+	"minibili/internal/model/video"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -29,8 +29,8 @@ import (
 	"minibili/internal/pkg/coverval"
 	"minibili/internal/pkg/dailyreward"
 	"minibili/internal/pkg/resp"
-	"minibili/internal/service"
 	"minibili/internal/queue"
+	"minibili/internal/service"
 	"minibili/internal/worker"
 )
 
@@ -497,7 +497,9 @@ func (a *API) GetVideo(c *gin.Context) {
 	pc, _ := a.Play.Display(context.Background(), v)
 	var u user.User
 	uPub, _ := a.UserSvc.GetUserPublic(c.Request.Context(), v.UserID)
-	if uPub != nil { u = user.User{ID: uPub.ID, Username: uPub.Username, AvatarURL: uPub.AvatarURL, Nickname: uPub.Nickname, Sign: uPub.Sign} }
+	if uPub != nil {
+		u = user.User{ID: uPub.ID, Username: uPub.Username, AvatarURL: uPub.AvatarURL, Nickname: uPub.Nickname, Sign: uPub.Sign}
+	}
 	watching := 0
 	if a.Hub != nil {
 		watching = a.Hub.RoomSize(id)
@@ -776,24 +778,24 @@ func (a *API) getVideoEngagementFlags(viewer, videoID uint64) videoEngagement {
 
 func videoCard(v video.Video, up string, play uint64, eng videoEngagement) gin.H {
 	m := gin.H{
-		"id":              v.ID,
-		"user_id":         v.UserID,
-		"title":           v.Title,
-		"description":     v.Description,
-		"cover_url":       v.CoverURL,
-		"play_count":      play,
-		"danmaku_count":   v.DanmakuCount,
-		"comment_count":   v.CommentCount,
-		"like_count":      v.LikeCount,
-		"fav_count":       v.FavCount,
-		"coin_count":      v.CoinCount,
-		"liked_by_me":     eng.LikedByMe,
-		"favorited_by_me": eng.FavoritedByMe,
-		"coined_by_me":    eng.CoinedByMe,
-		"in_watch_later":  eng.InWatchLater,
-		"duration":        v.DurationSec,
-		"uploader":        up,
-		"created_at":      v.CreatedAt.Format("2006-01-02 15:04:05"),
+		"id":               v.ID,
+		"user_id":          v.UserID,
+		"title":            v.Title,
+		"description":      v.Description,
+		"cover_url":        v.CoverURL,
+		"play_count":       play,
+		"danmaku_count":    v.DanmakuCount,
+		"comment_count":    v.CommentCount,
+		"like_count":       v.LikeCount,
+		"fav_count":        v.FavCount,
+		"coin_count":       v.CoinCount,
+		"liked_by_me":      eng.LikedByMe,
+		"favorited_by_me":  eng.FavoritedByMe,
+		"coined_by_me":     eng.CoinedByMe,
+		"in_watch_later":   eng.InWatchLater,
+		"duration":         v.DurationSec,
+		"uploader":         up,
+		"created_at":       v.CreatedAt.Format("2006-01-02 15:04:05"),
 		"comments_closed":  v.CommentsClosed,
 		"comments_curated": v.CommentsCurated,
 		"danmaku_closed":   v.DanmakuClosed,

@@ -1,8 +1,8 @@
 package data
 
 import (
-	"database/sql"
 	"context"
+	"database/sql"
 	"fmt"
 	"os"
 

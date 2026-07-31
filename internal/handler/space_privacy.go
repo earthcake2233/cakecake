@@ -4,7 +4,6 @@ import (
 	"minibili/internal/model/user"
 	"net/http"
 
-
 	"github.com/gin-gonic/gin"
 
 	"minibili/internal/errcode"

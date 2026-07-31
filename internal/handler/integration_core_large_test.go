@@ -3,14 +3,13 @@
 package handler
 
 import (
-	"minibili/internal/model/dynamic"
 	"encoding/json"
 	"fmt"
+	"minibili/internal/model/dynamic"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
-
 )
 
 func Test_DMFlow(t *testing.T) {

@@ -1,16 +1,15 @@
 package model_test
 
 import (
+	"encoding/json"
 	"minibili/internal/model/admin"
 	"minibili/internal/model/agent"
 	"minibili/internal/model/dm"
 	"minibili/internal/model/notification"
 	"minibili/internal/model/user"
 	"minibili/internal/model/video"
-	"encoding/json"
 	"testing"
 	"time"
-
 
 	"github.com/stretchr/testify/require"
 )
@@ -95,14 +94,14 @@ func TestUserBlock_StructFields(t *testing.T) {
 func TestAdmin_StructFields(t *testing.T) {
 	now := time.Now()
 	a := admin.Admin{
-		ID:          1,
-		Username:    "ops",
+		ID:           1,
+		Username:     "ops",
 		PasswordHash: "hash",
-		DisplayName: "Operator",
-		Status:      "active",
-		LastLoginAt: &now,
-		CreatedAt:   now,
-		UpdatedAt:   now,
+		DisplayName:  "Operator",
+		Status:       "active",
+		LastLoginAt:  &now,
+		CreatedAt:    now,
+		UpdatedAt:    now,
 	}
 	require.Equal(t, "ops", a.Username)
 	require.Equal(t, "Operator", a.DisplayName)
@@ -173,10 +172,10 @@ func TestDmMessage_EmptyContent(t *testing.T) {
 
 func TestDmConversation_Struct(t *testing.T) {
 	c := dm.DmConversation{
-		UserLow:      1,
-		UserHigh:     2,
-		Kind:         "human",
-		LastPreview:  "Hey!",
+		UserLow:     1,
+		UserHigh:    2,
+		Kind:        "human",
+		LastPreview: "Hey!",
 	}
 	require.Equal(t, "human", c.Kind)
 	require.Equal(t, "Hey!", c.LastPreview)

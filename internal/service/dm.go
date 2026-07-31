@@ -1,14 +1,13 @@
 package service
 
 import (
-	"minibili/internal/model/dm"
 	"context"
+	"minibili/internal/model/dm"
 	"time"
 
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
-
 )
 
 // DmService handles direct message business logic.
@@ -24,13 +23,17 @@ func NewDmService(db *gorm.DB, rdb *redis.Client, log *zap.Logger) *DmService {
 
 // DmPairIDs returns low/high sorted pair.
 func DmPairIDs(a, b uint64) (low, high uint64) {
-	if a < b { return a, b }
+	if a < b {
+		return a, b
+	}
 	return b, a
 }
 
 // DmPeerID returns the other participant"s ID.
 func DmPeerID(conv *dm.DmConversation, self uint64) uint64 {
-	if conv.UserLow == self { return conv.UserHigh }
+	if conv.UserLow == self {
+		return conv.UserHigh
+	}
 	return conv.UserLow
 }
 
@@ -44,9 +47,13 @@ func (s *DmService) GetOrCreateConversation(ctx context.Context, uid, peerID uin
 		_ = s.db.WithContext(ctx).Where("conversation_id = ? AND user_id = ?", conv.ID, uid).First(&part).Error
 		return &conv, &part, nil
 	}
-	if err != gorm.ErrRecordNotFound { return nil, nil, err }
+	if err != gorm.ErrRecordNotFound {
+		return nil, nil, err
+	}
 	conv = dm.DmConversation{UserLow: low, UserHigh: high}
-	if err := s.db.WithContext(ctx).Create(&conv).Error; err != nil { return nil, nil, err }
+	if err := s.db.WithContext(ctx).Create(&conv).Error; err != nil {
+		return nil, nil, err
+	}
 	for _, u := range []uint64{low, high} {
 		_ = s.db.WithContext(ctx).Create(&dm.DmParticipant{ConversationID: conv.ID, UserID: u}).Error
 	}
@@ -72,7 +79,9 @@ func (s *DmService) CreateMessageInTransaction(ctx context.Context, convID, send
 			ConversationID: convID, SenderID: senderID,
 			Content: content, Role: role,
 		}
-		if err := tx.Create(&msg).Error; err != nil { return err }
+		if err := tx.Create(&msg).Error; err != nil {
+			return err
+		}
 		_ = tx.Model(&dm.DmConversation{}).Where("id = ?", convID).
 			Update("updated_at", time.Now()).Error
 		if fn != nil {
@@ -85,7 +94,9 @@ func (s *DmService) CreateMessageInTransaction(ctx context.Context, convID, send
 // GetConversationByID returns a conversation by ID.
 func (s *DmService) GetConversationByID(ctx context.Context, convID uint64) (*dm.DmConversation, error) {
 	var conv dm.DmConversation
-	if err := s.db.WithContext(ctx).First(&conv, convID).Error; err != nil { return nil, err }
+	if err := s.db.WithContext(ctx).First(&conv, convID).Error; err != nil {
+		return nil, err
+	}
 	return &conv, nil
 }
 
@@ -106,9 +117,13 @@ func (s *DmService) ListConversations(ctx context.Context, uid uint64) ([]dm.DmC
 		Order("updated_at DESC").Find(&convs).Error; err != nil {
 		return nil, nil, err
 	}
-	if len(convs) == 0 { return convs, nil, nil }
+	if len(convs) == 0 {
+		return convs, nil, nil
+	}
 	ids := make([]uint64, len(convs))
-	for i := range convs { ids[i] = convs[i].ID }
+	for i := range convs {
+		ids[i] = convs[i].ID
+	}
 	var parts []dm.DmParticipant
 	_ = s.db.WithContext(ctx).Where("user_id = ? AND conversation_id IN ?", uid, ids).Find(&parts).Error
 	return convs, parts, nil
@@ -117,9 +132,13 @@ func (s *DmService) ListConversations(ctx context.Context, uid uint64) ([]dm.DmC
 // ListMessages returns messages for a conversation with cursor.
 func (s *DmService) ListMessages(ctx context.Context, convID uint64, beforeID uint64, limit int) ([]dm.DmMessage, error) {
 	q := s.db.WithContext(ctx).Model(&dm.DmMessage{}).Where("conversation_id = ?", convID)
-	if beforeID > 0 { q = q.Where("id < ?", beforeID) }
+	if beforeID > 0 {
+		q = q.Where("id < ?", beforeID)
+	}
 	var msgs []dm.DmMessage
-	if err := q.Order("id DESC").Limit(limit).Find(&msgs).Error; err != nil { return nil, err }
+	if err := q.Order("id DESC").Limit(limit).Find(&msgs).Error; err != nil {
+		return nil, err
+	}
 	return msgs, nil
 }
 
@@ -129,7 +148,9 @@ func (s *DmService) CreateMessage(ctx context.Context, convID, senderID uint64, 
 		ConversationID: convID, SenderID: senderID,
 		Content: content, Role: role,
 	}
-	if err := s.db.WithContext(ctx).Create(&msg).Error; err != nil { return nil, err }
+	if err := s.db.WithContext(ctx).Create(&msg).Error; err != nil {
+		return nil, err
+	}
 	_ = s.db.WithContext(ctx).Model(&dm.DmConversation{}).Where("id = ?", convID).
 		Update("updated_at", time.Now()).Error
 	return &msg, nil
@@ -181,13 +202,17 @@ func (s *DmService) PostMessage(ctx context.Context, convID, senderID, peerID ui
 			Content:        content,
 			CreatedAt:      now,
 		}
-		if err := tx.Create(&msg).Error; err != nil { return err }
+		if err := tx.Create(&msg).Error; err != nil {
+			return err
+		}
 		result.Message = &msg
 
 		if err := tx.Model(&dm.DmConversation{}).Where("id = ?", convID).Updates(map[string]interface{}{
 			"last_message_at": now,
 			"last_preview":    preview,
-		}).Error; err != nil { return err }
+		}).Error; err != nil {
+			return err
+		}
 
 		s.EnsureParticipant(tx, convID, senderID)
 		if !isAgent {
@@ -200,11 +225,15 @@ func (s *DmService) PostMessage(ctx context.Context, convID, senderID, peerID ui
 				Updates(map[string]interface{}{
 					"unread_count": gorm.Expr("unread_count + ?", 1),
 					"hidden_at":    nil,
-				}).Error; err != nil { return err }
+				}).Error; err != nil {
+				return err
+			}
 		}
 		return nil
 	})
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 
 	// Post-commit: refresh conversation
 	var conv dm.DmConversation
@@ -233,7 +262,9 @@ func (s *DmService) UnreadTotal(ctx context.Context, uid uint64) int64 {
 
 // EnsureParticipant creates a participant record if not exists.
 func (s *DmService) EnsureParticipant(tx *gorm.DB, convID, uid uint64) {
-	if tx == nil { tx = s.db }
+	if tx == nil {
+		tx = s.db
+	}
 	var p dm.DmParticipant
 	if err := tx.Where("conversation_id = ? AND user_id = ?", convID, uid).First(&p).Error; err != nil {
 		_ = tx.Create(&dm.DmParticipant{ConversationID: convID, UserID: uid}).Error

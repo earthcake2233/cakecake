@@ -1,15 +1,14 @@
 package service
 
 import (
-	"minibili/internal/model/video"
 	"context"
 	"fmt"
+	"minibili/internal/model/video"
 	"strings"
 
-	"go.uber.org/zap"
 	"github.com/redis/go-redis/v9"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
-
 )
 
 const favoriteFolderCapacity = 999
@@ -28,7 +27,6 @@ func NewFavoriteService(db *gorm.DB, rdb *redis.Client, log *zap.Logger, users U
 	return &FavoriteService{db: db, rdb: rdb, log: log, users: users, videos: videos}
 }
 
-
 // CreateFolder creates a new favorite folder.
 func (s *FavoriteService) CreateFolder(ctx context.Context, folder *video.FavoriteFolder) error {
 	return s.db.WithContext(ctx).Create(folder).Error
@@ -37,7 +35,9 @@ func (s *FavoriteService) CreateFolder(ctx context.Context, folder *video.Favori
 // GetFolderByID returns a folder by ID.
 func (s *FavoriteService) GetFolderByID(ctx context.Context, id uint64) (*video.FavoriteFolder, error) {
 	var f video.FavoriteFolder
-	if err := s.db.WithContext(ctx).First(&f, id).Error; err != nil { return nil, err }
+	if err := s.db.WithContext(ctx).First(&f, id).Error; err != nil {
+		return nil, err
+	}
 	return &f, nil
 }
 
@@ -106,10 +106,14 @@ func (s *FavoriteService) CountByUser(ctx context.Context, userID uint64) int64 
 // BatchFavorited returns a map of video_id -> favorited for a user.
 func (s *FavoriteService) BatchFavorited(ctx context.Context, userID uint64, videoIDs []uint64) map[uint64]bool {
 	result := make(map[uint64]bool)
-	if userID == 0 || len(videoIDs) == 0 { return result }
+	if userID == 0 || len(videoIDs) == 0 {
+		return result
+	}
 	var favs []video.VideoFavorite
 	s.db.WithContext(ctx).Where("user_id = ? AND video_id IN ?", userID, videoIDs).Find(&favs)
-	for _, f := range favs { result[f.VideoID] = true }
+	for _, f := range favs {
+		result[f.VideoID] = true
+	}
 	return result
 }
 
@@ -150,9 +154,13 @@ func (s *FavoriteService) CountFoldersByUser(ctx context.Context, userID uint64)
 // ListFavoritesByFolderWithVideoIds is like ListFavoritesByFolder but also returns video IDs.
 func (s *FavoriteService) ListFavoritesByFolderWithVideoIds(ctx context.Context, folderID uint64, page, pageSize int) ([]video.VideoFavorite, int64, []uint64, error) {
 	favs, total, err := s.ListFavoritesByFolder(ctx, folderID, page, pageSize)
-	if err != nil { return nil, 0, nil, err }
+	if err != nil {
+		return nil, 0, nil, err
+	}
 	videoIDs := make([]uint64, 0, len(favs))
-	for _, f := range favs { videoIDs = append(videoIDs, f.VideoID) }
+	for _, f := range favs {
+		videoIDs = append(videoIDs, f.VideoID)
+	}
 	return favs, total, videoIDs, nil
 }
 
@@ -191,9 +199,13 @@ func (s *FavoriteService) FolderCoverFromVideos(ctx context.Context, folderID ui
 		Order("created_at DESC, id DESC").Limit(1).Find(&fav).Error; err != nil || fav.ID == 0 {
 		return ""
 	}
-	if s.videos == nil { return "" }
+	if s.videos == nil {
+		return ""
+	}
 	videos, err := s.videos.BatchGetPublishedVideos(ctx, []uint64{fav.VideoID})
-	if err != nil || len(videos) == 0 { return "" }
+	if err != nil || len(videos) == 0 {
+		return ""
+	}
 	return videos[fav.VideoID].CoverURL
 }
 
@@ -208,22 +220,32 @@ type SetVideoFavoriteFoldersResult struct {
 func (s *FavoriteService) SetVideoFavoriteFolders(ctx context.Context, userID, videoID uint64, wantedIDs []uint64) (*SetVideoFavoriteFoldersResult, error) {
 	want := make(map[uint64]bool)
 	for _, fid := range wantedIDs {
-		if fid > 0 { want[fid] = true }
+		if fid > 0 {
+			want[fid] = true
+		}
 	}
 	if len(want) > 0 {
 		ids := make([]uint64, 0, len(want))
-		for fid := range want { ids = append(ids, fid) }
+		for fid := range want {
+			ids = append(ids, fid)
+		}
 		var owned int64
 		if err := s.db.WithContext(ctx).Model(&video.FavoriteFolder{}).
 			Where("user_id = ? AND id IN ?", userID, ids).
-			Count(&owned).Error; err != nil { return nil, err }
-		if int(owned) != len(ids) { return nil, nil }
+			Count(&owned).Error; err != nil {
+			return nil, err
+		}
+		if int(owned) != len(ids) {
+			return nil, nil
+		}
 		for fid := range want {
 			var cnt int64
 			_ = s.db.WithContext(ctx).Model(&video.VideoFavorite{}).Where("folder_id = ?", fid).Count(&cnt).Error
 			if cnt >= favoriteFolderCapacity {
 				exists, _ := s.CheckFavoriteExists(ctx, userID, fid, videoID)
-				if !exists { return nil, nil }
+				if !exists {
+					return nil, nil
+				}
 			}
 		}
 	}
@@ -232,16 +254,26 @@ func (s *FavoriteService) SetVideoFavoriteFolders(ctx context.Context, userID, v
 		return nil, err
 	}
 	existingSet := make(map[uint64]bool, len(existing))
-	for i := range existing { existingSet[existing[i].FolderID] = true }
+	for i := range existing {
+		existingSet[existing[i].FolderID] = true
+	}
 	wasFavorited := len(existing) > 0
 	for fid := range want {
-		if existingSet[fid] { continue }
+		if existingSet[fid] {
+			continue
+		}
 		row := video.VideoFavorite{UserID: userID, VideoID: videoID, FolderID: fid}
-		if err := s.db.WithContext(ctx).Create(&row).Error; err != nil { return nil, err }
+		if err := s.db.WithContext(ctx).Create(&row).Error; err != nil {
+			return nil, err
+		}
 	}
 	for i := range existing {
-		if want[existing[i].FolderID] { continue }
-		if err := s.db.WithContext(ctx).Delete(&existing[i]).Error; err != nil { return nil, err }
+		if want[existing[i].FolderID] {
+			continue
+		}
+		if err := s.db.WithContext(ctx).Delete(&existing[i]).Error; err != nil {
+			return nil, err
+		}
 	}
 	willFavorited := len(want) > 0
 	if !wasFavorited && willFavorited {
@@ -260,7 +292,9 @@ func (s *FavoriteService) SetVideoFavoriteFolders(ctx context.Context, userID, v
 		}
 	}
 	fids := make([]uint64, 0, len(want))
-	for fid := range want { fids = append(fids, fid) }
+	for fid := range want {
+		fids = append(fids, fid)
+	}
 	return &SetVideoFavoriteFoldersResult{
 		Favorited: willFavorited, FavCount: favCount, FolderIDs: fids,
 	}, nil
@@ -290,33 +324,51 @@ type UserFavoriteVideoResult struct {
 
 // ListUserFavoriteVideos returns favorited videos for a user with pagination.
 func (s *FavoriteService) ListUserFavoriteVideos(ctx context.Context, ownerID uint64, limit int, folderID uint64, filterFolder bool) (*UserFavoriteVideoResult, error) {
-	if limit <= 0 || limit > 200 { limit = 200 }
+	if limit <= 0 || limit > 200 {
+		limit = 200
+	}
 
 	base := s.db.WithContext(ctx).Model(&video.VideoFavorite{}).Where("user_id = ?", ownerID)
-	if filterFolder { base = base.Where("folder_id = ?", folderID) }
+	if filterFolder {
+		base = base.Where("folder_id = ?", folderID)
+	}
 
 	var total int64
 	if filterFolder {
-		if err := base.Count(&total).Error; err != nil { return nil, err }
+		if err := base.Count(&total).Error; err != nil {
+			return nil, err
+		}
 	} else {
-		if err := base.Select("COUNT(DISTINCT video_id)").Scan(&total).Error; err != nil { return nil, err }
+		if err := base.Select("COUNT(DISTINCT video_id)").Scan(&total).Error; err != nil {
+			return nil, err
+		}
 	}
 
 	q := s.db.WithContext(ctx).Where("user_id = ?", ownerID)
-	if filterFolder { q = q.Where("folder_id = ?", folderID) }
+	if filterFolder {
+		q = q.Where("folder_id = ?", folderID)
+	}
 
 	var rows []video.VideoFavorite
-	if err := q.Order("created_at DESC, id DESC").Limit(limit).Find(&rows).Error; err != nil { return nil, err }
-	if len(rows) == 0 { return &UserFavoriteVideoResult{Items: []UserFavoriteVideoItem{}, Total: total}, nil }
+	if err := q.Order("created_at DESC, id DESC").Limit(limit).Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	if len(rows) == 0 {
+		return &UserFavoriteVideoResult{Items: []UserFavoriteVideoItem{}, Total: total}, nil
+	}
 
 	vids := make([]uint64, 0, len(rows))
-	for i := range rows { vids = append(vids, rows[i].VideoID) }
+	for i := range rows {
+		vids = append(vids, rows[i].VideoID)
+	}
 
 	// Use VideoProvider to fetch published video info
 	videos := make(map[uint64]*VideoInfo)
 	if s.videos != nil {
 		vmap, err := s.videos.BatchGetPublishedVideos(ctx, vids)
-		if err != nil { return nil, err }
+		if err != nil {
+			return nil, err
+		}
 		videos = vmap
 	}
 
@@ -329,7 +381,9 @@ func (s *FavoriteService) ListUserFavoriteVideos(ctx context.Context, ownerID ui
 	users := make(map[uint64]UserInfo)
 	if s.users != nil && len(uids) > 0 {
 		umap, err := s.users.GetUsersByIDs(ctx, uids)
-		if err != nil { return nil, err }
+		if err != nil {
+			return nil, err
+		}
 		users = umap
 	}
 
@@ -337,9 +391,13 @@ func (s *FavoriteService) ListUserFavoriteVideos(ctx context.Context, ownerID ui
 	seenVideo := make(map[uint64]struct{})
 	for i := range rows {
 		v, ok := videos[rows[i].VideoID]
-		if !ok { continue }
+		if !ok {
+			continue
+		}
 		if !filterFolder {
-			if _, dup := seenVideo[rows[i].VideoID]; dup { continue }
+			if _, dup := seenVideo[rows[i].VideoID]; dup {
+				continue
+			}
 			seenVideo[rows[i].VideoID] = struct{}{}
 		}
 		uploaderName := ""
@@ -352,9 +410,9 @@ func (s *FavoriteService) ListUserFavoriteVideos(ctx context.Context, ownerID ui
 			ID: v.ID, Title: v.Title, CoverURL: v.CoverURL,
 			PlayCount: v.PlayCount, DanmakuCount: v.DanmakuCount, Duration: uint64(v.DurationSec),
 			UploaderName: uploaderName, UploaderID: v.UserID, UploaderAvatar: uploaderAvatar,
-			CreatedAt:    v.CreatedAt.Format("2006-01-02 15:04:05"),
-			FavoritedAt:  rows[i].CreatedAt.Format("2006-01-02 15:04:05"),
-			FolderID:     rows[i].FolderID,
+			CreatedAt:   v.CreatedAt.Format("2006-01-02 15:04:05"),
+			FavoritedAt: rows[i].CreatedAt.Format("2006-01-02 15:04:05"),
+			FolderID:    rows[i].FolderID,
 		})
 	}
 	return &UserFavoriteVideoResult{Items: items, Total: total}, nil
@@ -388,7 +446,9 @@ func (s *FavoriteService) FilterPublishedVideoIDs(ctx context.Context, videoIDs 
 	// Use VideoProvider to filter published videos
 	if s.videos != nil {
 		vmap, err := s.videos.BatchGetPublishedVideos(ctx, videoIDs)
-		if err != nil { return nil, err }
+		if err != nil {
+			return nil, err
+		}
 		result := make([]uint64, 0, len(vmap))
 		for id := range vmap {
 			result = append(result, id)

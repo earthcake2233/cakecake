@@ -1,9 +1,9 @@
 package service
 
 import (
+	"context"
 	"minibili/internal/model/admin"
 	"minibili/internal/model/user"
-	"context"
 	"strings"
 
 	"github.com/redis/go-redis/v9"
@@ -12,10 +12,10 @@ import (
 	"gorm.io/gorm"
 
 	"minibili/internal/data"
-	"time"
 	"minibili/internal/pkg/dailyreward"
 	"minibili/internal/pkg/jwttoken"
 	"minibili/internal/pkg/username"
+	"time"
 )
 
 // AuthService handles authentication business logic.

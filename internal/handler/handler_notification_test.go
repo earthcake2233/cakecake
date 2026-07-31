@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"strconv"
-
 )
 
 func Test_likeNotifPayloadSubject(t *testing.T) {
@@ -80,17 +79,25 @@ func Test_consolidateLikeAggregationNotifs(t *testing.T) {
 func Test_likeAggTotalFromDB(t *testing.T) {
 	api, _, _ := newTestAPI(t)
 	total := api.likeAggTotalFromDB(99999, false)
-	if total != 0 { t.Errorf("got %d, want 0", total) }
+	if total != 0 {
+		t.Errorf("got %d, want 0", total)
+	}
 	total = api.likeAggTotalFromDB(99999, true)
-	if total != 0 { t.Errorf("got %d, want 0", total) }
+	if total != 0 {
+		t.Errorf("got %d, want 0", total)
+	}
 }
 
 func Test_likeAggTopLikerNames(t *testing.T) {
 	api, _, _ := newTestAPI(t)
 	names := api.likeAggTopLikerNames(99999, false, 3)
-	if len(names) != 0 { t.Errorf("got %v, want nil", names) }
+	if len(names) != 0 {
+		t.Errorf("got %v, want nil", names)
+	}
 	names = api.likeAggTopLikerNames(99999, true, 3)
-	if len(names) != 0 { t.Errorf("got %v, want nil", names) }
+	if len(names) != 0 {
+		t.Errorf("got %v, want nil", names)
+	}
 }
 
 func Test_formatNotificationBasic(t *testing.T) {
@@ -101,9 +108,15 @@ func Test_formatNotificationBasic(t *testing.T) {
 		CommentPreview: "Test", PayloadJSON: `{}`, IsRead: true, CreatedAt: time.Now(),
 	}
 	result := api.formatNotification(n)
-	if result == nil { t.Fatal("nil result") }
-	if result["type"] != "reply" { t.Errorf("type=%v", result["type"]) }
-	if result["is_read"] != true { t.Errorf("is_read=%v", result["is_read"]) }
+	if result == nil {
+		t.Fatal("nil result")
+	}
+	if result["type"] != "reply" {
+		t.Errorf("type=%v", result["type"])
+	}
+	if result["is_read"] != true {
+		t.Errorf("is_read=%v", result["is_read"])
+	}
 }
 
 func Test_formatNotificationLikeAgg(t *testing.T) {
@@ -114,9 +127,15 @@ func Test_formatNotificationLikeAgg(t *testing.T) {
 		TotalLikes: 5, PayloadJSON: `{"like_subject":"comment"}`, IsRead: false, CreatedAt: time.Now(),
 	}
 	result := api.formatNotification(n)
-	if result == nil { t.Fatal("nil") }
-	if result["type"] != "like_aggregation" { t.Errorf("type=%v", result["type"]) }
-	if result["total_likes"] != 5 { t.Errorf("total_likes=%v", result["total_likes"]) }
+	if result == nil {
+		t.Fatal("nil")
+	}
+	if result["type"] != "like_aggregation" {
+		t.Errorf("type=%v", result["type"])
+	}
+	if result["total_likes"] != 5 {
+		t.Errorf("total_likes=%v", result["total_likes"])
+	}
 }
 
 func Test_formatNotificationDanmakuLike(t *testing.T) {
@@ -127,15 +146,23 @@ func Test_formatNotificationDanmakuLike(t *testing.T) {
 		TotalLikes: 3, PayloadJSON: `{"like_subject":"danmaku"}`, IsRead: false, CreatedAt: time.Now(),
 	}
 	result := api.formatNotification(n)
-	if result == nil { t.Fatal("nil") }
-	if result["like_target"] != "弹幕" { t.Errorf("like_target=%v", result["like_target"]) }
+	if result == nil {
+		t.Fatal("nil")
+	}
+	if result["like_target"] != "弹幕" {
+		t.Errorf("like_target=%v", result["like_target"])
+	}
 }
 
 func Test_likeNotifTopSenders(t *testing.T) {
 	api, _, _ := newTestAPI(t)
 	urls, ids := api.likeNotifTopSenders([]string{}, 0)
-	if len(urls) != 0 { t.Errorf("urls=%v", urls) }
-	if len(ids) != 0 { t.Errorf("ids=%v", ids) }
+	if len(urls) != 0 {
+		t.Errorf("urls=%v", urls)
+	}
+	if len(ids) != 0 {
+		t.Errorf("ids=%v", ids)
+	}
 	urls, ids = api.likeNotifTopSenders([]string{"nonexistent"}, 2)
 	t.Logf("urls=%v, ids=%v", urls, ids)
 }
@@ -143,8 +170,12 @@ func Test_likeNotifTopSenders(t *testing.T) {
 func Test_clearCommentDislike(t *testing.T) {
 	api, _, _ := newTestAPI(t)
 	ok, err := api.clearCommentDislike(1, 99999)
-	if err != nil { t.Fatal(err) }
-	if ok { t.Error("expected false for non-existent") }
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ok {
+		t.Error("expected false for non-existent")
+	}
 }
 
 func Test_clearCommentLike(t *testing.T) {
@@ -152,8 +183,12 @@ func Test_clearCommentLike(t *testing.T) {
 	// non-existent comment ID
 	var cm comment.Comment
 	ok, err := api.clearCommentLike(1, 99999, &cm)
-	if err != nil { t.Fatal(err) }
-	if ok { t.Error("expected false") }
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ok {
+		t.Error("expected false")
+	}
 }
 
 func Test_resolveReplyInboxTarget(t *testing.T) {
@@ -182,7 +217,9 @@ func Test_resolveReplyInboxTarget(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, ok := api.resolveReplyInboxTarget(&tt.n)
-			if ok != tt.ok { t.Errorf("ok=%v, want %v", ok, tt.ok) }
+			if ok != tt.ok {
+				t.Errorf("ok=%v, want %v", ok, tt.ok)
+			}
 			if got.CommentID != tt.want.CommentID || got.VideoID != tt.want.VideoID || got.ArticleID != tt.want.ArticleID {
 				t.Errorf("got %+v, want %+v", got, tt.want)
 			}

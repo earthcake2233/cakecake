@@ -1,9 +1,9 @@
 package handler
 
 import (
+	"encoding/json"
 	"minibili/internal/model/dynamic"
 	"minibili/internal/model/user"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -243,7 +243,8 @@ func TestRejectIfCommentSensitive_NilSens(t *testing.T) {
 
 func TestHomeStats_NilDB(t *testing.T) {
 	api := &API{Dependencies: &Dependencies{Log: zap.NewNop()}}
-	w := httptest.NewRecorder(); c, _ := gin.CreateTestContext(w)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
 	c.Request = httptest.NewRequest(http.MethodGet, "/api/v1/home-stats", nil)
 
 	api.HomeStats(c)
@@ -265,7 +266,8 @@ func TestHomeStats_NilDB(t *testing.T) {
 
 func TestHotSearchList_NilSearchHot(t *testing.T) {
 	api := &API{Dependencies: &Dependencies{Log: zap.NewNop()}}
-	w := httptest.NewRecorder(); c, _ := gin.CreateTestContext(w)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
 	c.Request = httptest.NewRequest(http.MethodGet, "/api/v1/hot-search?limit=5", nil)
 	api.HotSearchList(c)
 	require.Equal(t, http.StatusOK, w.Code)
@@ -275,7 +277,8 @@ func TestHotSearchList_NilSearchHot(t *testing.T) {
 
 func TestGetMeSpacePrivacy_NoUser(t *testing.T) {
 	api := &API{Dependencies: &Dependencies{Log: zap.NewNop()}}
-	w := httptest.NewRecorder(); c, _ := gin.CreateTestContext(w)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
 	c.Request = httptest.NewRequest(http.MethodGet, "/api/v1/users/me/space-privacy", nil)
 	api.GetMeSpacePrivacy(c)
 	require.Equal(t, http.StatusUnauthorized, w.Code)
@@ -392,7 +395,6 @@ func TestDynamicCoverURL(t *testing.T) {
 
 // ---------- normalizeGender ----------
 
-
 // ---------- validProfileBirthday ----------
 
 func TestValidProfileBirthday(t *testing.T) {
@@ -452,4 +454,3 @@ func TestCreatorUpInclusiveDays(t *testing.T) {
 }
 
 // ---------- bannerImageExt ----------
-

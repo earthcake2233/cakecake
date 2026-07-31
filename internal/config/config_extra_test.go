@@ -625,4 +625,3 @@ func TestNormalizeAliyunOSSEndpoint_EmptyHost(t *testing.T) {
 		t.Errorf("normalize('https://', 'mybucket') = %q; want 'https://'", got)
 	}
 }
-

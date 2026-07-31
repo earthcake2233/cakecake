@@ -1,13 +1,12 @@
 package service
 
 import (
-	"minibili/internal/model/video"
 	"context"
+	"minibili/internal/model/video"
 
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
-
 )
 
 // VideoDraftService handles video draft business logic.

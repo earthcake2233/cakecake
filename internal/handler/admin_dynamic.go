@@ -26,14 +26,14 @@ func adminDynamicToJSON(d *dynamic.UserDynamic, authorName string) gin.H {
 		cover = imgs[0]
 	}
 	return gin.H{
-		"id":             d.ID,
-		"title":          d.Title,
-		"content":        d.Content,
-		"images":         imgs,
-		"cover_url":      cover,
-		"user_id":        d.UserID,
-		"uploader_name":  authorName,
-		"like_count":     d.LikeCount,
+		"id":            d.ID,
+		"title":         d.Title,
+		"content":       d.Content,
+		"images":        imgs,
+		"cover_url":     cover,
+		"user_id":       d.UserID,
+		"uploader_name": authorName,
+		"like_count":    d.LikeCount,
 		"comment_count": d.CommentCount,
 		"created_at":    d.CreatedAt,
 	}

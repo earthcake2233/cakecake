@@ -1,10 +1,10 @@
 package worker
 
 import (
-	"minibili/internal/model/video"
 	"context"
 	"encoding/json"
 	"fmt"
+	"minibili/internal/model/video"
 	"os"
 	"path/filepath"
 	"strings"

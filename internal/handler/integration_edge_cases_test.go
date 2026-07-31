@@ -30,7 +30,12 @@ func Test_CommentApproveByNonOwner(t *testing.T) {
 	tk := tok(t, api, u2.ID)
 	v := seedVideoWithAPI(t, api, u3.ID, "CAN Video")
 	w := srve(r, areq("POST", "/api/v1/videos/"+fmt.Sprint(v.ID)+"/comments", tok(t, api, u.ID), `{"content":"Can I be approved?"}`))
-	var cr struct { Code int `json:"code"`; Data struct { ID uint64 `json:"id"`} }
+	var cr struct {
+		Code int `json:"code"`
+		Data struct {
+			ID uint64 `json:"id"`
+		}
+	}
 	json.Unmarshal(w.Body.Bytes(), &cr)
 	if cr.Code == 0 && cr.Data.ID > 0 {
 		srve(r, areq("POST", fmt.Sprintf("/api/v1/comments/%d/approve", cr.Data.ID), tk, nil))

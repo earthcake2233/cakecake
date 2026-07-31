@@ -1,17 +1,16 @@
 package service
 
 import (
-	"minibili/internal/model/admin"
 	"context"
+	"minibili/internal/model/admin"
 	"testing"
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
+	"github.com/glebarez/sqlite"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
-	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
-
 )
 
 func TestHS_TopWithScores(t *testing.T) {

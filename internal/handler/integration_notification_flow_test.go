@@ -3,33 +3,34 @@
 package handler
 
 import (
-	"minibili/internal/model/notification"
-	"minibili/internal/model/video"
 	"encoding/json"
 	"fmt"
+	"minibili/internal/model/notification"
+	"minibili/internal/model/video"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
-
 )
 
 func Test_NotificationFullFlow_SeedAndList(t *testing.T) {
 	api, r, _ := newTestAPI(t)
 	u := seedUser(t, api, "nff1", "NFF1", 10)
 	tk := tok(t, api, u.ID)
-	for i := 0; i < 5; i++ { seedNotification(t, api, u.ID, "reply", uint64(i+100)) }
+	for i := 0; i < 5; i++ {
+		seedNotification(t, api, u.ID, "reply", uint64(i+100))
+	}
 	for i := 0; i < 3; i++ {
 		n := notification.Notification{
-			RecipientID: u.ID,
-			Type: "like_aggregation",
-			RelatedID: uint64(i + 200),
+			RecipientID:     u.ID,
+			Type:            "like_aggregation",
+			RelatedID:       uint64(i + 200),
 			SenderNamesJSON: `["user_a","user_b","user_c"]`,
-			TotalLikes: 3 + i,
-			CommentPreview: "Nice!",
-			PayloadJSON: `{"like_subject":"comment"}`,
-			IsRead: false,
-			CreatedAt: time.Now(),
+			TotalLikes:      3 + i,
+			CommentPreview:  "Nice!",
+			PayloadJSON:     `{"like_subject":"comment"}`,
+			IsRead:          false,
+			CreatedAt:       time.Now(),
 		}
 		require.NoError(t, api.DB.Create(&n).Error)
 	}
@@ -54,13 +55,13 @@ func Test_NotificationCommentReplyAndLike(t *testing.T) {
 	u := seedUser(t, api, "ncr1", "NCR1", 10)
 	tk := tok(t, api, u.ID)
 	n := notification.Notification{
-		RecipientID: u.ID,
-		Type: "reply",
-		RelatedID: 0,
+		RecipientID:     u.ID,
+		Type:            "reply",
+		RelatedID:       0,
 		SenderNamesJSON: `["someone"]`,
-		PayloadJSON: `{"reply_body":"Check this out","video_id":0}`,
-		IsRead: false,
-		CreatedAt: time.Now(),
+		PayloadJSON:     `{"reply_body":"Check this out","video_id":0}`,
+		IsRead:          false,
+		CreatedAt:       time.Now(),
 	}
 	require.NoError(t, api.DB.Create(&n).Error)
 	srve(r, areq("POST", fmt.Sprintf("/api/v1/notifications/%d/comment-like", n.ID), tk, nil))
@@ -72,15 +73,15 @@ func Test_NotificationLikeLikers(t *testing.T) {
 	u := seedUser(t, api, "nll1", "NLL1", 10)
 	tk := tok(t, api, u.ID)
 	n := notification.Notification{
-		RecipientID: u.ID,
-		Type: "like_aggregation",
-		RelatedID: 0,
+		RecipientID:     u.ID,
+		Type:            "like_aggregation",
+		RelatedID:       0,
 		SenderNamesJSON: `["liker_a","liker_b"]`,
-		TotalLikes: 2,
-		CommentPreview: "Cool!",
-		PayloadJSON: `{"like_subject":"comment"}`,
-		IsRead: false,
-		CreatedAt: time.Now(),
+		TotalLikes:      2,
+		CommentPreview:  "Cool!",
+		PayloadJSON:     `{"like_subject":"comment"}`,
+		IsRead:          false,
+		CreatedAt:       time.Now(),
 	}
 	require.NoError(t, api.DB.Create(&n).Error)
 	srve(r, areq("GET", fmt.Sprintf("/api/v1/notifications/%d/like-likers", n.ID), tk, nil))
@@ -93,7 +94,12 @@ func Test_DmConversationMultipleMessages(t *testing.T) {
 	tk := tok(t, api, u.ID)
 	tk2 := tok(t, api, u2.ID)
 	w := srve(r, areq("POST", "/api/v1/dm/conversations", tk, fmt.Sprintf(`{"user_id":%d}`, u2.ID)))
-	var dcr struct { Code int `json:"code"`; Data struct { ID uint64 `json:"id"`} }
+	var dcr struct {
+		Code int `json:"code"`
+		Data struct {
+			ID uint64 `json:"id"`
+		}
+	}
 	json.Unmarshal(w.Body.Bytes(), &dcr)
 	if dcr.Code == 0 && dcr.Data.ID > 0 {
 		cid := dcr.Data.ID
@@ -114,7 +120,12 @@ func Test_UserDynamicPostUpdateDelete(t *testing.T) {
 	u := seedUser(t, api, "udp1", "UDP1", 10)
 	tk := tok(t, api, u.ID)
 	w := srve(r, areq("POST", "/api/v1/users/me/dynamics", tk, `{"title":"Test Dynamic","content":"Test content"}`))
-	var dr struct { Code int `json:"code"`; Data struct { ID uint64 `json:"id"`} }
+	var dr struct {
+		Code int `json:"code"`
+		Data struct {
+			ID uint64 `json:"id"`
+		}
+	}
 	json.Unmarshal(w.Body.Bytes(), &dr)
 	if dr.Code == 0 && dr.Data.ID > 0 {
 		did := dr.Data.ID
@@ -132,7 +143,12 @@ func Test_VideoEngagementFullFolderFlow(t *testing.T) {
 	tk := tok(t, api, u.ID)
 	v := seedVideoWithAPI(t, api, u2.ID, "VEF2 Video")
 	w := srve(r, areq("POST", "/api/v1/users/me/favorite-folders", tk, `{"title":"VEF Folder"}`))
-	var fr struct { Code int `json:"code"`; Data struct { ID uint64 `json:"id"`} }
+	var fr struct {
+		Code int `json:"code"`
+		Data struct {
+			ID uint64 `json:"id"`
+		}
+	}
 	json.Unmarshal(w.Body.Bytes(), &fr)
 	if fr.Code == 0 && fr.Data.ID > 0 {
 		fid := fr.Data.ID
@@ -173,7 +189,12 @@ func Test_ArticleCommentReplyFlow(t *testing.T) {
 	tk := tok(t, api, u.ID)
 	art := seedArticle(t, api, u.ID, "ACF Article")
 	w := srve(r, areq("POST", fmt.Sprintf("/api/v1/articles/%d/comments", art.ID), tok(t, api, u2.ID), `{"content":"Parent article comment"}`))
-	var acr struct { Code int `json:"code"`; Data struct { ID uint64 `json:"id"`} }
+	var acr struct {
+		Code int `json:"code"`
+		Data struct {
+			ID uint64 `json:"id"`
+		}
+	}
 	json.Unmarshal(w.Body.Bytes(), &acr)
 	if acr.Code == 0 && acr.Data.ID > 0 {
 		pcid := acr.Data.ID
@@ -197,7 +218,12 @@ func Test_AdminHotSearchAllOps(t *testing.T) {
 	api, r, _ := newTestAPI(t)
 	at := admintok(t, api)
 	w := srve(r, areq("POST", "/api/v1/admin/hot-search/ops", at, `{"keyword":"summer","group":"seasonal","score":80}`))
-	var hopr struct { Code int `json:"code"`; Data struct { ID uint64 `json:"id"`} }
+	var hopr struct {
+		Code int `json:"code"`
+		Data struct {
+			ID uint64 `json:"id"`
+		}
+	}
 	json.Unmarshal(w.Body.Bytes(), &hopr)
 	if hopr.Code == 0 && hopr.Data.ID > 0 {
 		srve(r, areq("PUT", fmt.Sprintf("/api/v1/admin/hot-search/ops/%d", hopr.Data.ID), at, `{"keyword":"summer_upd","score":90}`))
@@ -232,7 +258,12 @@ func Test_FollowGroupMemberManagement(t *testing.T) {
 	tk := tok(t, api, u.ID)
 	srve(r, areq("POST", "/api/v1/users/me/follow", tk, fmt.Sprintf(`{"user_id":%d}`, u2.ID)))
 	w := srve(r, areq("POST", "/api/v1/users/me/follow-groups", tk, `{"name":"Special Friends"}`))
-	var fgr struct { Code int `json:"code"`; Data struct { ID uint64 `json:"id"`} }
+	var fgr struct {
+		Code int `json:"code"`
+		Data struct {
+			ID uint64 `json:"id"`
+		}
+	}
 	json.Unmarshal(w.Body.Bytes(), &fgr)
 	if fgr.Code == 0 && fgr.Data.ID > 0 {
 		gid := fgr.Data.ID

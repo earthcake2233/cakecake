@@ -20,12 +20,11 @@ import (
 	"minibili/internal/search"
 )
 
-
 // hotRecordReq is a fire-and-forget hot search record request.
 type hotRecordReq struct {
-	userID    uint64
-	clientIP  string
-	keyword   string
+	userID   uint64
+	clientIP string
+	keyword  string
 }
 
 // InitHotRecorder starts a background worker to asynchronously record hot searches.
@@ -47,6 +46,7 @@ func (a *API) InitHotRecorder(buffer int) {
 		}
 	}()
 }
+
 const searchCacheTTL = 30 * time.Second
 
 func searchCacheKey(keyword, searchType, sort string, page, pageSize int) string {

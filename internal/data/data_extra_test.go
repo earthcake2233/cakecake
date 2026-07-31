@@ -1,18 +1,17 @@
 package data
 
 import (
+	"errors"
 	"minibili/internal/model/article"
 	"minibili/internal/model/comment"
 	"minibili/internal/model/user"
 	"minibili/internal/model/video"
-	"errors"
 	"testing"
 
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
-
 )
 
 func extDB(t *testing.T) *gorm.DB {

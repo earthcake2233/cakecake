@@ -31,7 +31,7 @@ func NewRedis(cfg *config.C) (*redis.Client, error) {
 
 // RedisKey helpers
 const (
-	PrefixDanmakuCooldown = "danmaku:cooldown:"
+	PrefixDanmakuCooldown     = "danmaku:cooldown:"
 	PrefixRefreshInvalid      = "refresh_token:invalid:"
 	PrefixAdminRefreshInvalid = "refresh_token:admin:invalid:"
 	// PrefixVideoPlayDelta stores incremental views since last flush to MySQL.

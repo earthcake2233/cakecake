@@ -1,6 +1,7 @@
 package data
 
 import (
+	"errors"
 	"minibili/internal/model/admin"
 	"minibili/internal/model/article"
 	"minibili/internal/model/comment"
@@ -8,7 +9,6 @@ import (
 	"minibili/internal/model/notification"
 	"minibili/internal/model/user"
 	"minibili/internal/model/video"
-	"errors"
 	"testing"
 	"time"
 
@@ -172,4 +172,3 @@ func TestNewRedis_InvalidConfig(t *testing.T) {
 	_, err := NewRedis(cfg)
 	require.Error(t, err)
 }
-

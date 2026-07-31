@@ -22,6 +22,7 @@ import (
 	"minibili/internal/service"
 	"minibili/internal/ws"
 )
+
 func newAdminCRUDAPI(t *testing.T) (*API, *gin.Engine, *jwttoken.Manager) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
@@ -46,13 +47,13 @@ func TestAdminBannerCRUD_Full(t *testing.T) {
 	access, _, _, err := jm.IssueAdminPair(1)
 	require.NoError(t, err)
 	req := httptest.NewRequest("POST", "/api/v1/admin/home-banners", strings.NewReader(`{"title":"Banner 1","image_url":"https://ex.com/img.jpg","link_type":"url","link_target":"https://ex.com","sort_order":1,"enabled":true}`))
-	req.Header.Set("Authorization", "Bearer " + access)
+	req.Header.Set("Authorization", "Bearer "+access)
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	require.Equal(t, 201, w.Code, w.Body.String())
 	var cr struct {
-		Code int `json:"code"`
+		Code int   `json:"code"`
 		Data gin.H `json:"data"`
 	}
 	json.Unmarshal(w.Body.Bytes(), &cr)
@@ -61,7 +62,7 @@ func TestAdminBannerCRUD_Full(t *testing.T) {
 
 	// Test DELETE
 	req4 := httptest.NewRequest("DELETE", "/api/v1/admin/home-banners/"+strconv.Itoa(id), nil)
-	req4.Header.Set("Authorization", "Bearer " + access)
+	req4.Header.Set("Authorization", "Bearer "+access)
 	w4 := httptest.NewRecorder()
 	r.ServeHTTP(w4, req4)
 	require.Equal(t, 200, w4.Code)

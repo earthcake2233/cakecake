@@ -3,17 +3,16 @@
 package service
 
 import (
+	"context"
 	"minibili/internal/model/admin"
 	"minibili/internal/model/agent"
 	"minibili/internal/model/dm"
-	"context"
 	"testing"
-	
+
 	"github.com/alicebob/miniredis/v2"
 	"github.com/glebarez/sqlite"
 	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
-
 )
 
 // setupSQLiteDB creates an in-memory SQLite DB with auto-migration for tests.
@@ -232,8 +231,6 @@ func TestDanmakuRelay_Skip(t *testing.T) {
 
 // ---------- AgentService: CheckQuota ----------
 
-
-
 func TestAgentService_IsAgentConversationIntegration(t *testing.T) {
 	s := &AgentService{}
 	tests := []struct {
@@ -255,5 +252,3 @@ func TestAgentService_IsAgentConversationIntegration(t *testing.T) {
 		})
 	}
 }
-
-

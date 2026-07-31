@@ -8,8 +8,8 @@ import (
 
 	"gorm.io/gorm"
 
-	"minibili/internal/pkg/userlevel"
 	"minibili/internal/pkg/useravatar"
+	"minibili/internal/pkg/userlevel"
 )
 
 // EnrichUserHits fills profile stats, follow state, and recent archives from MySQL.

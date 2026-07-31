@@ -1,8 +1,8 @@
 package worker
 
 import (
-	"minibili/internal/model/video"
 	"encoding/json"
+	"minibili/internal/model/video"
 	"os"
 	"path/filepath"
 	"testing"

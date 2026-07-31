@@ -1,12 +1,12 @@
 package service
 
 import (
-	"minibili/internal/model/article"
-	"minibili/internal/model/comment"
-	"minibili/internal/model/extra"
 	"context"
 	"errors"
 	"fmt"
+	"minibili/internal/model/article"
+	"minibili/internal/model/comment"
+	"minibili/internal/model/extra"
 
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
@@ -115,8 +115,12 @@ func (s *ArticleService) BatchArticleEngagementByViewer(ctx context.Context, vie
 	s.db.WithContext(ctx).Where("user_id = ? AND article_id IN ?", viewerID, articleIDs).Find(&coinRows)
 	for i := range coinRows {
 		amt := coinRows[i].Amount
-		if amt < 0 { amt = 0 }
-		if amt > 2 { amt = 2 }
+		if amt < 0 {
+			amt = 0
+		}
+		if amt > 2 {
+			amt = 2
+		}
 		coinAmt[coinRows[i].ArticleID] = amt
 	}
 	for _, id := range articleIDs {
@@ -170,20 +174,32 @@ func (s *ArticleService) ToggleArticleFavorite(ctx context.Context, userID, arti
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var existing article.ArticleFavorite
 		res := tx.Where("user_id = ? AND article_id = ?", userID, articleID).Limit(1).Find(&existing)
-		if res.Error != nil { return res.Error }
+		if res.Error != nil {
+			return res.Error
+		}
 		if res.RowsAffected > 0 {
 			favorited = false
-			if err := tx.Where("user_id = ? AND article_id = ?", userID, articleID).Delete(&article.ArticleFavorite{}).Error; err != nil { return err }
+			if err := tx.Where("user_id = ? AND article_id = ?", userID, articleID).Delete(&article.ArticleFavorite{}).Error; err != nil {
+				return err
+			}
 			if err := tx.Model(&article.Article{}).Where("id = ?", articleID).UpdateColumn("fav_count",
-				gorm.Expr("CASE WHEN fav_count - ? < 0 THEN 0 ELSE fav_count - ? END", 1, 1)).Error; err != nil { return err }
+				gorm.Expr("CASE WHEN fav_count - ? < 0 THEN 0 ELSE fav_count - ? END", 1, 1)).Error; err != nil {
+				return err
+			}
 		} else {
 			favorited = true
-			if err := tx.Create(&article.ArticleFavorite{UserID: userID, ArticleID: articleID}).Error; err != nil { return err }
+			if err := tx.Create(&article.ArticleFavorite{UserID: userID, ArticleID: articleID}).Error; err != nil {
+				return err
+			}
 			if err := tx.Model(&article.Article{}).Where("id = ?", articleID).UpdateColumn("fav_count",
-				gorm.Expr("fav_count + ?", 1)).Error; err != nil { return err }
+				gorm.Expr("fav_count + ?", 1)).Error; err != nil {
+				return err
+			}
 		}
 		var art article.Article
-		if err := tx.First(&art, articleID).Error; err != nil { return err }
+		if err := tx.First(&art, articleID).Error; err != nil {
+			return err
+		}
 		favCount = art.FavCount
 		return nil
 	})
@@ -196,13 +212,25 @@ func deleteArticleCascadeTx(tx *gorm.DB, articleID uint64) error {
 		return err
 	}
 	if len(cids) > 0 {
-		if err := tx.Where("comment_id IN ?", cids).Delete(&comment.ArticleCommentLike{}).Error; err != nil { return err }
-		if err := tx.Where("comment_id IN ?", cids).Delete(&comment.ArticleCommentDislike{}).Error; err != nil { return err }
-		if err := tx.Where("id IN ?", cids).Delete(&comment.ArticleComment{}).Error; err != nil { return err }
+		if err := tx.Where("comment_id IN ?", cids).Delete(&comment.ArticleCommentLike{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("comment_id IN ?", cids).Delete(&comment.ArticleCommentDislike{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("id IN ?", cids).Delete(&comment.ArticleComment{}).Error; err != nil {
+			return err
+		}
 	}
-	if err := tx.Where("article_id = ?", articleID).Delete(&article.ArticleFavorite{}).Error; err != nil { return err }
-	if err := tx.Where("article_id = ?", articleID).Delete(&article.ArticleCoin{}).Error; err != nil { return err }
-	if err := tx.Where("article_id = ?", articleID).Delete(&extra.ArticleViewHistory{}).Error; err != nil { return err }
+	if err := tx.Where("article_id = ?", articleID).Delete(&article.ArticleFavorite{}).Error; err != nil {
+		return err
+	}
+	if err := tx.Where("article_id = ?", articleID).Delete(&article.ArticleCoin{}).Error; err != nil {
+		return err
+	}
+	if err := tx.Where("article_id = ?", articleID).Delete(&extra.ArticleViewHistory{}).Error; err != nil {
+		return err
+	}
 	return tx.Where("id = ?", articleID).Delete(&article.Article{}).Error
 }
 
@@ -233,7 +261,9 @@ func (s *ArticleService) ListArticlesCursor(ctx context.Context, cursor uint64, 
 		return nil, err
 	}
 	hasMore := len(list) > limit
-	if hasMore { list = list[:limit] }
+	if hasMore {
+		list = list[:limit]
+	}
 	return &ListArticlesCursorResult{Items: list, HasMore: hasMore}, nil
 }
 
@@ -251,21 +281,25 @@ func (s *ArticleService) ListMyArticlesCursor(ctx context.Context, userID uint64
 	}
 	order := "id DESC"
 	switch sortKey {
-	case "time": order = "id DESC"
-	case "view": order = "view_count DESC, id DESC"
-	case "reply": order = "comment_count DESC, id DESC"
-	case "like", "fav": order = "fav_count DESC, id DESC"
+	case "time":
+		order = "id DESC"
+	case "view":
+		order = "view_count DESC, id DESC"
+	case "reply":
+		order = "comment_count DESC, id DESC"
+	case "like", "fav":
+		order = "fav_count DESC, id DESC"
 	}
 	var list []article.Article
 	if err := q.Order(order).Limit(limit + 1).Find(&list).Error; err != nil {
 		return nil, err
 	}
 	hasMore := len(list) > limit
-	if hasMore { list = list[:limit] }
+	if hasMore {
+		list = list[:limit]
+	}
 	return &ListArticlesCursorResult{Items: list, HasMore: hasMore}, nil
 }
-
-
 
 // ListMyArticlesPage returns user articles with page-based pagination and filtering.
 func (s *ArticleService) ListMyArticlesPage(ctx context.Context, userID uint64, page, pageSize int, status, titleQ, sortKey string) (*ListMyArticlesPageResult, error) {
@@ -285,10 +319,14 @@ func (s *ArticleService) ListMyArticlesPage(ctx context.Context, userID uint64, 
 	offset := (page - 1) * pageSize
 	order := "id DESC"
 	switch sortKey {
-	case "time": order = "created_at DESC, id DESC"
-	case "view": order = "view_count DESC, id DESC"
-	case "reply": order = "comment_count DESC, id DESC"
-	case "like", "fav": order = "fav_count DESC, id DESC"
+	case "time":
+		order = "created_at DESC, id DESC"
+	case "view":
+		order = "view_count DESC, id DESC"
+	case "reply":
+		order = "comment_count DESC, id DESC"
+	case "like", "fav":
+		order = "fav_count DESC, id DESC"
 	}
 	var list []article.Article
 	if err := q.Order(order).Offset(offset).Limit(pageSize).Find(&list).Error; err != nil {
@@ -308,11 +346,11 @@ func (s *ArticleService) ListUserPublishedArticlesCursor(ctx context.Context, us
 		return nil, err
 	}
 	hasMore := len(list) > limit
-	if hasMore { list = list[:limit] }
+	if hasMore {
+		list = list[:limit]
+	}
 	return &ListArticlesCursorResult{Items: list, HasMore: hasMore}, nil
 }
-
-
 
 // ListFavoritedArticlesV2 returns favorited articles for a user with cursor pagination.
 func (s *ArticleService) ListFavoritedArticlesV2(ctx context.Context, userID, cursor uint64, limit int) ([]article.ArticleFavorite, bool, error) {
@@ -330,15 +368,24 @@ func (s *ArticleService) ListFavoritedArticlesV2(ctx context.Context, userID, cu
 	}
 	return favs, hasMore, nil
 }
+
 // BatchFetchArticles returns a map of article ID to article pointer.
 func (s *ArticleService) BatchFetchArticles(ctx context.Context, ids []uint64, onlyPublished bool) map[uint64]*article.Article {
 	out := make(map[uint64]*article.Article, len(ids))
-	if len(ids) == 0 { return out }
+	if len(ids) == 0 {
+		return out
+	}
 	q := s.db.WithContext(ctx).Where("id IN ?", ids)
-	if onlyPublished { q = q.Where("status = ?", articleStatusPublished) }
+	if onlyPublished {
+		q = q.Where("status = ?", articleStatusPublished)
+	}
 	var rows []article.Article
-	if err := q.Find(&rows).Error; err != nil { return out }
-	for i := range rows { out[rows[i].ID] = &rows[i] }
+	if err := q.Find(&rows).Error; err != nil {
+		return out
+	}
+	for i := range rows {
+		out[rows[i].ID] = &rows[i]
+	}
 	return out
 }
 
@@ -355,17 +402,22 @@ func (s *ArticleService) CountFavoritedArticles(ctx context.Context, userID uint
 	return total, err
 }
 
-
 // SetUserService sets UserService for cross-domain queries.
 
 func manuscriptStatusToDB(status string) string {
 	switch status {
-	case "all", "": return ""
-	case "draft": return "draft"
-	case "processing": return "processing"
-	case "passed": return "published"
-	case "rejected": return "rejected"
-	default: return ""
+	case "all", "":
+		return ""
+	case "draft":
+		return "draft"
+	case "processing":
+		return "processing"
+	case "passed":
+		return "published"
+	case "rejected":
+		return "rejected"
+	default:
+		return ""
 	}
 }
 
@@ -384,14 +436,14 @@ func (s *ArticleService) HasArticleCoin(ctx context.Context, userID, articleID u
 
 // PostArticleCoinResult holds the result of a coin operation.
 type PostArticleCoinResult struct {
-	Coined         bool
-	CoinCount      uint64
-	Amount         int
-	MyCoinAmount   int
-	CoinBalance    float64
-	DailyProgress  int
-	AlreadyCoined  bool
-	Insufficient   bool
+	Coined        bool
+	CoinCount     uint64
+	Amount        int
+	MyCoinAmount  int
+	CoinBalance   float64
+	DailyProgress int
+	AlreadyCoined bool
+	Insufficient  bool
 }
 
 // PostArticleCoin handles the full article coin transaction.

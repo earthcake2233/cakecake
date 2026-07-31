@@ -5,16 +5,15 @@ import (
 	"time"
 
 	"gorm.io/gorm"
-
 )
 
 const (
-	ReasonLoginReward     = "login_reward"
-	ReasonVideoTip        = "video_tip"
-	ReasonVideoTipIncome  = "video_tip_income"
-	ReasonArticleTip      = "article_tip"
+	ReasonLoginReward      = "login_reward"
+	ReasonVideoTip         = "video_tip"
+	ReasonVideoTipIncome   = "video_tip_income"
+	ReasonArticleTip       = "article_tip"
 	ReasonArticleTipIncome = "article_tip_income"
-	ReasonNicknameChange  = "nickname_change"
+	ReasonNicknameChange   = "nickname_change"
 )
 
 // RecordLedger appends a ledger row (call inside the same transaction as balance change).

@@ -1,8 +1,8 @@
 package service
 
 import (
-	"minibili/internal/model/admin"
 	"context"
+	"minibili/internal/model/admin"
 	"testing"
 
 	"github.com/alicebob/miniredis/v2"
@@ -46,19 +46,18 @@ func TestNewDanmakuRelay_NilLog(t *testing.T) {
 	require.NotNil(t, relay.Log) // should be zap.NewNop()
 }
 
-
 func TestDanmakuRelay_Publish_Simple(t *testing.T) {
-    mr, err := miniredis.Run()
-    require.NoError(t, err)
-    defer mr.Close()
+	mr, err := miniredis.Run()
+	require.NoError(t, err)
+	defer mr.Close()
 
-    rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-    hub := ws.NewHub()
-    relay := NewDanmakuRelay(rdb, hub, zap.NewNop())
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	hub := ws.NewHub()
+	relay := NewDanmakuRelay(rdb, hub, zap.NewNop())
 
-    ctx := context.Background()
-    err = relay.Publish(ctx, uint64(100), map[string]interface{}{"text": "hello"})
-    require.NoError(t, err)
+	ctx := context.Background()
+	err = relay.Publish(ctx, uint64(100), map[string]interface{}{"text": "hello"})
+	require.NoError(t, err)
 }
 func TestDanmakuRelay_Publish_Error(t *testing.T) {
 	// Use a disconnected client to simulate publish failure

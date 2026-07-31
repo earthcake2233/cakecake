@@ -3,22 +3,23 @@
 package handler
 
 import (
-	"minibili/internal/model/comment"
-	"minibili/internal/model/dynamic"
 	"encoding/json"
 	"fmt"
+	"minibili/internal/model/comment"
+	"minibili/internal/model/dynamic"
 	"net/http/httptest"
 	"strconv"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
-
 )
 
 func codeFrom(t *testing.T, w *httptest.ResponseRecorder) int {
 	t.Helper()
-	var r struct { Code int `json:"code"` }
+	var r struct {
+		Code int `json:"code"`
+	}
 	json.Unmarshal(w.Body.Bytes(), &r)
 	return r.Code
 }
@@ -33,12 +34,18 @@ func Test_DecrementPaths(t *testing.T) {
 
 	// Post a comment
 	w := srve(r, areq("POST", "/api/v1/videos/"+strconv.FormatUint(v.ID, 10)+"/comments", tk, `{"content":"test"}`))
-	if codeFrom(t, w) != 0 { t.Skip("comment post failed") }
+	if codeFrom(t, w) != 0 {
+		t.Skip("comment post failed")
+	}
 
 	// Extract comment ID
-	var cm struct { Data comment.Comment `json:"data"` }
+	var cm struct {
+		Data comment.Comment `json:"data"`
+	}
 	json.Unmarshal(w.Body.Bytes(), &cm)
-	if cm.Data.ID == 0 { t.Skip("no comment id") }
+	if cm.Data.ID == 0 {
+		t.Skip("no comment id")
+	}
 	cid := cm.Data.ID
 
 	// Like comment (CASE WHEN like_count - 1 later gets tested)
@@ -76,11 +83,17 @@ func Test_DynamicCommentReactions(t *testing.T) {
 	// Post comment on dynamic
 	body := `{"content":"dynamic comment"}`
 	w := srve(r, areq("POST", fmt.Sprintf("/api/v1/user-dynamics/%d/comments", dyn.ID), tk, body))
-	if codeFrom(t, w) != 0 { t.Skip("dynamic comment failed") }
+	if codeFrom(t, w) != 0 {
+		t.Skip("dynamic comment failed")
+	}
 
-	var dcm struct { Data comment.DynamicComment `json:"data"` }
+	var dcm struct {
+		Data comment.DynamicComment `json:"data"`
+	}
 	json.Unmarshal(w.Body.Bytes(), &dcm)
-	if dcm.Data.ID == 0 { t.Skip("no dynamic comment id") }
+	if dcm.Data.ID == 0 {
+		t.Skip("no dynamic comment id")
+	}
 	dcid := dcm.Data.ID
 
 	// Like (then unlike by disliking) - covers CASE WHEN like_count -= 1
@@ -96,11 +109,17 @@ func Test_ArticleCommentDecrement(t *testing.T) {
 	tk := tok(t, api, u.ID)
 
 	w := srve(r, areq("POST", fmt.Sprintf("/api/v1/articles/%d/comments", art.ID), tk, `{"content":"acd comment"}`))
-	if codeFrom(t, w) != 0 { t.Skip("article comment failed") }
+	if codeFrom(t, w) != 0 {
+		t.Skip("article comment failed")
+	}
 
-	var acm struct { Data comment.ArticleComment `json:"data"` }
+	var acm struct {
+		Data comment.ArticleComment `json:"data"`
+	}
 	json.Unmarshal(w.Body.Bytes(), &acm)
-	if acm.Data.ID == 0 { t.Skip("no article comment id") }
+	if acm.Data.ID == 0 {
+		t.Skip("no article comment id")
+	}
 	acid := acm.Data.ID
 
 	// Like toggle (covers CASE WHEN like_count -= 1)
@@ -188,7 +207,11 @@ func Test_VideoFolderOperations(t *testing.T) {
 
 	// Create folder
 	w := srve(r, areq("POST", "/api/v1/users/me/favorite-folders", tk, `{"title":"VFO Folder"}`))
-	var ff struct { Data struct { ID uint64 `json:"id"` } `json:"data"` }
+	var ff struct {
+		Data struct {
+			ID uint64 `json:"id"`
+		} `json:"data"`
+	}
 	json.Unmarshal(w.Body.Bytes(), &ff)
 	if ff.Data.ID > 0 {
 		fid := ff.Data.ID

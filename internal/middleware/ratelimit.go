@@ -1,10 +1,10 @@
 package middleware
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strings"
-	"context"
 	"sync"
 	"time"
 

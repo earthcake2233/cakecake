@@ -4,7 +4,6 @@ import (
 	"minibili/internal/model/user"
 	"testing"
 	"time"
-
 )
 
 func TestPublicURL_NilUser(t *testing.T) {

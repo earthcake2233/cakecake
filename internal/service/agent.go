@@ -1,13 +1,13 @@
 package service
 
 import (
-	"minibili/internal/model/agent"
-	"minibili/internal/model/dm"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"minibili/internal/model/agent"
+	"minibili/internal/model/dm"
 	"strings"
 	"sync"
 	"time"
@@ -28,21 +28,21 @@ import (
 // AgentService runs AI assistant replies for agent DM threads.
 // GenerateReplyResult holds the AI reply along with tool call metadata for persistence.
 type GenerateReplyResult struct {
-	Content         string          `json:"content"`
-	ToolActivities  json.RawMessage `json:"tool_activities,omitempty"`
-	ToolResultData  json.RawMessage `json:"tool_result_data,omitempty"`
+	Content        string          `json:"content"`
+	ToolActivities json.RawMessage `json:"tool_activities,omitempty"`
+	ToolResultData json.RawMessage `json:"tool_result_data,omitempty"`
 }
 
 type AgentService struct {
-	Cfg        *config.C
-	DB         *gorm.DB
-	Redis      *redis.Client
-	Gateway    *aigateway.Gateway
-	Sens       *sensitive.Filter
-	ChatHub    *ws.ChatHub
-	Log        *zap.Logger
-	RC         *config.RuntimeConfig
-	ToolExec   toolkit.Executor
+	Cfg      *config.C
+	DB       *gorm.DB
+	Redis    *redis.Client
+	Gateway  *aigateway.Gateway
+	Sens     *sensitive.Filter
+	ChatHub  *ws.ChatHub
+	Log      *zap.Logger
+	RC       *config.RuntimeConfig
+	ToolExec toolkit.Executor
 }
 
 func (s *AgentService) gatewayReady() bool {
@@ -233,12 +233,12 @@ func (s *AgentService) setupToolCallbacks(traceID string, humanID uint64) {
 		var args interface{}
 		json.Unmarshal(argsJSON, &args)
 		payload := map[string]interface{}{
-			"trace_id":        tid,
-			"span_id":         spanID,
-			"parent_span_id":  parentSpanID,
-			"tool_name":       toolName,
-			"arguments":       args,
-			"started_at":      time.Now().Format(time.RFC3339),
+			"trace_id":       tid,
+			"span_id":        spanID,
+			"parent_span_id": parentSpanID,
+			"tool_name":      toolName,
+			"arguments":      args,
+			"started_at":     time.Now().Format(time.RFC3339),
 		}
 		s.ChatHub.PushJSON(humanID, map[string]interface{}{
 			"type": "tool_call_start",
@@ -341,10 +341,10 @@ func (s *AgentService) GenerateReply(ctx context.Context, conv *dm.DmConversatio
 				orig(tid, spanID, parentSpanID, toolName, argsJSON)
 				mu.Lock()
 				toolActs = append(toolActs, map[string]interface{}{
-					"trace_id":   tid,
-					"span_id":    spanID,
-					"tool_name":  toolName,
-					"status":     "running",
+					"trace_id":  tid,
+					"span_id":   spanID,
+					"tool_name": toolName,
+					"status":    "running",
 				})
 				mu.Unlock()
 			}
@@ -466,7 +466,6 @@ func (s *AgentService) ResetConversation(ctx context.Context, conv *dm.DmConvers
 
 // ReloadProfiles is a no-op placeholder after multi-profile migration.
 func (s *AgentService) ReloadProfiles() {}
-
 
 // ListAgentProfiles returns all agent profiles.
 func (s *AgentService) ListAgentProfiles(ctx context.Context) ([]agent.AgentProfile, error) {

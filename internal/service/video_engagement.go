@@ -1,9 +1,9 @@
 package service
 
 import (
+	"context"
 	"minibili/internal/model/user"
 	"minibili/internal/model/video"
-	"context"
 
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
@@ -27,9 +27,6 @@ func NewEngagementService(db *gorm.DB, rdb *redis.Client, log *zap.Logger, users
 	return &EngagementService{db: db, rdb: rdb, log: log, users: users, videos: videos}
 }
 
-
-
-
 // HasCoined checks if user already coined a video.
 func (s *EngagementService) HasCoined(ctx context.Context, userID, videoID uint64) bool {
 	var cnt int64
@@ -39,9 +36,13 @@ func (s *EngagementService) HasCoined(ctx context.Context, userID, videoID uint6
 
 // GetUserCoinBalance returns the user current coin balance.
 func (s *EngagementService) GetUserCoinBalance(ctx context.Context, userID uint64) int64 {
-	if s.users == nil { return 0 }
+	if s.users == nil {
+		return 0
+	}
 	u, err := s.users.GetUser(ctx, userID)
-	if err != nil { return 0 }
+	if err != nil {
+		return 0
+	}
 	return u.CoinBalanceTenths
 }
 
@@ -68,7 +69,9 @@ func (s *EngagementService) ToggleWatchLater(ctx context.Context, userID, videoI
 		return false, nil
 	}
 	wl := video.WatchLater{UserID: userID, VideoID: videoID}
-	if err := s.db.WithContext(ctx).Create(&wl).Error; err != nil { return false, err }
+	if err := s.db.WithContext(ctx).Create(&wl).Error; err != nil {
+		return false, err
+	}
 	return true, nil
 }
 
@@ -79,7 +82,9 @@ func (s *EngagementService) ListWatchLater(ctx context.Context, userID uint64, p
 	q := s.db.WithContext(ctx).Where("user_id = ?", userID)
 	offset := (page - 1) * pageSize
 	var list []video.WatchLater
-	if err := q.Order("id DESC").Offset(offset).Limit(pageSize).Find(&list).Error; err != nil { return nil, 0, err }
+	if err := q.Order("id DESC").Offset(offset).Limit(pageSize).Find(&list).Error; err != nil {
+		return nil, 0, err
+	}
 	return list, total, nil
 }
 
@@ -102,42 +107,61 @@ func (s *EngagementService) MarkWatchLaterWatched(ctx context.Context, userID, v
 // BatchHasCoined returns a map of video_id -> coined for a user.
 func (s *EngagementService) BatchHasCoined(ctx context.Context, userID uint64, videoIDs []uint64) map[uint64]bool {
 	result := make(map[uint64]bool)
-	if userID == 0 || len(videoIDs) == 0 { return result }
+	if userID == 0 || len(videoIDs) == 0 {
+		return result
+	}
 	var coins []video.VideoCoin
 	s.db.WithContext(ctx).Where("user_id = ? AND video_id IN ?", userID, videoIDs).Find(&coins)
-	for _, c := range coins { result[c.VideoID] = true }
+	for _, c := range coins {
+		result[c.VideoID] = true
+	}
 	return result
 }
 
 // BatchWatchLater returns a map of video_id -> in-watch-later for a user.
 func (s *EngagementService) BatchWatchLater(ctx context.Context, userID uint64, videoIDs []uint64) map[uint64]bool {
 	result := make(map[uint64]bool)
-	if userID == 0 || len(videoIDs) == 0 { return result }
+	if userID == 0 || len(videoIDs) == 0 {
+		return result
+	}
 	var wls []video.WatchLater
 	s.db.WithContext(ctx).Where("user_id = ? AND video_id IN ?", userID, videoIDs).Find(&wls)
-	for _, w := range wls { result[w.VideoID] = true }
+	for _, w := range wls {
+		result[w.VideoID] = true
+	}
 	return result
 }
+
 // BatchFavoritedByUser returns a map of video_id -> favorited for a user.
 func (s *EngagementService) BatchFavoritedByUser(ctx context.Context, userID uint64, videoIDs []uint64) map[uint64]bool {
 	result := make(map[uint64]bool)
-	if userID == 0 || len(videoIDs) == 0 { return result }
+	if userID == 0 || len(videoIDs) == 0 {
+		return result
+	}
 	var favs []video.VideoFavorite
 	s.db.WithContext(ctx).Where("user_id = ? AND video_id IN ?", userID, videoIDs).Find(&favs)
-	for _, f := range favs { result[f.VideoID] = true }
+	for _, f := range favs {
+		result[f.VideoID] = true
+	}
 	return result
 }
 
 // BatchCoinedByUser returns a map of video_id -> coin amount for a user.
 func (s *EngagementService) BatchCoinedByUser(ctx context.Context, userID uint64, videoIDs []uint64) map[uint64]int {
 	result := make(map[uint64]int)
-	if userID == 0 || len(videoIDs) == 0 { return result }
+	if userID == 0 || len(videoIDs) == 0 {
+		return result
+	}
 	var coins []video.VideoCoin
 	s.db.WithContext(ctx).Where("user_id = ? AND video_id IN ?", userID, videoIDs).Find(&coins)
 	for _, c := range coins {
 		amt := c.Amount
-		if amt < 0 { amt = 0 }
-		if amt > 2 { amt = 2 }
+		if amt < 0 {
+			amt = 0
+		}
+		if amt > 2 {
+			amt = 2
+		}
 		result[c.VideoID] = amt
 	}
 	return result
@@ -147,13 +171,19 @@ func (s *EngagementService) BatchCoinedByUser(ctx context.Context, userID uint64
 func (s *EngagementService) ToggleFavorite(ctx context.Context, userID, videoID uint64) (bool, uint64, error) {
 	var rows []video.VideoFavorite
 	res := s.db.WithContext(ctx).Where("user_id = ? AND video_id = ?", userID, videoID).Find(&rows)
-	if res.Error != nil { return false, 0, res.Error }
+	if res.Error != nil {
+		return false, 0, res.Error
+	}
 	if len(rows) == 0 {
 		row := video.VideoFavorite{UserID: userID, VideoID: videoID}
-		if err := s.db.WithContext(ctx).Create(&row).Error; err != nil { return false, 0, err }
+		if err := s.db.WithContext(ctx).Create(&row).Error; err != nil {
+			return false, 0, err
+		}
 		_ = s.db.WithContext(ctx).Model(&video.Video{}).Where("id = ?", videoID).UpdateColumn("fav_count", gorm.Expr("fav_count + ?", 1)).Error
 		var v video.Video
-		if err := s.db.WithContext(ctx).First(&v, videoID).Error; err != nil { return true, 0, nil }
+		if err := s.db.WithContext(ctx).First(&v, videoID).Error; err != nil {
+			return true, 0, nil
+		}
 		return true, v.FavCount, nil
 	}
 	if err := s.db.WithContext(ctx).Where("user_id = ? AND video_id = ?", userID, videoID).Delete(&video.VideoFavorite{}).Error; err != nil {
@@ -161,7 +191,9 @@ func (s *EngagementService) ToggleFavorite(ctx context.Context, userID, videoID 
 	}
 	_ = s.db.WithContext(ctx).Model(&video.Video{}).Where("id = ?", videoID).UpdateColumn("fav_count", gorm.Expr("CASE WHEN fav_count - ? < 0 THEN 0 ELSE fav_count - ? END", 1, 1)).Error
 	var v video.Video
-	if err := s.db.WithContext(ctx).First(&v, videoID).Error; err != nil { return false, 0, nil }
+	if err := s.db.WithContext(ctx).First(&v, videoID).Error; err != nil {
+		return false, 0, nil
+	}
 	return false, v.FavCount, nil
 }
 
@@ -169,8 +201,12 @@ func (s *EngagementService) ToggleFavorite(ctx context.Context, userID, videoID 
 func (s *EngagementService) MoveFavoritesBetweenFolders(ctx context.Context, uid, fromFolderID, toFolderID uint64) (int64, error) {
 	var favs []video.VideoFavorite
 	if err := s.db.WithContext(ctx).Where("user_id = ? AND folder_id = ?", uid, fromFolderID).
-		Order("created_at ASC").Find(&favs).Error; err != nil { return 0, err }
-	if len(favs) == 0 { return 0, nil }
+		Order("created_at ASC").Find(&favs).Error; err != nil {
+		return 0, err
+	}
+	if len(favs) == 0 {
+		return 0, nil
+	}
 	for _, fav := range favs {
 		var already video.VideoFavorite
 		_ = s.db.WithContext(ctx).Where("user_id = ? AND video_id = ?", uid, fav.VideoID).Limit(1).Find(&already).Error
@@ -198,13 +234,19 @@ func (s *EngagementService) VideoFavCount(ctx context.Context, videoID uint64) (
 func (s *EngagementService) ToggleVideoFavoriteWithFolder(ctx context.Context, userID, videoID, folderID uint64) (bool, uint64, error) {
 	var rows []video.VideoFavorite
 	res := s.db.WithContext(ctx).Where("user_id = ? AND video_id = ?", userID, videoID).Find(&rows)
-	if res.Error != nil { return false, 0, res.Error }
+	if res.Error != nil {
+		return false, 0, res.Error
+	}
 	if len(rows) == 0 {
 		row := video.VideoFavorite{UserID: userID, VideoID: videoID, FolderID: folderID}
-		if err := s.db.WithContext(ctx).Create(&row).Error; err != nil { return false, 0, err }
+		if err := s.db.WithContext(ctx).Create(&row).Error; err != nil {
+			return false, 0, err
+		}
 		_ = s.db.WithContext(ctx).Model(&video.Video{}).Where("id = ?", videoID).UpdateColumn("fav_count", gorm.Expr("fav_count + ?", 1)).Error
 		var v video.Video
-		if err := s.db.WithContext(ctx).First(&v, videoID).Error; err != nil { return true, 0, nil }
+		if err := s.db.WithContext(ctx).First(&v, videoID).Error; err != nil {
+			return true, 0, nil
+		}
 		return true, v.FavCount, nil
 	}
 	if err := s.db.WithContext(ctx).Where("user_id = ? AND video_id = ?", userID, videoID).Delete(&video.VideoFavorite{}).Error; err != nil {
@@ -212,50 +254,70 @@ func (s *EngagementService) ToggleVideoFavoriteWithFolder(ctx context.Context, u
 	}
 	_ = s.db.WithContext(ctx).Model(&video.Video{}).Where("id = ?", videoID).UpdateColumn("fav_count", gorm.Expr("CASE WHEN fav_count - ? < 0 THEN 0 ELSE fav_count - ? END", 1, 1)).Error
 	var v video.Video
-	if err := s.db.WithContext(ctx).First(&v, videoID).Error; err != nil { return false, 0, nil }
+	if err := s.db.WithContext(ctx).First(&v, videoID).Error; err != nil {
+		return false, 0, nil
+	}
 	return false, v.FavCount, nil
 }
 
 // PostVideoCoinResult holds the result of a coin operation.
 type PostVideoCoinResult struct {
-	Coined         bool
-	CoinCount      uint64
-	Amount         int
-	MyCoinAmount   int
-	CoinBalance    float64
-	DailyProgress  int
-	DailyMax       int
+	Coined        bool
+	CoinCount     uint64
+	Amount        int
+	MyCoinAmount  int
+	CoinBalance   float64
+	DailyProgress int
+	DailyMax      int
 }
 
 // PostVideoCoin performs the full coin transaction for a user.
 func (s *EngagementService) PostVideoCoin(ctx context.Context, uid, vid, uploaderID uint64, amount int) (*PostVideoCoinResult, error) {
 	var exist video.VideoCoin
 	res := s.db.WithContext(ctx).Where("user_id = ? AND video_id = ?", uid, vid).Limit(1).Find(&exist)
-	if res.Error != nil { return nil, res.Error }
+	if res.Error != nil {
+		return nil, res.Error
+	}
 
 	coinBefore := dailyreward.CoinProgress(s.db, uid)
 	var spentAmount int
 	var myCoinAmount int
 
 	if res.RowsAffected > 0 {
-		if exist.Amount >= 2 { return nil, nil }
+		if exist.Amount >= 2 {
+			return nil, nil
+		}
 		spentAmount = 1
 		myCoinAmount = 2
 		if err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-			if err := usercoin.SpendOnVideoCoin(tx, uid, uploaderID, vid, spentAmount); err != nil { return err }
-			if err := tx.Model(&exist).Update("amount", 2).Error; err != nil { return err }
+			if err := usercoin.SpendOnVideoCoin(tx, uid, uploaderID, vid, spentAmount); err != nil {
+				return err
+			}
+			if err := tx.Model(&exist).Update("amount", 2).Error; err != nil {
+				return err
+			}
 			return tx.Model(&video.Video{}).Where("id = ?", vid).UpdateColumn("coin_count", gorm.Expr("coin_count + ?", 1)).Error
-		}); err != nil { return nil, err }
+		}); err != nil {
+			return nil, err
+		}
 	} else {
-		if amount != 1 && amount != 2 { amount = 1 }
+		if amount != 1 && amount != 2 {
+			amount = 1
+		}
 		spentAmount = amount
 		myCoinAmount = amount
 		if err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-			if err := usercoin.SpendOnVideoCoin(tx, uid, uploaderID, vid, spentAmount); err != nil { return err }
+			if err := usercoin.SpendOnVideoCoin(tx, uid, uploaderID, vid, spentAmount); err != nil {
+				return err
+			}
 			row := video.VideoCoin{UserID: uid, VideoID: vid, Amount: amount}
-			if err := tx.Create(&row).Error; err != nil { return err }
+			if err := tx.Create(&row).Error; err != nil {
+				return err
+			}
 			return tx.Model(&video.Video{}).Where("id = ?", vid).UpdateColumn("coin_count", gorm.Expr("coin_count + ?", amount)).Error
-		}); err != nil { return nil, err }
+		}); err != nil {
+			return nil, err
+		}
 	}
 
 	coinAfter := dailyreward.CoinProgress(s.db, uid)
@@ -274,10 +336,14 @@ func (s *EngagementService) PostVideoCoin(ctx context.Context, uid, vid, uploade
 // BatchVideoLikes returns a map of video_id -> liked for a user.
 func (s *EngagementService) BatchVideoLikes(ctx context.Context, userID uint64, videoIDs []uint64) map[uint64]bool {
 	result := make(map[uint64]bool)
-	if userID == 0 || len(videoIDs) == 0 { return result }
+	if userID == 0 || len(videoIDs) == 0 {
+		return result
+	}
 	var likes []video.VideoLike
 	s.db.WithContext(ctx).Where("user_id = ? AND video_id IN ?", userID, videoIDs).Find(&likes)
-	for _, l := range likes { result[l.VideoID] = true }
+	for _, l := range likes {
+		result[l.VideoID] = true
+	}
 	return result
 }
 
@@ -297,38 +363,47 @@ func (s *EngagementService) UserFavoriteCount(ctx context.Context, userID, video
 	err := s.db.WithContext(ctx).Model(&video.VideoFavorite{}).Where("user_id = ? AND video_id = ?", userID, videoID).Count(&cnt).Error
 	return cnt, err
 }
+
 // WatchLaterVideoItem holds a watch-later entry with video details.
 type WatchLaterVideoItem struct {
-	ID               uint64  `json:"id"`
-	Title            string  `json:"title"`
-	CoverURL         string  `json:"cover_url"`
-	PlayCount        uint64  `json:"play_count"`
-	DanmakuCount     uint64  `json:"danmaku_count"`
-	Duration         float64 `json:"duration"`
-	UploaderName     string  `json:"uploader"`
-	UploaderAvatar   string  `json:"uploader_avatar_url"`
-	UploaderID       uint64  `json:"uploader_id"`
-	CreatedAt        string  `json:"created_at"`
-	AddedAt          string  `json:"added_at"`
-	Watched          bool    `json:"watched"`
+	ID             uint64  `json:"id"`
+	Title          string  `json:"title"`
+	CoverURL       string  `json:"cover_url"`
+	PlayCount      uint64  `json:"play_count"`
+	DanmakuCount   uint64  `json:"danmaku_count"`
+	Duration       float64 `json:"duration"`
+	UploaderName   string  `json:"uploader"`
+	UploaderAvatar string  `json:"uploader_avatar_url"`
+	UploaderID     uint64  `json:"uploader_id"`
+	CreatedAt      string  `json:"created_at"`
+	AddedAt        string  `json:"added_at"`
+	Watched        bool    `json:"watched"`
 }
 
 // ListWatchLaterWithVideos returns watch-later items with video details.
 func (s *EngagementService) ListWatchLaterWithVideos(ctx context.Context, userID uint64, page, pageSize int) ([]WatchLaterVideoItem, int64, error) {
 	list, total, err := s.ListWatchLater(ctx, userID, page, pageSize)
-	if err != nil { return nil, 0, err }
-	if len(list) == 0 { return []WatchLaterVideoItem{}, total, nil }
-	
+	if err != nil {
+		return nil, 0, err
+	}
+	if len(list) == 0 {
+		return []WatchLaterVideoItem{}, total, nil
+	}
+
 	vids := make([]uint64, 0, len(list))
-	for _, wl := range list { vids = append(vids, wl.VideoID) }
-	
+	for _, wl := range list {
+		vids = append(vids, wl.VideoID)
+	}
+
 	vmap := make(map[uint64]*VideoInfo)
 	uids := make([]uint64, 0)
 	uidSeen := make(map[uint64]struct{})
 	if s.videos != nil {
 		var verr error
 		vmap, verr = s.videos.BatchGetPublishedVideos(ctx, vids)
-		if verr != nil { return nil, 0, verr }
+		if verr != nil {
+			return nil, 0, verr
+		}
 		for _, vi := range vmap {
 			if _, ok := uidSeen[vi.UserID]; !ok {
 				uidSeen[vi.UserID] = struct{}{}
@@ -350,31 +425,35 @@ func (s *EngagementService) ListWatchLaterWithVideos(ctx context.Context, userID
 			}
 		}
 	}
-	
+
 	users_u := make(map[uint64]UserInfo)
 	if s.users != nil && len(uids) > 0 {
 		umap, err := s.users.GetUsersByIDs(ctx, uids)
-		if err == nil { users_u = umap }
+		if err == nil {
+			users_u = umap
+		}
 	}
-	
+
 	items := make([]WatchLaterVideoItem, 0, len(list))
 	for _, wl := range list {
 		vi, ok := vmap[wl.VideoID]
-		if !ok { continue }
+		if !ok {
+			continue
+		}
 		u, _ := users_u[vi.UserID]
 		items = append(items, WatchLaterVideoItem{
-			ID:           vi.ID,
-			Title:        vi.Title,
-			CoverURL:     vi.CoverURL,
-			PlayCount:    vi.PlayCount,
-			DanmakuCount: vi.DanmakuCount,
-			Duration:     vi.DurationSec,
-			UploaderName: u.Nickname,
+			ID:             vi.ID,
+			Title:          vi.Title,
+			CoverURL:       vi.CoverURL,
+			PlayCount:      vi.PlayCount,
+			DanmakuCount:   vi.DanmakuCount,
+			Duration:       vi.DurationSec,
+			UploaderName:   u.Nickname,
 			UploaderAvatar: u.AvatarURL,
-			UploaderID:   vi.UserID,
-			CreatedAt:    vi.CreatedAt.Format("2006-01-02 15:04:05"),
-			AddedAt:      wl.CreatedAt.Format("2006-01-02 15:04:05"),
-			Watched:      wl.Watched,
+			UploaderID:     vi.UserID,
+			CreatedAt:      vi.CreatedAt.Format("2006-01-02 15:04:05"),
+			AddedAt:        wl.CreatedAt.Format("2006-01-02 15:04:05"),
+			Watched:        wl.Watched,
 		})
 	}
 	return items, total, nil
@@ -382,17 +461,17 @@ func (s *EngagementService) ListWatchLaterWithVideos(ctx context.Context, userID
 
 // CoinedVideoItem holds a coin record with video details.
 type CoinedVideoItem struct {
-	ID                uint64
-	Title             string
-	CoverURL          string
-	PlayCount         uint64
-	DanmakuCount      uint64
-	CommentCount      uint64
-	Duration          float64
-	UploaderName      string
-	UploaderAvatar    string
-	CreatedAt         string
-	CoinedAt          string
+	ID             uint64
+	Title          string
+	CoverURL       string
+	PlayCount      uint64
+	DanmakuCount   uint64
+	CommentCount   uint64
+	Duration       float64
+	UploaderName   string
+	UploaderAvatar string
+	CreatedAt      string
+	CoinedAt       string
 }
 
 // ListUserCoinedVideos returns coin records with video details for a user.
@@ -403,24 +482,30 @@ func (s *EngagementService) ListUserCoinedVideos(ctx context.Context, ownerID ui
 	}
 	var total int64
 	_ = s.db.WithContext(ctx).Model(&video.VideoCoin{}).Where("user_id = ?", ownerID).Count(&total).Error
-	if len(coins) == 0 { return []CoinedVideoItem{}, total, nil }
-	
+	if len(coins) == 0 {
+		return []CoinedVideoItem{}, total, nil
+	}
+
 	vids := make([]uint64, 0, len(coins))
 	seen := make(map[uint64]struct{}, len(coins))
 	for i := range coins {
 		vid := coins[i].VideoID
-		if _, ok := seen[vid]; ok { continue }
+		if _, ok := seen[vid]; ok {
+			continue
+		}
 		seen[vid] = struct{}{}
 		vids = append(vids, vid)
 	}
-	
+
 	vmap := make(map[uint64]*VideoInfo)
 	uids := make([]uint64, 0)
 	uidSeen := make(map[uint64]struct{})
 	if s.videos != nil {
 		var verr error
 		vmap, verr = s.videos.BatchGetPublishedVideos(ctx, vids)
-		if verr != nil { return nil, 0, verr }
+		if verr != nil {
+			return nil, 0, verr
+		}
 		for _, vi := range vmap {
 			if _, ok := uidSeen[vi.UserID]; !ok {
 				uidSeen[vi.UserID] = struct{}{}
@@ -442,26 +527,29 @@ func (s *EngagementService) ListUserCoinedVideos(ctx context.Context, ownerID ui
 			}
 		}
 	}
-	
+
 	users_u := make(map[uint64]UserInfo)
 	if s.users != nil && len(uids) > 0 {
 		umap, err := s.users.GetUsersByIDs(ctx, uids)
-		if err == nil { users_u = umap }
+		if err == nil {
+			users_u = umap
+		}
 	}
-	
+
 	items := make([]CoinedVideoItem, 0, len(coins))
 	for i := range coins {
 		vi, ok := vmap[coins[i].VideoID]
-		if !ok { continue }
+		if !ok {
+			continue
+		}
 		u, _ := users_u[vi.UserID]
 		items = append(items, CoinedVideoItem{
 			ID: vi.ID, Title: vi.Title, CoverURL: vi.CoverURL,
 			PlayCount: vi.PlayCount, DanmakuCount: vi.DanmakuCount, CommentCount: vi.CommentCount,
 			Duration: vi.DurationSec, UploaderName: u.Nickname, UploaderAvatar: u.AvatarURL,
 			CreatedAt: vi.CreatedAt.Format("2006-01-02 15:04:05"),
-			CoinedAt: coins[i].CreatedAt.Format("2006-01-02 15:04:05"),
+			CoinedAt:  coins[i].CreatedAt.Format("2006-01-02 15:04:05"),
 		})
 	}
 	return items, total, nil
 }
-

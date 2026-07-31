@@ -15,11 +15,11 @@ import (
 
 func TestAdminHotSearchLimit(t *testing.T) {
 	tests := []struct {
-		name   string
-		query  string
-		def    int
-		max    int
-		want   int
+		name  string
+		query string
+		def   int
+		max   int
+		want  int
 	}{
 		{"no query", "", 10, 20, 10},
 		{"within bounds", "5", 10, 20, 5},

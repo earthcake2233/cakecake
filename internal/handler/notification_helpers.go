@@ -1,14 +1,13 @@
 package handler
 
 import (
+	"encoding/json"
 	"minibili/internal/model/article"
 	"minibili/internal/model/comment"
 	"minibili/internal/model/notification"
 	"minibili/internal/model/user"
 	"minibili/internal/model/video"
-	"encoding/json"
 	"time"
-
 
 	"minibili/internal/pkg/useravatar"
 )
@@ -92,15 +91,15 @@ func (a *API) likeAggTopLikerNames(relatedID uint64, isArticle bool, limit int) 
 // formatNotification formats a notification for API response.
 func (a *API) formatNotification(n notification.Notification) map[string]interface{} {
 	out := map[string]interface{}{
-		"id":               n.ID,
-		"type":             n.Type,
-		"related_id":       n.RelatedID,
-		"comment_preview":  n.CommentPreview,
-		"sender_names":     n.SenderNamesJSON,
-		"total_likes":      n.TotalLikes,
-		"is_read":          n.IsRead,
-		"payload":          n.PayloadJSON,
-		"created_at":       n.CreatedAt.Format(time.RFC3339),
+		"id":              n.ID,
+		"type":            n.Type,
+		"related_id":      n.RelatedID,
+		"comment_preview": n.CommentPreview,
+		"sender_names":    n.SenderNamesJSON,
+		"total_likes":     n.TotalLikes,
+		"is_read":         n.IsRead,
+		"payload":         n.PayloadJSON,
+		"created_at":      n.CreatedAt.Format(time.RFC3339),
 	}
 	if n.Type == "like_aggregation" {
 		subject := a.likeNotifPayloadSubject(&n)
@@ -171,13 +170,15 @@ func (a *API) resolveReplyInboxTarget(n *notification.Notification) (replyInboxT
 	}
 }
 
-
 // mergeUniqueDisplayNames deduplicates and returns unique display names in original order.
 func mergeUniqueDisplayNames(names []string) []string {
 	seen := make(map[string]bool)
 	var out []string
 	for _, n := range names {
-		if !seen[n] { seen[n] = true; out = append(out, n) }
+		if !seen[n] {
+			seen[n] = true
+			out = append(out, n)
+		}
 	}
 	return out
 }

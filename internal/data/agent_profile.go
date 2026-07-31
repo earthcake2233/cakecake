@@ -1,13 +1,13 @@
 package data
 
 import (
-	"minibili/internal/model/agent"
-	"minibili/internal/model/dm"
-	"minibili/internal/model/user"
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"minibili/internal/model/agent"
+	"minibili/internal/model/dm"
+	"minibili/internal/model/user"
 	"regexp"
 	"strings"
 
@@ -124,7 +124,6 @@ func findOrCreateLegacyBotUser(db *gorm.DB, cfg *config.C, displayName, sign, av
 	return u.ID, nil
 }
 
-
 func backfillDmAgentProfileIDs(db *gorm.DB, lg *zap.Logger) error {
 	var profiles []agent.AgentProfile
 	if err := db.Find(&profiles).Error; err != nil {
@@ -239,12 +238,12 @@ func EnsureAgentConversationForProfile(db *gorm.DB, humanID uint64, profile *age
 	welcome := PickWelcomeMessage(profile)
 	now := db.NowFunc()
 	conv = dm.DmConversation{
-		UserLow:          low,
-		UserHigh:         high,
-		Kind:             dm.DmKindAgent,
-		AgentProfileID:   profile.ID,
-		LastMessageAt:    now,
-		LastPreview:      welcome,
+		UserLow:        low,
+		UserHigh:       high,
+		Kind:           dm.DmKindAgent,
+		AgentProfileID: profile.ID,
+		LastMessageAt:  now,
+		LastPreview:    welcome,
 	}
 	if err := db.Create(&conv).Error; err != nil {
 		return nil, false, err
@@ -438,7 +437,3 @@ func ensureDmParticipants(db *gorm.DB, convID, humanID, botID uint64) {
 		}
 	}
 }
-
-
-
-

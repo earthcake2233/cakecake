@@ -30,5 +30,3 @@ func TestDeleteObjects_SkipEmptyKeys(t *testing.T) {
 	err := o.DeleteObjects([]string{"", "/", "  "})
 	require.NoError(t, err)
 }
-
-

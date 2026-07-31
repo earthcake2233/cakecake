@@ -1,5 +1,7 @@
 package admin
+
 import "time"
+
 type Admin struct {
 	ID           uint64 `gorm:"primaryKey"`
 	Username     string `gorm:"size:64;uniqueIndex;not null"`
@@ -25,10 +27,10 @@ type HomeBanner struct {
 }
 type HotSearchOp struct {
 	ID           uint64 `gorm:"primaryKey"`
-	OpType       string `gorm:"size:16;not null;index"` // pin | block | manual
-	Keyword      string `gorm:"size:100;not null"`      // match key (normalized on write)
-	DisplayTitle string `gorm:"size:100"`               //展示文案，空则用 keyword
-	Badge        string `gorm:"size:8"`                 // 热 | 新 | 荐 | empty
+	OpType       string `gorm:"size:16;not null;index"`   // pin | block | manual
+	Keyword      string `gorm:"size:100;not null"`        // match key (normalized on write)
+	DisplayTitle string `gorm:"size:100"`                 //展示文案，空则用 keyword
+	Badge        string `gorm:"size:8"`                   // 热 | 新 | 荐 | empty
 	PinRank      int    `gorm:"not null;default:0;index"` // 1..N for pin/manual slot
 	Enabled      bool   `gorm:"not null;default:1;index"`
 	StartAt      *time.Time

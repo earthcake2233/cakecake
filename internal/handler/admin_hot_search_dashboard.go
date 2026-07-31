@@ -1,8 +1,8 @@
 package handler
 
 import (
-	"minibili/internal/model/admin"
 	"context"
+	"minibili/internal/model/admin"
 	"net/http"
 	"strconv"
 	"strings"
@@ -103,10 +103,10 @@ func (a *API) AdminHotSearchDashboard(c *gin.Context) {
 	}
 
 	resp.OK(c, gin.H{
-		"merged":        merged,
-		"redis":         redisRows,
-		"ops":           opItems,
-		"custom_order":  a.HotSearchSvc.HasDisplayLayout(c.Request.Context()),
+		"merged":       merged,
+		"redis":        redisRows,
+		"ops":          opItems,
+		"custom_order": a.HotSearchSvc.HasDisplayLayout(c.Request.Context()),
 	})
 }
 
@@ -253,4 +253,3 @@ func hotSearchDisplayTitle(op *admin.HotSearchOp) string {
 	}
 	return strings.TrimSpace(op.Keyword)
 }
-

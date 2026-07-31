@@ -2,7 +2,6 @@ package handler
 
 import (
 	"context"
-
 )
 
 // getFollowCounts returns following and follower counts.

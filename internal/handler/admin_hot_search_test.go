@@ -54,7 +54,7 @@ func TestAdminUpdateHotSearchOp_Success(t *testing.T) {
 	mock.ExpectCommit()
 
 	mock.ExpectQuery("SELECT .+ FROM `hot_search_ops` WHERE").
-		WillReturnRows(mock.NewRows([]string{"id","keyword","op_type","display_title","sort_order","enabled","pin_rank"}).
+		WillReturnRows(mock.NewRows([]string{"id", "keyword", "op_type", "display_title", "sort_order", "enabled", "pin_rank"}).
 			AddRow(1, "test", "pin", "Old", 1, true, 0))
 
 	api.AdminUpdateHotSearchOp(c)
@@ -94,7 +94,7 @@ func TestAdminPreviewHotSearch_Success(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"id"}))
 
 	mock.ExpectQuery("SELECT .+ FROM `hot_search_ops`").
-		WillReturnRows(sqlmock.NewRows([]string{"id","keyword","display_title","enabled","pin_rank"}).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "keyword", "display_title", "enabled", "pin_rank"}).
 			AddRow(1, "news", "Hot News", true, 1).
 			AddRow(2, "sports", "", true, 2))
 

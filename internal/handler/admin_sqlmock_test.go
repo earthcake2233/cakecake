@@ -20,7 +20,7 @@ func TestAdminListVideos_Success(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"count(*)"}).AddRow(2))
 
 	mock.ExpectQuery("SELECT .+ FROM `videos` WHERE status IN .+ ORDER BY").
-		WillReturnRows(sqlmock.NewRows([]string{"id","user_id","title","status","fail_reason","cover_url","video_url","duration_sec","zone","play_count"}).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id", "title", "status", "fail_reason", "cover_url", "video_url", "duration_sec", "zone", "play_count"}).
 			AddRow(1, 10, "Video1", "pending_review", "", "", "", 120, "tech", 0).
 			AddRow(2, 11, "Video2", "pending_review", "", "", "", 60, "music", 0))
 
@@ -28,7 +28,7 @@ func TestAdminListVideos_Success(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"count(*)"}).AddRow(2))
 
 	mock.ExpectQuery("SELECT .+ FROM `users` WHERE id IN").
-		WillReturnRows(sqlmock.NewRows([]string{"id","username","coin_balance_tenths"}).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "coin_balance_tenths"}).
 			AddRow(10, "user10", 230).AddRow(11, "user11", 230))
 
 	api.AdminListVideos(c)
@@ -57,11 +57,11 @@ func TestAdminGetVideo_Success(t *testing.T) {
 	c.Params = gin.Params{{Key: "id", Value: "1"}}
 
 	mock.ExpectQuery("SELECT .+ FROM `videos` WHERE").
-		WillReturnRows(sqlmock.NewRows([]string{"id","user_id","title","status","fail_reason","cover_url","video_url","duration_sec","zone","play_count"}).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id", "title", "status", "fail_reason", "cover_url", "video_url", "duration_sec", "zone", "play_count"}).
 			AddRow(1, 10, "TestVideo", "pending_review", "", "", "", 120, "tech", 0))
 
 	mock.ExpectQuery("SELECT .+ FROM `users` WHERE").
-		WillReturnRows(sqlmock.NewRows([]string{"id","username","coin_balance_tenths"}).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "coin_balance_tenths"}).
 			AddRow(10, "uploader", 230))
 
 	api.AdminGetVideo(c)
@@ -94,14 +94,14 @@ func TestAdminListArticles_Success(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"count(*)"}).AddRow(1))
 
 	mock.ExpectQuery("SELECT .+ FROM `articles` WHERE status IN .+ ORDER BY").
-		WillReturnRows(sqlmock.NewRows([]string{"id","user_id","title","status","body_md","cover_url","view_count","comment_count"}).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id", "title", "status", "body_md", "cover_url", "view_count", "comment_count"}).
 			AddRow(1, 10, "Article1", "pending_review", "# Hello", "", 0, 0))
 
 	mock.ExpectQuery("SELECT count(.+) FROM `articles` WHERE status =").
 		WillReturnRows(sqlmock.NewRows([]string{"count(*)"}).AddRow(1))
 
 	mock.ExpectQuery("SELECT .+ FROM `users` WHERE id IN").
-		WillReturnRows(sqlmock.NewRows([]string{"id","username","coin_balance_tenths"}).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "coin_balance_tenths"}).
 			AddRow(10, "author1", 230))
 
 	api.AdminListArticles(c)
@@ -130,11 +130,11 @@ func TestAdminGetArticle_Success(t *testing.T) {
 	c.Params = gin.Params{{Key: "id", Value: "1"}}
 
 	mock.ExpectQuery("SELECT .+ FROM `articles` WHERE").
-		WillReturnRows(sqlmock.NewRows([]string{"id","user_id","title","status","body_md","cover_url","view_count","comment_count"}).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id", "title", "status", "body_md", "cover_url", "view_count", "comment_count"}).
 			AddRow(1, 10, "TestArticle", "pending_review", "# Hello", "", 0, 0))
 
 	mock.ExpectQuery("SELECT .+ FROM `users` WHERE").
-		WillReturnRows(sqlmock.NewRows([]string{"id","username","coin_balance_tenths"}).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "coin_balance_tenths"}).
 			AddRow(10, "author1", 230))
 
 	api.AdminGetArticle(c)
@@ -167,11 +167,11 @@ func TestAdminListDynamics_Success(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"count(*)"}).AddRow(1))
 
 	mock.ExpectQuery("SELECT .+ FROM `user_dynamics` ORDER BY").
-		WillReturnRows(sqlmock.NewRows([]string{"id","user_id","content","status","image_count","share_count","comment_count"}).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id", "content", "status", "image_count", "share_count", "comment_count"}).
 			AddRow(1, 10, "Hello", "pending_review", 0, 0, 0))
 
 	mock.ExpectQuery("SELECT .+ FROM `users` WHERE id IN").
-		WillReturnRows(sqlmock.NewRows([]string{"id","username","coin_balance_tenths"}).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "coin_balance_tenths"}).
 			AddRow(10, "user10", 230))
 
 	api.AdminListDynamics(c)
@@ -188,11 +188,11 @@ func TestAdminGetDynamic_Success(t *testing.T) {
 	c.Params = gin.Params{{Key: "id", Value: "1"}}
 
 	mock.ExpectQuery("SELECT .+ FROM `user_dynamics` WHERE").
-		WillReturnRows(sqlmock.NewRows([]string{"id","user_id","content","status","image_count"}).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id", "content", "status", "image_count"}).
 			AddRow(1, 10, "Dynamic content", "pending_review", 0))
 
 	mock.ExpectQuery("SELECT .+ FROM `users` WHERE").
-		WillReturnRows(sqlmock.NewRows([]string{"id","username","coin_balance_tenths"}).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "coin_balance_tenths"}).
 			AddRow(10, "user10", 230))
 
 	api.AdminGetDynamic(c)
@@ -208,7 +208,7 @@ func TestAdminListHotSearchOps_Success(t *testing.T) {
 	c, w := newMockGinCtx(t, "GET", "/api/v1/admin/hot-search-ops", nil)
 
 	mock.ExpectQuery("SELECT .+ FROM `hot_search_ops` ORDER BY pin_rank ASC, id ASC").
-		WillReturnRows(sqlmock.NewRows([]string{"id","keyword","display_title","sort_order","enabled","pin_rank"}).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "keyword", "display_title", "sort_order", "enabled", "pin_rank"}).
 			AddRow(1, "keyword1", "Display1", 1, true, 0).
 			AddRow(2, "keyword2", "", 2, false, 0))
 

@@ -1,10 +1,10 @@
 package handler
 
 import (
-	"minibili/internal/model/agent"
 	"encoding/json"
 	"fmt"
 	"mime/multipart"
+	"minibili/internal/model/agent"
 	"net/http"
 	"strconv"
 	"strings"
@@ -33,17 +33,17 @@ func adminAgentProfilePayload(p *agent.AgentProfile, globalPrompt string) gin.H 
 	}
 	welcome := agent.ParseWelcomeMessages(p.WelcomeMessagesJSON)
 	return gin.H{
-		"id":                p.ID,
-		"slug":              p.Slug,
-		"bot_user_id":       p.BotUserID,
-		"display_name":      p.DisplayName,
-		"avatar_url":        p.AvatarURL,
-		"sign":              p.Sign,
-		"system_prompt":     p.SystemPrompt,
-		"welcome_messages":  welcome,
-		"sort_order":        p.SortOrder,
-		"enabled":           p.Enabled,
-		"updated_at":        p.UpdatedAt.Format("2006-01-02 15:04:05"),
+		"id":                   p.ID,
+		"slug":                 p.Slug,
+		"bot_user_id":          p.BotUserID,
+		"display_name":         p.DisplayName,
+		"avatar_url":           p.AvatarURL,
+		"sign":                 p.Sign,
+		"system_prompt":        p.SystemPrompt,
+		"welcome_messages":     welcome,
+		"sort_order":           p.SortOrder,
+		"enabled":              p.Enabled,
+		"updated_at":           p.UpdatedAt.Format("2006-01-02 15:04:05"),
 		"global_system_prompt": globalPrompt,
 	}
 }
@@ -66,14 +66,14 @@ func (a *API) AdminListAgentProfiles(c *gin.Context) {
 }
 
 type adminAgentProfileWriteReq struct {
-	Slug             string          `json:"slug"`
-	DisplayName      string          `json:"display_name"`
-	AvatarURL        string          `json:"avatar_url"`
-	Sign             string          `json:"sign"`
-	SystemPrompt     string          `json:"system_prompt"`
-	WelcomeMessages  json.RawMessage `json:"welcome_messages"`
-	SortOrder        *int            `json:"sort_order"`
-	Enabled          *bool           `json:"enabled"`
+	Slug            string          `json:"slug"`
+	DisplayName     string          `json:"display_name"`
+	AvatarURL       string          `json:"avatar_url"`
+	Sign            string          `json:"sign"`
+	SystemPrompt    string          `json:"system_prompt"`
+	WelcomeMessages json.RawMessage `json:"welcome_messages"`
+	SortOrder       *int            `json:"sort_order"`
+	Enabled         *bool           `json:"enabled"`
 }
 
 func (a *API) validateAgentProfileWrite(req *adminAgentProfileWriteReq, isCreate bool) (slug, welcomeJSON string, code int) {

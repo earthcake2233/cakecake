@@ -1,12 +1,12 @@
 package service
 
 import (
+	"context"
 	"minibili/internal/model/admin"
 	"minibili/internal/model/article"
 	"minibili/internal/model/extra"
 	"minibili/internal/model/user"
 	"minibili/internal/model/video"
-	"context"
 	"testing"
 	"time"
 
@@ -16,7 +16,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
-
 )
 
 // ---------- PlayCounter ----------
@@ -113,10 +112,10 @@ func TestPublishArticle_Success(t *testing.T) {
 
 	now := time.Now()
 	art := article.Article{
-		Title:   "Test Article",
-		BodyMD:  "# Hello",
-		Status:  "pending_review",
-		UserID:  1,
+		Title:     "Test Article",
+		BodyMD:    "# Hello",
+		Status:    "pending_review",
+		UserID:    1,
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
@@ -144,13 +143,13 @@ func TestPublishArticle_AlreadyPublished(t *testing.T) {
 	now := time.Now()
 	pubAt := now
 	art := article.Article{
-		Title:     "Published Article",
-		BodyMD:    "# Done",
-		Status:    "published",
-		UserID:    1,
+		Title:       "Published Article",
+		BodyMD:      "# Done",
+		Status:      "published",
+		UserID:      1,
 		PublishedAt: &pubAt,
-		CreatedAt: now,
-		UpdatedAt: now,
+		CreatedAt:   now,
+		UpdatedAt:   now,
 	}
 	require.NoError(t, db.Create(&art).Error)
 
@@ -185,13 +184,13 @@ func TestPublishVideo_Success(t *testing.T) {
 	require.NoError(t, db.Create(&u).Error)
 
 	v := video.Video{
-		Title:     "Test Video",
-		VideoURL:  "https://cdn.example.com/v.mp4",
-		Status:    "pending_review",
-		UserID:    u.ID,
+		Title:       "Test Video",
+		VideoURL:    "https://cdn.example.com/v.mp4",
+		Status:      "pending_review",
+		UserID:      u.ID,
 		DurationSec: 120,
-		CreatedAt: now,
-		UpdatedAt: now,
+		CreatedAt:   now,
+		UpdatedAt:   now,
 	}
 	require.NoError(t, db.Create(&v).Error)
 
@@ -218,10 +217,10 @@ func TestPublishVideo_AlreadyPublished(t *testing.T) {
 	require.NoError(t, db.Create(&u).Error)
 
 	v := video.Video{
-		Title:    "Published Video",
-		VideoURL: "https://cdn.example.com/v.mp4",
-		Status:   "published",
-		UserID:   u.ID,
+		Title:     "Published Video",
+		VideoURL:  "https://cdn.example.com/v.mp4",
+		Status:    "published",
+		UserID:    u.ID,
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
@@ -266,8 +265,8 @@ func TestSearchSuggest_WithUserHistory(t *testing.T) {
 
 	// Add user search history
 	h := extra.UserSearchHistory{
-		UserID:   1,
-		Keyword:  "golang testing",
+		UserID:  1,
+		Keyword: "golang testing",
 	}
 	require.NoError(t, db.Create(&h).Error)
 

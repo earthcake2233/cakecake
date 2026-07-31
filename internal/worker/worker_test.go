@@ -20,7 +20,7 @@ func TestTruncate(t *testing.T) {
 		{"abc", 0, ""},
 		{"hello world", 5, "hello"},
 		// truncate works on bytes, not runes
-		{"你好世界", 6, "你好"},       // each Chinese char = 3 bytes, 6 bytes = 2 chars
+		{"你好世界", 6, "你好"}, // each Chinese char = 3 bytes, 6 bytes = 2 chars
 		{"abcdef", 6, "abcdef"},
 	}
 	for _, tc := range tests {

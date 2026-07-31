@@ -1,11 +1,11 @@
 package handler
 
 import (
-	"minibili/internal/model/video"
 	"context"
 	"encoding/json"
 	"fmt"
 	"mime/multipart"
+	"minibili/internal/model/video"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -233,11 +233,15 @@ func (a *API) SaveVideoDraft(c *gin.Context) {
 				resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 				return
 			}
-			if tmp, _ := a.VideoDraftSvc.RefetchDraft(context.Background(), v.ID); tmp != nil { v = *tmp }
+			if tmp, _ := a.VideoDraftSvc.RefetchDraft(context.Background(), v.ID); tmp != nil {
+				v = *tmp
+			}
 			if err := a.uploadDraftCoverToOSS(&v, coverPath); err != nil {
 				a.Log.Warn("draft cover oss", zap.Error(err), zap.Uint64("video_id", v.ID))
 			} else {
-				if tmp, _ := a.VideoDraftSvc.RefetchDraft(context.Background(), v.ID); tmp != nil { v = *tmp }
+				if tmp, _ := a.VideoDraftSvc.RefetchDraft(context.Background(), v.ID); tmp != nil {
+					v = *tmp
+				}
 			}
 		}
 		out := gin.H{
@@ -288,12 +292,16 @@ func (a *API) SaveVideoDraft(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	if tmp, _ := a.VideoDraftSvc.RefetchDraft(context.Background(), v.ID); tmp != nil { v = *tmp }
+	if tmp, _ := a.VideoDraftSvc.RefetchDraft(context.Background(), v.ID); tmp != nil {
+		v = *tmp
+	}
 	if coverPath != "" {
 		if err := a.uploadDraftCoverToOSS(&v, coverPath); err != nil {
 			a.Log.Warn("draft cover oss", zap.Error(err), zap.Uint64("video_id", v.ID))
 		} else {
-			if tmp, _ := a.VideoDraftSvc.RefetchDraft(context.Background(), v.ID); tmp != nil { v = *tmp }
+			if tmp, _ := a.VideoDraftSvc.RefetchDraft(context.Background(), v.ID); tmp != nil {
+				v = *tmp
+			}
 		}
 	}
 	out := gin.H{
@@ -463,7 +471,9 @@ func (a *API) UpdateVideoDraft(c *gin.Context) {
 		if err := a.uploadDraftCoverToOSS(v, newCoverPath); err != nil {
 			a.Log.Warn("draft cover oss update", zap.Error(err))
 		} else {
-			if tmp, _ := a.VideoDraftSvc.RefetchDraft(context.Background(), id); tmp != nil { v = tmp }
+			if tmp, _ := a.VideoDraftSvc.RefetchDraft(context.Background(), id); tmp != nil {
+				v = tmp
+			}
 		}
 	}
 	out := gin.H{
@@ -660,10 +670,10 @@ func (a *API) ReplaceVideoMedia(c *gin.Context) {
 	}
 
 	updates := map[string]interface{}{
-		"title":       title,
-		"description": desc,
-		"tags_json":   tagsJSON,
-		"status":      "processing",
+		"title":            title,
+		"description":      desc,
+		"tags_json":        tagsJSON,
+		"status":           "processing",
 		"fail_reason":      "",
 		"video_url":        "",
 		"cover_url":        "",

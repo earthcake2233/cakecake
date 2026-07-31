@@ -1,10 +1,10 @@
 package service
 
 import (
+	"context"
 	"minibili/internal/model/danmaku"
 	"minibili/internal/model/user"
 	"minibili/internal/model/video"
-	"context"
 	"time"
 	"unicode/utf8"
 
@@ -251,8 +251,8 @@ func (s *DanmakuService) ListCreatorDanmakus(ctx context.Context, uid uint64, li
 			ID: d.ID, VideoID: d.VideoID, UserID: d.UserID,
 			Content: d.Content, Color: d.Color, Type: d.Type,
 			VideoTime: d.VideoTime, LikeCount: int64(d.LikeCount),
-			CreatedAt: d.CreatedAt.Format("2006-01-02 15:04:05"),
-			LikedByMe: likedByViewer[d.ID],
+			CreatedAt:  d.CreatedAt.Format("2006-01-02 15:04:05"),
+			LikedByMe:  likedByViewer[d.ID],
 			VideoTitle: v.Title, CoverURL: v.CoverURL,
 			Username: usernames[d.UserID],
 		})
@@ -306,4 +306,3 @@ func (s *DanmakuService) ListHistory(ctx context.Context, videoID uint64, curren
 	}
 	return hist, nil
 }
-

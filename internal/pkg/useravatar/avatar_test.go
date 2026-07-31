@@ -4,7 +4,6 @@ import (
 	"minibili/internal/model/user"
 	"testing"
 	"time"
-
 )
 
 func TestPublicURLCacheBust(t *testing.T) {

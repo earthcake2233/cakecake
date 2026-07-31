@@ -1,5 +1,7 @@
 package notification
+
 import "time"
+
 type Notification struct {
 	ID              uint64 `gorm:"primaryKey"`
 	RecipientID     uint64 `gorm:"index:idx_notif_recipient;not null"`
@@ -19,4 +21,5 @@ type LikeNotifMute struct {
 	CommentID   uint64 `gorm:"uniqueIndex:idx_like_notif_mute_pair;not null"`
 	CreatedAt   time.Time
 }
+
 func (LikeNotifMute) TableName() string { return "like_notif_mutes" }

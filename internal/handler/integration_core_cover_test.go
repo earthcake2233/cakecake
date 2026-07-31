@@ -3,9 +3,9 @@
 package handler
 
 import (
-	"minibili/internal/model/dynamic"
 	"encoding/json"
 	"fmt"
+	"minibili/internal/model/dynamic"
 	"net/http/httptest"
 	"testing"
 	"time"

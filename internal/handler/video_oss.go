@@ -1,8 +1,8 @@
 package handler
 
 import (
-	"minibili/internal/model/video"
 	"fmt"
+	"minibili/internal/model/video"
 	"strings"
 
 	"go.uber.org/zap"

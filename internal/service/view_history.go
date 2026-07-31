@@ -1,18 +1,17 @@
 package service
 
 import (
+	"context"
 	"minibili/internal/model/article"
 	"minibili/internal/model/extra"
 	"minibili/internal/model/user"
 	"minibili/internal/model/video"
-	"context"
 	"sort"
 	"time"
 
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
-
 )
 
 // ViewHistoryService handles video view history operations.
@@ -270,5 +269,3 @@ func (s *ViewHistoryService) GetViewHistorySettings(ctx context.Context, userID 
 	}
 	return u.ViewHistoryPaused, nil
 }
-
-

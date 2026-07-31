@@ -5,7 +5,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
 )
 
 func TestNormalizeSearchKeyword(t *testing.T) {
@@ -138,7 +137,7 @@ func TestHotSearchOpActive(t *testing.T) {
 	now := time.Date(2026, 6, 15, 12, 0, 0, 0, time.UTC)
 
 	tests := []struct {
-		name string
+		name  string
 		start *time.Time
 		end   *time.Time
 		want  bool

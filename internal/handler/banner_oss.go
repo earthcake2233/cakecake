@@ -1,8 +1,8 @@
 package handler
 
 import (
-	"minibili/internal/model/admin"
 	"fmt"
+	"minibili/internal/model/admin"
 	"strings"
 
 	"go.uber.org/zap"

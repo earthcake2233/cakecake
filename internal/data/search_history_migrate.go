@@ -1,8 +1,8 @@
 package data
 
 import (
-	"minibili/internal/model/extra"
 	"fmt"
+	"minibili/internal/model/extra"
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"

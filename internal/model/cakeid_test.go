@@ -4,7 +4,6 @@ import (
 	"minibili/internal/model/user"
 	"testing"
 
-
 	"github.com/stretchr/testify/require"
 )
 

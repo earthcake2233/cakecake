@@ -1,11 +1,10 @@
 package service
 
 import (
-	"minibili/internal/model/user"
 	"context"
+	"minibili/internal/model/user"
 
 	"gorm.io/gorm"
-
 )
 
 // UserProviderImpl implements UserProvider using *gorm.DB (Phase 1 monolith).
@@ -26,7 +25,9 @@ func (p *UserProviderImpl) GetUser(ctx context.Context, id uint64) (UserInfo, er
 }
 
 func (p *UserProviderImpl) GetUsersByIDs(ctx context.Context, ids []uint64) (map[uint64]UserInfo, error) {
-	if len(ids) == 0 { return nil, nil }
+	if len(ids) == 0 {
+		return nil, nil
+	}
 	var users []user.User
 	if err := p.db.WithContext(ctx).Where("id IN ?", ids).Find(&users).Error; err != nil {
 		return nil, err
@@ -39,7 +40,9 @@ func (p *UserProviderImpl) GetUsersByIDs(ctx context.Context, ids []uint64) (map
 }
 
 func (p *UserProviderImpl) BatchCurrentLevels(ctx context.Context, ids []uint64) (map[uint64]int, error) {
-	if len(ids) == 0 { return nil, nil }
+	if len(ids) == 0 {
+		return nil, nil
+	}
 	var users []user.User
 	if err := p.db.WithContext(ctx).Where("id IN ?", ids).Find(&users).Error; err != nil {
 		return nil, err
@@ -49,7 +52,10 @@ func (p *UserProviderImpl) BatchCurrentLevels(ctx context.Context, ids []uint64)
 	for _, u := range users {
 		lv := 1
 		for j := len(th) - 1; j >= 0; j-- {
-			if u.Experience >= th[j] { lv = j + 1; break }
+			if u.Experience >= th[j] {
+				lv = j + 1
+				break
+			}
 		}
 		result[u.ID] = lv
 	}
@@ -68,11 +74,11 @@ func toUserInfo(u *user.User) UserInfo {
 	return UserInfo{
 		ID: u.ID, Username: u.Username, Nickname: name, AvatarURL: avatar,
 		CoinBalanceTenths: u.CoinBalanceTenths,
-		AnonymizedAt: u.AnonymizedAt,
+		AnonymizedAt:      u.AnonymizedAt,
 	}
 }
 
 func (p *UserProviderImpl) DecrementCoins(ctx context.Context, userID uint64, amount int) error {
-    return p.db.WithContext(ctx).Model(&user.User{}).Where("id = ? AND coins >= ?", userID, amount).
-        UpdateColumn("coins", gorm.Expr("coins - ?", amount)).Error
+	return p.db.WithContext(ctx).Model(&user.User{}).Where("id = ? AND coins >= ?", userID, amount).
+		UpdateColumn("coins", gorm.Expr("coins - ?", amount)).Error
 }

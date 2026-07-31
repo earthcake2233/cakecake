@@ -3,14 +3,14 @@
 package handler
 
 import (
-	"minibili/internal/model/article"
-	"minibili/internal/model/dynamic"
-	"minibili/internal/model/user"
-	"minibili/internal/model/video"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
+	"minibili/internal/model/article"
+	"minibili/internal/model/dynamic"
+	"minibili/internal/model/user"
+	"minibili/internal/model/video"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -19,7 +19,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
-
 )
 
 // helpers
@@ -146,7 +145,12 @@ func Test_DmConversation(t *testing.T) {
 	tk1 := tok(t, api, u1.ID)
 	tk2 := tok(t, api, u2.ID)
 	w := srve(r, areq("POST", "/api/v1/dm/conversations", tk1, fmt.Sprintf(`{"peer_id":%d}`, u2.ID)))
-	var cr struct { Code int `json:"code"`; Data struct{ ID uint64 `json:"id"`} `json:"data"` }
+	var cr struct {
+		Code int `json:"code"`
+		Data struct {
+			ID uint64 `json:"id"`
+		} `json:"data"`
+	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &cr))
 	require.Equal(t, 0, cr.Code)
 	cid := cr.Data.ID
@@ -164,7 +168,12 @@ func Test_FavoriteFolder(t *testing.T) {
 	require.NoError(t, api.DB.Create(&df).Error)
 	srve(r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/favorite", v.ID), tk, nil))
 	w := srve(r, areq("POST", "/api/v1/users/me/favorite-folders", tk, `{"title":"My Folder"}`))
-	var fr struct { Code int `json:"code"`; Data struct{ ID uint64 `json:"id"`} `json:"data"` }
+	var fr struct {
+		Code int `json:"code"`
+		Data struct {
+			ID uint64 `json:"id"`
+		} `json:"data"`
+	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &fr))
 	fid := fr.Data.ID
 	srve(r, areq("GET", "/api/v1/users/me/favorite-folders", tk, nil))
@@ -208,7 +217,12 @@ func Test_AdminBannerCRUD(t *testing.T) {
 	at := admintok(t, api)
 	srve(r, areq("GET", "/api/v1/admin/home-banners", at, nil))
 	w := srve(r, areq("POST", "/api/v1/admin/home-banners", at, `{"title":"B1","link_type":"none","sort_order":1}`))
-	var br struct { Code int `json:"code"`; Data struct{ ID uint64 `json:"id"`} `json:"data"` }
+	var br struct {
+		Code int `json:"code"`
+		Data struct {
+			ID uint64 `json:"id"`
+		} `json:"data"`
+	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &br))
 	if br.Code == 0 && br.Data.ID > 0 {
 		srve(r, areq("PUT", fmt.Sprintf("/api/v1/admin/home-banners/%d", br.Data.ID), at, `{"title":"Updated"}`))

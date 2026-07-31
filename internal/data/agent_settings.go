@@ -7,7 +7,6 @@ import (
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"
-
 )
 
 const defaultAgentDisplayName = "cakecake AI"
@@ -91,12 +90,11 @@ func SyncAgentBotProfile(db *gorm.DB, botUserID uint64, st *agent.AgentSettings)
 		name = defaultAgentDisplayName
 	}
 	return db.Model(&user.User{}).Where("id = ?", botUserID).Updates(map[string]interface{}{
-		"nickname":    name,
-		"avatar_url":  strings.TrimSpace(st.AvatarURL),
-		"sign":        strings.TrimSpace(st.Sign),
+		"nickname":   name,
+		"avatar_url": strings.TrimSpace(st.AvatarURL),
+		"sign":       strings.TrimSpace(st.Sign),
 	}).Error
 }
-
 
 // GetGlobalSystemPrompt returns the agent_settings system_prompt (global layer).
 // This is the general/default prompt that applies to ALL agent profiles.

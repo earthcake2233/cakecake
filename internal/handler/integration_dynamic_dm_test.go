@@ -3,16 +3,15 @@
 package handler
 
 import (
+	"encoding/json"
+	"fmt"
 	"minibili/internal/model/comment"
 	"minibili/internal/model/dm"
 	"minibili/internal/model/dynamic"
-	"encoding/json"
-	"fmt"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
-
 )
 
 // Test_DynamicCommentApproveIgnoreDelete verifies curated comment flow for dynamics.
@@ -86,7 +85,12 @@ func Test_DmConversationEdgeCases(t *testing.T) {
 	u2 := seedUser(t, api, "dce2", "DCE2", 10)
 	tk := tok(t, api, u1.ID)
 	w := srve(r, areq("POST", "/api/v1/dm/conversations", tk, fmt.Sprintf(`{"user_id":%d}`, u2.ID)))
-	var dcr struct { Code int `json:"code"`; Data struct { ID uint64 `json:"id"`} }
+	var dcr struct {
+		Code int `json:"code"`
+		Data struct {
+			ID uint64 `json:"id"`
+		}
+	}
 	json.Unmarshal(w.Body.Bytes(), &dcr)
 	if dcr.Code == 0 && dcr.Data.ID > 0 {
 		cid := dcr.Data.ID
@@ -97,7 +101,7 @@ func Test_DmConversationEdgeCases(t *testing.T) {
 		srve(r, areq("PATCH", fmt.Sprintf("/api/v1/dm/conversations/%d/settings", cid), tk, `{"pinned":true}`))
 		// Reset agent conversation
 		// Reset agent conversation - Agent not configured so expect error
-	srve(r, areq("POST", fmt.Sprintf("/api/v1/dm/conversations/%d/reset", cid), tk, nil))
+		srve(r, areq("POST", fmt.Sprintf("/api/v1/dm/conversations/%d/reset", cid), tk, nil))
 		// Delete conversation
 		srve(r, areq("DELETE", fmt.Sprintf("/api/v1/dm/conversations/%d", cid), tk, nil))
 	}
@@ -123,7 +127,6 @@ func Test_DynamicCommentLikeDislikeEdge(t *testing.T) {
 	srve(r, areq("POST", fmt.Sprintf("/api/v1/dynamic-comments/%d/like", cid), tk, nil))
 }
 
-
 // Test_DmConversationDirectDB covers DM endpoints with a DB-created conversation.
 func Test_DmConversationDirectDB(t *testing.T) {
 	api, r, _ := newTestAPI(t)
@@ -132,7 +135,9 @@ func Test_DmConversationDirectDB(t *testing.T) {
 	tk := tok(t, api, u1.ID)
 	// Create a conversation directly in DB
 	lo, hi := u1.ID, u2.ID
-	if lo > hi { lo, hi = hi, lo }
+	if lo > hi {
+		lo, hi = hi, lo
+	}
 	conv := dm.DmConversation{UserLow: lo, UserHigh: hi, Kind: dm.DmKindHuman, CreatedAt: time.Now(), UpdatedAt: time.Now()}
 	require.NoError(t, api.DB.Create(&conv).Error)
 	// Add participants

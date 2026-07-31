@@ -1,16 +1,15 @@
 package handler
 
 import (
-	"minibili/internal/model/video"
 	"bytes"
 	"encoding/json"
+	"minibili/internal/model/video"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
-
 )
 
 func registerLogin(t *testing.T, r *gin.Engine, username string) string {
@@ -160,7 +159,7 @@ func formatUint(n uint64) string {
 	i := len(buf)
 	for n > 0 {
 		i--
-		buf[i] = byte('0'+n%10)
+		buf[i] = byte('0' + n%10)
 		n /= 10
 	}
 	return string(buf[i:])

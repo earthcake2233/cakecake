@@ -1,8 +1,10 @@
 package user
+
 import (
 	"fmt"
 	"time"
 )
+
 type User struct {
 	ID           uint64 `gorm:"primaryKey"`
 	Username     string `gorm:"size:64;uniqueIndex;not null"`
@@ -13,17 +15,17 @@ type User struct {
 	Nickname string `gorm:"size:64"`
 	Sign     string `gorm:"size:500"`
 	// SpaceAnnouncement is the personal-space sidebar bulletin (≤150 UTF-8 runes, validated in handler).
-	SpaceAnnouncement string    `gorm:"size:600"`
-	Gender            string    `gorm:"size:16"` // male | female | secret
+	SpaceAnnouncement string `gorm:"size:600"`
+	Gender            string `gorm:"size:16"` // male | female | secret
 	Birthday          string `gorm:"size:10"` // YYYY-MM-DD, may be empty
 	// Space privacy toggles (personal space settings).
-	PrivacyPublicFavorites    bool `gorm:"not null;default:0"`
-	PrivacyPublicRecentCoins  bool `gorm:"not null;default:0"`
-	PrivacyPublicFollowing    bool `gorm:"not null;default:0"`
-	PrivacyPublicFans         bool `gorm:"not null;default:0"`
-	PrivacyPublicBirthday     bool `gorm:"not null;default:1"`
-	CreatedAt                 time.Time `gorm:"index"`
-	UpdatedAt         time.Time
+	PrivacyPublicFavorites   bool      `gorm:"not null;default:0"`
+	PrivacyPublicRecentCoins bool      `gorm:"not null;default:0"`
+	PrivacyPublicFollowing   bool      `gorm:"not null;default:0"`
+	PrivacyPublicFans        bool      `gorm:"not null;default:0"`
+	PrivacyPublicBirthday    bool      `gorm:"not null;default:1"`
+	CreatedAt                time.Time `gorm:"index"`
+	UpdatedAt                time.Time
 	// FirstPublishedAt is set once when the user's first video reaches published (transcode OK);
 	// retained if that video is later deleted so the "became a creator" day count still has an anchor.
 	FirstPublishedAt *time.Time `gorm:"index"`
@@ -53,11 +55,11 @@ type UserBlock struct {
 	CreatedAt time.Time
 }
 type CoinLedger struct {
-	ID          uint64 `gorm:"primaryKey"`
-	UserID      uint64 `gorm:"index:idx_coin_ledger_user_created,priority:1;not null"`
-	DeltaTenths int64  `gorm:"not null"`
-	ReasonType  string `gorm:"size:32;not null;index"`
-	VideoID     uint64 `gorm:"index;not null;default:0"`
+	ID          uint64    `gorm:"primaryKey"`
+	UserID      uint64    `gorm:"index:idx_coin_ledger_user_created,priority:1;not null"`
+	DeltaTenths int64     `gorm:"not null"`
+	ReasonType  string    `gorm:"size:32;not null;index"`
+	VideoID     uint64    `gorm:"index;not null;default:0"`
 	CreatedAt   time.Time `gorm:"index:idx_coin_ledger_user_created,priority:2"`
 }
 type UserFollowGroup struct {
@@ -72,12 +74,17 @@ type UserFollowGroupMember struct {
 	FolloweeID uint64 `gorm:"uniqueIndex:idx_follow_group_member,priority:2;index;not null"`
 	CreatedAt  time.Time
 }
+
 func IsUserAnonymized(u *User) bool {
 	return u != nil && u.AnonymizedAt != nil
 }
 func DisplayUsername(u *User) string {
-	if u == nil { return "" }
-	if IsUserAnonymized(u) { return "\u5df2\u6ce8\u9500\u7528\u6237" }
+	if u == nil {
+		return ""
+	}
+	if IsUserAnonymized(u) {
+		return "\u5df2\u6ce8\u9500\u7528\u6237"
+	}
 	return u.Username
 }
 

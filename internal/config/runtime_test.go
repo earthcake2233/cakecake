@@ -6,7 +6,6 @@ import (
 
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
-
 )
 
 func setupRuntimeTest(t *testing.T) (*RuntimeConfig, *gorm.DB) {

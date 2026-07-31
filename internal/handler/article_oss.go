@@ -1,8 +1,8 @@
 package handler
 
 import (
-	"minibili/internal/model/article"
 	"fmt"
+	"minibili/internal/model/article"
 	"regexp"
 	"strings"
 

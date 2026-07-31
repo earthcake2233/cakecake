@@ -1,13 +1,13 @@
 package toolkit
 
 import (
+	"context"
+	"encoding/json"
+	"fmt"
 	"minibili/internal/model/comment"
 	"minibili/internal/model/danmaku"
 	"minibili/internal/model/user"
 	"minibili/internal/model/video"
-	"context"
-	"encoding/json"
-	"fmt"
 	"strings"
 
 	"gorm.io/gorm"
@@ -134,12 +134,12 @@ func (p *PlatformExecutor) searchVideos(ctx context.Context, raw json.RawMessage
 		}
 	}
 	type item struct {
-		ID           uint64 `json:"id"`
-		Title        string `json:"title"`
-		UploaderName string `json:"uploader_name"`
-		PlayCount    uint64 `json:"play_count"`
+		ID           uint64  `json:"id"`
+		Title        string  `json:"title"`
+		UploaderName string  `json:"uploader_name"`
+		PlayCount    uint64  `json:"play_count"`
 		Duration     float64 `json:"duration_sec"`
-		CoverURL     string `json:"cover_url"`
+		CoverURL     string  `json:"cover_url"`
 	}
 	items := make([]item, 0, len(videos))
 	for _, v := range videos {
@@ -245,13 +245,13 @@ func (p *PlatformExecutor) getTrending(ctx context.Context, raw json.RawMessage)
 		}
 	}
 	type item struct {
-		Rank         int    `json:"rank"`
-		Title        string `json:"title"`
-		VideoID      uint64 `json:"video_id"`
-		UploaderName string `json:"uploader_name"`
-		PlayCount    uint64 `json:"play_count"`
+		Rank         int     `json:"rank"`
+		Title        string  `json:"title"`
+		VideoID      uint64  `json:"video_id"`
+		UploaderName string  `json:"uploader_name"`
+		PlayCount    uint64  `json:"play_count"`
 		Duration     float64 `json:"duration_sec"`
-		CoverURL     string `json:"cover_url"`
+		CoverURL     string  `json:"cover_url"`
 	}
 	items := make([]item, 0, len(videos))
 	for i, v := range videos {
@@ -383,12 +383,12 @@ func (p *PlatformExecutor) getVideoDanmaku(ctx context.Context, raw json.RawMess
 		}
 	}
 	type item struct {
-		Content   string  `json:"content"`
-		VideoID   uint64  `json:"video_id"`
-		VideoTime float64 `json:"video_time"`
-		Type      string  `json:"type"`
-		Color     string  `json:"color"`
-		UserName  string  `json:"user_name"`
+		Content    string  `json:"content"`
+		VideoID    uint64  `json:"video_id"`
+		VideoTime  float64 `json:"video_time"`
+		Type       string  `json:"type"`
+		Color      string  `json:"color"`
+		UserName   string  `json:"user_name"`
 		UserAvatar string  `json:"user_avatar"`
 	}
 	items := make([]item, 0, len(danmakus))

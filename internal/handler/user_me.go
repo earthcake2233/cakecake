@@ -14,8 +14,8 @@ import (
 	"minibili/internal/errcode"
 	"minibili/internal/middleware"
 	"minibili/internal/pkg/coverval"
-	"minibili/internal/pkg/resp"
 	"minibili/internal/pkg/dailyreward"
+	"minibili/internal/pkg/resp"
 	"minibili/internal/pkg/usercoin"
 	"minibili/internal/pkg/userlevel"
 )

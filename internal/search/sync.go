@@ -1,67 +1,66 @@
 package search
 
 import (
-	"minibili/internal/model/article"
-	"minibili/internal/model/user"
-	"minibili/internal/model/video"
 	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
+	"minibili/internal/model/article"
+	"minibili/internal/model/user"
+	"minibili/internal/model/video"
 	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
 
 	"gorm.io/gorm"
-
 )
 
 type videoDoc struct {
-	ID            uint64    `json:"id"`
-	UserID        uint64    `json:"user_id"`
-	Title         string    `json:"title"`
-	Description   string    `json:"description"`
-	Tags          string    `json:"tags,omitempty"`
-	Uploader      string    `json:"uploader"`
-	CoverURL      string    `json:"cover_url"`
-	PlayCount     uint64    `json:"play_count"`
-	DanmakuCount  uint64    `json:"danmaku_count"`
-	FavCount      uint64    `json:"fav_count"`
-	DurationSec   float64   `json:"duration_sec"`
-	Zone          string    `json:"zone,omitempty"`
-	ZoneParent    string    `json:"zone_parent,omitempty"`
-	CreatedAt     time.Time `json:"created_at"`
-	Status        string    `json:"status"`
+	ID           uint64    `json:"id"`
+	UserID       uint64    `json:"user_id"`
+	Title        string    `json:"title"`
+	Description  string    `json:"description"`
+	Tags         string    `json:"tags,omitempty"`
+	Uploader     string    `json:"uploader"`
+	CoverURL     string    `json:"cover_url"`
+	PlayCount    uint64    `json:"play_count"`
+	DanmakuCount uint64    `json:"danmaku_count"`
+	FavCount     uint64    `json:"fav_count"`
+	DurationSec  float64   `json:"duration_sec"`
+	Zone         string    `json:"zone,omitempty"`
+	ZoneParent   string    `json:"zone_parent,omitempty"`
+	CreatedAt    time.Time `json:"created_at"`
+	Status       string    `json:"status"`
 }
 
 type articleDoc struct {
-	ID            uint64     `json:"id"`
-	UserID        uint64     `json:"user_id"`
-	Title         string     `json:"title"`
-	Body          string     `json:"body"`
-	Excerpt       string     `json:"excerpt"`
-	Author        string     `json:"author"`
-	AuthorAvatar  string     `json:"author_avatar"`
-	CoverURL      string     `json:"cover_url"`
-	ViewCount     uint64     `json:"view_count"`
-	CommentCount  uint64     `json:"comment_count"`
-	FavCount      uint64     `json:"fav_count"`
-	Tags          string     `json:"tags,omitempty"`
-	Category      string     `json:"category"`
-	PublishedAt   *time.Time `json:"published_at,omitempty"`
-	Status        string     `json:"status"`
+	ID           uint64     `json:"id"`
+	UserID       uint64     `json:"user_id"`
+	Title        string     `json:"title"`
+	Body         string     `json:"body"`
+	Excerpt      string     `json:"excerpt"`
+	Author       string     `json:"author"`
+	AuthorAvatar string     `json:"author_avatar"`
+	CoverURL     string     `json:"cover_url"`
+	ViewCount    uint64     `json:"view_count"`
+	CommentCount uint64     `json:"comment_count"`
+	FavCount     uint64     `json:"fav_count"`
+	Tags         string     `json:"tags,omitempty"`
+	Category     string     `json:"category"`
+	PublishedAt  *time.Time `json:"published_at,omitempty"`
+	Status       string     `json:"status"`
 }
 
 type userDoc struct {
-	ID         uint64 `json:"id"`
-	Nickname   string `json:"nickname"`
-	Username   string `json:"username"`
-	CakeID     string `json:"cake_id"`
-	Sign       string `json:"sign"`
-	AvatarURL  string `json:"avatar_url"`
-	Status     string `json:"status"`
+	ID        uint64 `json:"id"`
+	Nickname  string `json:"nickname"`
+	Username  string `json:"username"`
+	CakeID    string `json:"cake_id"`
+	Sign      string `json:"sign"`
+	AvatarURL string `json:"avatar_url"`
+	Status    string `json:"status"`
 }
 
 func firstTagLabel(tagsJSON string) string {

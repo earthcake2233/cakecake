@@ -9,7 +9,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-
 // SEARCH HISTORY
 func TestGetMySearchHistory_Unauthorized(t *testing.T) {
 	gormDB, _ := newMockGORM(t)
@@ -19,7 +18,6 @@ func TestGetMySearchHistory_Unauthorized(t *testing.T) {
 	require.Equal(t, http.StatusUnauthorized, w.Code)
 }
 
-
 func TestPutMySearchHistory_Unauthorized(t *testing.T) {
 	gormDB, _ := newMockGORM(t)
 	api := newMockAPISimple(t, gormDB)
@@ -27,7 +25,6 @@ func TestPutMySearchHistory_Unauthorized(t *testing.T) {
 	api.PutMySearchHistory(c)
 	require.Equal(t, http.StatusUnauthorized, w.Code)
 }
-
 
 // SEARCH HISTORY (continued)
 func TestPutMySearchHistory_BadJSON(t *testing.T) {
@@ -55,7 +52,6 @@ func TestPostMySearchHistory_BadJSON(t *testing.T) {
 	api.PostMySearchHistory(c)
 	require.Equal(t, http.StatusBadRequest, w.Code)
 }
-
 
 // DM
 func TestListDmConversations_Unauthorized(t *testing.T) {
@@ -101,7 +97,6 @@ func TestDeleteDmConversation_BadParam(t *testing.T) {
 	require.Equal(t, http.StatusBadRequest, w.Code)
 }
 
-
 func TestListDmMessages_Unauthorized(t *testing.T) {
 	gormDB, _ := newMockGORM(t)
 	api := newMockAPISimple(t, gormDB)
@@ -145,7 +140,6 @@ func TestResetDmAgentConversation_Unauthorized(t *testing.T) {
 	api.ResetDmAgentConversation(c)
 	require.Equal(t, http.StatusUnauthorized, w.Code)
 }
-
 
 // VIEW HISTORY
 func TestPostVideoViewHistory_Unauthorized(t *testing.T) {
@@ -259,7 +253,6 @@ func TestPostArticleCoin_BadParam(t *testing.T) {
 	api.PostArticleCoin(c)
 	require.Equal(t, http.StatusBadRequest, w.Code)
 }
-
 
 // USER DYNAMIC
 func TestGetUserDynamic_NotFound(t *testing.T) {
@@ -377,7 +370,6 @@ func TestDeleteFavoriteFolder_BadParam(t *testing.T) {
 	require.Equal(t, http.StatusBadRequest, w.Code)
 }
 
-
 // VIDEO ENGAGEMENT
 func TestToggleVideoFavorite_Unauthorized(t *testing.T) {
 	gormDB, _ := newMockGORM(t)
@@ -435,7 +427,6 @@ func TestToggleWatchLater_BadParam(t *testing.T) {
 	api.ToggleWatchLater(c)
 	require.Equal(t, http.StatusBadRequest, w.Code)
 }
-
 
 // ARTICLE COMMENT
 func TestPostArticleComment_Unauthorized(t *testing.T) {

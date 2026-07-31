@@ -1,14 +1,13 @@
 package usercoin
 
 import (
-	"minibili/internal/model/user"
 	"fmt"
+	"minibili/internal/model/user"
 	"testing"
 
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
-
 )
 
 func setupUserCoinDB(t *testing.T) *gorm.DB {
@@ -22,9 +21,9 @@ func setupUserCoinDB(t *testing.T) *gorm.DB {
 func createTestUser(t *testing.T, db *gorm.DB, id uint64, tenths int64) {
 	t.Helper()
 	u := user.User{
-		ID:               id,
-		Username:         fmt.Sprintf("user_%d", id),
-		PasswordHash:     "hash",
+		ID:                id,
+		Username:          fmt.Sprintf("user_%d", id),
+		PasswordHash:      "hash",
 		CoinBalanceTenths: tenths,
 	}
 	require.NoError(t, db.Create(&u).Error)

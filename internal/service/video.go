@@ -1,9 +1,9 @@
 package service
 
 import (
+	"context"
 	"minibili/internal/model/admin"
 	"minibili/internal/model/video"
-	"context"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -97,7 +97,9 @@ func (s *VideoService) ListPublishedVideos(ctx context.Context, opts VideoListOp
 
 // CountZoneVideos returns the count of published videos in a zone.
 func (s *VideoService) CountZoneVideos(zoneParent string) int64 {
-	if zoneParent == "" { return 0 }
+	if zoneParent == "" {
+		return 0
+	}
 	var n int64
 	_ = s.db.Model(&video.Video{}).
 		Where("status = ?", "published").
@@ -264,7 +266,7 @@ type MyVideoFilter struct {
 	Status   string   // single status
 	Statuses []string // multi status (used when Status is empty)
 	TitleQ   string
-	SortKey  string   // "time", "reply", "like"
+	SortKey  string // "time", "reply", "like"
 	Page     int
 	PageSize int
 }
@@ -346,7 +348,6 @@ func (s *VideoService) UpdateBanner(ctx context.Context, id uint64, updates map[
 func (s *VideoService) DeleteBanner(ctx context.Context, id uint64) error {
 	return s.db.WithContext(ctx).Delete(&admin.HomeBanner{}, id).Error
 }
-
 
 // CountByStatus returns video count by status.
 func (s *VideoService) CountByStatus(ctx context.Context, status string) (int64, error) {

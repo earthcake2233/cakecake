@@ -1,13 +1,13 @@
 package handler
 
 import (
-	"minibili/internal/model/comment"
-	"minibili/internal/model/dynamic"
-	"minibili/internal/model/user"
+	"context"
 	"encoding/json"
 	"fmt"
 	"mime/multipart"
-	"context"
+	"minibili/internal/model/comment"
+	"minibili/internal/model/dynamic"
+	"minibili/internal/model/user"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -363,7 +363,7 @@ func (a *API) PutMyUserDynamic(c *gin.Context) {
 	}
 	dyn.Title = title
 	updates := map[string]interface{}{
-		"content": content,
+		"content":     content,
 		"images_json": string(imgsJSON),
 	}
 	if err := a.DynamicSvc.UpdateDynamic(context.Background(), id, updates); err != nil {
@@ -446,7 +446,6 @@ func (a *API) DeleteMyDynamic(c *gin.Context) {
 	purgeDynamicOSSObjects(a.Cfg, a.OSS, a.Log, *dyn)
 	resp.OK(c, gin.H{"ok": true})
 }
-
 
 // ListMyDynamics lists the current user's image/text dynamics (content management).
 // Query: page, page_size, sort(time|reply|like), q(title or content).

@@ -1,11 +1,10 @@
 package usercoin
 
 import (
-	"minibili/internal/model/user"
 	"errors"
+	"minibili/internal/model/user"
 
 	"gorm.io/gorm"
-
 )
 
 const (

@@ -4,9 +4,9 @@ import "strings"
 
 // VideoFilter from search UI (All / Videos tab).
 type VideoFilter struct {
-	Order      string // default | click | pubdate | dm | fav
-	Duration   string // all | lt10 | m10_30 | m30_60 | gt60
-	Zone       string // UI label e.g. 动画、全部分区
+	Order    string // default | click | pubdate | dm | fav
+	Duration string // all | lt10 | m10_30 | m30_60 | gt60
+	Zone     string // UI label e.g. 动画、全部分区
 }
 
 func ParseVideoFilter(order, duration, zone string) VideoFilter {

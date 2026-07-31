@@ -107,8 +107,8 @@ func TestGatewayBuildMessagesNilRedis(t *testing.T) {
 
 func TestGatewayBuildMessagesWithHistory(t *testing.T) {
 	g := &Gateway{
-		LLM:    &Client{APIKey: "test"},
-		Redis:  nil,
+		LLM:        &Client{APIKey: "test"},
+		Redis:      nil,
 		MaxHistory: 5,
 	}
 	msgs, err := g.BuildMessages(context.Background(), 1, "test message")

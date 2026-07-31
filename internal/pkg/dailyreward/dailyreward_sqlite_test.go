@@ -12,7 +12,6 @@ import (
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
-
 )
 
 func setupDailyRewardDB(t *testing.T) *gorm.DB {

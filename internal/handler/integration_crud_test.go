@@ -3,14 +3,14 @@
 package handler
 
 import (
+	"bytes"
+	"encoding/json"
 	"minibili/internal/model/admin"
 	"minibili/internal/model/article"
 	"minibili/internal/model/comment"
 	"minibili/internal/model/dynamic"
 	"minibili/internal/model/user"
 	"minibili/internal/model/video"
-	"bytes"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -56,26 +56,26 @@ func setupHandlerIntegrationDB(t *testing.T) (*API, *gin.Engine, string) {
 
 	api := &API{
 		Dependencies: &Dependencies{
-			Cfg:          cfg,
-			DB:           db,
-			Redis:        rdb,
-			JWT:          jm,
-			Hub:          ws.NewHub(),
-			Log:          zap.NewNop(),
-			Play:         &service.PlayCounter{Rdb: rdb, DB: db},
-			AuthSvc:      service.NewAuthService(db, rdb, zap.NewNop(), jm, service.AuthConfig{}),
-			UserSvc:      service.NewUserService(db, zap.NewNop()),
-			FollowSvc:    service.NewFollowService(db, zap.NewNop()),
-			DanmakuSvc:   service.NewDanmakuService(db, rdb, zap.NewNop(), nil),
-			CommentSvc:   service.NewCommentService(db, rdb, zap.NewNop(), nil, nil,
+			Cfg:        cfg,
+			DB:         db,
+			Redis:      rdb,
+			JWT:        jm,
+			Hub:        ws.NewHub(),
+			Log:        zap.NewNop(),
+			Play:       &service.PlayCounter{Rdb: rdb, DB: db},
+			AuthSvc:    service.NewAuthService(db, rdb, zap.NewNop(), jm, service.AuthConfig{}),
+			UserSvc:    service.NewUserService(db, zap.NewNop()),
+			FollowSvc:  service.NewFollowService(db, zap.NewNop()),
+			DanmakuSvc: service.NewDanmakuService(db, rdb, zap.NewNop(), nil),
+			CommentSvc: service.NewCommentService(db, rdb, zap.NewNop(), nil, nil,
 				service.NewUserProvider(db), service.NewVideoProvider(db),
 				service.NewArticleProvider(db), service.NewDynamicProvider(db)),
-			NotifSvc:     service.NewNotificationService(db, rdb, zap.NewNop(), nil),
-			VideoSvc:     service.NewVideoService(db, rdb, zap.NewNop()),
-			DmSvc:        service.NewDmService(db, rdb, zap.NewNop()),
-			FavoriteSvc:  service.NewFavoriteService(db, rdb, zap.NewNop(), nil, nil),
-			ArticleSvc:   service.NewArticleService(db, rdb, zap.NewNop(), nil),
-			DynamicSvc:   service.NewDynamicService(db, rdb, zap.NewNop()),
+			NotifSvc:          service.NewNotificationService(db, rdb, zap.NewNop(), nil),
+			VideoSvc:          service.NewVideoService(db, rdb, zap.NewNop()),
+			DmSvc:             service.NewDmService(db, rdb, zap.NewNop()),
+			FavoriteSvc:       service.NewFavoriteService(db, rdb, zap.NewNop(), nil, nil),
+			ArticleSvc:        service.NewArticleService(db, rdb, zap.NewNop(), nil),
+			DynamicSvc:        service.NewDynamicService(db, rdb, zap.NewNop()),
 			EngagementSvc:     service.NewEngagementService(db, rdb, zap.NewNop(), nil, nil),
 			ViewHistorySvc:    service.NewViewHistoryService(db, rdb, zap.NewNop()),
 			VideoDraftSvc:     service.NewVideoDraftService(db, rdb, zap.NewNop()),

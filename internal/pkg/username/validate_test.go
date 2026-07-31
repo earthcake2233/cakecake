@@ -51,7 +51,7 @@ func TestValid_EdgeCases(t *testing.T) {
 		{"min runes - 3", "abc", true},
 		{"just under min", "ab", false},
 		{"just over max", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", false}, // 33 a's
-		{"exactly max", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", true}, // 32 a's
+		{"exactly max", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", true},     // 32 a's
 		{"mixed case letters", "AliceUserName", true},
 	}
 	for _, tc := range tests {

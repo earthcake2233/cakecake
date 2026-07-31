@@ -8,7 +8,6 @@ import (
 
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
-
 )
 
 // ---------- IsAgentConversation ----------
@@ -280,6 +279,3 @@ func TestActiveHotSearchOpFlags(t *testing.T) {
 		}
 	})
 }
-
-
-

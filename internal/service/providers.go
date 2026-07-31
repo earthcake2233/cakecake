@@ -1,13 +1,12 @@
 package service
 
 import (
+	"context"
 	"minibili/internal/model/article"
 	"minibili/internal/model/dynamic"
 	"minibili/internal/model/video"
-	"context"
 
 	"gorm.io/gorm"
-
 )
 
 // VideoProviderImpl implements VideoProvider using *gorm.DB.
@@ -21,8 +20,12 @@ func NewVideoProvider(db *gorm.DB) *VideoProviderImpl {
 
 func (p *VideoProviderImpl) GetPublishedVideo(ctx context.Context, id uint64) (*VideoInfo, error) {
 	var v video.Video
-	if err := p.db.WithContext(ctx).First(&v, id).Error; err != nil { return nil, err }
-	if v.Status != "published" { return nil, gorm.ErrRecordNotFound }
+	if err := p.db.WithContext(ctx).First(&v, id).Error; err != nil {
+		return nil, err
+	}
+	if v.Status != "published" {
+		return nil, gorm.ErrRecordNotFound
+	}
 	return &VideoInfo{
 		ID: v.ID, UserID: v.UserID, Title: v.Title, CoverURL: v.CoverURL,
 		PlayCount: v.PlayCount, DanmakuCount: v.DanmakuCount, CommentCount: v.CommentCount, DurationSec: v.DurationSec,
@@ -34,7 +37,9 @@ func (p *VideoProviderImpl) GetPublishedVideo(ctx context.Context, id uint64) (*
 
 func (p *VideoProviderImpl) GetVideoAuthor(ctx context.Context, id uint64) (uint64, error) {
 	var v video.Video
-	if err := p.db.WithContext(ctx).Select("user_id").First(&v, id).Error; err != nil { return 0, err }
+	if err := p.db.WithContext(ctx).Select("user_id").First(&v, id).Error; err != nil {
+		return 0, err
+	}
 	return v.UserID, nil
 }
 
@@ -54,7 +59,9 @@ func (p *VideoProviderImpl) IncrFavCount(ctx context.Context, id uint64, delta i
 }
 
 func (p *VideoProviderImpl) BatchGetPublishedVideos(ctx context.Context, ids []uint64) (map[uint64]*VideoInfo, error) {
-	if len(ids) == 0 { return nil, nil }
+	if len(ids) == 0 {
+		return nil, nil
+	}
 	var videos []video.Video
 	if err := p.db.WithContext(ctx).Where("id IN ? AND status = ?", ids, "published").Find(&videos).Error; err != nil {
 		return nil, err
@@ -84,8 +91,12 @@ func NewArticleProvider(db *gorm.DB) *ArticleProviderImpl {
 
 func (p *ArticleProviderImpl) GetPublishedArticle(ctx context.Context, id uint64) (*ArticleInfo, error) {
 	var a article.Article
-	if err := p.db.WithContext(ctx).First(&a, id).Error; err != nil { return nil, err }
-	if a.Status != "published" { return nil, gorm.ErrRecordNotFound }
+	if err := p.db.WithContext(ctx).First(&a, id).Error; err != nil {
+		return nil, err
+	}
+	if a.Status != "published" {
+		return nil, gorm.ErrRecordNotFound
+	}
 	return &ArticleInfo{
 		ID: a.ID, UserID: a.UserID, Title: a.Title, Status: a.Status,
 		CommentsClosed: a.CommentsClosed, CommentsCurated: a.CommentsCurated, CreatedAt: a.CreatedAt,
@@ -94,7 +105,9 @@ func (p *ArticleProviderImpl) GetPublishedArticle(ctx context.Context, id uint64
 
 func (p *ArticleProviderImpl) GetArticleAuthor(ctx context.Context, id uint64) (uint64, error) {
 	var a article.Article
-	if err := p.db.WithContext(ctx).Select("user_id").First(&a, id).Error; err != nil { return 0, err }
+	if err := p.db.WithContext(ctx).Select("user_id").First(&a, id).Error; err != nil {
+		return 0, err
+	}
 	return a.UserID, nil
 }
 
@@ -114,7 +127,9 @@ func NewDynamicProvider(db *gorm.DB) *DynamicProviderImpl {
 
 func (p *DynamicProviderImpl) GetPublishedDynamic(ctx context.Context, id uint64) (*DynamicInfo, error) {
 	var d dynamic.UserDynamic
-	if err := p.db.WithContext(ctx).First(&d, id).Error; err != nil { return nil, err }
+	if err := p.db.WithContext(ctx).First(&d, id).Error; err != nil {
+		return nil, err
+	}
 	return &DynamicInfo{
 		ID: d.ID, UserID: d.UserID, Status: "published",
 		CommentsClosed: d.CommentsClosed, CommentsCurated: d.CommentsCurated, CreatedAt: d.CreatedAt,
@@ -123,7 +138,9 @@ func (p *DynamicProviderImpl) GetPublishedDynamic(ctx context.Context, id uint64
 
 func (p *DynamicProviderImpl) GetDynamicAuthor(ctx context.Context, id uint64) (uint64, error) {
 	var d dynamic.UserDynamic
-	if err := p.db.WithContext(ctx).Select("user_id").First(&d, id).Error; err != nil { return 0, err }
+	if err := p.db.WithContext(ctx).Select("user_id").First(&d, id).Error; err != nil {
+		return 0, err
+	}
 	return d.UserID, nil
 }
 

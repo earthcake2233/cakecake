@@ -19,7 +19,7 @@ func TestAdminRejectVideo_NotPending(t *testing.T) {
 	c.Params = gin.Params{{Key: "id", Value: "1"}}
 
 	mock.ExpectQuery("SELECT .+ FROM `videos` WHERE").
-		WillReturnRows(sqlmock.NewRows([]string{"id","user_id","title","status"}).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id", "title", "status"}).
 			AddRow(1, 10, "TV", "published"))
 
 	api.AdminRejectVideo(c)
@@ -64,7 +64,7 @@ func TestAdminRejectArticle_NotPending(t *testing.T) {
 	c.Params = gin.Params{{Key: "id", Value: "1"}}
 
 	mock.ExpectQuery("SELECT .+ FROM `articles` WHERE").
-		WillReturnRows(sqlmock.NewRows([]string{"id","user_id","title","status"}).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id", "title", "status"}).
 			AddRow(1, 10, "TA", "published"))
 
 	api.AdminRejectArticle(c)
@@ -97,7 +97,7 @@ func TestAdminDeleteVideo_NotPublished(t *testing.T) {
 	c.Params = gin.Params{{Key: "id", Value: "1"}}
 
 	mock.ExpectQuery("SELECT .+ FROM `videos` WHERE").
-		WillReturnRows(sqlmock.NewRows([]string{"id","user_id","title","status"}).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id", "title", "status"}).
 			AddRow(1, 10, "TV", "pending_review"))
 
 	api.AdminDeleteVideo(c)
@@ -130,7 +130,7 @@ func TestAdminDeleteArticle_NotPublished(t *testing.T) {
 	c.Params = gin.Params{{Key: "id", Value: "1"}}
 
 	mock.ExpectQuery("SELECT .+ FROM `articles` WHERE").
-		WillReturnRows(sqlmock.NewRows([]string{"id","user_id","title","status"}).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id", "title", "status"}).
 			AddRow(1, 10, "TA", "pending_review"))
 
 	api.AdminDeleteArticle(c)
@@ -163,7 +163,7 @@ func TestAdminApproveVideo_NotPending(t *testing.T) {
 	c.Params = gin.Params{{Key: "id", Value: "1"}}
 
 	mock.ExpectQuery("SELECT .+ FROM `videos` WHERE").
-		WillReturnRows(sqlmock.NewRows([]string{"id","user_id","title","status","video_url"}).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id", "title", "status", "video_url"}).
 			AddRow(1, 10, "TV", "published", "https://ex.com/v.mp4"))
 
 	api.AdminApproveVideo(c)
@@ -179,7 +179,7 @@ func TestAdminApproveVideo_EmptyVideoURL(t *testing.T) {
 	c.Params = gin.Params{{Key: "id", Value: "1"}}
 
 	mock.ExpectQuery("SELECT .+ FROM `videos` WHERE").
-		WillReturnRows(sqlmock.NewRows([]string{"id","user_id","title","status","video_url"}).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id", "title", "status", "video_url"}).
 			AddRow(1, 10, "TV", "pending_review", ""))
 
 	api.AdminApproveVideo(c)
@@ -197,7 +197,7 @@ func TestAdminApproveArticle_NotPending(t *testing.T) {
 	c.Params = gin.Params{{Key: "id", Value: "1"}}
 
 	mock.ExpectQuery("SELECT .+ FROM `articles` WHERE").
-		WillReturnRows(sqlmock.NewRows([]string{"id","user_id","title","status"}).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id", "title", "status"}).
 			AddRow(1, 10, "TA", "published"))
 
 	api.AdminApproveArticle(c)

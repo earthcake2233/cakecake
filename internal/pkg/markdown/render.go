@@ -24,8 +24,8 @@ type TocEntry struct {
 var (
 	headingRe = regexp.MustCompile(`(?m)^(#{1,3})\s+(.+)$`)
 	// \p{Han} = CJK unified ideographs (Go regexp / RE2, not JS \uXXXX)
-	slugSafe  = regexp.MustCompile(`[^a-zA-Z0-9\p{Han}]+`)
-	htmlTags  = regexp.MustCompile(`<[^>]*>`)
+	slugSafe = regexp.MustCompile(`[^a-zA-Z0-9\p{Han}]+`)
+	htmlTags = regexp.MustCompile(`<[^>]*>`)
 )
 
 var md = goldmark.New(

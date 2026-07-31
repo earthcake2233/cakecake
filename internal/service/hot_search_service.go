@@ -1,12 +1,11 @@
 package service
 
 import (
-	"minibili/internal/model/admin"
 	"context"
+	"minibili/internal/model/admin"
 	"strings"
 
 	"gorm.io/gorm"
-
 )
 
 // HotSearchService handles hot search business operations,

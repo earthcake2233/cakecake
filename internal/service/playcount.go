@@ -1,8 +1,8 @@
 package service
 
 import (
-	"minibili/internal/model/video"
 	"context"
+	"minibili/internal/model/video"
 	"strconv"
 
 	"github.com/redis/go-redis/v9"

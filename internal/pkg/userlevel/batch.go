@@ -1,9 +1,8 @@
 package userlevel
 
 import (
-	"minibili/internal/model/user"
 	"gorm.io/gorm"
-
+	"minibili/internal/model/user"
 )
 
 // BatchCurrentLevels maps user id to account level (1–6) from stored experience.

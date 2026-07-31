@@ -1,9 +1,9 @@
 package handler
 
 import (
-	"minibili/internal/model/video"
 	"context"
 	"errors"
+	"minibili/internal/model/video"
 	"net/http"
 	"strconv"
 
@@ -65,8 +65,6 @@ func (a *API) engagementByViewer(viewer uint64, ids []uint64) map[uint64]videoEn
 	return out
 }
 
-
-
 func watchLaterByViewer(db *gorm.DB, viewer uint64, ids []uint64) map[uint64]bool {
 	out := make(map[uint64]bool)
 	if viewer == 0 || len(ids) == 0 {
@@ -81,7 +79,6 @@ func watchLaterByViewer(db *gorm.DB, viewer uint64, ids []uint64) map[uint64]boo
 	}
 	return out
 }
-
 
 func loadPublishedVideo(a *API, vid uint64) (*video.Video, bool) {
 	v, err := a.VideoSvc.GetPublishedVideo(context.Background(), vid)
@@ -127,6 +124,7 @@ func (a *API) ToggleVideoFavorite(c *gin.Context) {
 	}
 	resp.OK(c, gin.H{"favorited": favorited, "fav_count": favCount})
 }
+
 const favoriteFolderCapacity = 999
 
 type setVideoFavoriteFoldersJSON struct {
@@ -173,7 +171,9 @@ func (a *API) GetVideoFavoritePicker(c *gin.Context) {
 			countLabel = strconv.FormatInt(videoCount, 10) + "/" + strconv.Itoa(favoriteFolderCapacity)
 		}
 		inFolder, _ := a.FavoriteSvc.CheckFavoriteExists(context.Background(), uid, id, vid)
-		if inFolder { selected[id] = true }
+		if inFolder {
+			selected[id] = true
+		}
 		items = append(items, gin.H{"id": id, "title": row["title"],
 			"is_default": isDefault, "video_count": videoCount,
 			"count_label": countLabel, "selected": selected[id],
@@ -181,7 +181,9 @@ func (a *API) GetVideoFavoritePicker(c *gin.Context) {
 	}
 	v, _ := a.VideoSvc.GetPublishedVideo(context.Background(), vid)
 	var favCount uint64
-	if v != nil { favCount = v.FavCount }
+	if v != nil {
+		favCount = v.FavCount
+	}
 	resp.OK(c, gin.H{"favorited": len(selected) > 0, "fav_count": favCount, "folder_ids": folderIDsFromMap(selected), "items": items})
 }
 
@@ -240,8 +242,6 @@ func (a *API) SetVideoFavoriteFolders(c *gin.Context) {
 	}
 	resp.OK(c, gin.H{"favorited": result.Favorited, "fav_count": result.FavCount, "folder_ids": result.FolderIDs})
 }
-
-
 
 func (a *API) syncVideoFavCountAfterUserChange(vid uint64, before, after int64) {
 	if before == 0 && after > 0 {
@@ -569,10 +569,16 @@ func (a *API) ListMyWatchLater(c *gin.Context) {
 		return
 	}
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	if page < 1 { page = 1 }
+	if page < 1 {
+		page = 1
+	}
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
-	if pageSize < 1 { pageSize = 20 }
-	if pageSize > 50 { pageSize = 50 }
+	if pageSize < 1 {
+		pageSize = 20
+	}
+	if pageSize > 50 {
+		pageSize = 50
+	}
 	items, total, err := a.EngagementSvc.ListWatchLaterWithVideos(context.Background(), uid, page, pageSize)
 	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
@@ -665,7 +671,7 @@ func (a *API) favoriteListItems(ctx context.Context, ownerID uint64, limit int, 
 			"play_count": item.PlayCount, "danmaku_count": item.DanmakuCount, "duration": item.Duration,
 			"uploader": item.UploaderName, "uploader_id": item.UploaderID,
 			"uploader_avatar_url": item.UploaderAvatar,
-			"created_at": item.CreatedAt, "favorited_at": item.FavoritedAt,
+			"created_at":          item.CreatedAt, "favorited_at": item.FavoritedAt,
 			"folder_id": item.FolderID,
 		})
 	}
@@ -717,7 +723,9 @@ func (a *API) ListUserFavorites(c *gin.Context) {
 	}
 	limit := 200
 	if raw := c.Query("limit"); raw != "" {
-		if n, err := strconv.Atoi(raw); err == nil && n > 0 && n <= 200 { limit = n }
+		if n, err := strconv.Atoi(raw); err == nil && n > 0 && n <= 200 {
+			limit = n
+		}
 	}
 	folderID, filterFolder, err := parseFolderIDQuery(c)
 	if err != nil {
@@ -745,7 +753,9 @@ func (a *API) ListUserFavorites(c *gin.Context) {
 
 func (a *API) coinRecentListItems(ctx context.Context, ownerID uint64, limit int) ([]gin.H, int64, error) {
 	items, total, err := a.EngagementSvc.ListUserCoinedVideos(ctx, ownerID, limit)
-	if err != nil { return nil, 0, err }
+	if err != nil {
+		return nil, 0, err
+	}
 	result := make([]gin.H, 0, len(items))
 	for _, item := range items {
 		result = append(result, gin.H{
@@ -779,7 +789,9 @@ func (a *API) ListUserRecentCoinVideos(c *gin.Context) {
 	}
 	limit := 20
 	if raw := c.Query("limit"); raw != "" {
-		if n, err := strconv.Atoi(raw); err == nil && n > 0 && n <= 50 { limit = n }
+		if n, err := strconv.Atoi(raw); err == nil && n > 0 && n <= 50 {
+			limit = n
+		}
 	}
 	items, total, err := a.coinRecentListItems(c, ownerID, limit)
 	if err != nil {

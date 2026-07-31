@@ -1,10 +1,9 @@
 package useravatar
 
 import (
-	"minibili/internal/model/user"
 	"fmt"
+	"minibili/internal/model/user"
 	"strings"
-
 )
 
 // PublicURL appends ?v=updated_at so browsers refetch after OSS overwrite at a fixed key.

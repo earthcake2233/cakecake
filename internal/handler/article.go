@@ -1,13 +1,13 @@
 package handler
 
 import (
+	"context"
+	"encoding/json"
+	"fmt"
 	"minibili/internal/model/article"
 	"minibili/internal/model/comment"
 	"minibili/internal/model/extra"
 	"minibili/internal/model/user"
-	"context"
-	"encoding/json"
-	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -21,22 +21,22 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"minibili/internal/service"
 	"minibili/internal/errcode"
 	"minibili/internal/middleware"
 	"minibili/internal/pkg/coverval"
 	"minibili/internal/pkg/markdown"
 	"minibili/internal/pkg/resp"
 	"minibili/internal/pkg/sensitive"
+	"minibili/internal/service"
 )
 
 const (
-	articleStatusDraft          = "draft"
-	articleStatusPublished      = "published"
-	articleStatusPendingReview  = "pending_review"
-	articleStatusRejected       = "rejected"
-	maxArticleTitleRunes        = 80
-	maxArticleBodyRunes         = 100000
+	articleStatusDraft         = "draft"
+	articleStatusPublished     = "published"
+	articleStatusPendingReview = "pending_review"
+	articleStatusRejected      = "rejected"
+	maxArticleTitleRunes       = 80
+	maxArticleBodyRunes        = 100000
 )
 
 func (a *API) articleStatusAfterSubmit(publish bool) string {
@@ -50,11 +50,11 @@ func (a *API) articleStatusAfterSubmit(publish bool) string {
 }
 
 type articlePostJSON struct {
-	Title   string   `json:"title"`
-	BodyMD  string   `json:"body_md"`
-	CoverURL string  `json:"cover_url"`
-	Tags    []string `json:"tags"`
-	Publish bool     `json:"publish"`
+	Title    string   `json:"title"`
+	BodyMD   string   `json:"body_md"`
+	CoverURL string   `json:"cover_url"`
+	Tags     []string `json:"tags"`
+	Publish  bool     `json:"publish"`
 }
 
 type articlePatchJSON struct {
@@ -81,7 +81,6 @@ func toArticleEngagement(eng *service.ArticleEngagement) articleEngagement {
 		MyCoinAmount:  eng.MyCoinAmount,
 	}
 }
-
 
 func loadPublishedArticle(a *API, id uint64) (article.Article, bool) {
 	artInfo, err := a.ArticleSvc.GetPublishedArticle(context.Background(), id)
@@ -157,26 +156,26 @@ func articleDetailPayload(a *API, art *article.Article, author *user.User, eng a
 		pubAt = art.PublishedAt.Format("2006-01-02 15:04:05")
 	}
 	return gin.H{
-		"id":              art.ID,
-		"cv_id":           art.ID,
-		"user_id":         art.UserID,
-		"title":           art.Title,
-		"cover_url":       art.CoverURL,
-		"body_md":         art.BodyMD,
-		"body_html":       bodyHTML,
-		"toc":             toc,
-		"tags":            parseArticleTagsJSON(art.TagsJSON),
-		"status":          art.Status,
-		"fail_reason":     strings.TrimSpace(art.FailReason),
-		"view_count":      art.ViewCount,
-		"comment_count":   art.CommentCount,
-		"coin_count":      art.CoinCount,
-		"fav_count":       art.FavCount,
-		"forward_count":   art.ForwardCount,
-		"published_at":    pubAt,
-		"created_at":      art.CreatedAt.Format("2006-01-02 15:04:05"),
-		"author_name":     upName,
-		"author_avatar":   avatar,
+		"id":               art.ID,
+		"cv_id":            art.ID,
+		"user_id":          art.UserID,
+		"title":            art.Title,
+		"cover_url":        art.CoverURL,
+		"body_md":          art.BodyMD,
+		"body_html":        bodyHTML,
+		"toc":              toc,
+		"tags":             parseArticleTagsJSON(art.TagsJSON),
+		"status":           art.Status,
+		"fail_reason":      strings.TrimSpace(art.FailReason),
+		"view_count":       art.ViewCount,
+		"comment_count":    art.CommentCount,
+		"coin_count":       art.CoinCount,
+		"fav_count":        art.FavCount,
+		"forward_count":    art.ForwardCount,
+		"published_at":     pubAt,
+		"created_at":       art.CreatedAt.Format("2006-01-02 15:04:05"),
+		"author_name":      upName,
+		"author_avatar":    avatar,
 		"favorited_by_me":  eng.FavoritedByMe,
 		"coined_by_me":     eng.CoinedByMe,
 		"my_coin_amount":   eng.MyCoinAmount,
@@ -192,18 +191,18 @@ func articleListItem(art article.Article, authorName string, eng articleEngageme
 		pubAt = art.PublishedAt.Format("2006-01-02 15:04:05")
 	}
 	return gin.H{
-		"id":              art.ID,
-		"title":           art.Title,
-		"cover_url":       art.CoverURL,
-		"status":          art.Status,
-		"fail_reason":     strings.TrimSpace(art.FailReason),
-		"view_count":      art.ViewCount,
-		"comment_count":   art.CommentCount,
-		"coin_count":      art.CoinCount,
-		"fav_count":       art.FavCount,
-		"forward_count":   art.ForwardCount,
-		"published_at":    pubAt,
-		"created_at":      art.CreatedAt.Format("2006-01-02 15:04:05"),
+		"id":               art.ID,
+		"title":            art.Title,
+		"cover_url":        art.CoverURL,
+		"status":           art.Status,
+		"fail_reason":      strings.TrimSpace(art.FailReason),
+		"view_count":       art.ViewCount,
+		"comment_count":    art.CommentCount,
+		"coin_count":       art.CoinCount,
+		"fav_count":        art.FavCount,
+		"forward_count":    art.ForwardCount,
+		"published_at":     pubAt,
+		"created_at":       art.CreatedAt.Format("2006-01-02 15:04:05"),
 		"author_name":      authorName,
 		"favorited_by_me":  eng.FavoritedByMe,
 		"comments_closed":  art.CommentsClosed,
@@ -349,12 +348,12 @@ func (a *API) PostArticle(c *gin.Context) {
 		}
 	}
 	art := article.Article{
-		UserID:    uid,
-		Title:     title,
-		BodyMD:    bodyMD,
-		CoverURL:  strings.TrimSpace(req.CoverURL),
-		Status:    status,
-		TagsJSON:  tagsJSON,
+		UserID:      uid,
+		Title:       title,
+		BodyMD:      bodyMD,
+		CoverURL:    strings.TrimSpace(req.CoverURL),
+		Status:      status,
+		TagsJSON:    tagsJSON,
 		PublishedAt: publishedAt,
 	}
 	if err := a.ArticleSvc.CreateArticle(c.Request.Context(), &art); err != nil {
@@ -521,7 +520,9 @@ func (a *API) PostArticleView(c *gin.Context) {
 	}
 	var art article.Article
 	art2, _ := a.ArticleSvc.GetArticleByID(c.Request.Context(), id)
-	if art2 != nil { art = *art2 }
+	if art2 != nil {
+		art = *art2
+	}
 	resp.OK(c, gin.H{"view_count": art.ViewCount})
 }
 

@@ -11,7 +11,6 @@ import (
 
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
-
 )
 
 func setupDailyRewardDB(t *testing.T) *gorm.DB {
@@ -29,11 +28,11 @@ func setupDailyRewardDB(t *testing.T) *gorm.DB {
 func createDailyUser(t *testing.T, db *gorm.DB, id uint64) {
 	t.Helper()
 	u := user.User{
-		ID:               id,
-		Username:         "dailyuser",
-		PasswordHash:     "hash",
+		ID:                id,
+		Username:          "dailyuser",
+		PasswordHash:      "hash",
 		CoinBalanceTenths: 230,
-		Experience:       0,
+		Experience:        0,
 	}
 	if err := db.Create(&u).Error; err != nil {
 		t.Fatalf("create user: %v", err)

@@ -4,16 +4,15 @@
 package handler
 
 import (
+	"encoding/json"
+	"fmt"
 	"minibili/internal/model/article"
 	"minibili/internal/model/dynamic"
 	"minibili/internal/model/notification"
-	"encoding/json"
-	"fmt"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
-
 )
 
 func seedNotification(t *testing.T, api *API, recipientID uint64, notifType string, relatedID uint64) uint64 {
@@ -66,7 +65,12 @@ func Test_NotificationLikeAggregation(t *testing.T) {
 	srve(r, areq("POST", "/api/v1/videos/"+fmt.Sprint(v.ID)+"/comments", tok(t, api, u2.ID), body))
 	body2 := fmt.Sprintf(`{"content":"Second comment for like agg","video_id":%d}`, v.ID)
 	w := srve(r, areq("POST", "/api/v1/videos/"+fmt.Sprint(v.ID)+"/comments", tok(t, api, u2.ID), body2))
-	var cr struct { Code int `json:"code"`; Data struct { ID uint64 `json:"id"`} }
+	var cr struct {
+		Code int `json:"code"`
+		Data struct {
+			ID uint64 `json:"id"`
+		}
+	}
 	json.Unmarshal(w.Body.Bytes(), &cr)
 	if cr.Code == 0 && cr.Data.ID > 0 {
 		srve(r, areq("POST", fmt.Sprintf("/api/v1/comments/%d/like", cr.Data.ID), tok(t, api, u.ID), nil))
@@ -82,7 +86,12 @@ func Test_CommentApproveIgnoreDelete(t *testing.T) {
 	tk := tok(t, api, u.ID)
 	v := seedVideoWithAPI(t, api, u.ID, "CAI Video")
 	w := srve(r, areq("POST", "/api/v1/videos/"+fmt.Sprint(v.ID)+"/comments", tok(t, api, u2.ID), fmt.Sprintf(`{"content":"Needs approval"}`)))
-	var cr struct { Code int `json:"code"`; Data struct { ID uint64 `json:"id"`} }
+	var cr struct {
+		Code int `json:"code"`
+		Data struct {
+			ID uint64 `json:"id"`
+		}
+	}
 	json.Unmarshal(w.Body.Bytes(), &cr)
 	if cr.Code == 0 && cr.Data.ID > 0 {
 		cid := cr.Data.ID
@@ -101,7 +110,12 @@ func Test_CommentIgnoreCurated(t *testing.T) {
 	tk := tok(t, api, u.ID)
 	v := seedVideoWithAPI(t, api, u.ID, "CIC Video")
 	w := srve(r, areq("POST", "/api/v1/videos/"+fmt.Sprint(v.ID)+"/comments", tok(t, api, u2.ID), fmt.Sprintf(`{"content":"Ignore me"}`)))
-	var cr struct { Code int `json:"code"`; Data struct { ID uint64 `json:"id"`} }
+	var cr struct {
+		Code int `json:"code"`
+		Data struct {
+			ID uint64 `json:"id"`
+		}
+	}
 	json.Unmarshal(w.Body.Bytes(), &cr)
 	if cr.Code == 0 && cr.Data.ID > 0 {
 		srve(r, areq("POST", fmt.Sprintf("/api/v1/comments/%d/ignore-curated", cr.Data.ID), tk, nil))
@@ -115,7 +129,12 @@ func Test_ArticleCommentIgnoreDelete(t *testing.T) {
 	tk := tok(t, api, u.ID)
 	art := seedArticle(t, api, u.ID, "ACD Article")
 	w := srve(r, areq("POST", fmt.Sprintf("/api/v1/articles/%d/comments", art.ID), tok(t, api, u2.ID), fmt.Sprintf(`{"content":"Article comment test"}`)))
-	var acr struct { Code int `json:"code"`; Data struct { ID uint64 `json:"id"`} }
+	var acr struct {
+		Code int `json:"code"`
+		Data struct {
+			ID uint64 `json:"id"`
+		}
+	}
 	json.Unmarshal(w.Body.Bytes(), &acr)
 	if acr.Code == 0 && acr.Data.ID > 0 {
 		cid := acr.Data.ID
@@ -136,8 +155,18 @@ func Test_VideoFavoritePickerAndFolderOps(t *testing.T) {
 	v := seedVideoWithAPI(t, api, u2.ID, "VFP Video")
 	w1 := srve(r, areq("POST", "/api/v1/users/me/favorite-folders", tk, `{"title":"Folder A"}`))
 	w2 := srve(r, areq("POST", "/api/v1/users/me/favorite-folders", tk, `{"title":"Folder B"}`))
-	var f1 struct { Code int `json:"code"`; Data struct { ID uint64 `json:"id"`} }
-	var f2 struct { Code int `json:"code"`; Data struct { ID uint64 `json:"id"`} }
+	var f1 struct {
+		Code int `json:"code"`
+		Data struct {
+			ID uint64 `json:"id"`
+		}
+	}
+	var f2 struct {
+		Code int `json:"code"`
+		Data struct {
+			ID uint64 `json:"id"`
+		}
+	}
 	json.Unmarshal(w1.Body.Bytes(), &f1)
 	json.Unmarshal(w2.Body.Bytes(), &f2)
 	if f1.Code == 0 && f1.Data.ID > 0 && f2.Code == 0 && f2.Data.ID > 0 {
@@ -173,7 +202,12 @@ func Test_DmConversationSettingsAndReset(t *testing.T) {
 	u2 := seedUser(t, api, "dcs2", "DCS2", 10)
 	tk := tok(t, api, u.ID)
 	w := srve(r, areq("POST", "/api/v1/dm/conversations", tk, fmt.Sprintf(`{"user_id":%d}`, u2.ID)))
-	var dcr struct { Code int `json:"code"`; Data struct { ID uint64 `json:"id"`} }
+	var dcr struct {
+		Code int `json:"code"`
+		Data struct {
+			ID uint64 `json:"id"`
+		}
+	}
 	json.Unmarshal(w.Body.Bytes(), &dcr)
 	if dcr.Code == 0 && dcr.Data.ID > 0 {
 		cid := dcr.Data.ID
@@ -189,7 +223,12 @@ func Test_CreatorCommentsWithApproval(t *testing.T) {
 	tk := tok(t, api, u.ID)
 	v := seedVideoWithAPI(t, api, u.ID, "CCW Video")
 	w := srve(r, areq("POST", "/api/v1/videos/"+fmt.Sprint(v.ID)+"/comments", tok(t, api, u2.ID), `{"content":"Creator comment test"}`))
-	var cr struct { Code int `json:"code"`; Data struct { ID uint64 `json:"id"`} }
+	var cr struct {
+		Code int `json:"code"`
+		Data struct {
+			ID uint64 `json:"id"`
+		}
+	}
 	json.Unmarshal(w.Body.Bytes(), &cr)
 	if cr.Code == 0 && cr.Data.ID > 0 {
 		srve(r, areq("POST", fmt.Sprintf("/api/v1/comments/%d/approve", cr.Data.ID), tk, nil))
@@ -217,7 +256,12 @@ func Test_FavoriteFolderBatchRemove(t *testing.T) {
 	tk := tok(t, api, u.ID)
 	v := seedVideoWithAPI(t, api, u2.ID, "FBR Video")
 	w := srve(r, areq("POST", "/api/v1/users/me/favorite-folders", tk, `{"title":"Batch Folder"}`))
-	var fr struct { Code int `json:"code"`; Data struct { ID uint64 `json:"id"`} }
+	var fr struct {
+		Code int `json:"code"`
+		Data struct {
+			ID uint64 `json:"id"`
+		}
+	}
 	json.Unmarshal(w.Body.Bytes(), &fr)
 	if fr.Code == 0 && fr.Data.ID > 0 {
 		fid := fr.Data.ID
@@ -248,7 +292,12 @@ func Test_AdminAgentSettingsAndAvatar(t *testing.T) {
 	srve(r, areq("POST", "/api/v1/admin/agent-settings/avatar", at, nil))
 	srve(r, areq("GET", "/api/v1/admin/agent-profiles", at, nil))
 	w := srve(r, areq("POST", "/api/v1/admin/agent-profiles", at, `{"slug":"support-bot","display_name":"Support Bot","welcome_message":"How can I help?"}`))
-	var apr struct { Code int `json:"code"`; Data struct { ID uint64 `json:"id"`} }
+	var apr struct {
+		Code int `json:"code"`
+		Data struct {
+			ID uint64 `json:"id"`
+		}
+	}
 	json.Unmarshal(w.Body.Bytes(), &apr)
 	if apr.Code == 0 && apr.Data.ID > 0 {
 		pid := apr.Data.ID
@@ -263,7 +312,12 @@ func Test_AgentDmEndpoints(t *testing.T) {
 	u2 := seedUser(t, api, "adm2", "ADM2", 10)
 	tk := tok(t, api, u.ID)
 	w := srve(r, areq("POST", "/api/v1/dm/conversations", tk, fmt.Sprintf(`{"user_id":%d}`, u2.ID)))
-	var dcr struct { Code int `json:"code"`; Data struct { ID uint64 `json:"id"`} }
+	var dcr struct {
+		Code int `json:"code"`
+		Data struct {
+			ID uint64 `json:"id"`
+		}
+	}
 	json.Unmarshal(w.Body.Bytes(), &dcr)
 	if dcr.Code == 0 && dcr.Data.ID > 0 {
 		cid := dcr.Data.ID
@@ -307,7 +361,12 @@ func Test_DanmakuDeleteAndLike(t *testing.T) {
 	tk := tok(t, api, u.ID)
 	v := seedVideoWithAPI(t, api, u2.ID, "DDL Video")
 	w := srve(r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/danmaku", v.ID), tk, `{"content":"DDL Danmaku","type":0,"color":16777215,"progress":5.0}`))
-	var dmr struct { Code int `json:"code"`; Data struct { ID uint64 `json:"id"`} }
+	var dmr struct {
+		Code int `json:"code"`
+		Data struct {
+			ID uint64 `json:"id"`
+		}
+	}
 	json.Unmarshal(w.Body.Bytes(), &dmr)
 	if dmr.Code == 0 && dmr.Data.ID > 0 {
 		did := dmr.Data.ID
@@ -342,7 +401,12 @@ func Test_ArticleFullCRUD(t *testing.T) {
 	u := seedUser(t, api, "afc1", "AFC1", 10)
 	tk := tok(t, api, u.ID)
 	w := srve(r, areq("POST", "/api/v1/articles", tk, `{"title":"CRUD Article","body_md":"# Content","tags":["go","test"],"status":"draft"}`))
-	var ar struct { Code int `json:"code"`; Data struct { ID uint64 `json:"id"`} }
+	var ar struct {
+		Code int `json:"code"`
+		Data struct {
+			ID uint64 `json:"id"`
+		}
+	}
 	json.Unmarshal(w.Body.Bytes(), &ar)
 	if ar.Code == 0 && ar.Data.ID > 0 {
 		aid := ar.Data.ID
@@ -428,7 +492,12 @@ func Test_HomeBannerAdminCRUD(t *testing.T) {
 	at := admintok(t, api)
 	srve(r, areq("GET", "/api/v1/admin/home-banners", at, nil))
 	w := srve(r, areq("POST", "/api/v1/admin/home-banners", at, `{"title":"Test Banner","link_type":"none","sort_order":1}`))
-	var br struct { Code int `json:"code"`; Data struct { ID uint64 `json:"id"`} }
+	var br struct {
+		Code int `json:"code"`
+		Data struct {
+			ID uint64 `json:"id"`
+		}
+	}
 	json.Unmarshal(w.Body.Bytes(), &br)
 	if br.Code == 0 && br.Data.ID > 0 {
 		bid := br.Data.ID

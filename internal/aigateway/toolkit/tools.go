@@ -112,4 +112,3 @@ func definition(name string) aigateway.ToolDef {
 		return aigateway.ToolDef{}
 	}
 }
-

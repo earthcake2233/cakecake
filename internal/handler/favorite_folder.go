@@ -1,11 +1,11 @@
 package handler
 
 import (
-	"minibili/internal/model/video"
-	"errors"
 	"context"
+	"errors"
 	"fmt"
 	"mime/multipart"
+	"minibili/internal/model/video"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -33,9 +33,13 @@ type createFavoriteFolderJSON struct {
 
 func (a *API) ensureDefaultFavoriteFolder(userID uint64) (video.FavoriteFolder, error) {
 	folders, err := a.FavoriteSvc.ListFoldersByUser(context.Background(), userID)
-	if err != nil { return video.FavoriteFolder{}, err }
+	if err != nil {
+		return video.FavoriteFolder{}, err
+	}
 	for _, ff := range folders {
-		if ff.IsDefault { return ff, nil }
+		if ff.IsDefault {
+			return ff, nil
+		}
 	}
 	f := video.FavoriteFolder{
 		UserID:    userID,
@@ -217,7 +221,7 @@ func (a *API) createFavoriteFolderJSON(c *gin.Context, uid uint64) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	resp.OK(c, a.folderRowPayload( &row))
+	resp.OK(c, a.folderRowPayload(&row))
 }
 
 func (a *API) createFavoriteFolderMultipart(c *gin.Context, uid uint64) {
@@ -268,7 +272,7 @@ func (a *API) createFavoriteFolderMultipart(c *gin.Context, uid uint64) {
 			row.CoverURL = url
 		}
 	}
-	resp.OK(c, a.folderRowPayload( &row))
+	resp.OK(c, a.folderRowPayload(&row))
 }
 
 // ListUserFavoriteFolders returns favorite folders for a user's space (public, or all if viewer is owner).
@@ -407,8 +411,11 @@ func (a *API) updateFavoriteFolderJSON(c *gin.Context, uid, folderID uint64) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	ptr, _ := a.FavoriteSvc.GetFolderByID(context.Background(), row.ID); if ptr != nil { row = *ptr }
-	resp.OK(c, a.folderRowPayload( &row))
+	ptr, _ := a.FavoriteSvc.GetFolderByID(context.Background(), row.ID)
+	if ptr != nil {
+		row = *ptr
+	}
+	resp.OK(c, a.folderRowPayload(&row))
 }
 
 func (a *API) updateFavoriteFolderMultipart(c *gin.Context, uid, folderID uint64) {
@@ -456,8 +463,11 @@ func (a *API) updateFavoriteFolderMultipart(c *gin.Context, uid, folderID uint64
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	ptr, _ := a.FavoriteSvc.GetFolderByID(context.Background(), row.ID); if ptr != nil { row = *ptr }
-	resp.OK(c, a.folderRowPayload( &row))
+	ptr, _ := a.FavoriteSvc.GetFolderByID(context.Background(), row.ID)
+	if ptr != nil {
+		row = *ptr
+	}
+	resp.OK(c, a.folderRowPayload(&row))
 }
 
 // DeleteFavoriteFolder removes a non-default folder and its favorites.
@@ -502,6 +512,7 @@ func (a *API) validateFolderOwnedByUser(uid, folderID uint64) bool {
 	f, err := a.FavoriteSvc.GetFolderByID(context.Background(), folderID)
 	return err == nil && f.UserID == uid
 }
+
 // @Summary      Clear invalid favorites in folder
 // @Description  Remove references to deleted videos from a folder
 // @Tags         Favorites

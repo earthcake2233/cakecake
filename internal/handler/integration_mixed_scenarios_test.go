@@ -3,15 +3,14 @@
 package handler
 
 import (
-	"minibili/internal/model/dynamic"
-	"minibili/internal/model/video"
 	"encoding/json"
 	"fmt"
+	"minibili/internal/model/dynamic"
+	"minibili/internal/model/video"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
-
 )
 
 func Test_NotificationBatchAndCategoryRead(t *testing.T) {
@@ -33,7 +32,12 @@ func Test_CommentLikeDislikeToggleFlow(t *testing.T) {
 	tk := tok(t, api, u.ID)
 	v := seedVideoWithAPI(t, api, u2.ID, "CLT Video")
 	w := srve(r, areq("POST", "/api/v1/videos/"+fmt.Sprint(v.ID)+"/comments", tok(t, api, u2.ID), fmt.Sprintf(`{"content":"Toggle test comment"}`)))
-	var cr struct { Code int `json:"code"`; Data struct { ID uint64 `json:"id"`} }
+	var cr struct {
+		Code int `json:"code"`
+		Data struct {
+			ID uint64 `json:"id"`
+		}
+	}
 	json.Unmarshal(w.Body.Bytes(), &cr)
 	if cr.Code == 0 && cr.Data.ID > 0 {
 		cid := cr.Data.ID
@@ -63,7 +67,12 @@ func Test_DynamicCommentOperations(t *testing.T) {
 	dyn := dynamic.UserDynamic{UserID: u.ID, Title: "DCO Dynamic", Content: "DCO content", ImagesJSON: "[]", CreatedAt: time.Now()}
 	require.NoError(t, api.DB.Create(&dyn).Error)
 	w := srve(r, areq("POST", fmt.Sprintf("/api/v1/user-dynamics/%d/comments", dyn.ID), tk2, fmt.Sprintf(`{"content":"DCO comment","dynamic_id":%d}`, dyn.ID)))
-	var dcr struct { Code int `json:"code"`; Data struct { ID uint64 `json:"id"`} }
+	var dcr struct {
+		Code int `json:"code"`
+		Data struct {
+			ID uint64 `json:"id"`
+		}
+	}
 	json.Unmarshal(w.Body.Bytes(), &dcr)
 	if dcr.Code == 0 && dcr.Data.ID > 0 {
 		cid := dcr.Data.ID
@@ -124,7 +133,12 @@ func Test_AdminBannerFullCRUD(t *testing.T) {
 	api, r, _ := newTestAPI(t)
 	at := admintok(t, api)
 	w := srve(r, areq("POST", "/api/v1/admin/home-banners", at, `{"title":"B1","link_type":"url","link_url":"https://example.com","sort_order":1}`))
-	var br struct { Code int `json:"code"`; Data struct { ID uint64 `json:"id"`} }
+	var br struct {
+		Code int `json:"code"`
+		Data struct {
+			ID uint64 `json:"id"`
+		}
+	}
 	json.Unmarshal(w.Body.Bytes(), &br)
 	if br.Code == 0 && br.Data.ID > 0 {
 		bid := br.Data.ID

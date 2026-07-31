@@ -3,7 +3,7 @@ package queue
 import (
 	"context"
 	"errors"
-		"testing"
+	"testing"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 )

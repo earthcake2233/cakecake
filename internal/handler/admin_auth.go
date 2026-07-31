@@ -13,7 +13,7 @@ import (
 	"minibili/internal/data"
 	"minibili/internal/errcode"
 	"minibili/internal/middleware"
-		"minibili/internal/pkg/resp"
+	"minibili/internal/pkg/resp"
 )
 
 type adminLoginReq struct {

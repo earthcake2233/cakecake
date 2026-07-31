@@ -3,13 +3,13 @@
 package handler
 
 import (
+	"bytes"
+	"encoding/json"
+	"fmt"
 	"minibili/internal/model/article"
 	"minibili/internal/model/comment"
 	"minibili/internal/model/user"
 	"minibili/internal/model/video"
-	"bytes"
-	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -17,7 +17,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
-
 )
 
 // ---------------------------------------------------------------------------
@@ -512,6 +511,7 @@ func TestSetVideoFavoriteFolders(t *testing.T) {
 	err = api.DB.Where("user_id = ? AND video_id = ? AND folder_id = ?", viewer.ID, v.ID, folder.ID).First(&fav).Error
 	require.NoError(t, err)
 }
+
 // ---------------------------------------------------------------------------
 // 3. Comments
 // ---------------------------------------------------------------------------
@@ -657,7 +657,6 @@ func TestPinComment(t *testing.T) {
 	r.ServeHTTP(w3, req3)
 	require.Equal(t, http.StatusForbidden, w3.Code, w3.Body.String())
 }
-
 
 func TestLikeCommentOperations(t *testing.T) {
 	api, r, jm := newTestAPI(t)
@@ -873,6 +872,7 @@ func TestPostArticleCoin(t *testing.T) {
 	r.ServeHTTP(w2, req2)
 	require.Equal(t, http.StatusBadRequest, w2.Code, w2.Body.String())
 }
+
 // ---------------------------------------------------------------------------
 // 5. Search
 // ---------------------------------------------------------------------------
@@ -1346,5 +1346,3 @@ func TestListUserPublishedArticles(t *testing.T) {
 	require.True(t, ok)
 	require.Len(t, items, 2)
 }
-
-

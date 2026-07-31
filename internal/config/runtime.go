@@ -1,14 +1,13 @@
 package config
 
 import (
-	"minibili/internal/model/system"
 	"context"
+	"minibili/internal/model/system"
 	"strconv"
 	"sync"
 	"time"
 
 	"gorm.io/gorm"
-
 )
 
 const refreshInterval = 30 * time.Second

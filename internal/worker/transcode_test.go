@@ -1,9 +1,9 @@
 package worker
 
 import (
-	"testing"
 	"os"
 	"path/filepath"
+	"testing"
 )
 
 func TestTranscodeJob_Defaults(t *testing.T) {
@@ -60,4 +60,3 @@ func TestTranscodeJob_MaxRetry(t *testing.T) {
 		t.Errorf("RetryCount should persist")
 	}
 }
-

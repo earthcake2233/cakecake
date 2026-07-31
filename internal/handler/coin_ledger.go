@@ -9,9 +9,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"go.uber.org/zap"
 	"minibili/internal/middleware"
 	"minibili/internal/pkg/bvid"
-	"go.uber.org/zap"
 
 	"minibili/internal/errcode"
 	"minibili/internal/pkg/resp"

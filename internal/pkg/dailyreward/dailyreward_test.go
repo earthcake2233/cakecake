@@ -1,9 +1,9 @@
 package dailyreward
 
 import (
+	"regexp"
 	"testing"
 	"time"
-	"regexp"
 )
 
 func TestTodayDate_Format(t *testing.T) {

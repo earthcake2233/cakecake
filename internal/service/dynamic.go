@@ -1,14 +1,13 @@
 package service
 
 import (
+	"context"
 	"minibili/internal/model/comment"
 	"minibili/internal/model/dynamic"
-	"context"
 
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
-
 )
 
 // DynamicService handles user dynamic business logic.
@@ -24,7 +23,9 @@ func NewDynamicService(db *gorm.DB, rdb *redis.Client, log *zap.Logger) *Dynamic
 
 func (s *DynamicService) GetDynamicByID(ctx context.Context, id uint64) (*dynamic.UserDynamic, error) {
 	var d dynamic.UserDynamic
-	if err := s.db.WithContext(ctx).First(&d, id).Error; err != nil { return nil, err }
+	if err := s.db.WithContext(ctx).First(&d, id).Error; err != nil {
+		return nil, err
+	}
 	return &d, nil
 }
 
@@ -144,10 +145,10 @@ func (s *DynamicService) ListUserDynamicsCursor(ctx context.Context, userID uint
 
 // ListMyDynamicsAdvanced lists user dynamics with advanced filtering (title search, custom sort).
 type MyDynamicFilter struct {
-	UserID  uint64
-	TitleQ  string
-	SortKey string
-	Page    int
+	UserID   uint64
+	TitleQ   string
+	SortKey  string
+	Page     int
 	PageSize int
 }
 

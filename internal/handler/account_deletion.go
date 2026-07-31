@@ -1,12 +1,12 @@
 package handler
 
 import (
-	"minibili/internal/model/notification"
-	"minibili/internal/model/user"
-	"minibili/internal/model/video"
 	"context"
 	crand "crypto/rand"
 	"math/big"
+	"minibili/internal/model/notification"
+	"minibili/internal/model/user"
+	"minibili/internal/model/video"
 	"net/http"
 	"strings"
 	"time"

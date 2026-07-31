@@ -1,14 +1,13 @@
 package service
 
 import (
-	"minibili/internal/model/admin"
 	"context"
+	"minibili/internal/model/admin"
 	"sort"
 	"strings"
 	"time"
 
 	"gorm.io/gorm"
-
 )
 
 func hotSearchOpActive(now time.Time, start, end *time.Time) bool {

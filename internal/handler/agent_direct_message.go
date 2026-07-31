@@ -1,13 +1,12 @@
 package handler
 
 import (
-	"minibili/internal/model/dm"
 	"context"
+	"minibili/internal/model/dm"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
-
 )
 
 func (a *API) dmIsAgentConv(conv *dm.DmConversation) bool {

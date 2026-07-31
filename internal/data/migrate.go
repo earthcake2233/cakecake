@@ -1,6 +1,8 @@
 package data
 
 import (
+	"database/sql"
+	"encoding/json"
 	"minibili/internal/model/admin"
 	"minibili/internal/model/agent"
 	"minibili/internal/model/article"
@@ -13,8 +15,6 @@ import (
 	"minibili/internal/model/system"
 	"minibili/internal/model/user"
 	"minibili/internal/model/video"
-	"database/sql"
-	"encoding/json"
 	"strings"
 	"time"
 
@@ -23,7 +23,6 @@ import (
 
 	"minibili/internal/pkg/usercoin"
 )
-
 
 // RegisteredMigrations returns every schema/data migration in execution order.
 // New migrations MUST be appended at the end with an incremented version number.
@@ -105,7 +104,6 @@ func autoMigrateCoreModels(db *gorm.DB, lg *zap.Logger) error {
 func AutoMigrateAll(db *gorm.DB, lg *zap.Logger) error {
 	return RunVersionedMigrations(db, lg, RegisteredMigrations())
 }
-
 
 // migrateVideoFavoriteUniqueIndex replaces legacy (user_id, video_id) unique index
 // with (user_id, video_id, folder_id) so one video can exist in multiple folders.

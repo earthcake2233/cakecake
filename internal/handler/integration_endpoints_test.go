@@ -3,15 +3,14 @@
 package handler
 
 import (
-	"minibili/internal/model/user"
 	"fmt"
+	"minibili/internal/model/user"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
-
 )
 
 func TestIntegration_BlockUser(t *testing.T) {

@@ -1,8 +1,8 @@
 package handler
 
 import (
-	"minibili/internal/model/user"
 	"context"
+	"minibili/internal/model/user"
 	"net/http"
 	"strconv"
 	"strings"
@@ -71,21 +71,21 @@ func (a *API) GetUserPublic(c *gin.Context) {
 	counts, _ := a.FollowSvc.GetFollowCounts(c.Request.Context(), id)
 	pubCount, _ := a.FollowSvc.GetUploaderPublishedCount(c.Request.Context(), id)
 	payload := gin.H{
-		"user_id":          u.ID,
-		"nickname":         nick,
-		"cake_id":          strings.TrimSpace(u.CakeID),
-		"avatar_url":       avatar,
-		"sign":             sign,
-		"announcement":     announcement,
-		"gender":           gender,
-		"birthday":         birthday,
-		"privacy":          privacy,
-		"is_owner":         isOwner,
-		"following_count":  counts.Following,
-		"follower_count":   counts.Followers,
-		"published_count":  pubCount,
-		"followed_by_me":   false,
-		"level_info":       userlevel.FromExperience(u.Experience),
+		"user_id":         u.ID,
+		"nickname":        nick,
+		"cake_id":         strings.TrimSpace(u.CakeID),
+		"avatar_url":      avatar,
+		"sign":            sign,
+		"announcement":    announcement,
+		"gender":          gender,
+		"birthday":        birthday,
+		"privacy":         privacy,
+		"is_owner":        isOwner,
+		"following_count": counts.Following,
+		"follower_count":  counts.Followers,
+		"published_count": pubCount,
+		"followed_by_me":  false,
+		"level_info":      userlevel.FromExperience(u.Experience),
 	}
 	if viewerOK && viewer != id {
 		following, _ := a.FollowSvc.IsFollowing(c.Request.Context(), viewer, id)

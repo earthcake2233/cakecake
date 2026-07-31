@@ -1,14 +1,13 @@
 package service
 
 import (
-	"minibili/internal/model/admin"
 	"context"
 	"encoding/json"
+	"minibili/internal/model/admin"
 	"strings"
 	"time"
 
 	"gorm.io/gorm"
-
 )
 
 const hotSearchLayoutSingletonID uint64 = 1

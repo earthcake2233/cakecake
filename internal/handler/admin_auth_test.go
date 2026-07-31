@@ -4,11 +4,11 @@ import (
 	"minibili/internal/model/admin"
 	"time"
 
-	"github.com/alicebob/miniredis/v2"
-	"github.com/redis/go-redis/v9"
-"minibili/internal/config"
 	"bytes"
 	"encoding/json"
+	"github.com/alicebob/miniredis/v2"
+	"github.com/redis/go-redis/v9"
+	"minibili/internal/config"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -21,8 +21,8 @@ import (
 	"gorm.io/gorm"
 
 	"minibili/internal/data"
-	"minibili/internal/service"
 	"minibili/internal/pkg/jwttoken"
+	"minibili/internal/service"
 	"minibili/internal/ws"
 )
 

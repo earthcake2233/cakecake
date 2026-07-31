@@ -1,15 +1,14 @@
 package service
 
 import (
-	"minibili/internal/model/user"
 	"context"
+	"minibili/internal/model/user"
 	"strings"
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"time"
-
 )
 
 // UserService handles user profile business logic.
@@ -23,20 +22,20 @@ func NewUserService(db *gorm.DB, log *zap.Logger) *UserService {
 }
 
 type UserProfile struct {
-	ID        uint64 `json:"id"`
-	Username  string `json:"username"`
-	Nickname  string `json:"nickname"`
-	AvatarURL string `json:"avatar_url"`
-	Sign      string `json:"sign"`
-	CakeID    string `json:"cake_id"`
-	CreatedAt string `json:"created_at"`
-	Gender    string `json:"gender"`
-	Birthday  string `json:"birthday"`
-	Announcement string `json:"announcement"`
-	PrivacyPublicFavorites    bool `json:"privacy_public_favorites"`
-	PrivacyPublicRecentCoins  bool `json:"privacy_public_recent_coins"`
-	PrivacyPublicFollowing    bool `json:"privacy_public_following"`
-	PrivacyPublicFans         bool `json:"privacy_public_fans"`
+	ID                       uint64 `json:"id"`
+	Username                 string `json:"username"`
+	Nickname                 string `json:"nickname"`
+	AvatarURL                string `json:"avatar_url"`
+	Sign                     string `json:"sign"`
+	CakeID                   string `json:"cake_id"`
+	CreatedAt                string `json:"created_at"`
+	Gender                   string `json:"gender"`
+	Birthday                 string `json:"birthday"`
+	Announcement             string `json:"announcement"`
+	PrivacyPublicFavorites   bool   `json:"privacy_public_favorites"`
+	PrivacyPublicRecentCoins bool   `json:"privacy_public_recent_coins"`
+	PrivacyPublicFollowing   bool   `json:"privacy_public_following"`
+	PrivacyPublicFans        bool   `json:"privacy_public_fans"`
 }
 
 // GetMe returns the current user's profile.
@@ -49,7 +48,7 @@ func (s *UserService) GetMe(ctx context.Context, userID uint64) (*UserProfile, e
 		ID: u.ID, Username: u.Username, Nickname: u.Nickname,
 		AvatarURL: u.AvatarURL, Sign: u.Sign, CakeID: u.CakeID,
 		CreatedAt: u.CreatedAt.Format("2006-01-02 15:04:05"),
-		Gender: u.Gender, Birthday: u.Birthday, Announcement: u.SpaceAnnouncement,
+		Gender:    u.Gender, Birthday: u.Birthday, Announcement: u.SpaceAnnouncement,
 		PrivacyPublicFavorites: u.PrivacyPublicFavorites, PrivacyPublicRecentCoins: u.PrivacyPublicRecentCoins, PrivacyPublicFollowing: u.PrivacyPublicFollowing, PrivacyPublicFans: u.PrivacyPublicFans,
 	}, nil
 }
@@ -59,9 +58,13 @@ func (s *UserService) UpdateProfile(ctx context.Context, userID uint64, updates 
 	allowed := map[string]bool{"nickname": true, "sign": true, "gender": true, "birthday": true}
 	filtered := make(map[string]interface{})
 	for k, v := range updates {
-		if allowed[k] { filtered[k] = v }
+		if allowed[k] {
+			filtered[k] = v
+		}
 	}
-	if len(filtered) == 0 { return nil }
+	if len(filtered) == 0 {
+		return nil
+	}
 	return s.db.WithContext(ctx).Model(&user.User{}).Where("id = ?", userID).Updates(filtered).Error
 }
 
@@ -69,7 +72,9 @@ func (s *UserService) UpdateProfile(ctx context.Context, userID uint64, updates 
 func (s *UserService) UpdateUsername(ctx context.Context, userID uint64, newName string) error {
 	var count int64
 	s.db.WithContext(ctx).Model(&user.User{}).Where("username = ? AND id != ?", newName, userID).Count(&count)
-	if count > 0 { return ErrParamError }
+	if count > 0 {
+		return ErrParamError
+	}
 	return s.db.WithContext(ctx).Model(&user.User{}).Where("id = ?", userID).Update("username", newName).Error
 }
 
@@ -104,10 +109,11 @@ func (s *UserService) GetUserPublic(ctx context.Context, userID uint64) (*UserPr
 		ID: u.ID, Username: u.Username, Nickname: u.Nickname,
 		AvatarURL: u.AvatarURL, Sign: u.Sign, CakeID: u.CakeID,
 		CreatedAt: u.CreatedAt.Format("2006-01-02 15:04:05"),
-		Gender: u.Gender, Birthday: u.Birthday, Announcement: u.SpaceAnnouncement,
-			PrivacyPublicFavorites: u.PrivacyPublicFavorites, PrivacyPublicRecentCoins: u.PrivacyPublicRecentCoins, PrivacyPublicFollowing: u.PrivacyPublicFollowing, PrivacyPublicFans: u.PrivacyPublicFans,
-}, nil
+		Gender:    u.Gender, Birthday: u.Birthday, Announcement: u.SpaceAnnouncement,
+		PrivacyPublicFavorites: u.PrivacyPublicFavorites, PrivacyPublicRecentCoins: u.PrivacyPublicRecentCoins, PrivacyPublicFollowing: u.PrivacyPublicFollowing, PrivacyPublicFans: u.PrivacyPublicFans,
+	}, nil
 }
+
 // GetUserBrief returns a user's display name and avatar URL.
 func (s *UserService) GetUserBrief(ctx context.Context, userID uint64) (name, avatar string, err error) {
 	var u user.User
@@ -192,6 +198,7 @@ func (s *UserService) EnsureCakeID(ctx context.Context, u *user.User) error {
 	u.CakeID = cakeID
 	return nil
 }
+
 // ListCoinLedger returns paginated coin change history for a user.
 func (s *UserService) ListCoinLedger(ctx context.Context, userID uint64, since time.Time, limit, offset int) (total int64, rows []user.CoinLedger, err error) {
 	q := s.db.WithContext(ctx).Model(&user.CoinLedger{}).Where("user_id = ? AND created_at >= ?", userID, since)

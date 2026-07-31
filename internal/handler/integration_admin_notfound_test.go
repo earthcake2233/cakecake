@@ -52,10 +52,10 @@ func Test_UserFolloweeIDs_Zero(t *testing.T) {
 	api, _, _ := newTestAPI(t)
 	u := seedUser(t, api, "ufi1", "UFI1", 10)
 	ids := make([]uint64, 0)
-f1, _ := api.FollowSvc.GetFollowingIDs(context.Background(), u.ID, nil)
-for k := range f1 {
-	ids = append(ids, k)
-}
+	f1, _ := api.FollowSvc.GetFollowingIDs(context.Background(), u.ID, nil)
+	for k := range f1 {
+		ids = append(ids, k)
+	}
 	if ids == nil {
 		t.Error("expected non-nil set")
 	}

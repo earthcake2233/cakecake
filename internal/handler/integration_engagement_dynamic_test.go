@@ -3,14 +3,13 @@
 package handler
 
 import (
-	"minibili/internal/model/dynamic"
 	"encoding/json"
 	"fmt"
+	"minibili/internal/model/dynamic"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
-
 )
 
 func Test_ArticleEngagementFavoriteAndCoin(t *testing.T) {
@@ -35,7 +34,12 @@ func Test_DynamicCommentFullFlow(t *testing.T) {
 	require.NoError(t, api.DB.Create(&dyn).Error)
 	body := fmt.Sprintf(`{"content":"Nice dynamic!","dynamic_id":%d}`, dyn.ID)
 	w := srve(r, areq("POST", fmt.Sprintf("/api/v1/user-dynamics/%d/comments", dyn.ID), tk2, body))
-	var dcr struct { Code int `json:"code"`; Data struct { ID uint64 `json:"id"`} `json:"data"` }
+	var dcr struct {
+		Code int `json:"code"`
+		Data struct {
+			ID uint64 `json:"id"`
+		} `json:"data"`
+	}
 	json.Unmarshal(w.Body.Bytes(), &dcr)
 	if dcr.Code == 0 && dcr.Data.ID > 0 {
 		cid := dcr.Data.ID
@@ -53,7 +57,12 @@ func Test_UserDynamicUpdateAndList(t *testing.T) {
 	tk := tok(t, api, u.ID)
 	u2 := seedUser(t, api, "udl2", "UDL2", 10)
 	w := srve(r, areq("POST", "/api/v1/users/me/dynamics", tk, `{"title":"Update Test","content":"Original content"}`))
-	var dr struct { Code int `json:"code"`; Data struct { ID uint64 `json:"id"`} `json:"data"` }
+	var dr struct {
+		Code int `json:"code"`
+		Data struct {
+			ID uint64 `json:"id"`
+		} `json:"data"`
+	}
 	json.Unmarshal(w.Body.Bytes(), &dr)
 	if dr.Code == 0 && dr.Data.ID > 0 {
 		did := dr.Data.ID
@@ -73,7 +82,12 @@ func Test_VideoEngagementFolderOps(t *testing.T) {
 	tk := tok(t, api, u.ID)
 	v := seedVideoWithAPI(t, api, u2.ID, "VEF Video")
 	w := srve(r, areq("POST", "/api/v1/users/me/favorite-folders", tk, `{"title":"VEF Folder"}`))
-	var fr struct { Code int `json:"code"`; Data struct { ID uint64 `json:"id"`} `json:"data"` }
+	var fr struct {
+		Code int `json:"code"`
+		Data struct {
+			ID uint64 `json:"id"`
+		} `json:"data"`
+	}
 	json.Unmarshal(w.Body.Bytes(), &fr)
 	if fr.Code == 0 && fr.Data.ID > 0 {
 		fid := fr.Data.ID
@@ -88,7 +102,12 @@ func Test_AdminAgentProfileCRUD(t *testing.T) {
 	api, r, _ := newTestAPI(t)
 	at := admintok(t, api)
 	w := srve(r, areq("POST", "/api/v1/admin/agent-profiles", at, `{"slug":"test-bot","display_name":"Test Bot","welcome_message":"Hello"}`))
-	var apr struct { Code int `json:"code"`; Data struct { ID uint64 `json:"id"`} `json:"data"` }
+	var apr struct {
+		Code int `json:"code"`
+		Data struct {
+			ID uint64 `json:"id"`
+		} `json:"data"`
+	}
 	json.Unmarshal(w.Body.Bytes(), &apr)
 	if apr.Code == 0 && apr.Data.ID > 0 {
 		pid := apr.Data.ID
@@ -116,11 +135,15 @@ func Test_AdminBannerUploadByID_NilOSS(t *testing.T) {
 	api, r, _ := newTestAPI(t)
 	at := admintok(t, api)
 	w := srve(r, areq("POST", "/api/v1/admin/home-banners", at, `{"title":"Banner Upload Test","link_type":"none","sort_order":1}`))
-	var br struct { Code int `json:"code"`; Data struct { ID uint64 `json:"id"`} `json:"data"` }
+	var br struct {
+		Code int `json:"code"`
+		Data struct {
+			ID uint64 `json:"id"`
+		} `json:"data"`
+	}
 	json.Unmarshal(w.Body.Bytes(), &br)
 	if br.Code == 0 && br.Data.ID > 0 {
 		srve(r, areq("POST", fmt.Sprintf("/api/v1/admin/home-banners/%d/image", br.Data.ID), at, nil))
 	}
 	srve(r, areq("POST", "/api/v1/admin/home-banners/99999/image", at, nil))
 }
-

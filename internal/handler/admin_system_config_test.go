@@ -39,19 +39,19 @@ func newTestAPIWithRuntimeCfg(t *testing.T) (*API, *gin.Engine, *jwttoken.Manage
 	tmp := t.TempDir()
 
 	cfg := &config.C{
-		RedisAddr:          mr.Addr(),
-		RedisPassword:      "",
-		RedisDB:            0,
-		RedisDial:          5 * time.Second,
-		RedisRead:          3 * time.Second,
-		RedisWrite:         3 * time.Second,
-		RedisPoolSize:      10,
-		TempUploadDir:      tmp,
-		AgentEnabled:       true,
-		AgentDailyQuota:    80,
-		RateLimitEnabled:   false,
-		RateLimitRate:      20,
-		RateLimitBurst:     50,
+		RedisAddr:        mr.Addr(),
+		RedisPassword:    "",
+		RedisDB:          0,
+		RedisDial:        5 * time.Second,
+		RedisRead:        3 * time.Second,
+		RedisWrite:       3 * time.Second,
+		RedisPoolSize:    10,
+		TempUploadDir:    tmp,
+		AgentEnabled:     true,
+		AgentDailyQuota:  80,
+		RateLimitEnabled: false,
+		RateLimitRate:    20,
+		RateLimitBurst:   50,
 	}
 	rdb, err := data.NewRedis(cfg)
 	require.NoError(t, err)
@@ -80,18 +80,18 @@ func newTestAPIWithRuntimeCfg(t *testing.T) (*API, *gin.Engine, *jwttoken.Manage
 
 	api := &API{
 		Dependencies: &Dependencies{
-			Cfg:         cfg,
-			DB:          db,
-			Redis:       rdb,
-			Log:         log,
-			Hub:         hub,
-			JWT:         jm,
-			Sens:        sens,
-			OSS:         nil,
-			MQ:          noopMQ{},
-			Play:        pc,
+			Cfg:          cfg,
+			DB:           db,
+			Redis:        rdb,
+			Log:          log,
+			Hub:          hub,
+			JWT:          jm,
+			Sens:         sens,
+			OSS:          nil,
+			MQ:           noopMQ{},
+			Play:         pc,
 			DanmakuRelay: relay,
-			RuntimeCfg:  runtimeCfg,
+			RuntimeCfg:   runtimeCfg,
 		},
 	}
 	r := gin.New()

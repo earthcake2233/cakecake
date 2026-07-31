@@ -1,5 +1,7 @@
 package video
+
 import "time"
+
 type Video struct {
 	ID           uint64  `gorm:"primaryKey"`
 	UserID       uint64  `gorm:"index:idx_video_user;not null"`
@@ -27,12 +29,12 @@ type Video struct {
 	// Zone is the publish partition, e.g. "anime" or "lifestyle-daily".
 	Zone string `gorm:"size:64"`
 	// DraftRawPath / DraftCoverPath: local staging paths when status=draft, used before submission transcoding.
-	DraftRawPath   string    `gorm:"size:1024"`
-	DraftCoverPath string    `gorm:"size:1024"`
-	ReviewedAt     *time.Time
-	ReviewedByAdminID *uint64 `gorm:"index"`
-	CreatedAt      time.Time `gorm:"index:idx_video_created"`
-	UpdatedAt      time.Time
+	DraftRawPath      string `gorm:"size:1024"`
+	DraftCoverPath    string `gorm:"size:1024"`
+	ReviewedAt        *time.Time
+	ReviewedByAdminID *uint64   `gorm:"index"`
+	CreatedAt         time.Time `gorm:"index:idx_video_created"`
+	UpdatedAt         time.Time
 }
 type VideoLike struct {
 	ID        uint64 `gorm:"primaryKey"`
@@ -66,9 +68,9 @@ type VideoCoin struct {
 	CreatedAt time.Time
 }
 type WatchLater struct {
-	ID        uint64 `gorm:"primaryKey"`
-	UserID    uint64 `gorm:"uniqueIndex:idx_watch_later_user_video;not null"`
-	VideoID   uint64 `gorm:"uniqueIndex:idx_watch_later_user_video;not null"`
-	Watched   bool   `gorm:"not null;default:0"`
+	ID        uint64    `gorm:"primaryKey"`
+	UserID    uint64    `gorm:"uniqueIndex:idx_watch_later_user_video;not null"`
+	VideoID   uint64    `gorm:"uniqueIndex:idx_watch_later_user_video;not null"`
+	Watched   bool      `gorm:"not null;default:0"`
 	CreatedAt time.Time `gorm:"index"`
 }

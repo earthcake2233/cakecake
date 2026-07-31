@@ -1,15 +1,14 @@
 package service
 
 import (
+	"context"
 	"minibili/internal/model/article"
 	"minibili/internal/model/dynamic"
 	"minibili/internal/model/user"
 	"minibili/internal/model/video"
-	"context"
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"
-
 )
 
 // FollowService handles follow/unfollow business logic.
@@ -193,6 +192,7 @@ func (s *FollowService) GetUploaderPublishedCount(ctx context.Context, userID ui
 	}
 	return videoN + articleN + dynN, nil
 }
+
 // ??? Follow Groups ???
 
 // ListGroups returns all follow groups for a user.
@@ -385,7 +385,9 @@ func unfollowBothWays(tx *gorm.DB, a, b uint64) error {
 		}
 		if len(groupIDs) > 0 {
 			followee := b
-			if owner == b { followee = a }
+			if owner == b {
+				followee = a
+			}
 			if err := tx.Where("group_id IN ? AND followee_id = ?", groupIDs, followee).
 				Delete(&user.UserFollowGroupMember{}).Error; err != nil {
 				return err

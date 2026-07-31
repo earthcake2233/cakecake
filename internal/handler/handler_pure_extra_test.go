@@ -1,15 +1,14 @@
 package handler
 
 import (
+	"mime/multipart"
 	"minibili/internal/model/admin"
 	"minibili/internal/model/article"
 	"minibili/internal/model/dynamic"
 	"minibili/internal/model/user"
 	"minibili/internal/model/video"
-	"mime/multipart"
 	"testing"
 	"time"
-
 )
 
 // ---------- parseOptionalUnix ----------
@@ -306,17 +305,17 @@ func TestAdminDynamicToJSON(t *testing.T) {
 func TestBannerToJSON(t *testing.T) {
 	now := time.Now()
 	b := &admin.HomeBanner{
-		ID:          5,
-		Title:       "Summer Sale",
-		ImageURL:    "https://img.example.com/banner.jpg",
-		LinkType:    "url",
-		LinkTarget:  "https://example.com",
-		SortOrder:   1,
-		Enabled:     true,
-		StartAt:     &now,
-		EndAt:       nil,
-		CreatedAt:   now,
-		UpdatedAt:   now,
+		ID:         5,
+		Title:      "Summer Sale",
+		ImageURL:   "https://img.example.com/banner.jpg",
+		LinkType:   "url",
+		LinkTarget: "https://example.com",
+		SortOrder:  1,
+		Enabled:    true,
+		StartAt:    &now,
+		EndAt:      nil,
+		CreatedAt:  now,
+		UpdatedAt:  now,
 	}
 	out := bannerToJSON(b)
 	if out["title"] != "Summer Sale" {
@@ -502,8 +501,6 @@ func TestValidateArticleContent_Extra(t *testing.T) {
 
 // ---------- formatDanmakuPlayTime extra edge ----------
 
-
-
 // ---------- extra edge cases ----------
 
 func TestAdminVideoToJSONMinimal(t *testing.T) {
@@ -521,7 +518,6 @@ func TestAdminArticleToJSONMinimal(t *testing.T) {
 		t.Errorf("published_at = %q, want empty", out["published_at"])
 	}
 }
-
 
 func TestParseOptionalUnixEdge(t *testing.T) {
 	large := int64(32503680000) // year 3000
@@ -547,4 +543,3 @@ func TestDeletionCoolingDaysRange(t *testing.T) {
 		t.Errorf("expected at least 4 distinct values, got %d", len(hist))
 	}
 }
-

@@ -1,13 +1,12 @@
 package data
 
 import (
-	"minibili/internal/model/system"
 	"fmt"
+	"minibili/internal/model/system"
 	"time"
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"
-
 )
 
 // Migration is a single versioned schema/data migration.

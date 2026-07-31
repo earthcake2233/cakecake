@@ -3,10 +3,10 @@
 package handler
 
 import (
-	"minibili/internal/model/admin"
-	"minibili/internal/model/comment"
 	"encoding/json"
 	"fmt"
+	"minibili/internal/model/admin"
+	"minibili/internal/model/comment"
 	"net/http/httptest"
 	"strconv"
 	"testing"
@@ -34,10 +34,16 @@ func Test_NotifLikeFlow(t *testing.T) {
 	// Create a comment on u2 video
 	body := `{"content":"nice video"}`
 	w := srve(r, areq("POST", "/api/v1/videos/"+strconv.FormatUint(v.ID, 10)+"/comments", tk, body))
-	if code(t, w) != 0 { t.Skip("comment post failed") }
-	var cm struct { Data comment.Comment `json:"data"` }
+	if code(t, w) != 0 {
+		t.Skip("comment post failed")
+	}
+	var cm struct {
+		Data comment.Comment `json:"data"`
+	}
 	json.Unmarshal(w.Body.Bytes(), &cm)
-	if cm.Data.ID == 0 { t.Skip("no comment id") }
+	if cm.Data.ID == 0 {
+		t.Skip("no comment id")
+	}
 
 	// Like the comment (should create notification for u2)
 	srve(r, areq("POST", "/api/v1/comments/"+strconv.FormatUint(cm.Data.ID, 10)+"/like", tk, nil))
@@ -62,9 +68,15 @@ func Test_DMFullFlow(t *testing.T) {
 	tk := tok(t, api, u.ID)
 
 	w := srve(r, areq("POST", "/api/v1/dm/conversations", tk, fmt.Sprintf(`{"peer_id":%d}`, u2.ID)))
-	var conv struct { Data struct { ID uint64 `json:"id"` } `json:"data"` }
+	var conv struct {
+		Data struct {
+			ID uint64 `json:"id"`
+		} `json:"data"`
+	}
 	json.Unmarshal(w.Body.Bytes(), &conv)
-	if conv.Data.ID == 0 { t.Skip("conv not created") }
+	if conv.Data.ID == 0 {
+		t.Skip("conv not created")
+	}
 
 	cid := conv.Data.ID
 	srve(r, areq("POST", fmt.Sprintf("/api/v1/dm/conversations/%d/messages", cid), tk, `{"content":"hello there"}`))

@@ -3,11 +3,11 @@
 package handler
 
 import (
+	"encoding/json"
+	"fmt"
 	"minibili/internal/model/article"
 	"minibili/internal/model/user"
 	"minibili/internal/model/video"
-	"encoding/json"
-	"fmt"
 	"net/http/httptest"
 	"strconv"
 	"strings"
@@ -16,7 +16,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
-
 )
 
 func TestAdminBannerCRUD(t *testing.T) {
@@ -31,7 +30,10 @@ func TestAdminBannerCRUD(t *testing.T) {
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	require.Equal(t, 201, w.Code, "Create: %s", w.Body.String())
-	var cr struct { Code int `json:"code"`; Data gin.H `json:"data"` }
+	var cr struct {
+		Code int   `json:"code"`
+		Data gin.H `json:"data"`
+	}
 	json.Unmarshal(w.Body.Bytes(), &cr)
 	require.Equal(t, 0, cr.Code)
 	id := int(cr.Data["id"].(float64))

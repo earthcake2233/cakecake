@@ -1,5 +1,7 @@
 package comment
+
 import "time"
+
 type Comment struct {
 	ID        uint64 `gorm:"primaryKey"`
 	VideoID   uint64 `gorm:"index:idx_comment_video;not null"`
@@ -7,14 +9,14 @@ type Comment struct {
 	ParentID  uint64 `gorm:"index;default:0"`
 	Level     int    `gorm:"not null"`
 	Content   string `gorm:"size:2000;not null"`
-	LikeCount  uint64 `gorm:"default:0"`
-	Pinned     bool   `gorm:"index;default:0"`
+	LikeCount uint64 `gorm:"default:0"`
+	Pinned    bool   `gorm:"index;default:0"`
 	// Approved: in curated mode, false means pending curation; in non-curated mode, set to true on creation.
-	Approved   bool `gorm:"not null;default:0;index"`
+	Approved bool `gorm:"not null;default:0;index"`
 	// CuratedIgnored: in curated mode, means the uploader ignored it (not public); approved stays false.
-	CuratedIgnored bool `gorm:"not null;default:0;index"`
-	IpLocation string `gorm:"size:32;not null;default:''"`
-	CreatedAt  time.Time
+	CuratedIgnored bool   `gorm:"not null;default:0;index"`
+	IpLocation     string `gorm:"size:32;not null;default:''"`
+	CreatedAt      time.Time
 }
 type CommentLike struct {
 	ID        uint64 `gorm:"primaryKey"`
@@ -29,19 +31,19 @@ type CommentDislike struct {
 	CreatedAt time.Time
 }
 type ArticleComment struct {
-	ID         uint64 `gorm:"primaryKey"`
-	ArticleID  uint64 `gorm:"index:idx_article_comment_article;not null"`
-	UserID     uint64 `gorm:"index;not null"`
-	ParentID   uint64 `gorm:"index;default:0"`
-	Level      int    `gorm:"not null"`
-	Content    string `gorm:"size:2000;not null"`
-	LikeCount  uint64 `gorm:"default:0"`
-	Pinned     bool   `gorm:"index;default:0"`
+	ID        uint64 `gorm:"primaryKey"`
+	ArticleID uint64 `gorm:"index:idx_article_comment_article;not null"`
+	UserID    uint64 `gorm:"index;not null"`
+	ParentID  uint64 `gorm:"index;default:0"`
+	Level     int    `gorm:"not null"`
+	Content   string `gorm:"size:2000;not null"`
+	LikeCount uint64 `gorm:"default:0"`
+	Pinned    bool   `gorm:"index;default:0"`
 	// Approved: in curated mode, false means pending author curation; in non-curated mode, set to true on creation.
-	Approved       bool `gorm:"not null;default:0;index"`
-	CuratedIgnored bool `gorm:"not null;default:0;index"`
-	IpLocation string `gorm:"size:32;not null;default:''"`
-	CreatedAt  time.Time
+	Approved       bool   `gorm:"not null;default:0;index"`
+	CuratedIgnored bool   `gorm:"not null;default:0;index"`
+	IpLocation     string `gorm:"size:32;not null;default:''"`
+	CreatedAt      time.Time
 }
 type ArticleCommentLike struct {
 	ID        uint64 `gorm:"primaryKey"`
@@ -56,19 +58,19 @@ type ArticleCommentDislike struct {
 	CreatedAt time.Time
 }
 type DynamicComment struct {
-	ID         uint64 `gorm:"primaryKey"`
-	DynamicID  uint64 `gorm:"index:idx_dyn_cmt_dynamic;not null"`
-	UserID     uint64 `gorm:"index;not null"`
-	ParentID   uint64 `gorm:"index;not null;default:0"`
-	Level      int    `gorm:"not null;default:1"`
-	Content    string `gorm:"size:1000;not null"`
-	LikeCount  uint64 `gorm:"default:0"`
-	Pinned     bool   `gorm:"index;default:0"`
+	ID        uint64 `gorm:"primaryKey"`
+	DynamicID uint64 `gorm:"index:idx_dyn_cmt_dynamic;not null"`
+	UserID    uint64 `gorm:"index;not null"`
+	ParentID  uint64 `gorm:"index;not null;default:0"`
+	Level     int    `gorm:"not null;default:1"`
+	Content   string `gorm:"size:1000;not null"`
+	LikeCount uint64 `gorm:"default:0"`
+	Pinned    bool   `gorm:"index;default:0"`
 	// Approved: in curated mode, false means pending author curation; in non-curated mode, set to true on creation.
-	Approved       bool `gorm:"not null;default:0;index"`
-	CuratedIgnored bool `gorm:"not null;default:0;index"`
-	IpLocation string `gorm:"size:32;not null;default:''"`
-	CreatedAt  time.Time
+	Approved       bool   `gorm:"not null;default:0;index"`
+	CuratedIgnored bool   `gorm:"not null;default:0;index"`
+	IpLocation     string `gorm:"size:32;not null;default:''"`
+	CreatedAt      time.Time
 }
 type DynamicCommentLike struct {
 	ID        uint64 `gorm:"primaryKey"`

@@ -87,16 +87,16 @@ func (a *API) dmFormatMessage(m *dm.DmMessage, senderName, senderAvatar string) 
 		role = "user"
 	}
 	return gin.H{
-		"id":                m.ID,
-		"conversation_id":   m.ConversationID,
-		"sender_id":         m.SenderID,
-		"sender_name":       senderName,
-		"sender_avatar":     senderAvatar,
-		"content":           m.Content,
-		"role":              role,
-		"tool_activities":   m.ToolActivities,
-		"tool_result_data":  m.ToolResultData,
-		"created_at":        m.CreatedAt.Format("2006-01-02 15:04:05"),
+		"id":               m.ID,
+		"conversation_id":  m.ConversationID,
+		"sender_id":        m.SenderID,
+		"sender_name":      senderName,
+		"sender_avatar":    senderAvatar,
+		"content":          m.Content,
+		"role":             role,
+		"tool_activities":  m.ToolActivities,
+		"tool_result_data": m.ToolResultData,
+		"created_at":       m.CreatedAt.Format("2006-01-02 15:04:05"),
 	}
 }
 
@@ -116,15 +116,15 @@ func (a *API) dmFormatConversation(conv *dm.DmConversation, self uint64, part *d
 		kind = dm.DmKindHuman
 	}
 	return gin.H{
-		"id":              conv.ID,
-		"peer_id":         peer,
-		"peer_name":       name,
-		"peer_avatar":     avatar,
-		"last_preview":    conv.LastPreview,
-		"last_message_at": conv.LastMessageAt.Format("2006-01-02 15:04:05"),
-		"unread_count":    unread,
-		"pinned":          pinned,
-		"muted":           muted,
+		"id":               conv.ID,
+		"peer_id":          peer,
+		"peer_name":        name,
+		"peer_avatar":      avatar,
+		"last_preview":     conv.LastPreview,
+		"last_message_at":  conv.LastMessageAt.Format("2006-01-02 15:04:05"),
+		"unread_count":     unread,
+		"pinned":           pinned,
+		"muted":            muted,
 		"kind":             kind,
 		"is_agent":         a.dmIsAgentConv(conv),
 		"agent_profile_id": conv.AgentProfileID,
@@ -167,15 +167,21 @@ func (a *API) ListDmConversations(c *gin.Context) {
 		pi, pj := partMap[convs[i].ID], partMap[convs[j].ID]
 		pinI := pi != nil && pi.Pinned
 		pinJ := pj != nil && pj.Pinned
-		if pinI != pinJ { return pinI }
-		if pinI && pinJ { return dmPinnedAtAfter(pi.PinnedAt, pj.PinnedAt) }
+		if pinI != pinJ {
+			return pinI
+		}
+		if pinI && pinJ {
+			return dmPinnedAtAfter(pi.PinnedAt, pj.PinnedAt)
+		}
 		return convs[i].LastMessageAt.After(convs[j].LastMessageAt)
 	})
 	items := make([]gin.H, 0, len(convs))
 	for i := range convs {
 		conv := &convs[i]
 		part := partMap[conv.ID]
-		if part != nil && part.HiddenAt != nil { continue }
+		if part != nil && part.HiddenAt != nil {
+			continue
+		}
 		items = append(items, a.dmFormatConversation(conv, uid, part))
 	}
 	resp.OK(c, gin.H{"items": items})
@@ -319,9 +325,15 @@ func (a *API) PatchDmConversationSettings(c *gin.Context) {
 		return
 	}
 	updates := make(map[string]interface{})
-	if body.Pinned != nil { updates["pinned"] = *body.Pinned }
-	if body.Hidden != nil { updates["hidden_at"] = time.Now() }
-	if body.Unhidden != nil { updates["hidden_at"] = nil }
+	if body.Pinned != nil {
+		updates["pinned"] = *body.Pinned
+	}
+	if body.Hidden != nil {
+		updates["hidden_at"] = time.Now()
+	}
+	if body.Unhidden != nil {
+		updates["hidden_at"] = nil
+	}
 	if err := a.DmSvc.UpdateConversationSettings(context.Background(), convID, uid, updates); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
