@@ -66,7 +66,7 @@ func (a *API) buildFollowUserRows(
 		}
 		sign := strings.TrimSpace(u.Sign)
 		if sign == "" {
-			sign = "?????????????"
+			sign = ""
 		}
 		item := gin.H{
 			"user_id":     u.ID,

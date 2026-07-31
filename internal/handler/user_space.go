@@ -48,7 +48,7 @@ func (a *API) GetUserPublic(c *gin.Context) {
 		gender = "secret"
 	}
 	if user.IsUserAnonymized(u) {
-		nick = "?????"
+		nick = user.DisplayUsername(u)
 		avatar = ""
 		sign = ""
 		announcement = ""

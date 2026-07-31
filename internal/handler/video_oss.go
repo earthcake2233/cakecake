@@ -48,7 +48,7 @@ func purgeVideoOSSObjects(cfg *config.C, ossClient *storage.OSS, log *zap.Logger
 	}
 	if err := ossClient.DeleteObjects(keys); err != nil {
 		if log != nil {
-			log.Warn("oss delete video objects",
+			log.Error("oss delete video objects",
 				zap.Uint64("video_id", v.ID),
 				zap.Strings("keys", keys),
 				zap.Error(err),

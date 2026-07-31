@@ -386,7 +386,7 @@ func (s *AgentService) GenerateReply(ctx context.Context, conv *dm.DmConversatio
 	}
 	if s.Sens != nil {
 		if err := s.Sens.Check(reply); err != nil {
-			return &GenerateReplyResult{Content: "???????????????????????"}, nil
+			return &GenerateReplyResult{Content: "抱歉，AI 助手暂时无法回复，请稍后再试。"}, nil
 		}
 	}
 

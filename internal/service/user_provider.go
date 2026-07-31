@@ -58,10 +58,17 @@ func (p *UserProviderImpl) BatchCurrentLevels(ctx context.Context, ids []uint64)
 
 func toUserInfo(u *user.User) UserInfo {
 	name := u.Username
-	if u.Nickname != "" { name = u.Nickname }
+	avatar := u.AvatarURL
+	if user.IsUserAnonymized(u) {
+		name = "已注销用户"
+		avatar = ""
+	} else if u.Nickname != "" {
+		name = u.Nickname
+	}
 	return UserInfo{
-		ID: u.ID, Username: u.Username, Nickname: name, AvatarURL: u.AvatarURL,
+		ID: u.ID, Username: u.Username, Nickname: name, AvatarURL: avatar,
 		CoinBalanceTenths: u.CoinBalanceTenths,
+		AnonymizedAt: u.AnonymizedAt,
 	}
 }
 

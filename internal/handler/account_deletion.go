@@ -108,6 +108,7 @@ func maybeFinalizeAccountDeletion(a *API, uid uint64) error {
 	}
 	for _, v := range removedVideos {
 		purgeVideoOSSObjects(a.Cfg, a.OSS, a.Log, v)
+		a.esDeleteVideo(v.ID)
 	}
 	return nil
 }

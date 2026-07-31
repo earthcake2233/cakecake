@@ -21,11 +21,12 @@ type UserProvider interface {
 // UserInfo is the cross-domain user data.
 type UserInfo struct {
 	CoinBalanceTenths int64
-    ID        uint64
-    Username  string
-    Nickname  string
-    AvatarURL string
-    Level     int
+    ID           uint64
+    Username     string
+    Nickname     string
+    AvatarURL    string
+    Level        int
+    AnonymizedAt *time.Time
 }
 
 // VideoProvider is the video domain boundary.
