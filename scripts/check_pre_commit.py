@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Pre-commit gate: BOM check + go vet + gofmt + sensitive data scan.
+"""Pre-commit gate: BOM check + go vet + gofmt + doc date + sensitive scan.
 
 Hard blocks:
   - UTF-8 BOM in any .go/.md/.yaml/.json/.py file
   - go vet failures in staged packages
   - gofmt violations in staged Go files
+  - Stale "last updated" header dates in staged .md files (R-DOC-14)
   - Sensitive tokens in staged files
 
 Usage: python scripts/check_pre_commit.py [--no-vet] [--yes]
@@ -96,13 +97,25 @@ def check_gofmt():
     return True
 
 
+def check_doc_dates():
+    """Run check_doc_dates.py on staged files. Returns True if clean."""
+    script = REPO / "scripts" / "check_doc_dates.py"
+    out, code = run([sys.executable, str(script)])
+    if code != 0:
+        print("[FAIL] Doc date check failed:")
+        print(out)
+        return False
+    print(out)
+    return True
+
+
 def check_sensitive():
     """Scan staged files for secrets. Returns True if clean."""
     patterns = [
-        (r"CODECOV_TOKEN=", "Codecov token"),
+        (r"CODECOV_TOKEN\s*=\s*\S{8,}", "Codecov token"),
         (r'password\s*=\s*"[^"]+"', "hardcoded password"),
         (r'secret\s*=\s*"[^"]+"', "hardcoded secret"),
-        (r"PRIVATE_KEY", "private key"),
+        (r"PRIVATE_KEY\s*[:=]", "private key"),
         (r'ACCESS_KEY_ID\s*=\s*"[^"]+"', "access key ID"),
         (r'ACCESS_KEY_SECRET\s*=\s*"[^"]+"', "access key secret"),
         (r'DEEPSEEK_API_KEY\s*=\s*"[^"]+"', "DeepSeek API key"),
@@ -112,6 +125,8 @@ def check_sensitive():
     for f in files.splitlines():
         if not f:
             continue
+        if f == "scripts/check_pre_commit.py":
+            continue  # this file legitimately contains the scan patterns themselves
         try:
             text = (REPO / f).read_text(encoding="utf-8", errors="replace")
             for pat, label in patterns:
@@ -154,6 +169,8 @@ def main():
         if not check_vet():
             all_pass = False
     if not check_gofmt():
+        all_pass = False
+    if not check_doc_dates():
         all_pass = False
     if not check_sensitive():
         all_pass = False

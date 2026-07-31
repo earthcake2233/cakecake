@@ -15,7 +15,7 @@
 ## Mini-Bili v1.0 工程规则（Rule）
 
 **版本**：v1.0
-**最后更新**：2026-07-23
+**最后更新**：2026-07-31
 **依赖文档**：Mini-Bili v1.0 SPEC
 
 
@@ -169,6 +169,7 @@
 | **R-DOC-9** | **含中文的 Python 脚本必须通过文件执行，禁止 inline -c** | 在 PowerShell 环境下，禁止使用 `python -c "..."` 方式执行包含中文/UTF-8 多字节字符的 Python 代码。必须采用以下任一方案：1. 使用 `scripts/safe_write.py --base64 <b64> --output <path>` 写入文件；2. 使用 .NET `[System.IO.File]::WriteAllBytes` 写 .py 文件后再执行；3. 将内容先写入临时文件再调用 `python <file>`。违反此规则是导致中文乱码的#1原因。 |
 | **R-DOC-10** | **修改 Markdown 表格后必须运行校验脚本** | 每次编辑含 Markdown 表格的 `.md` 文件后，提交前必须运行 `python scripts/validate_md_tables.py` 确保：无 `---` 打断表格连续性、无行列数不匹配、无漏掉 `|` 符号。以 `OK: all tables look clean` 为通过标准。 |
 | **R-DOC-11** | **架构图规则：流程用 Mermaid，项目结构用 Text** | 流程说明、拓扑关系、数据流图必须使用 ````mermaid` 代码块（`flowchart`、`sequenceDiagram` 等）。项目目录结构树（如 `docs/ARCHITECTURE.md` 的项目结构）允许使用 ` ``` ` 纯文本树形图（`├──` / `└──`），更清晰且避免 Mermaid 渲染过窄问题。**禁止**使用 ` ```text ` 标注纯文本图为架构图。 |
+| **R-DOC-14** | **文档“最后更新”日期为硬门禁** | 修改任何带头部 `**最后更新**`/`**Last Updated**` 字段的 `.md` 文件时，必须把该字段更新为当天日期。`scripts/check_doc_dates.py`（已接入 `check_pre_commit.py`）检查暂存区中被修改的 `.md`，日期不是当天即阻断提交。 |
 ---
 
 ### 十、测试规范
