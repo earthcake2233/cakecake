@@ -5,18 +5,10 @@
   </a>
 </p>
 
-  </a>
-  </a>
-</p>
-
-  </a>
-</p>
-
-
 ## Mini-Bili v1.0 技能手册（Skill）
 
 **版本**：v1.0
-**最后更新**：2026-07-26
+**最后更新**：2026-07-31
 **依赖文档**：Mini-Bili v1.0 SPEC、Mini-Bili v1.0 Rule
 
 ### 关于 Skill 的说明
@@ -682,3 +674,46 @@ flowchart LR
 - go vet ./cmd/... ./internal/config/... 零错误
 - go build -o ./bin/mini-bili ./cmd/mini-bili/ 成功
 - 启动应用后 Ctrl+C，观察日志确认："shutting down gracefully" → "all background tasks finished"
+
+---
+
+### S-018：WSL 推送 GitHub（fine-grained PAT）
+
+**背景**：本 WSL 沙箱默认无外网（DNS/出站被容器隔离），且 Windows 互操作（gh/powershell.exe）不可用；网络需要在命令审批弹窗中勾选“允许网络访问”后才对单次命令放行。
+
+**凭据**：GitHub 上创建 fine-grained Personal Access Token（名称 `WSL`，Repository permissions）：
+
+- `Contents: Read and write`（推送代码必需）
+- `Actions: Read`（查询 CI 运行结果）
+- `Workflows: Read and write`（提交中若含 `.github/workflows/*` 改动则必需，否则 GitHub 拒绝推送）
+- Repository access 选 Only select repositories → `cakecake`
+
+**推送方式（token 已存入系统环境变量 `GITHUB_PAT`，不写入 git 配置；askpass 临时脚本用完即删）**：
+
+```sh
+# 1. 一次性 askpass 脚本（权限 0600）
+cat > /tmp/gh-askpass.sh <<'EOF'
+#!/bin/sh
+case "$1" in
+  *[Uu]sername*) echo "earthcake2233" ;;
+  *) echo "$GITHUB_PAT" ;;
+esac
+EOF
+chmod 700 /tmp/gh-askpass.sh
+
+# 2. 推送（审批弹窗记得勾选允许网络访问）
+GIT_ASKPASS=/tmp/gh-askpass.sh GIT_TERMINAL_PROMPT=0 git push origin main
+
+# 3. 用完删除临时凭据
+rm -f /tmp/gh-askpass.sh
+```
+
+**查询 CI 结果**：
+
+```sh
+TOKEN=$GITHUB_PAT
+curl -sS -H "Authorization: Bearer $TOKEN" \
+  "https://api.github.com/repos/earthcake2233/cakecake/actions/runs?branch=main&per_page=10"
+```
+
+**注意**：token 是活凭据，已存入 `~/.bashrc` 的环境变量 `GITHUB_PAT`，禁止把 token 明文写入仓库内文件（含 Skill.md 本身）。每次推送后可在 GitHub 上轮换并同步更新环境变量。
