@@ -69,14 +69,7 @@ func adminArticleToJSON(art *article.Article, uploaderName string) gin.H {
 // AdminListArticles GET /api/v1/admin/articles
 
 func (a *API) AdminListArticles(c *gin.Context) {
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
-	if page < 1 {
-		page = 1
-	}
-	if pageSize < 1 || pageSize > 50 {
-		pageSize = 20
-	}
+	page, pageSize := parsePagination(c, 20)
 	statusQ := c.DefaultQuery("status", article.StatusPendingReview)
 	titleQ := strings.TrimSpace(c.Query("q"))
 

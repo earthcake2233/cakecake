@@ -39,10 +39,7 @@ func (a *API) ListMeCoinLedger(c *gin.Context) {
 		since = now.AddDate(0, 0, -30)
 		rng = "month"
 	}
-	limit := 10
-	if v, err := strconv.Atoi(c.DefaultQuery("limit", "10")); err == nil && v > 0 && v <= 100 {
-		limit = v
-	}
+	limit := parseLimit(c, 10, 100)
 	offset := 0
 	if v, err := strconv.Atoi(c.DefaultQuery("offset", "0")); err == nil && v >= 0 {
 		offset = v

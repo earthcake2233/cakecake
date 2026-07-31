@@ -139,12 +139,7 @@ func (a *API) ListUserArticleFavorites(c *gin.Context) {
 func (a *API) listArticleFavoritesForUser(c *gin.Context, uid uint64) {
 	viewerUID, viewerOK := middleware.UserID(c)
 	isOwnerView := viewerOK && viewerUID == uid
-	limit := 20
-	if s := c.Query("limit"); s != "" {
-		if n, err := strconv.Atoi(s); err == nil && n > 0 && n <= 50 {
-			limit = n
-		}
-	}
+	limit := parseLimit(c, 20, 50)
 	curID, _ := strconv.ParseUint(c.Query("cursor"), 10, 64)
 	favs, hasMore, err := a.ArticleSvc.ListFavoritedArticlesV2(c.Request.Context(), uid, curID, limit)
 	if err != nil {

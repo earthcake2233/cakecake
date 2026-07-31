@@ -291,12 +291,7 @@ func saveUploadedFile(fh *multipart.FileHeader, dst string) error {
 // @Success     200 {object} map[string]interface{}
 // @Router      /videos [get]
 func (a *API) ListPublishedVideos(c *gin.Context) {
-	limit := 20
-	if s := c.Query("limit"); s != "" {
-		if n, err := strconv.Atoi(s); err == nil && n > 0 && n <= 100 {
-			limit = n
-		}
-	}
+	limit := parseLimit(c, 20, 100)
 	sortKey := strings.TrimSpace(c.DefaultQuery("sort", "hot"))
 	zoneParent := ""
 	if zp := normalizeVideoZone(strings.TrimSpace(c.Query("zone_parent"))); zp != "" {
@@ -407,14 +402,7 @@ func (a *API) ListMyVideos(c *gin.Context) {
 		resp.Err(c, http.StatusUnauthorized, errcode.CodeUnauthorized)
 		return
 	}
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "10"))
-	if page < 1 {
-		page = 1
-	}
-	if pageSize < 1 || pageSize > 50 {
-		pageSize = 10
-	}
+	page, pageSize := parsePagination(c, 10)
 	sortKey := strings.TrimSpace(c.DefaultQuery("sort", "time"))
 	statusQ := strings.TrimSpace(c.Query("status"))
 	titleQ := strings.TrimSpace(c.Query("q"))

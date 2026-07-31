@@ -120,12 +120,7 @@ func (a *API) ListUserPublishedVideos(c *gin.Context) {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
-	limit := 20
-	if s := c.Query("limit"); s != "" {
-		if n, err := strconv.Atoi(s); err == nil && n > 0 && n <= 50 {
-			limit = n
-		}
-	}
+	limit := parseLimit(c, 20, 50)
 	curID, _ := strconv.ParseUint(c.Query("cursor"), 10, 64)
 	list, err := a.VideoSvc.ListUserPublishedVideosCursor(c.Request.Context(), uid, curID, limit+1)
 	if err != nil {

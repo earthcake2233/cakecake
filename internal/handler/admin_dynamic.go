@@ -42,14 +42,7 @@ func adminDynamicToJSON(d *dynamic.UserDynamic, authorName string) gin.H {
 // AdminListDynamics GET /api/v1/admin/dynamics — dynamics do not require review; ops can view and delete.
 
 func (a *API) AdminListDynamics(c *gin.Context) {
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
-	if page < 1 {
-		page = 1
-	}
-	if pageSize < 1 || pageSize > 50 {
-		pageSize = 20
-	}
+	page, pageSize := parsePagination(c, 20)
 	q := strings.TrimSpace(c.Query("q"))
 
 	result, err := a.DynamicSvc.AdminListDynamics(c.Request.Context(), q, page, pageSize)
