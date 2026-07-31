@@ -142,6 +142,7 @@ As the project evolves, Rule entries will grow. When a Rule is repeatedly violat
 | **R-ENCODE-1** | **No UTF-8 BOM in project files** | BOM (Byte Order Mark) causes Go compilation failures and Markdown rendering issues. Use `python scripts/check_bom.py` to detect all `.go`, `.md`, `.yaml`, `.json`, `.py` files. Script supports `--fix` for auto-repair and `--path` for path filtering. Use `python scripts/safe_write.py` for file writes (auto-strips BOM). NEVER use `Set-Content` for text file writes. |
 | **R-ENCODE-2** | **Pre-commit BOM check is a hard gate** | `python scripts/check_pre_commit.py` runs `check_bom.py` on every commit. BOM detection blocks the commit; must run `python scripts/check_bom.py --fix` before re-committing. Skipping this check for any reason is forbidden. |
 | **R-ENCODE-3** | **File writes MUST use safe_write.py** | On Windows, PowerShell `Set-Content -Encoding UTF8` inserts a UTF-8 BOM that breaks Go compilation. Any script or tool writing `.go`, `.md`, `.yaml`, `.json`, or `.py` files MUST use `python scripts/safe_write.py --text "..." --output <path>`, which automatically strips BOM. Direct use of `Set-Content` or `Out-File` for text files is forbidden. |
+| **R-FMT-1** | **gofmt is a hard gate before commit** | All Go code MUST pass gofmt (`gofmt -l internal cmd` output empty). `scripts/check_pre_commit.py` and GitHub CI both check; unformatted files block commits. Run `gofmt -w` after adding/modifying Go files. |
 
 ---
 
@@ -163,6 +164,7 @@ As the project evolves, Rule entries will grow. When a Rule is repeatedly violat
 | **R-VERIFY-2** | **Skipping verification is a violation** | If local test environment issues prevent compilation/testing, fix the environment first. NEVER skip verification citing "environment issues" and push directly. |
 | **R-VERIFY-3** | **Run full test suite before PR** | Before submitting a PR, run `go test ./... -count=1` to ensure all tests pass. NEVER skip citing "only changed one line." |
 | **R-VERIFY-4** | **Author (earthcake) must manually verify before push** | After each code change, the project author (earthcake) must personally log in and verify functionality works correctly and is bug-free before allowing push. NEVER push without author verification. |
+| **R-VERIFY-5** | **Author must review changes before commit (single confirmation gate)** | Before any `git commit`, MUST show the author (earthcake) `git status --short` (file list) and `git diff` (key content) and get explicit confirmation. When committing, stage ONLY the files changed in this task; NEVER use `git add -A` or `git add .` (which could sweep unconfirmed changes or accidental deletions into the commit). Before committing, re-check that the staged snapshot matches what was shown. The single confirmation gate is at commit time; separate add confirmation is not required. NEVER commit without showing and confirming. |
 
 
 ---
