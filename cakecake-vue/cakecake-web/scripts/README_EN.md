@@ -11,7 +11,7 @@
 
 | Script | Purpose |
 |--------|---------|
-| `npm run check:encoding` | Check `src/pages/minibili`, `src/i18n`, etc. for `????` / garbled characters |
+| `npm run check:encoding` | Check `src/pages/cakecake`, `src/i18n`, etc. for `????` / garbled characters |
 
 ## Maintenance (Generally Not Needed)
 
@@ -27,4 +27,4 @@ When editing Chinese text in `PersonalSpace.vue`, prefer editing **`src/i18n/*.z
 
 ## Encoding Notes
 
-Some Vue SFC files in `src/pages/minibili/` contain inline Chinese text (video zone names, UI labels, etc.). When editing these files on Windows with certain editors, garbled characters (`????`, `U+FFFD`) may appear. Always run `npm run check:encoding` before committing.
+Some Vue SFC files in `src/pages/cakecake/` contain inline Chinese text (video zone names, UI labels, etc.). When editing these files on Windows with certain editors, garbled characters (`????`, `U+FFFD`) may appear. Always run `npm run check:encoding` before committing.

@@ -68,7 +68,7 @@ graph TD
 
 **Windows (PowerShell):**
 ```powershell
-cd D:\cakecake\cakecake-vue\bilibili-vue
+cd D:\cakecake\cakecake-vue\cakecake-web
 npm install
 copy .env.production.example .env.production
 npm run build

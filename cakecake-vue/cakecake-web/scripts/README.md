@@ -11,7 +11,7 @@
 
 | 脚本 | 用途 |
 |------|------|
-| `npm run check:encoding` | 检查 `src/pages/minibili`、`src/i18n` 等是否含 `????` / 乱码 |
+| `npm run check:encoding` | 检查 `src/pages/cakecake`、`src/i18n` 等是否含 `????` / 乱码 |
 
 ## 维护（一般不需要）
 
@@ -25,4 +25,4 @@
 
 ## 编码说明
 
-`src/pages/minibili/` 下的部分 Vue SFC 文件内联了中文文案（视频分区名、UI 标签等）。在 Windows 上使用某些编辑器修改这些文件时，可能出现乱码（`????`、`U+FFFD`）。提交前务必运行 `npm run check:encoding`。
+`src/pages/cakecake/` 下的部分 Vue SFC 文件内联了中文文案（视频分区名、UI 标签等）。在 Windows 上使用某些编辑器修改这些文件时，可能出现乱码（`????`、`U+FFFD`）。提交前务必运行 `npm run check:encoding`。

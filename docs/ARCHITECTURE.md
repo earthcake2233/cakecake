@@ -69,7 +69,7 @@ cakecake/
 ├── deploy/                       # Nginx 配置、systemd unit、生产环境变量模板
 ├── docs/                         # 截图与指南
 ├── cakecake-vue/cakecake-web/    # Vue 3 + Vite + TypeScript 前端
-└── go.mod                        # module minibili
+└── go.mod                        # module cakecake
 ```
 
 ---

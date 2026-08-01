@@ -68,7 +68,7 @@ The project frontend uses **Vite 6 + Vue 3**, requiring **Node.js 18+** (recomme
 
 **Windows (PowerShell):**
 ```powershell
-cd D:\cakecake\cakecake-vue\bilibili-vue
+cd D:\cakecake\cakecake-vue\cakecake-web
 npm install
 copy .env.production.example .env.production
 npm run build

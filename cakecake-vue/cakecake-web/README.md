@@ -77,8 +77,8 @@ npm run build    # 产出 dist/，部署见 deploy/DEPLOY.md
 
 ```
 src/
-├── api/              # 接口封装（minibili.ts、index.js）
-├── pages/            # 页面（home、video、minibili、upload、admin …）
+├── api/              # 接口封装（cakecake.ts、index.js）
+├── pages/            # 页面（home、video、cakecake、upload、admin …）
 ├── components/       # 公共组件
 ├── store/            # Vuex
 ├── mock/localApi.js  # API 失败占位 / 非核心 Tab 演示

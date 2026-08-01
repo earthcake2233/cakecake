@@ -7,11 +7,11 @@
 
 # cakecake Frontend
 
-The Vue 3 + Vite project lives in the **`bilibili-vue/`** subdirectory.
+The Vue 3 + Vite project lives in the **`cakecake-web/`** subdirectory.
 
 **Development, build, and environment variables:** read
 
-**[bilibili-vue/README.md](./bilibili-vue/README.md)** (Chinese) or **[bilibili-vue/README_EN.md](./bilibili-vue/README_EN.md)** (English).
+**[cakecake-web/README.md](./cakecake-web/README.md)** (Chinese) or **[cakecake-web/README_EN.md](./cakecake-web/README_EN.md)** (English).
 
 Full-stack integration and backend config: root **[README.md](../README.md)**.  
 Production deployment: **[deploy/DEPLOY.md](../deploy/DEPLOY.md)**.

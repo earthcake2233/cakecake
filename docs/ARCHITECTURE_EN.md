@@ -69,7 +69,7 @@ cakecake/
 ├── deploy/                       # Nginx config, systemd unit, env template
 ├── docs/                         # Screenshots and guides
 ├── cakecake-vue/cakecake-web/    # Vue 3 + Vite + TypeScript frontend
-└── go.mod                        # module minibili
+└── go.mod                        # module cakecake
 ```
 
 ---

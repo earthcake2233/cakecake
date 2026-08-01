@@ -78,8 +78,8 @@ When upload is disabled, follow **[docs/manual-video-ingest.md](../../docs/manua
 
 ```
 src/
-├── api/              # API wrappers (minibili.ts, index.js)
-├── pages/            # Pages (home, video, minibili, upload, admin …)
+├── api/              # API wrappers (cakecake.ts, index.js)
+├── pages/            # Pages (home, video, cakecake, upload, admin …)
 ├── components/       # Shared components
 ├── store/            # Vuex
 ├── mock/localApi.js  # API fallback / non-core tab demo
