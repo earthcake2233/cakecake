@@ -68,6 +68,7 @@ func main() {
 			continue
 		}
 		ddl = strings.Replace(ddl, "CREATE TABLE ", "CREATE TABLE IF NOT EXISTS ", 1)
+		ddl = strings.ReplaceAll(ddl, "utf8mb4_0900_ai_ci", "utf8mb4_general_ci")
 		fmt.Printf("%s;\n\n", ddl)
 	}
 

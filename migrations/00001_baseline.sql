@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS `admins` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `idx_admins_username` (`username`),
   KEY `idx_admins_status` (`status`)
-) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE IF NOT EXISTS `agent_profiles` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS `agent_profiles` (
   KEY `idx_agent_profiles_bot_user_id` (`bot_user_id`),
   KEY `idx_agent_profiles_sort_order` (`sort_order`),
   KEY `idx_agent_profiles_enabled` (`enabled`)
-) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE IF NOT EXISTS `agent_settings` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
@@ -47,7 +47,7 @@ CREATE TABLE IF NOT EXISTS `agent_settings` (
   `assistant_enabled` tinyint(1) NOT NULL DEFAULT '1',
   `updated_at` datetime(3) DEFAULT NULL,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE IF NOT EXISTS `article_coins` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
@@ -57,7 +57,7 @@ CREATE TABLE IF NOT EXISTS `article_coins` (
   `created_at` datetime(3) DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `idx_article_coin_user_article` (`user_id`,`article_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE IF NOT EXISTS `article_comment_dislikes` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
@@ -66,7 +66,7 @@ CREATE TABLE IF NOT EXISTS `article_comment_dislikes` (
   `created_at` datetime(3) DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `idx_article_cmt_dislike_user_cmt` (`user_id`,`comment_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE IF NOT EXISTS `article_comment_likes` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
@@ -75,7 +75,7 @@ CREATE TABLE IF NOT EXISTS `article_comment_likes` (
   `created_at` datetime(3) DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `idx_article_cmt_like_user_cmt` (`user_id`,`comment_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=31 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=31 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE IF NOT EXISTS `article_comments` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
@@ -97,7 +97,7 @@ CREATE TABLE IF NOT EXISTS `article_comments` (
   KEY `idx_article_comments_pinned` (`pinned`),
   KEY `idx_article_comments_curated_ignored` (`curated_ignored`),
   KEY `idx_article_comments_approved` (`approved`)
-) ENGINE=InnoDB AUTO_INCREMENT=20 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=20 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE IF NOT EXISTS `article_favorites` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
@@ -106,7 +106,7 @@ CREATE TABLE IF NOT EXISTS `article_favorites` (
   `created_at` datetime(3) DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `idx_article_fav_user_article` (`user_id`,`article_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=64 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=64 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE IF NOT EXISTS `article_view_histories` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
@@ -118,7 +118,7 @@ CREATE TABLE IF NOT EXISTS `article_view_histories` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_view_hist_user_article` (`user_id`,`article_id`),
   KEY `idx_view_hist_art_user_viewed` (`viewed_at`)
-) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE IF NOT EXISTS `articles` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
@@ -146,7 +146,7 @@ CREATE TABLE IF NOT EXISTS `articles` (
   KEY `idx_article_status` (`status`),
   KEY `idx_article_created` (`created_at`),
   KEY `idx_articles_reviewed_by_admin_id` (`reviewed_by_admin_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE IF NOT EXISTS `coin_ledgers` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
@@ -159,7 +159,7 @@ CREATE TABLE IF NOT EXISTS `coin_ledgers` (
   KEY `idx_coin_ledgers_reason_type` (`reason_type`),
   KEY `idx_coin_ledgers_video_id` (`video_id`),
   KEY `idx_coin_ledger_user_created` (`user_id`,`created_at`)
-) ENGINE=InnoDB AUTO_INCREMENT=37 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=37 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE IF NOT EXISTS `comment_dislikes` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
@@ -168,7 +168,7 @@ CREATE TABLE IF NOT EXISTS `comment_dislikes` (
   `created_at` datetime(3) DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `idx_dislike_user_comment` (`user_id`,`comment_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=26 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=26 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE IF NOT EXISTS `comment_likes` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
@@ -177,7 +177,7 @@ CREATE TABLE IF NOT EXISTS `comment_likes` (
   `created_at` datetime(3) DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `idx_like_user_comment` (`user_id`,`comment_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=190 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=190 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE IF NOT EXISTS `comments` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
@@ -199,7 +199,7 @@ CREATE TABLE IF NOT EXISTS `comments` (
   KEY `idx_comments_pinned` (`pinned`),
   KEY `idx_comments_approved` (`approved`),
   KEY `idx_comments_curated_ignored` (`curated_ignored`)
-) ENGINE=InnoDB AUTO_INCREMENT=99 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=99 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE IF NOT EXISTS `danmaku_likes` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
@@ -207,7 +207,7 @@ CREATE TABLE IF NOT EXISTS `danmaku_likes` (
   `danmaku_id` bigint unsigned NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `idx_danmaku_like_user_dm` (`user_id`,`danmaku_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE IF NOT EXISTS `danmakus` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
@@ -223,7 +223,7 @@ CREATE TABLE IF NOT EXISTS `danmakus` (
   PRIMARY KEY (`id`),
   KEY `idx_danmaku_video` (`video_id`),
   KEY `idx_danmakus_user_id` (`user_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=88 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=88 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE IF NOT EXISTS `dm_conversations` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
@@ -240,7 +240,7 @@ CREATE TABLE IF NOT EXISTS `dm_conversations` (
   KEY `idx_dm_conversations_last_message_at` (`last_message_at`),
   KEY `idx_dm_conversations_kind` (`kind`),
   KEY `idx_dm_conversations_agent_profile_id` (`agent_profile_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE IF NOT EXISTS `dm_messages` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
@@ -255,7 +255,7 @@ CREATE TABLE IF NOT EXISTS `dm_messages` (
   KEY `idx_dm_msg_conv` (`conversation_id`),
   KEY `idx_dm_messages_sender_id` (`sender_id`),
   KEY `idx_dm_messages_created_at` (`created_at`)
-) ENGINE=InnoDB AUTO_INCREMENT=345 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=345 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE IF NOT EXISTS `dm_participants` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
@@ -273,7 +273,7 @@ CREATE TABLE IF NOT EXISTS `dm_participants` (
   KEY `idx_dm_participants_user_id` (`user_id`),
   KEY `idx_dm_participants_pinned_at` (`pinned_at`),
   KEY `idx_dm_participants_hidden_at` (`hidden_at`)
-) ENGINE=InnoDB AUTO_INCREMENT=21 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=21 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE IF NOT EXISTS `dynamic_comment_dislikes` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
@@ -282,7 +282,7 @@ CREATE TABLE IF NOT EXISTS `dynamic_comment_dislikes` (
   `created_at` datetime(3) DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `idx_dyn_cmt_dislike_user_cmt` (`user_id`,`comment_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE IF NOT EXISTS `dynamic_comment_likes` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
@@ -291,7 +291,7 @@ CREATE TABLE IF NOT EXISTS `dynamic_comment_likes` (
   `created_at` datetime(3) DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `idx_dyn_cmt_like_user_cmt` (`user_id`,`comment_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE IF NOT EXISTS `dynamic_comments` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
@@ -313,7 +313,7 @@ CREATE TABLE IF NOT EXISTS `dynamic_comments` (
   KEY `idx_dynamic_comments_user_id` (`user_id`),
   KEY `idx_dynamic_comments_approved` (`approved`),
   KEY `idx_dynamic_comments_curated_ignored` (`curated_ignored`)
-) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE IF NOT EXISTS `favorite_folders` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
@@ -327,7 +327,7 @@ CREATE TABLE IF NOT EXISTS `favorite_folders` (
   `cover_url` varchar(1024) NOT NULL DEFAULT '',
   PRIMARY KEY (`id`),
   KEY `idx_fav_folder_user` (`user_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=21 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=21 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE IF NOT EXISTS `home_banners` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
@@ -344,14 +344,14 @@ CREATE TABLE IF NOT EXISTS `home_banners` (
   PRIMARY KEY (`id`),
   KEY `idx_home_banners_sort_order` (`sort_order`),
   KEY `idx_home_banners_enabled` (`enabled`)
-) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE IF NOT EXISTS `hot_search_display_layouts` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `order_json` text NOT NULL,
   `updated_at` datetime(3) DEFAULT NULL,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE IF NOT EXISTS `hot_search_ops` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
@@ -369,14 +369,14 @@ CREATE TABLE IF NOT EXISTS `hot_search_ops` (
   KEY `idx_hot_search_ops_op_type` (`op_type`),
   KEY `idx_hot_search_ops_pin_rank` (`pin_rank`),
   KEY `idx_hot_search_ops_enabled` (`enabled`)
-) ENGINE=InnoDB AUTO_INCREMENT=33 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=33 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE IF NOT EXISTS `like_notif_mutes` (
   `recipient_id` bigint unsigned NOT NULL,
   `comment_id` bigint unsigned NOT NULL,
   `created_at` datetime(3) DEFAULT NULL,
   UNIQUE KEY `idx_like_notif_mute_pair` (`recipient_id`,`comment_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE IF NOT EXISTS `notifications` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
@@ -395,7 +395,7 @@ CREATE TABLE IF NOT EXISTS `notifications` (
   KEY `idx_notif_recipient` (`recipient_id`),
   KEY `idx_notifications_type` (`type`),
   KEY `idx_notifications_related_id` (`related_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=108 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=108 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE IF NOT EXISTS `schema_versions` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
@@ -405,14 +405,14 @@ CREATE TABLE IF NOT EXISTS `schema_versions` (
   `executed_at` datetime(3) NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `idx_schema_versions_version` (`version`)
-) ENGINE=InnoDB AUTO_INCREMENT=20 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=20 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE IF NOT EXISTS `system_configs` (
   `key` varchar(64) NOT NULL,
   `value` varchar(1024) NOT NULL,
   `updated_at` datetime(3) DEFAULT NULL,
   PRIMARY KEY (`key`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE IF NOT EXISTS `user_blocks` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
@@ -423,7 +423,7 @@ CREATE TABLE IF NOT EXISTS `user_blocks` (
   UNIQUE KEY `idx_user_block_pair` (`blocker_id`,`blocked_id`),
   KEY `idx_user_blocks_blocker_id` (`blocker_id`),
   KEY `idx_user_blocks_blocked_id` (`blocked_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE IF NOT EXISTS `user_daily_tasks` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
@@ -435,7 +435,7 @@ CREATE TABLE IF NOT EXISTS `user_daily_tasks` (
   `updated_at` datetime(3) DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_user_daily_task` (`user_id`,`task_date`)
-) ENGINE=InnoDB AUTO_INCREMENT=30 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=30 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE IF NOT EXISTS `user_dynamic_likes` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
@@ -444,7 +444,7 @@ CREATE TABLE IF NOT EXISTS `user_dynamic_likes` (
   `created_at` datetime(3) DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `idx_dyn_like_user_dyn` (`user_id`,`dynamic_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=12 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=12 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE IF NOT EXISTS `user_dynamics` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
@@ -459,7 +459,7 @@ CREATE TABLE IF NOT EXISTS `user_dynamics` (
   `comments_curated` tinyint(1) NOT NULL DEFAULT '0',
   PRIMARY KEY (`id`),
   KEY `idx_dyn_user_created` (`user_id`,`created_at`)
-) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE IF NOT EXISTS `user_follow_group_members` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
@@ -470,7 +470,7 @@ CREATE TABLE IF NOT EXISTS `user_follow_group_members` (
   UNIQUE KEY `idx_follow_group_member` (`group_id`,`followee_id`),
   KEY `idx_user_follow_group_members_group_id` (`group_id`),
   KEY `idx_user_follow_group_members_followee_id` (`followee_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE IF NOT EXISTS `user_follow_groups` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
@@ -479,7 +479,7 @@ CREATE TABLE IF NOT EXISTS `user_follow_groups` (
   `created_at` datetime(3) DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `idx_follow_group_user` (`user_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE IF NOT EXISTS `user_follows` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
@@ -490,7 +490,7 @@ CREATE TABLE IF NOT EXISTS `user_follows` (
   UNIQUE KEY `idx_user_follow_pair` (`follower_id`,`followee_id`),
   KEY `idx_user_follow_follower` (`follower_id`),
   KEY `idx_user_follow_followee` (`followee_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=30 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=30 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE IF NOT EXISTS `user_search_histories` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
@@ -502,7 +502,7 @@ CREATE TABLE IF NOT EXISTS `user_search_histories` (
   UNIQUE KEY `idx_user_search_norm` (`user_id`,`keyword_norm`),
   KEY `idx_user_search_updated` (`updated_at`),
   KEY `idx_user_search_user` (`user_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=11102 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=11102 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE IF NOT EXISTS `users` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
@@ -537,7 +537,7 @@ CREATE TABLE IF NOT EXISTS `users` (
   KEY `idx_users_deletion_requested_at` (`deletion_requested_at`),
   KEY `idx_users_deletion_effective_at` (`deletion_effective_at`),
   KEY `idx_users_first_published_at` (`first_published_at`)
-) ENGINE=InnoDB AUTO_INCREMENT=17 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=17 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE IF NOT EXISTS `video_coins` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
@@ -547,7 +547,7 @@ CREATE TABLE IF NOT EXISTS `video_coins` (
   `amount` bigint NOT NULL DEFAULT '1',
   PRIMARY KEY (`id`),
   UNIQUE KEY `idx_video_coin_user_video` (`user_id`,`video_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE IF NOT EXISTS `video_favorites` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
@@ -558,7 +558,7 @@ CREATE TABLE IF NOT EXISTS `video_favorites` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `idx_video_fav_user_video_folder` (`user_id`,`video_id`,`folder_id`),
   KEY `idx_video_fav_folder` (`folder_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=55 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=55 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE IF NOT EXISTS `video_likes` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
@@ -567,7 +567,7 @@ CREATE TABLE IF NOT EXISTS `video_likes` (
   `created_at` datetime(3) DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `idx_video_like_user_video` (`user_id`,`video_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=27 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=27 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE IF NOT EXISTS `video_view_histories` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
@@ -581,7 +581,7 @@ CREATE TABLE IF NOT EXISTS `video_view_histories` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_view_hist_user_video` (`user_id`,`video_id`),
   KEY `idx_view_hist_user_viewed` (`viewed_at`)
-) ENGINE=InnoDB AUTO_INCREMENT=31 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=31 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE IF NOT EXISTS `videos` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
@@ -616,7 +616,7 @@ CREATE TABLE IF NOT EXISTS `videos` (
   KEY `idx_video_created` (`created_at`),
   KEY `idx_video_user` (`user_id`),
   KEY `idx_videos_reviewed_by_admin_id` (`reviewed_by_admin_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=58 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=58 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE IF NOT EXISTS `watch_laters` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
@@ -627,7 +627,7 @@ CREATE TABLE IF NOT EXISTS `watch_laters` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `idx_watch_later_user_video` (`user_id`,`video_id`),
   KEY `idx_watch_laters_created_at` (`created_at`)
-) ENGINE=InnoDB AUTO_INCREMENT=64 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=64 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- +goose Down
 -- Baseline rollback: drop all tables in reverse order.

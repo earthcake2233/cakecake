@@ -168,10 +168,13 @@ DEST="${DEPLOY_USER}@${DEPLOY_HOST}"
 "${SCP[@]}" "$WORK/mini-bili" "$WORK/www.tar.gz" "$WORK/migrations.tar.gz" "${DEST}:/tmp/"
 "${SSH[@]}" "$DEST" "set -e
 install -m 755 /tmp/mini-bili $REMOTE_DIR/bin/mini-bili
+if [ -d $REMOTE_DIR/migrations ]; then
+  rm -rf $REMOTE_DIR/migrations.prev
+  mv $REMOTE_DIR/migrations $REMOTE_DIR/migrations.prev
+fi
 rm -rf $REMOTE_DIR/www/*
 mkdir -p $REMOTE_DIR/www
 tar xzf /tmp/www.tar.gz -C $REMOTE_DIR/www
-rm -rf $REMOTE_DIR/migrations
 mkdir -p $REMOTE_DIR/migrations
 tar xzf /tmp/migrations.tar.gz -C $REMOTE_DIR/migrations
 rm -f /tmp/mini-bili /tmp/www.tar.gz /tmp/migrations.tar.gz
@@ -190,6 +193,10 @@ if [ \"\$ok\" != \"1\" ]; then
   sleep 1
   if [ -f $REMOTE_DIR/bin/mini-bili.prev ]; then
     install -m 755 $REMOTE_DIR/bin/mini-bili.prev $REMOTE_DIR/bin/mini-bili
+  fi
+  rm -rf $REMOTE_DIR/migrations
+  if [ -d $REMOTE_DIR/migrations.prev ]; then
+    mv $REMOTE_DIR/migrations.prev $REMOTE_DIR/migrations
   fi
   systemctl start $SERVICE_NAME || true
   exit 1

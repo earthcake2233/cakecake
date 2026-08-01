@@ -105,11 +105,14 @@ jobs:
             if [ -f /opt/minibili/bin/mini-bili ]; then
               cp -a /opt/minibili/bin/mini-bili /opt/minibili/bin/mini-bili.prev
             fi
+            if [ -d /opt/minibili/migrations ]; then
+              rm -rf /opt/minibili/migrations.prev
+              mv /opt/minibili/migrations /opt/minibili/migrations.prev
+            fi
             install -m 755 "$WORK/mini-bili" /opt/minibili/bin/mini-bili
             rm -rf /opt/minibili/www/*
             mkdir -p /opt/minibili/www
             cp -a "$WORK/dist/." /opt/minibili/www/
-            rm -rf /opt/minibili/migrations
             mkdir -p /opt/minibili/migrations
             cp -a "$WORK/migrations/." /opt/minibili/migrations/
             rm -rf "$WORK" /tmp/minibili-release.tar.gz
@@ -129,6 +132,10 @@ jobs:
               sleep 1
               if [ -f /opt/minibili/bin/mini-bili.prev ]; then
                 install -m 755 /opt/minibili/bin/mini-bili.prev /opt/minibili/bin/mini-bili
+              fi
+              rm -rf /opt/minibili/migrations
+              if [ -d /opt/minibili/migrations.prev ]; then
+                mv /opt/minibili/migrations.prev /opt/minibili/migrations
               fi
               systemctl start minibili || true
               sleep 3
