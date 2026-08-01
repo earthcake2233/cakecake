@@ -1,19 +1,19 @@
 package toolkit
 
 import (
+	"cakecake/internal/model/comment"
+	"cakecake/internal/model/danmaku"
+	"cakecake/internal/model/user"
+	"cakecake/internal/model/video"
 	"context"
 	"encoding/json"
 	"fmt"
-	"minibili/internal/model/comment"
-	"minibili/internal/model/danmaku"
-	"minibili/internal/model/user"
-	"minibili/internal/model/video"
 	"strings"
 
 	"gorm.io/gorm"
 
-	"minibili/internal/pkg/sensitive"
-	"minibili/internal/search"
+	"cakecake/internal/pkg/sensitive"
+	"cakecake/internal/search"
 )
 
 // PlatformExecutor implements Executor using the platforms DB and search.

@@ -1,14 +1,14 @@
 package data
 
 import (
+	"cakecake/internal/model/admin"
+	"cakecake/internal/model/article"
+	"cakecake/internal/model/comment"
+	"cakecake/internal/model/danmaku"
+	"cakecake/internal/model/notification"
+	"cakecake/internal/model/user"
+	"cakecake/internal/model/video"
 	"errors"
-	"minibili/internal/model/admin"
-	"minibili/internal/model/article"
-	"minibili/internal/model/comment"
-	"minibili/internal/model/danmaku"
-	"minibili/internal/model/notification"
-	"minibili/internal/model/user"
-	"minibili/internal/model/video"
 	"testing"
 	"time"
 
@@ -18,7 +18,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"minibili/internal/config"
+	"cakecake/internal/config"
 )
 
 func setupDataDB(t *testing.T) *gorm.DB {

@@ -3,8 +3,8 @@
 package handler
 
 import (
-	"minibili/internal/model/comment"
-	"minibili/internal/model/notification"
+	"cakecake/internal/model/comment"
+	"cakecake/internal/model/notification"
 	"testing"
 	"time"
 

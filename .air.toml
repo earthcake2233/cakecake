@@ -5,8 +5,8 @@ env_files = [".env"]
 
 [build]
   args_bin = []
-  entrypoint = ["./tmp/mini-bili"]
-  cmd = "go build -buildvcs=false -o ./tmp/mini-bili ./cmd/mini-bili"
+  entrypoint = ["./tmp/cakecake"]
+  cmd = "go build -buildvcs=false -o ./tmp/cakecake ./cmd/cakecake"
   delay = 500
   exclude_dir = ["tmp","vendor","testdata",".git","cakecake-vue","bin","node_modules"]
   exclude_file = []
@@ -22,9 +22,9 @@ env_files = [".env"]
   stop_on_error = true
 
 [build.windows]
-  entrypoint = ["./tmp/mini-bili.exe"]
-  cmd = "go build -buildvcs=false -o ./tmp/mini-bili.exe ./cmd/mini-bili"
-  env = ["GO111MODULE=on", "GOCACHE=D:/Minibili/.gocache"]
+  entrypoint = ["./tmp/cakecake.exe"]
+  cmd = "go build -buildvcs=false -o ./tmp/cakecake.exe ./cmd/cakecake"
+  env = ["GO111MODULE=on", "GOCACHE=D:/cakecake/.gocache"]
 
 [color]
   app = ""

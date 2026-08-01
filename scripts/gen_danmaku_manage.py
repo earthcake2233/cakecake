@@ -2,7 +2,7 @@
 import json
 from pathlib import Path
 
-TARGET = Path(__file__).resolve().parents[1] / "cakecake-vue/bilibili-vue/src/pages/upload/danmakuManage.vue"
+TARGET = Path(__file__).resolve().parents[1] / "cakecake-vue/cakecake-web/src/pages/upload/danmakuManage.vue"
 
 S = {
     "tab_video": "\u7a3f\u4ef6\u5f39\u5e55",
@@ -32,7 +32,7 @@ S = {
     "op": "\u64cd\u4f5c",
     "foot": "\u5f39\u5e55\u5217\u8868\u663e\u793a\u6700\u65b0\u7684\u7a3f\u4ef6\u5f39\u5e55\uff0c\u4e0a\u96501000\u6761",
     "soon": "\u529f\u80fd\u5373\u5c06\u5f00\u653e",
-    "empty_hint": "\u8bf7\u5f00\u542f Mini-Bili \u6a21\u5f0f\u5e76\u767b\u5f55\u540e\u67e5\u770b",
+    "empty_hint": "\u8bf7\u5f00\u542f cakecake \u6a21\u5f0f\u5e76\u767b\u5f55\u540e\u67e5\u770b",
     "empty_search": "\u6ca1\u6709\u5339\u914d\u7684\u5f39\u5e55",
     "empty": "\u8fd8\u6ca1\u6709\u5f39\u5e55\u54e6~",
     "user": "\u7528\u6237",
@@ -369,7 +369,7 @@ import {
 import { getAccessToken } from "@/utils/authTokens";
 import { formatVideoBvid } from "@/utils/videoBvid";
 
-const isMinibiliMode =
+const iscakecakeMode =
   import.meta.env.VITE_MINIBILI_API === "true" ||
   import.meta.env.VITE_MINIBILI_API === "1";
 
@@ -400,7 +400,7 @@ export default {
     };
   },
   computed: {
-    isMinibiliMode() { return isMinibiliMode; },
+    iscakecakeMode() { return iscakecakeMode; },
     displayRows() {
       const list = [...(this.rows || [])];
       if (!this.sortField) return list;
@@ -430,12 +430,12 @@ export default {
     showEmpty() {
       if (this.loadError) return false;
       if (this.loading && this.showListArea) return false;
-      if (!this.isMinibiliMode) return true;
+      if (!this.iscakecakeMode) return true;
       if (this.topTab !== "video") return true;
       return !this.rows.length;
     },
     emptyText() {
-      if (!this.isMinibiliMode) return \"""",
+      if (!this.iscakecakeMode) return \"""",
     S["empty_hint"],
     """\";
       if (this.searchApplied) return \"""",
@@ -458,20 +458,20 @@ export default {
       const q = String(val || "").trim();
       if (!q && this.searchApplied) {
         this.searchApplied = "";
-        if (this.topTab === "video" && this.isMinibiliMode && getAccessToken()) {
+        if (this.topTab === "video" && this.iscakecakeMode && getAccessToken()) {
           void this.fetchList();
         }
       }
     },
     topTab(tab) {
-      if (tab === "video" && this.isMinibiliMode && getAccessToken()) {
+      if (tab === "video" && this.iscakecakeMode && getAccessToken()) {
         this.syncSearchFromInput();
         void this.fetchList();
       }
     }
   },
   mounted() {
-    if (this.isMinibiliMode && getAccessToken()) {
+    if (this.iscakecakeMode && getAccessToken()) {
       void this.loadVideos();
       void this.fetchList();
     }
@@ -485,7 +485,7 @@ export default {
     },
     setTopTab(tab) {
       if (this.topTab === tab) {
-        if (tab === "video" && this.isMinibiliMode && getAccessToken()) {
+        if (tab === "video" && this.iscakecakeMode && getAccessToken()) {
           this.syncSearchFromInput();
           void this.fetchList();
         }
@@ -526,7 +526,7 @@ export default {
       } catch { this.videoOptions = []; }
     },
     async fetchList() {
-      if (!this.isMinibiliMode || !getAccessToken() || this.topTab !== "video") return;
+      if (!this.iscakecakeMode || !getAccessToken() || this.topTab !== "video") return;
       this.loading = true;
       this.loadError = "";
       try {
@@ -614,7 +614,7 @@ export default {
       this.rowMenuPos = null;
     },
     async onToggleLike(row) {
-      if (!row || !row.id || !this.isMinibiliMode || !getAccessToken()) return;
+      if (!row || !row.id || !this.iscakecakeMode || !getAccessToken()) return;
       this.likeBusy = row.id;
       try {
         const res = await mbToggleDanmakuLike(Number(row.id));

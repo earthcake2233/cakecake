@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Minibili 一键部署脚本（WSL / Linux）
+# cakecake 一键部署脚本（WSL / Linux）
 #
 # 流程：本地测试（无 bug 门禁）→ 构建 → 二次确认 → 上传云服务器 → 重启 → 健康检查
 #
@@ -74,7 +74,7 @@ fi
 WORK="/tmp/minibili-deploy-latest"
 
 if [[ "$DEPLOY_ONLY" -eq 1 ]]; then
-  if [[ ! -f "$WORK/mini-bili" || ! -f "$WORK/www.tar.gz" || ! -f "$WORK/migrations.tar.gz" ]]; then
+  if [[ ! -f "$WORK/cakecake" || ! -f "$WORK/www.tar.gz" || ! -f "$WORK/migrations.tar.gz" ]]; then
     echo "找不到上次构建产物（$WORK），请先运行 ./scripts/deploy.sh --dry-run 生成。" >&2
     exit 2
   fi
@@ -106,24 +106,24 @@ else
   go test -tags=integration -count=1 -timeout 300s ./...
 
   echo "    前端测试 (npm test)..."
-  (cd cakecake-vue/bilibili-vue && npm test)
+  (cd cakecake-vue/cakecake-web && npm test)
 fi
 
 # ---- [2/5] 构建 ----
 echo "==> [2/5] 构建产物..."
 if [[ "$DEPLOY_ONLY" -eq 1 ]]; then
-  echo "    复用已有产物: $WORK/mini-bili + $WORK/www.tar.gz + $WORK/migrations.tar.gz"
+  echo "    复用已有产物: $WORK/cakecake + $WORK/www.tar.gz + $WORK/migrations.tar.gz"
 else
   echo "    后端 (linux/amd64)..."
-  go build -buildvcs=false -ldflags="-s -w" -o "$WORK/mini-bili" ./cmd/mini-bili
+  go build -buildvcs=false -ldflags="-s -w" -o "$WORK/cakecake" ./cmd/cakecake
 
   echo "    前端 dist..."
-  if [[ ! -f cakecake-vue/bilibili-vue/.env.production ]]; then
-    cp cakecake-vue/bilibili-vue/.env.production.example cakecake-vue/bilibili-vue/.env.production
+  if [[ ! -f cakecake-vue/cakecake-web/.env.production ]]; then
+    cp cakecake-vue/cakecake-web/.env.production.example cakecake-vue/cakecake-web/.env.production
     echo "    提示: 已从 .env.production.example 生成 .env.production"
   fi
-  (cd cakecake-vue/bilibili-vue && npm run build)
-  tar -czf "$WORK/www.tar.gz" -C cakecake-vue/bilibili-vue/dist .
+  (cd cakecake-vue/cakecake-web && npm run build)
+  tar -czf "$WORK/www.tar.gz" -C cakecake-vue/cakecake-web/dist .
   tar -czf "$WORK/migrations.tar.gz" -C migrations .
   dirty="no"
   git status --porcelain | grep -q . && dirty="yes"
@@ -134,12 +134,12 @@ else
     "$(date '+%Y-%m-%d %H:%M:%S')" > "$WORK/deploy-info.txt"
 fi
 
-BIN_SIZE="$(du -h "$WORK/mini-bili" | cut -f1)"
+BIN_SIZE="$(du -h "$WORK/cakecake" | cut -f1)"
 DIST_SIZE="$(du -h "$WORK/www.tar.gz" | cut -f1)"
 
 # ---- [3/5] 二次确认 ----
 echo "==> [3/5] 部署确认"
-echo "    后端二进制: $BIN_SIZE ($WORK/mini-bili)"
+echo "    后端二进制: $BIN_SIZE ($WORK/cakecake)"
 echo "    前端资源:   $DIST_SIZE (www.tar.gz)"
 if [[ -f "$WORK/deploy-info.txt" ]]; then
   echo "    构建信息:   $(cat "$WORK/deploy-info.txt")"
@@ -165,9 +165,9 @@ SSH=(ssh -i "$DEPLOY_KEY" -p "$DEPLOY_PORT" -o BatchMode=yes -o StrictHostKeyChe
 SCP=(scp -i "$DEPLOY_KEY" -P "$DEPLOY_PORT" -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15)
 DEST="${DEPLOY_USER}@${DEPLOY_HOST}"
 
-"${SCP[@]}" "$WORK/mini-bili" "$WORK/www.tar.gz" "$WORK/migrations.tar.gz" "${DEST}:/tmp/"
+"${SCP[@]}" "$WORK/cakecake" "$WORK/www.tar.gz" "$WORK/migrations.tar.gz" "${DEST}:/tmp/"
 "${SSH[@]}" "$DEST" "set -e
-install -m 755 /tmp/mini-bili $REMOTE_DIR/bin/mini-bili
+install -m 755 /tmp/cakecake $REMOTE_DIR/bin/cakecake
 if [ -d $REMOTE_DIR/migrations ]; then
   rm -rf $REMOTE_DIR/migrations.prev
   mv $REMOTE_DIR/migrations $REMOTE_DIR/migrations.prev
@@ -177,7 +177,7 @@ mkdir -p $REMOTE_DIR/www
 tar xzf /tmp/www.tar.gz -C $REMOTE_DIR/www
 mkdir -p $REMOTE_DIR/migrations
 tar xzf /tmp/migrations.tar.gz -C $REMOTE_DIR/migrations
-rm -f /tmp/mini-bili /tmp/www.tar.gz /tmp/migrations.tar.gz
+rm -f /tmp/cakecake /tmp/www.tar.gz /tmp/migrations.tar.gz
 systemctl restart $SERVICE_NAME
 ok=0
 for _ in \$(seq 1 15); do
@@ -191,8 +191,8 @@ if [ \"\$ok\" != \"1\" ]; then
   echo 'health check failed, rolling back...' >&2
   systemctl stop $SERVICE_NAME || true
   sleep 1
-  if [ -f $REMOTE_DIR/bin/mini-bili.prev ]; then
-    install -m 755 $REMOTE_DIR/bin/mini-bili.prev $REMOTE_DIR/bin/mini-bili
+  if [ -f $REMOTE_DIR/bin/cakecake.prev ]; then
+    install -m 755 $REMOTE_DIR/bin/cakecake.prev $REMOTE_DIR/bin/cakecake
   fi
   rm -rf $REMOTE_DIR/migrations
   if [ -d $REMOTE_DIR/migrations.prev ]; then
@@ -204,7 +204,7 @@ fi
 nginx -t && nginx -s reload
 curl -fsS http://127.0.0.1:8080/api/v1/health | head -c 200
 echo
-echo 'Minibili deploy OK'"
+echo 'cakecake deploy OK'"
 
 # ---- [5/5] 公网健康检查 ----
 echo "==> [5/5] 健康检查"

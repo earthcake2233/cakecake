@@ -18,12 +18,12 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"minibili/internal/config"
-	"minibili/internal/data"
-	"minibili/internal/pkg/jwttoken"
-	"minibili/internal/pkg/sensitive"
-	"minibili/internal/service"
-	"minibili/internal/ws"
+	"cakecake/internal/config"
+	"cakecake/internal/data"
+	"cakecake/internal/pkg/jwttoken"
+	"cakecake/internal/pkg/sensitive"
+	"cakecake/internal/service"
+	"cakecake/internal/ws"
 )
 
 type noopMQ struct{}

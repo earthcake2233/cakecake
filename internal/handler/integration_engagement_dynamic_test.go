@@ -3,9 +3,9 @@
 package handler
 
 import (
+	"cakecake/internal/model/dynamic"
 	"encoding/json"
 	"fmt"
-	"minibili/internal/model/dynamic"
 	"testing"
 	"time"
 

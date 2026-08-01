@@ -1,9 +1,9 @@
 package handler
 
 import (
+	"cakecake/internal/model/dynamic"
+	"cakecake/internal/model/user"
 	"encoding/json"
-	"minibili/internal/model/dynamic"
-	"minibili/internal/model/user"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -13,8 +13,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
-	"minibili/internal/pkg/sensitive"
-	"minibili/internal/pkg/usercoin"
+	"cakecake/internal/pkg/sensitive"
+	"cakecake/internal/pkg/usercoin"
 )
 
 // ---------- coinLedgerReasonText ----------

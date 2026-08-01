@@ -1,12 +1,12 @@
 package handler
 
 import (
+	"cakecake/internal/model/notification"
+	"cakecake/internal/model/user"
+	"cakecake/internal/model/video"
 	"context"
 	crand "crypto/rand"
 	"math/big"
-	"minibili/internal/model/notification"
-	"minibili/internal/model/user"
-	"minibili/internal/model/video"
 	"net/http"
 	"strings"
 	"time"
@@ -17,9 +17,9 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 
-	"minibili/internal/errcode"
-	"minibili/internal/middleware"
-	"minibili/internal/pkg/resp"
+	"cakecake/internal/errcode"
+	"cakecake/internal/middleware"
+	"cakecake/internal/pkg/resp"
 )
 
 type deletionPasswordReq struct {

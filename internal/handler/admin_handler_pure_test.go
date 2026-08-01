@@ -1,14 +1,14 @@
 package handler
 
 import (
-	"minibili/internal/model/admin"
+	"cakecake/internal/model/admin"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/gin-gonic/gin"
 
-	"minibili/internal/config"
+	"cakecake/internal/config"
 )
 
 // ---------- adminHotSearchLimit ----------

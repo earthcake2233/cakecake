@@ -1,9 +1,9 @@
 package handler
 
 import (
+	"cakecake/internal/model/user"
+	"cakecake/internal/model/video"
 	"context"
-	"minibili/internal/model/user"
-	"minibili/internal/model/video"
 	"net/http"
 	"strconv"
 	"strings"
@@ -13,10 +13,10 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"minibili/internal/errcode"
-	"minibili/internal/middleware"
-	"minibili/internal/pkg/resp"
-	"minibili/internal/service"
+	"cakecake/internal/errcode"
+	"cakecake/internal/middleware"
+	"cakecake/internal/pkg/resp"
+	"cakecake/internal/service"
 )
 
 func adminVideoStatusFilter(q string) []string {

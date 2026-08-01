@@ -1,13 +1,13 @@
 package model_test
 
 import (
+	"cakecake/internal/model/admin"
+	"cakecake/internal/model/agent"
+	"cakecake/internal/model/dm"
+	"cakecake/internal/model/notification"
+	"cakecake/internal/model/user"
+	"cakecake/internal/model/video"
 	"encoding/json"
-	"minibili/internal/model/admin"
-	"minibili/internal/model/agent"
-	"minibili/internal/model/dm"
-	"minibili/internal/model/notification"
-	"minibili/internal/model/user"
-	"minibili/internal/model/video"
 	"testing"
 	"time"
 

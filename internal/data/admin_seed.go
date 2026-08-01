@@ -1,14 +1,14 @@
 package data
 
 import (
-	"minibili/internal/model/admin"
+	"cakecake/internal/model/admin"
 	"strings"
 
 	"go.uber.org/zap"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 
-	"minibili/internal/config"
+	"cakecake/internal/config"
 )
 
 // SeedDefaultAdmin creates the first admin when table is empty and env seed is set.

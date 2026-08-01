@@ -1,10 +1,10 @@
 package service
 
 import (
+	"cakecake/internal/model/article"
+	"cakecake/internal/model/dynamic"
+	"cakecake/internal/model/video"
 	"context"
-	"minibili/internal/model/article"
-	"minibili/internal/model/dynamic"
-	"minibili/internal/model/video"
 
 	"gorm.io/gorm"
 )

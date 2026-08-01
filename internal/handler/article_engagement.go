@@ -1,18 +1,18 @@
 package handler
 
 import (
-	"minibili/internal/model/article"
+	"cakecake/internal/model/article"
 	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
-	"minibili/internal/errcode"
-	"minibili/internal/middleware"
-	"minibili/internal/pkg/dailyreward"
-	"minibili/internal/pkg/resp"
-	"minibili/internal/pkg/usercoin"
+	"cakecake/internal/errcode"
+	"cakecake/internal/middleware"
+	"cakecake/internal/pkg/dailyreward"
+	"cakecake/internal/pkg/resp"
+	"cakecake/internal/pkg/usercoin"
 )
 
 // ToggleArticleFavorite toggles favorite on an article.

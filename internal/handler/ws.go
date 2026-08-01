@@ -1,10 +1,10 @@
 package handler
 
 import (
+	"cakecake/internal/model/user"
+	"cakecake/internal/model/video"
 	"context"
 	"encoding/json"
-	"minibili/internal/model/user"
-	"minibili/internal/model/video"
 	"net/http"
 	"strconv"
 	"strings"

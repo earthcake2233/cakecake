@@ -5,11 +5,11 @@
   </a>
 </p>
 
-## Mini-Bili v1.0 技能手册（Skill）
+## cakecake v1.0 技能手册（Skill）
 
 **版本**：v1.0
-**最后更新**：2026-07-31
-**依赖文档**：Mini-Bili v1.0 SPEC、Mini-Bili v1.0 Rule
+**最后更新**：2026-08-01
+**依赖文档**：cakecake v1.0 SPEC、cakecake v1.0 Rule
 
 ### 关于 Skill 的说明
 
@@ -30,7 +30,7 @@ Rule 说"这件事必须做"，Skill 说"这件事这样做"。
 1. 在项目根目录下依次执行：
    ```go
    go mod tidy
-   go build -o ./bin/mini-bili ./cmd/
+   go build -o ./bin/cakecake ./cmd/
    ```
    `go mod tidy` 必须在 `go build` 之前执行，确保 `go.mod` 和 `go.sum` 与当前代码中的 import 一致。
 2. 检查编译输出：
@@ -41,7 +41,7 @@ Rule 说"这件事必须做"，Skill 说"这件事这样做"。
    - 定位第一个错误（而非最后一个），修复它。
    - 修复后从步骤 1 开始重新执行。
    - 若同一错误修复 3 次仍未通过，停止并向人报告具体错误信息和已尝试的修复步骤。
-4. 编译通过后，确认 `./bin/mini-bili` 文件已生成且可执行。
+4. 编译通过后，确认 `./bin/cakecake` 文件已生成且可执行。
 
 **禁止行为**：
 - 严禁跳过 `go mod tidy` 直接执行 `go build`。
@@ -672,7 +672,7 @@ flowchart LR
 
 **验证方式**：
 - go vet ./cmd/... ./internal/config/... 零错误
-- go build -o ./bin/mini-bili ./cmd/mini-bili/ 成功
+- go build -o ./bin/cakecake ./cmd/cakecake/ 成功
 - 启动应用后 Ctrl+C，观察日志确认："shutting down gracefully" → "all background tasks finished"
 
 ---

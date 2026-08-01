@@ -1,11 +1,11 @@
 package handler
 
 import (
+	"cakecake/internal/model/video"
 	"context"
 	"errors"
 	"fmt"
 	"mime/multipart"
-	"minibili/internal/model/video"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -17,10 +17,10 @@ import (
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 
-	"minibili/internal/errcode"
-	"minibili/internal/middleware"
-	"minibili/internal/pkg/coverval"
-	"minibili/internal/pkg/resp"
+	"cakecake/internal/errcode"
+	"cakecake/internal/middleware"
+	"cakecake/internal/pkg/coverval"
+	"cakecake/internal/pkg/resp"
 )
 
 const defaultFavoriteFolderTitle = "默认收藏夹"

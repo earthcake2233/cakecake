@@ -1,7 +1,7 @@
 package handler
 
 import (
-	"minibili/internal/model/user"
+	"cakecake/internal/model/user"
 	"net/http"
 	"strconv"
 	"strings"
@@ -9,13 +9,13 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"cakecake/internal/middleware"
+	"cakecake/internal/pkg/bvid"
 	"go.uber.org/zap"
-	"minibili/internal/middleware"
-	"minibili/internal/pkg/bvid"
 
-	"minibili/internal/errcode"
-	"minibili/internal/pkg/resp"
-	"minibili/internal/pkg/usercoin"
+	"cakecake/internal/errcode"
+	"cakecake/internal/pkg/resp"
+	"cakecake/internal/pkg/usercoin"
 )
 
 // ListMeCoinLedger returns paginated coin change history for the personal-center page.

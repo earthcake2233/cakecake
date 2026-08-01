@@ -1,9 +1,9 @@
 package service
 
 import (
+	"cakecake/internal/model/agent"
+	"cakecake/internal/model/dm"
 	"context"
-	"minibili/internal/model/agent"
-	"minibili/internal/model/dm"
 	"os"
 	"path/filepath"
 	"testing"
@@ -16,10 +16,10 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"minibili/internal/aigateway"
-	"minibili/internal/config"
-	"minibili/internal/data"
-	"minibili/internal/pkg/sensitive"
+	"cakecake/internal/aigateway"
+	"cakecake/internal/config"
+	"cakecake/internal/data"
+	"cakecake/internal/pkg/sensitive"
 )
 
 // ---------- helpers ----------

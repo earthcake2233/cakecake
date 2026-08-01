@@ -12,11 +12,11 @@
   </a>
 </p>
 
-# Minibili AI Gateway (Message Center Assistant)
+# cakecake AI Gateway (Message Center Assistant)
 
 ## Features
 
-- Every logged-in user automatically gets a fixed **Minibili AI** conversation (`kind=agent`) in "My Messages."
+- Every logged-in user automatically gets a fixed **cakecake AI** conversation (`kind=agent`) in "My Messages."
 - User messages go through existing `POST /api/v1/dm/conversations/:id/messages`; server asynchronously calls **DeepSeek**, assistant reply is persisted then pushed via **WebSocket** (`/api/v1/ws/chat`).
 - Short-term context stored in **Redis** (`mb:agent:hist:{conversationId}`), daily quota `mb:agent:quota:{userId}:{date}`.
 

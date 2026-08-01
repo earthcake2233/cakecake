@@ -1,16 +1,16 @@
 package handler
 
 import (
-	"minibili/internal/model/admin"
-	"minibili/internal/model/danmaku"
-	"minibili/internal/model/user"
-	"minibili/internal/model/video"
+	"cakecake/internal/model/admin"
+	"cakecake/internal/model/danmaku"
+	"cakecake/internal/model/user"
+	"cakecake/internal/model/video"
 	"path/filepath"
 	"testing"
 
 	"github.com/gin-gonic/gin"
 
-	"minibili/internal/config"
+	"cakecake/internal/config"
 )
 
 func TestNormalizeDanmakuFontSize(t *testing.T) {

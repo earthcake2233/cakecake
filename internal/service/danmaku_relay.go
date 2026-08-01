@@ -7,8 +7,8 @@ import (
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 
-	"minibili/internal/data"
-	"minibili/internal/ws"
+	"cakecake/internal/data"
+	"cakecake/internal/ws"
 )
 
 // DanmakuRelay publishes danmaku-room WebSocket payloads via Redis Pub/Sub so

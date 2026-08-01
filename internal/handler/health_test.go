@@ -9,8 +9,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
-	"minibili/internal/pkg/jwttoken"
-	"minibili/internal/ws"
+	"cakecake/internal/pkg/jwttoken"
+	"cakecake/internal/ws"
 )
 
 func TestHealth(t *testing.T) {

@@ -1,9 +1,9 @@
 package data
 
 import (
+	"cakecake/internal/model/dm"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
-	"minibili/internal/model/dm"
 )
 
 func ensureDmParticipantHiddenAt(db *gorm.DB, lg *zap.Logger) error {

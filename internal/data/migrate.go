@@ -1,27 +1,27 @@
 package data
 
 import (
+	"cakecake/internal/model/admin"
+	"cakecake/internal/model/agent"
+	"cakecake/internal/model/article"
+	"cakecake/internal/model/comment"
+	"cakecake/internal/model/danmaku"
+	"cakecake/internal/model/dm"
+	"cakecake/internal/model/dynamic"
+	"cakecake/internal/model/extra"
+	"cakecake/internal/model/notification"
+	"cakecake/internal/model/system"
+	"cakecake/internal/model/user"
+	"cakecake/internal/model/video"
 	"database/sql"
 	"encoding/json"
-	"minibili/internal/model/admin"
-	"minibili/internal/model/agent"
-	"minibili/internal/model/article"
-	"minibili/internal/model/comment"
-	"minibili/internal/model/danmaku"
-	"minibili/internal/model/dm"
-	"minibili/internal/model/dynamic"
-	"minibili/internal/model/extra"
-	"minibili/internal/model/notification"
-	"minibili/internal/model/system"
-	"minibili/internal/model/user"
-	"minibili/internal/model/video"
 	"strings"
 	"time"
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"minibili/internal/pkg/usercoin"
+	"cakecake/internal/pkg/usercoin"
 )
 
 // RegisteredMigrations returns every schema/data migration in execution order.

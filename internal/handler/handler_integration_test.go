@@ -4,9 +4,9 @@ package handler
 
 import (
 	"bytes"
+	"cakecake/internal/model/video"
 	"encoding/json"
 	"fmt"
-	"minibili/internal/model/video"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -16,8 +16,8 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"minibili/internal/pkg/jwttoken"
-	"minibili/internal/ws"
+	"cakecake/internal/pkg/jwttoken"
+	"cakecake/internal/ws"
 )
 
 // ---------------------------------------------------------------------------

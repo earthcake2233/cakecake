@@ -1,14 +1,14 @@
 package handler
 
 import (
+	"cakecake/internal/model/video"
 	"fmt"
-	"minibili/internal/model/video"
 	"strings"
 
 	"go.uber.org/zap"
 
-	"minibili/internal/config"
-	"minibili/internal/storage"
+	"cakecake/internal/config"
+	"cakecake/internal/storage"
 )
 
 var favoriteFolderCoverOSSExts = []string{"jpg", "jpeg", "png", "webp", "gif", "bmp"}

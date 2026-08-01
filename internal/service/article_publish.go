@@ -1,14 +1,14 @@
 package service
 
 import (
+	"cakecake/internal/model/article"
 	"context"
-	"minibili/internal/model/article"
 	"time"
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"minibili/internal/search"
+	"cakecake/internal/search"
 )
 
 // PublishArticle marks an article published and indexes search (post-review or direct publish).

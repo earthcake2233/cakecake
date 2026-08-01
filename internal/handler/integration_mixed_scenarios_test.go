@@ -3,10 +3,10 @@
 package handler
 
 import (
+	"cakecake/internal/model/dynamic"
+	"cakecake/internal/model/video"
 	"encoding/json"
 	"fmt"
-	"minibili/internal/model/dynamic"
-	"minibili/internal/model/video"
 	"testing"
 	"time"
 

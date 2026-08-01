@@ -1,15 +1,15 @@
 package service
 
 import (
+	"cakecake/internal/model/comment"
 	"context"
-	"minibili/internal/model/comment"
 	"unicode/utf8"
 
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"minibili/internal/pkg/sensitive"
+	"cakecake/internal/pkg/sensitive"
 )
 
 type CommentService struct {

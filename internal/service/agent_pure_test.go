@@ -5,8 +5,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"minibili/internal/aigateway"
-	"minibili/internal/ws"
+	"cakecake/internal/aigateway"
+	"cakecake/internal/ws"
 )
 
 func TestGenerateTraceID(t *testing.T) {

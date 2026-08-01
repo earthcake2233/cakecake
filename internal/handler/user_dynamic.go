@@ -1,13 +1,13 @@
 package handler
 
 import (
+	"cakecake/internal/model/comment"
+	"cakecake/internal/model/dynamic"
+	"cakecake/internal/model/user"
 	"context"
 	"encoding/json"
 	"fmt"
 	"mime/multipart"
-	"minibili/internal/model/comment"
-	"minibili/internal/model/dynamic"
-	"minibili/internal/model/user"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -20,11 +20,11 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"minibili/internal/errcode"
-	"minibili/internal/middleware"
-	"minibili/internal/pkg/coverval"
-	"minibili/internal/pkg/resp"
-	"minibili/internal/service"
+	"cakecake/internal/errcode"
+	"cakecake/internal/middleware"
+	"cakecake/internal/pkg/coverval"
+	"cakecake/internal/pkg/resp"
+	"cakecake/internal/service"
 )
 
 const (

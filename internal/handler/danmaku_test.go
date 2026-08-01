@@ -2,8 +2,8 @@ package handler
 
 import (
 	"bytes"
+	"cakecake/internal/model/video"
 	"encoding/json"
-	"minibili/internal/model/video"
 	"net/http"
 	"net/http/httptest"
 	"testing"

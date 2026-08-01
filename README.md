@@ -11,47 +11,67 @@
 
 # cakecake
 
-基于 Go + Vue3 全栈构建的仿 B 站视频分享社区，聚焦视频投稿、实时弹幕、多级评论、全文搜索、AI 助手等核心链路。前端品牌 **cakecake** · 后端模块沿用 `minibili`。
+生产级视频社区全栈实现：WebSocket + Redis Pub/Sub 的实时弹幕、RabbitMQ 异步转码流水线、Elasticsearch 全文检索、DeepSeek Function Calling——每条链路都按可上线标准落地。
+
+版本化数据库迁移、全局限流、优雅关闭、可观测性、人工审批的 CI/CD：企业级工程实践，Go + Vue3 一个仓库完整闭环。
 
 <p align="center">
   <a href="https://chengzisoft.top/#/">
     <img src="https://img.shields.io/badge/在线体验-chengzisoft.top-00a1d6?style=flat-square" alt="在线体验">
   </a>
-    
+  <a href="https://b23.tv/9VnJIWm">
+    <img src="https://img.shields.io/badge/演示视频-B站-00a1d6?style=flat-square&logo=bilibili" alt="演示视频">
+  </a>
+  <a href="https://github.com/earthcake2233/cakecake">
+    <img src="https://img.shields.io/github/stars/earthcake2233/cakecake?style=flat-square&logo=github" alt="Stars">
+  </a>
   <a href="https://github.com/earthcake2233/cakecake/actions">
     <img src="https://img.shields.io/github/actions/workflow/status/earthcake2233/cakecake/ci.yml?branch=main&style=flat-square&logo=github&label=CI" alt="CI">
     <img src="https://img.shields.io/github/actions/workflow/status/earthcake2233/cakecake/deploy.yml?branch=main&style=flat-square&logo=github&label=Deploy" alt="Deploy">
   </a>
-    
-  <a href="https://b23.tv/9VnJIWm">
-    <img src="https://img.shields.io/badge/演示视频-B站-00a1d6?style=flat-square&logo=bilibili" alt="B站演示">
-  </a>
+  <a href="https://codecov.io/gh/earthcake2233/cakecake"><img src="https://img.shields.io/codecov/c/github/earthcake2233/cakecake?flag=frontend&style=flat-square&label=Vue%20Coverage" alt="Vue Coverage"></a>
+  <a href="https://codecov.io/gh/earthcake2233/cakecake"><img src="https://img.shields.io/codecov/c/github/earthcake2233/cakecake?flag=backend&style=flat-square&label=Go%20Coverage" alt="Go Coverage"></a>
 </p>
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Go-1.25-00ADD8?style=flat-square&logo=go&logoColor=white" alt="Go">
-  <img src="https://img.shields.io/badge/Gin-009688?style=flat-square&logo=gin&logoColor=white" alt="Gin">
-  <img src="https://img.shields.io/badge/GORM-3776AB?style=flat-square&logo=go&logoColor=white" alt="GORM">
-  <img src="https://img.shields.io/badge/Vue-3.5-4FC08D?style=flat-square&logo=vuedotjs&logoColor=white" alt="Vue">
-  <img src="https://img.shields.io/badge/Vite-6-646CFF?style=flat-square&logo=vite&logoColor=white" alt="Vite">
-  <img src="https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript">
-  <img src="https://img.shields.io/badge/MySQL-4479A1?style=flat-square&logo=mysql&logoColor=white" alt="MySQL">
-  <img src="https://img.shields.io/badge/Redis-DC382D?style=flat-square&logo=redis&logoColor=white" alt="Redis">
-  <img src="https://img.shields.io/badge/RabbitMQ-FF6600?style=flat-square&logo=rabbitmq&logoColor=white" alt="RabbitMQ">
-  <img src="https://img.shields.io/badge/Elasticsearch-00BFB3?style=flat-square&logo=elasticsearch&logoColor=white" alt="Elasticsearch">
-  <img src="https://img.shields.io/badge/FFmpeg-007808?style=flat-square&logo=ffmpeg&logoColor=white" alt="FFmpeg">
-  <img src="https://img.shields.io/badge/WebSocket-010101?style=flat-square&logo=socket.io&logoColor=white" alt="WebSocket">
-  <a href="https://codecov.io/gh/earthcake2233/cakecake"><img src="https://img.shields.io/codecov/c/github/earthcake2233/cakecake?flag=frontend&style=flat-square&logo=codecov&label=Vue%20Coverage" alt="Codecov"></a>
-  <a href="https://codecov.io/gh/earthcake2233/cakecake"><img src="https://img.shields.io/codecov/c/github/earthcake2233/cakecake?flag=backend&style=flat-square&logo=codecov&label=Go%20Coverage" alt="Codecov Backend"></a>
-</p>
+---
 
-**能力概览**：JWT 登录、视频/专栏投稿与审核、动态、关注与私信（WebSocket）、视频上传与异步转码（FFmpeg + RabbitMQ + OSS）、实时弹幕、评论与通知、搜索（Elasticsearch 可选）、AI 助手（DeepSeek 可选）、运营后台。
+## 5 分钟本地联调
+
+**1. 后端**（仓库根目录）
+
+```bash
+cp .env.example .env          # 填写 JWT_SECRET、MYSQL_DSN、REDIS_*、RABBITMQ_URL、OSS_* 等
+go mod tidy
+go build -o ./bin/cakecake ./cmd/cakecake/
+./bin/cakecake               # 默认 :8080；健康检查 GET /api/v1/health
+```
+
+MySQL 需先建库（如 `minibili`）；开发环境由 GORM AutoMigrate 自动建表（V1-V19），生产环境（APP_ENV=production）走 goose SQL 迁移（V20+），支持回滚。
+
+**2. 前端**
+
+```bash
+cd cakecake-vue/cakecake-web
+npm install
+cp .env.example .env.local    # 至少 VITE_MINIBILI_API=true
+npm run dev                   # http://localhost:8888
+```
+
+**3. 验证**
+
+- 首页能打开，接口走 `/api/v1`（Vite 代理到 `127.0.0.1:8080`）
+- 登录 / 注册：`#/cakecake/login`、`#/cakecake/register`
+- 无效路径或不存在的视频 → `#/404`
+
+前端细节、环境变量说明见 **[cakecake-vue/cakecake-web/README.md](./cakecake-vue/cakecake-web/README.md)**。
+
+---
 
 ## 界面截图
 
 <table>
   <tr>
-    <td align="center" colspan="2"><b> AI 智能助手 — 结构化工具结果展示</b><br><img src="docs/images/ai-chat-structured-results.png" alt="AI 聊天结构化结果" width="500"/></td>
+    <td align="center" colspan="2"><b>AI 智能助手 — 结构化工具结果展示</b><br><img src="docs/images/ai-chat-structured-results.png" alt="AI 聊天结构化结果" width="500"/></td>
   </tr>
   <tr>
     <td align="center"><b>首页</b><br><img src="docs/images/homepage.png" alt="首页" width="400"/></td>
@@ -73,12 +93,26 @@
 
 ---
 
+## 技术栈
+
+| 层 | 选型 |
+| :--- | :--- |
+| 后端 | Go · Gin · GORM |
+| 数据 | MySQL · Redis · RabbitMQ |
+| 搜索 | Elasticsearch 8.x（可选，兼容 OpenSearch / Bonsai） |
+| 存储 | 阿里云 OSS（视频/封面/头像） |
+| 转码 | FFmpeg / ffprobe |
+| 前端 | Vue 3 · Vite · TypeScript |
+| 认证 | JWT（Access + Refresh Token） |
+
+---
+
 ## 文档索引
 
 | 文档                                                                         | 读者                   | 说明                                      |
 | ---------------------------------------------------------------------------- | ---------------------- | ----------------------------------------- |
 | **本文**                                                                     | 全栈 / 后端            | 环境、后端启动、API 约定、测试            |
-| [cakecake-vue/bilibili-vue/README.md](./cakecake-vue/bilibili-vue/README.md) | 前端                   | 安装、环境变量、开发 / 构建               |
+| [cakecake-vue/cakecake-web/README.md](./cakecake-vue/cakecake-web/README.md) | 前端                   | 安装、环境变量、开发 / 构建               |
 | [deploy/DEPLOY.md](./deploy/DEPLOY.md)                                       | 运维                   | 生产部署（Nginx、systemd、OSS、ES）       |
 | [docs/manual-video-ingest.md](./docs/manual-video-ingest.md)                 | 运维                   | 关闭网页上传时，本地 OSS + 手动写库发视频 |
 | [docs/ai-gateway.md](./docs/ai-gateway.md)                                   | 运维                   | AI 助手（DeepSeek）配置                   |
@@ -94,49 +128,17 @@
 ## 仓库结构
 
 ```
-Minibili/
-├── cmd/mini-bili/           # Go 入口
+cakecake/
+├── cmd/cakecake/            # Go 入口
 ├── internal/                # handler / service / worker / ws 等
 ├── configs/                 # sensitive_words.txt、ip2region_v4.xdb
 ├── deploy/                  # Nginx、systemd 模板
-├── go.mod                   # module minibili
+├── go.mod                   # module cakecake
 └── cakecake-vue/
-    └── bilibili-vue/        # Vue 3 + Vite 前端
+    └── cakecake-web/        # Vue 3 + Vite 前端
 ```
 
-`bilibili-vue/go.mod` 与根模块隔离，避免根目录 `go test ./...` 扫到 `node_modules` 内的 Go 文件。
-
----
-
-## 5 分钟本地联调
-
-**1. 后端**（仓库根目录）
-
-```bash
-cp .env.example .env          # 填写 JWT_SECRET、MYSQL_DSN、REDIS_*、RABBITMQ_URL、OSS_* 等
-go mod tidy
-go build -o ./bin/mini-bili ./cmd/mini-bili/
-./bin/mini-bili               # 默认 :8080；健康检查 GET /api/v1/health
-```
-
-MySQL 需先建库（如 `minibili`）；开发环境由 GORM AutoMigrate 自动建表（V1-V19），生产环境（APP_ENV=production）走 goose SQL 迁移（V20+），支持回滚。
-
-**2. 前端**
-
-```bash
-cd cakecake-vue/bilibili-vue
-npm install
-cp .env.example .env.local    # 至少 VITE_MINIBILI_API=true
-npm run dev                   # http://localhost:8888
-```
-
-**3. 验证**
-
-- 首页能打开，接口走 `/api/v1`（Vite 代理到 `127.0.0.1:8080`）
-- 登录 / 注册：`#/minibili/login`、`#/minibili/register`
-- 无效路径或不存在的视频 → `#/404`
-
-前端细节、环境变量说明见 **[bilibili-vue/README.md](./cakecake-vue/bilibili-vue/README.md)**。
+`cakecake-web/go.mod` 与根模块隔离，避免根目录 `go test ./...` 扫到 `node_modules` 内的 Go 文件。
 
 ---
 
@@ -150,7 +152,7 @@ npm run dev                   # http://localhost:8888
 | **Redis**                          | 播放计数、弹幕冷却、Refresh Token 等                                                  |
 | **RabbitMQ**                       | 转码队列（规格要求，不可用 Redis List 替代）                                          |
 | **Elasticsearch**（可选）          | 全文搜索；未配置则搜索页提示未就绪                                                    |
-| **FFmpeg / ffprobe**               | 转码与封面截帧；Windows + Air 建议在`.env` 设 `FFPROBE_PATH` / `FFMPEG_PATH` 绝对路径 |
+| **FFmpeg / ffprobe**               | 转码与封面截帧；Windows + Air 建议在 `.env` 设 `FFPROBE_PATH` / `FFMPEG_PATH` 绝对路径 |
 | **阿里云 OSS**                     | `videos/`、`covers/` 等（见 SPEC）                                                    |
 
 ---
@@ -191,28 +193,24 @@ air    # 在仓库根执行；见 .air.toml，会加载 .env
 ### 前端（Vitest）
 
 ```bash
-cd cakecake-vue/bilibili-vue
-npm run test        # 77 个测试文件，829 个测试用例
+cd cakecake-vue/cakecake-web
+npm run test        # Vitest 全量测试
 npm run test:ui     # Vitest UI 交互界面
-npm run coverage    # 覆盖率报告（~73% 语句覆盖）
+npm run coverage    # 覆盖率报告
 ```
 
 ### 后端（Go test）
 
 ```bash
-go test ./... -count=1
-# 集成测试（需 MySQL/Redis，首次运行时无需数据库种子数据）
-go test -tags=integration ./internal/handler/... -count=1
+go test ./... -count=1                    # 单元测试：SQLite 内存库 + miniredis，无外部依赖
+go test -tags=integration ./... -count=1  # 集成测试；队列用例需 RABBITMQ_URL（未设置则自动跳过）
 ```
 
-> 后端包含 **27 个测试文件**，覆盖 handler / service / ws / pkg 等核心模块。
-> 集成测试使用 SQLite 内存数据库，不依赖外部服务。
+> 后端测试覆盖 handler / service / ws / pkg 等核心模块；单元测试使用 SQLite 内存库与 miniredis，不依赖外部服务。
+> 可选黑盒测试（针对已部署服务，未设 URL 则跳过）：
 
 ```bash
-go test ./... -count=1
-
-# 对已部署服务的黑盒（未设 URL 则 Skip）
-# Linux/macOS: export MINIBILI_TEST_BASE_URL="http://127.0.0.1:8080"
+export CAKECAKE_TEST_BASE_URL="http://127.0.0.1:8080"
 go test -tags=integration ./internal/handler/... -count=1
 ```
 
@@ -220,11 +218,16 @@ go test -tags=integration ./internal/handler/... -count=1
 
 ## 生产部署
 
-见 **[deploy/DEPLOY.md](./deploy/DEPLOY.md)**（静态资源目录常为 `/opt/minibili/www`）。可选 **[GitHub Actions](./.github/workflows/deploy.yml)** 在 push 到 `main` 时自动构建并 SSH 部署（Secrets 见 workflow 注释；公开仓库建议先改为仅 `workflow_dispatch`）。
+见 **[deploy/DEPLOY.md](./deploy/DEPLOY.md)**（静态资源目录常为 `/opt/minibili/www`）。可选 **[GitHub Actions](./.github/workflows/deploy.yml)** 在 CI 通过后经人工审批自动构建并 SSH 部署（Secrets 见 workflow 注释）。
 
 ---
 
-## 其他
+## Contributing
 
-- 勿提交 `.env`、密钥与数据库密码。
-- 实现与 SPEC / Rule 冲突时，以 SPEC / Rule 为准。
+开发规范见 [Rule.md](./Rule.md)，标准操作见 [Skill.md](./Skill.md)；提交前请运行中英文档同步检查：`python scripts/check_en_sync.py --check-sync`。
+
+---
+
+## License
+
+本项目采用 **[PolyForm Noncommercial License 1.0.0](./LICENSE)**：允许个人与教育用途，禁止商业使用。

@@ -1,12 +1,12 @@
 package service
 
 import (
+	"cakecake/internal/model/admin"
+	"cakecake/internal/model/article"
+	"cakecake/internal/model/extra"
+	"cakecake/internal/model/user"
+	"cakecake/internal/model/video"
 	"context"
-	"minibili/internal/model/admin"
-	"minibili/internal/model/article"
-	"minibili/internal/model/extra"
-	"minibili/internal/model/user"
-	"minibili/internal/model/video"
 	"testing"
 	"time"
 

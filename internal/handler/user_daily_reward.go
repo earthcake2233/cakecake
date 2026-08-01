@@ -6,10 +6,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
-	"minibili/internal/errcode"
-	"minibili/internal/middleware"
-	"minibili/internal/pkg/dailyreward"
-	"minibili/internal/pkg/resp"
+	"cakecake/internal/errcode"
+	"cakecake/internal/middleware"
+	"cakecake/internal/pkg/dailyreward"
+	"cakecake/internal/pkg/resp"
 )
 
 // GetMeDailyRewards returns today's daily-reward task state (personal center home).

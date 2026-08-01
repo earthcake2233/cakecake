@@ -1,13 +1,13 @@
 package handler
 
 import (
-	"minibili/internal/model/article"
-	"minibili/internal/model/dm"
-	"minibili/internal/model/dynamic"
+	"cakecake/internal/model/article"
+	"cakecake/internal/model/dm"
+	"cakecake/internal/model/dynamic"
 	"testing"
 	"time"
 
-	"minibili/internal/config"
+	"cakecake/internal/config"
 )
 
 func TestSearchCacheKey_Unit(t *testing.T) {

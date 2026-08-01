@@ -1,7 +1,7 @@
 package config
 
 import (
-	"minibili/internal/model/system"
+	"cakecake/internal/model/system"
 	"testing"
 
 	"github.com/glebarez/sqlite"

@@ -1,16 +1,16 @@
 package service
 
 import (
+	"cakecake/internal/model/user"
+	"cakecake/internal/model/video"
 	"context"
-	"minibili/internal/model/user"
-	"minibili/internal/model/video"
 
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"minibili/internal/pkg/dailyreward"
-	"minibili/internal/pkg/usercoin"
+	"cakecake/internal/pkg/dailyreward"
+	"cakecake/internal/pkg/usercoin"
 )
 
 // EngagementService handles video engagement operations (coin, watch later).

@@ -1,14 +1,14 @@
 package service
 
 import (
+	"cakecake/internal/model/video"
 	"context"
-	"minibili/internal/model/video"
 	"strconv"
 
 	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 
-	"minibili/internal/data"
+	"cakecake/internal/data"
 )
 
 // PlayCounter syncs Redis hot counters with MySQL (SPEC F3).

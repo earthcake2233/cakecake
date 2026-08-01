@@ -1,14 +1,14 @@
 package handler
 
 import (
+	"cakecake/internal/model/admin"
 	"fmt"
-	"minibili/internal/model/admin"
 	"strings"
 
 	"go.uber.org/zap"
 
-	"minibili/internal/config"
-	"minibili/internal/storage"
+	"cakecake/internal/config"
+	"cakecake/internal/storage"
 )
 
 var bannerImageOSSExts = []string{"jpg", "jpeg", "png", "webp", "gif", "bmp"}

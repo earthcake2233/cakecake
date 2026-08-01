@@ -6,9 +6,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"minibili/internal/errcode"
-	"minibili/internal/pkg/jwttoken"
-	"minibili/internal/pkg/resp"
+	"cakecake/internal/errcode"
+	"cakecake/internal/pkg/jwttoken"
+	"cakecake/internal/pkg/resp"
 )
 
 // CtxUserIDKey is the gin context key for JWT user id.

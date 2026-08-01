@@ -1,7 +1,7 @@
 package data
 
 import (
-	"minibili/internal/model/agent"
+	"cakecake/internal/model/agent"
 	"testing"
 
 	"github.com/glebarez/sqlite"

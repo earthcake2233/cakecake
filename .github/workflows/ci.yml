@@ -21,21 +21,21 @@ jobs:
         with:
           node-version: "22"
           cache: npm
-          cache-dependency-path: cakecake-vue/bilibili-vue/package-lock.json
+          cache-dependency-path: cakecake-vue/cakecake-web/package-lock.json
 
       - name: Install dependencies
-        working-directory: cakecake-vue/bilibili-vue
+        working-directory: cakecake-vue/cakecake-web
         run: npm ci
 
       - name: Run tests with coverage
-        working-directory: cakecake-vue/bilibili-vue
+        working-directory: cakecake-vue/cakecake-web
         run: npm run coverage
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5.5.5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          directory: cakecake-vue/bilibili-vue/coverage
+          directory: cakecake-vue/cakecake-web/coverage
           flags: frontend
           name: frontend-coverage
           fail_ci_if_error: true

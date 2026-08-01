@@ -1,7 +1,7 @@
 package userlevel
 
 import (
-	"minibili/internal/model/user"
+	"cakecake/internal/model/user"
 	"testing"
 
 	"github.com/glebarez/sqlite"

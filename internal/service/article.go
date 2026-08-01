@@ -1,19 +1,19 @@
 package service
 
 import (
+	"cakecake/internal/model/article"
+	"cakecake/internal/model/comment"
+	"cakecake/internal/model/extra"
 	"context"
 	"errors"
 	"fmt"
-	"minibili/internal/model/article"
-	"minibili/internal/model/comment"
-	"minibili/internal/model/extra"
 
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"minibili/internal/pkg/dailyreward"
-	"minibili/internal/pkg/usercoin"
+	"cakecake/internal/pkg/dailyreward"
+	"cakecake/internal/pkg/usercoin"
 )
 
 // ArticleService handles article business logic.

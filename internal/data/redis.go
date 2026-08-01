@@ -7,7 +7,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
-	"minibili/internal/config"
+	"cakecake/internal/config"
 )
 
 // NewRedis creates a Redis client with explicit timeouts (Rule R-DEV-5).

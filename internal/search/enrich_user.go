@@ -1,15 +1,15 @@
 package search
 
 import (
-	"minibili/internal/model/article"
-	"minibili/internal/model/user"
-	"minibili/internal/model/video"
+	"cakecake/internal/model/article"
+	"cakecake/internal/model/user"
+	"cakecake/internal/model/video"
 	"strings"
 
 	"gorm.io/gorm"
 
-	"minibili/internal/pkg/useravatar"
-	"minibili/internal/pkg/userlevel"
+	"cakecake/internal/pkg/useravatar"
+	"cakecake/internal/pkg/userlevel"
 )
 
 // EnrichUserHits fills profile stats, follow state, and recent archives from MySQL.

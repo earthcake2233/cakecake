@@ -1,13 +1,13 @@
 package handler
 
 import (
-	"minibili/internal/model/dynamic"
+	"cakecake/internal/model/dynamic"
 	"strings"
 
 	"go.uber.org/zap"
 
-	"minibili/internal/config"
-	"minibili/internal/storage"
+	"cakecake/internal/config"
+	"cakecake/internal/storage"
 )
 
 func dynamicOSSObjectKeys(cfg *config.C, dyn dynamic.UserDynamic) []string {

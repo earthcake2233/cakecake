@@ -1,7 +1,7 @@
 package handler
 
 import (
-	"minibili/internal/model/dm"
+	"cakecake/internal/model/dm"
 	"net/http"
 	"sort"
 	"strconv"
@@ -11,11 +11,11 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"minibili/internal/errcode"
-	"minibili/internal/middleware"
+	"cakecake/internal/errcode"
+	"cakecake/internal/middleware"
 
+	"cakecake/internal/pkg/resp"
 	"context"
-	"minibili/internal/pkg/resp"
 )
 
 const dmMaxContentRunes = 500

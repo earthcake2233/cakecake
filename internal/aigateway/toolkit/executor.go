@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"minibili/internal/aigateway"
+	"cakecake/internal/aigateway"
 )
 
 // Executor runs a tool call and returns a result string.

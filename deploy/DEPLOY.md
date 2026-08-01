@@ -12,7 +12,7 @@
   </a>
 </p>
 
-# Minibili 生产部署指南（阿里云 CentOS 7）
+# cakecake 生产部署指南（阿里云 CentOS 7）
 
 面向 **个人站 / 面试演示 / 小流量**。默认架构：
 
@@ -30,7 +30,7 @@
 graph TD
     Browser[浏览器]
     Nginx["Nginx<br/>(/opt/minibili/www 静态 + 反代 /api)"]
-    App["mini-bili :8080<br/>(仅本机监听)"]
+    App["cakecake :8080<br/>(仅本机监听)"]
     MySQL["(MySQL :3306)"]
     Redis["(Redis :6379)"]
     RMQ["(RabbitMQ :5672)<br/>转码队列"]
@@ -68,7 +68,7 @@ graph TD
 
 **Windows (PowerShell):**
 ```powershell
-cd D:\Minibili\cakecake-vue\bilibili-vue
+cd D:\cakecake\cakecake-vue\bilibili-vue
 npm install
 copy .env.production.example .env.production
 npm run build
@@ -76,7 +76,7 @@ npm run build
 
 **Linux / macOS:**
 ```bash
-cd cakecake-vue/bilibili-vue
+cd cakecake-vue/cakecake-web
 npm install
 cp .env.production.example .env.production
 npm run build
@@ -99,19 +99,19 @@ CentOS 7 无需安装 Go，只上传 Linux 二进制即可。
 
 **Windows (PowerShell):**
 ```powershell
-cd D:\Minibili
+cd D:\cakecake
 $env:GOPATH="C:\gopath-empty"
 $env:GO111MODULE="on"
 $env:GOOS="linux"
 $env:GOARCH="amd64"
-go build -ldflags="-s -w" -o mini-bili-linux .\cmd\mini-bili
+go build -ldflags="-s -w" -o cakecake-linux .\cmd\cakecake
 ```
 
 **Linux / macOS:**
 ```bash
 cd /path/to/minibili
 GOPATH=/tmp/gopath-empty GO111MODULE=on GOOS=linux GOARCH=amd64 \
-  go build -ldflags="-s -w" -o mini-bili-linux ./cmd/mini-bili
+  go build -ldflags="-s -w" -o cakecake-linux ./cmd/cakecake
 ```
 
 **Cross-platform (requires GNU Make):**
@@ -121,7 +121,7 @@ make build-linux
 
 **关键：交叉编译后先验证二进制格式再上传：**
 ```bash
-file mini-bili-linux
+file cakecake-linux
 # 应显示: ELF 64-bit LSB executable, x86-64 ... for GNU/Linux
 # 若显示 PE32+，说明交叉编译失败，参见 incident-20260725-502.md
 ```
@@ -148,8 +148,8 @@ sudo chown -R "$USER:$USER" /opt/minibili
 从本机上传示例（按你的 IP 修改）：
 
 ```bash
-scp mini-bili-linux user@你的ECSIP:/opt/minibili/bin/mini-bili
-scp -r cakecake-vue/bilibili-vue/dist/* user@你的ECSIP:/opt/minibili/www/
+scp cakecake-linux user@你的ECSIP:/opt/minibili/bin/mini-bili
+scp -r cakecake-vue/cakecake-web/dist/* user@你的ECSIP:/opt/minibili/www/
 scp -r configs user@你的ECSIP:/opt/minibili/
 scp deploy/env.production.example user@你的ECSIP:/opt/minibili/.env
 ```
@@ -234,7 +234,7 @@ sudo systemctl enable nginx
 复制本仓库配置：
 
 ```bash
-sudo cp /path/to/Minibili/deploy/nginx-minibili.conf /etc/nginx/conf.d/minibili.conf
+sudo cp /path/to/cakecake/deploy/nginx-minibili.conf /etc/nginx/conf.d/minibili.conf
 # 编辑 server_name、root 路径
 sudo nginx -t && sudo systemctl reload nginx
 ```
@@ -312,7 +312,7 @@ ELASTICSEARCH_PASSWORD=你的密码
 ## 九、systemd 守护进程
 
 ```bash
-sudo cp /path/to/Minibili/deploy/minibili.service /etc/systemd/system/minibili.service
+sudo cp /path/to/cakecake/deploy/minibili.service /etc/systemd/system/minibili.service
 sudo systemctl daemon-reload
 sudo systemctl enable minibili --now
 sudo systemctl status minibili

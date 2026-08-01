@@ -1,14 +1,14 @@
 package dailyreward
 
 import (
-	"minibili/internal/model/extra"
-	"minibili/internal/model/user"
-	"minibili/internal/model/video"
+	"cakecake/internal/model/extra"
+	"cakecake/internal/model/user"
+	"cakecake/internal/model/video"
 	"time"
 
 	"gorm.io/gorm"
 
-	"minibili/internal/pkg/usercoin"
+	"cakecake/internal/pkg/usercoin"
 )
 
 const (

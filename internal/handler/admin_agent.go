@@ -1,10 +1,10 @@
 package handler
 
 import (
+	"cakecake/internal/model/agent"
 	"encoding/json"
 	"fmt"
 	"mime/multipart"
-	"minibili/internal/model/agent"
 	"net/http"
 	"strconv"
 	"strings"
@@ -14,10 +14,10 @@ import (
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 
-	"minibili/internal/data"
-	"minibili/internal/errcode"
-	"minibili/internal/pkg/coverval"
-	"minibili/internal/pkg/resp"
+	"cakecake/internal/data"
+	"cakecake/internal/errcode"
+	"cakecake/internal/pkg/coverval"
+	"cakecake/internal/pkg/resp"
 )
 
 func (a *API) adminAgentMeta() gin.H {

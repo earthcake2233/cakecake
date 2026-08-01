@@ -11,8 +11,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"minibili/internal/model/article"
-	"minibili/internal/model/video"
+	"cakecake/internal/model/article"
+	"cakecake/internal/model/video"
 )
 
 // userDocStatusActive is the search-document status for normal (non-deleted) users.

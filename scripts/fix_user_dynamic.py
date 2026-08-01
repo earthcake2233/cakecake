@@ -1,5 +1,5 @@
 import re
-with open('D:\\\Minibili\\\internal\\\handler\\\user_dynamic.go', 'r', encoding='utf-8') as f:
+with open('D:\\\cakecake\\\internal\\\handler\\\user_dynamic.go', 'r', encoding='utf-8') as f:
     c = f.read()
 
 # Change 1: Replace user lookup at line ~91
@@ -14,7 +14,7 @@ c = c.replace(
     'var u model.User\n\tuPtr, err := a.UserSvc.GetUserPublic(c.Request.Context(), uid)\n\tif err != nil || uPtr == nil {\n\t\tresp.Err(c, http.StatusNotFound, errcode.CodeNotFound)\n\t\treturn\n\t}\n\tu.ID = uPtr.ID\n\tu.Username = uPtr.Username\n\tu.AvatarURL = uPtr.AvatarURL'
 )
 
-with open('D:\\\Minibili\\\internal\\\handler\\\user_dynamic.go', 'w', encoding='utf-8') as f:
+with open('D:\\\cakecake\\\internal\\\handler\\\user_dynamic.go', 'w', encoding='utf-8') as f:
     f.write(c)
 print('done')
 

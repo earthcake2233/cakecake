@@ -1,13 +1,13 @@
 package data
 
 import (
+	"cakecake/internal/model/extra"
 	"fmt"
-	"minibili/internal/model/extra"
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"minibili/internal/pkg/searchhist"
+	"cakecake/internal/pkg/searchhist"
 )
 
 // migrateUserSearchHistory applies schema, dedupes rows, then adds the unique (user_id, keyword_norm) index.

@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"minibili/internal/config"
+	"cakecake/internal/config"
 )
 
 func newMockESServer(t *testing.T, handler func(w http.ResponseWriter, r *http.Request)) *httptest.Server {

@@ -1,8 +1,8 @@
 package data
 
 import (
-	"minibili/internal/model/agent"
-	"minibili/internal/model/user"
+	"cakecake/internal/model/agent"
+	"cakecake/internal/model/user"
 	"strings"
 	"testing"
 

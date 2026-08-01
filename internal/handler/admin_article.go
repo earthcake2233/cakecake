@@ -1,9 +1,9 @@
 package handler
 
 import (
+	"cakecake/internal/model/article"
+	"cakecake/internal/model/user"
 	"context"
-	"minibili/internal/model/article"
-	"minibili/internal/model/user"
 	"net/http"
 	"strconv"
 	"strings"
@@ -13,11 +13,11 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"minibili/internal/errcode"
-	"minibili/internal/middleware"
-	"minibili/internal/pkg/markdown"
-	"minibili/internal/pkg/resp"
-	"minibili/internal/service"
+	"cakecake/internal/errcode"
+	"cakecake/internal/middleware"
+	"cakecake/internal/pkg/markdown"
+	"cakecake/internal/pkg/resp"
+	"cakecake/internal/service"
 )
 
 func adminArticleStatusFilter(q string) []string {

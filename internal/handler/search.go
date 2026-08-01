@@ -13,10 +13,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
-	"minibili/internal/errcode"
-	"minibili/internal/middleware"
-	"minibili/internal/pkg/resp"
-	"minibili/internal/search"
+	"cakecake/internal/errcode"
+	"cakecake/internal/middleware"
+	"cakecake/internal/pkg/resp"
+	"cakecake/internal/search"
 )
 
 // hotRecordReq is a fire-and-forget hot search record request.

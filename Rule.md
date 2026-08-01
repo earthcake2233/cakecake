@@ -12,11 +12,11 @@
   </a>
 </p>
 
-## Mini-Bili v1.0 工程规则（Rule）
+## cakecake v1.0 工程规则（Rule）
 
 **版本**：v1.0
 **最后更新**：2026-08-01
-**依赖文档**：Mini-Bili v1.0 SPEC
+**依赖文档**：cakecake v1.0 SPEC
 
 
 ### 关于 Rule 的说明
@@ -34,7 +34,7 @@
 
 | 编号       | 规则                               | 说明                                                                                                                                                                                              |
 | :--------- | :--------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **R-DB-1** | **严禁硬编码敏感信息**             | 数据库连接字符串、OSS 密钥（Bucket`mini-bili`）、JWT Secret、RabbitMQ 连接信息、敏感词库路径等敏感配置，必须通过环境变量读取，环境变量缺失时从配置文件读取。严禁直接写在代码中。                  |
+| **R-DB-1** | **严禁硬编码敏感信息**             | 数据库连接字符串、OSS 密钥（Bucket`cakecake`）、JWT Secret、RabbitMQ 连接信息、敏感词库路径等敏感配置，必须通过环境变量读取，环境变量缺失时从配置文件读取。严禁直接写在代码中。                  |
 | **R-DB-2** | **严禁拼接 SQL**                   | 所有数据库查询必须使用 GORM 的参数化查询或`db.Where()` 等安全方法，严禁使用 `db.Raw()` 拼接用户输入。                                                                                             |
 | **R-DB-3** | **数据库结构变更必须通过迁移脚本** | 所有`CREATE TABLE`、`ALTER TABLE` 等操作必须通过迁移系统执行。V1–V19 由 GORM AutoMigrate（`RegisteredMigrations()`）管理，V20+ 通过 goose SQL 迁移文件（`migrations/` 目录）管理。严禁在业务代码中直接建表或手动修改线上数据库。                                                 |
 | **R-DB-4** | **核心查询字段必须建立索引**       | 以下字段在对应的数据库表中**必须**显式声明索引：- `play_count`（视频播放量，用于排序）- `created_at`（创建时间，用于排序）- `user_id`（用户ID，用于关联查询）- `video_id`（视频ID，用于关联查询） |
@@ -252,7 +252,7 @@
 | :--- | :--- | :--- |
 | **R-BUILD-1** | **跨平台编译必须走 Makefile** | 禁止手动在 PowerShell 逐条执行 $env:GOOS=linux + go build。必须统一使用 make build-linux，确保 GOCACHE/GOTMPDIR 环境变量被正确导出到 D 盘，防止写满 C 盘。 |
 | **R-BUILD-2** | **每次编译后必须清理 Go 缓存** | uild-linux target 的 recipe 末尾已内置 python scripts/clean_go_cache.py，自动删除 C 盘 Temp 下所有 go-*/gc-*/gm-* 目录以及 AppData\\Local\\go-build。开发者新增其他编译 target 时也必须手动调用本脚本。 |
-| **R-BUILD-3** | **禁止在 C 盘残留编译缓存** | GOCACHE 和 GOTMPDIR 必须指向 D 盘（当前设为 D:\\Minibili\\.gocache 和 D:\\Minibili\\.gotmp），这两条路径已在 .gitignore 中忽略。如果需要在本地临时改路径，改完后必须 python scripts/clean_go_cache.py --local-only 清理。 |
+| **R-BUILD-3** | **禁止在 C 盘残留编译缓存** | GOCACHE 和 GOTMPDIR 必须指向 D 盘（当前设为 D:\\cakecake\\.gocache 和 D:\\cakecake\\.gotmp），这两条路径已在 .gitignore 中忽略。如果需要在本地临时改路径，改完后必须 python scripts/clean_go_cache.py --local-only 清理。 |
 
 
 

@@ -1,15 +1,15 @@
 package handler
 
 import (
+	"cakecake/internal/model/article"
 	"fmt"
-	"minibili/internal/model/article"
 	"regexp"
 	"strings"
 
 	"go.uber.org/zap"
 
-	"minibili/internal/config"
-	"minibili/internal/storage"
+	"cakecake/internal/config"
+	"cakecake/internal/storage"
 )
 
 var articleCoverOSSExts = []string{"jpg", "jpeg", "png", "webp", "gif", "bmp"}

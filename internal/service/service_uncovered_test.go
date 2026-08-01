@@ -1,8 +1,8 @@
 package service
 
 import (
+	"cakecake/internal/model/admin"
 	"context"
-	"minibili/internal/model/admin"
 	"testing"
 
 	"github.com/alicebob/miniredis/v2"
@@ -12,7 +12,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"minibili/internal/ws"
+	"cakecake/internal/ws"
 )
 
 // ---------- DanmakuRelay ----------

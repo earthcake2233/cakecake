@@ -12,11 +12,11 @@
   </a>
 </p>
 
-# Minibili AI 网关（消息中心助手）
+# cakecake AI 网关（消息中心助手）
 
 ## 功能
 
-- 每位登录用户在「我的消息」中自动拥有与 **Minibili AI** 的固定会话（`kind=agent`）。
+- 每位登录用户在「我的消息」中自动拥有与 **cakecake AI** 的固定会话（`kind=agent`）。
 - 用户消息走现有 `POST /api/v1/dm/conversations/:id/messages`；服务端异步调用 **DeepSeek**，助手回复落库后经 **WebSocket**（`/api/v1/ws/chat`）推送。
 - 短期上下文保存在 **Redis**（`mb:agent:hist:{conversationId}`），日配额 `mb:agent:quota:{userId}:{date}`。
 

@@ -10,7 +10,7 @@ import (
 	"github.com/elastic/elastic-transport-go/v8/elastictransport"
 	"github.com/elastic/go-elasticsearch/v8"
 
-	"minibili/internal/config"
+	"cakecake/internal/config"
 )
 
 // openSearchCompatInterceptor adapts go-elasticsearch/v8 for OpenSearch / Bonsai:
@@ -44,7 +44,7 @@ func stripElasticsearchCompatHeaders(h http.Header) {
 	}
 }
 
-// Client wraps the Elasticsearch HTTP API for Mini-Bili search indices.
+// Client wraps the Elasticsearch HTTP API for cakecake search indices.
 type Client struct {
 	es *elasticsearch.Client
 }

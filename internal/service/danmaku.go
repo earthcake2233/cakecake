@@ -1,10 +1,10 @@
 package service
 
 import (
+	"cakecake/internal/model/danmaku"
+	"cakecake/internal/model/user"
+	"cakecake/internal/model/video"
 	"context"
-	"minibili/internal/model/danmaku"
-	"minibili/internal/model/user"
-	"minibili/internal/model/video"
 	"time"
 	"unicode/utf8"
 
@@ -12,8 +12,8 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"minibili/internal/data"
-	"minibili/internal/pkg/sensitive"
+	"cakecake/internal/data"
+	"cakecake/internal/pkg/sensitive"
 )
 
 // DanmakuService handles danmaku business logic.

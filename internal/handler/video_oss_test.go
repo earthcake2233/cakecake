@@ -1,10 +1,10 @@
 package handler
 
 import (
-	"minibili/internal/model/video"
+	"cakecake/internal/model/video"
 	"testing"
 
-	"minibili/internal/config"
+	"cakecake/internal/config"
 )
 
 func TestVideoOSSObjectKeys(t *testing.T) {

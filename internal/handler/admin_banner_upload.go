@@ -13,9 +13,9 @@ import (
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 
-	"minibili/internal/errcode"
-	"minibili/internal/pkg/coverval"
-	"minibili/internal/pkg/resp"
+	"cakecake/internal/errcode"
+	"cakecake/internal/pkg/coverval"
+	"cakecake/internal/pkg/resp"
 )
 
 func (a *API) uploadBannerImageToOSS(fh *multipart.FileHeader, objectKey string) (string, int) {

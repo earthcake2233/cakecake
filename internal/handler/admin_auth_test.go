@@ -1,14 +1,14 @@
 package handler
 
 import (
-	"minibili/internal/model/admin"
+	"cakecake/internal/model/admin"
 	"time"
 
 	"bytes"
+	"cakecake/internal/config"
 	"encoding/json"
 	"github.com/alicebob/miniredis/v2"
 	"github.com/redis/go-redis/v9"
-	"minibili/internal/config"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -20,10 +20,10 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 
-	"minibili/internal/data"
-	"minibili/internal/pkg/jwttoken"
-	"minibili/internal/service"
-	"minibili/internal/ws"
+	"cakecake/internal/data"
+	"cakecake/internal/pkg/jwttoken"
+	"cakecake/internal/service"
+	"cakecake/internal/ws"
 )
 
 func seedAdminUser(t *testing.T, db *gorm.DB, username, password string) *admin.Admin {

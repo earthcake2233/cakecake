@@ -1,13 +1,13 @@
 package service
 
 import (
+	"cakecake/internal/model/agent"
+	"cakecake/internal/model/dm"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"minibili/internal/model/agent"
-	"minibili/internal/model/dm"
 	"strings"
 	"sync"
 	"time"
@@ -17,12 +17,12 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"minibili/internal/aigateway"
-	"minibili/internal/aigateway/toolkit"
-	"minibili/internal/config"
-	"minibili/internal/data"
-	"minibili/internal/pkg/sensitive"
-	"minibili/internal/ws"
+	"cakecake/internal/aigateway"
+	"cakecake/internal/aigateway/toolkit"
+	"cakecake/internal/config"
+	"cakecake/internal/data"
+	"cakecake/internal/pkg/sensitive"
+	"cakecake/internal/ws"
 )
 
 // AgentService runs AI assistant replies for agent DM threads.

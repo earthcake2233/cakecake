@@ -1,14 +1,14 @@
 package handler
 
 import (
-	"minibili/internal/model/user"
+	"cakecake/internal/model/user"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 
-	"minibili/internal/errcode"
-	"minibili/internal/middleware"
-	"minibili/internal/pkg/resp"
+	"cakecake/internal/errcode"
+	"cakecake/internal/middleware"
+	"cakecake/internal/pkg/resp"
 )
 
 type spacePrivacyPayload struct {

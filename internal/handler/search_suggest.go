@@ -8,10 +8,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"minibili/internal/errcode"
-	"minibili/internal/middleware"
-	"minibili/internal/pkg/resp"
-	"minibili/internal/search"
+	"cakecake/internal/errcode"
+	"cakecake/internal/middleware"
+	"cakecake/internal/pkg/resp"
+	"cakecake/internal/search"
 )
 
 // SearchSuggest GET /api/v1/search/suggest?term=xxx&limit=10

@@ -1,4 +1,4 @@
-module minibili
+module cakecake
 
 go 1.25.7
 

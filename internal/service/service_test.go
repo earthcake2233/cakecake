@@ -1,7 +1,7 @@
 package service
 
 import (
-	"minibili/internal/model/admin"
+	"cakecake/internal/model/admin"
 	"strings"
 	"testing"
 	"time"

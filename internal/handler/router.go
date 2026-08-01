@@ -5,9 +5,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"minibili/internal/logger"
-	"minibili/internal/middleware"
-	"minibili/internal/pkg/jwttoken"
+	"cakecake/internal/logger"
+	"cakecake/internal/middleware"
+	"cakecake/internal/pkg/jwttoken"
 )
 
 // RegisterRoutes wires HTTP and WebSocket routes.

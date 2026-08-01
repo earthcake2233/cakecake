@@ -3,10 +3,10 @@
 package handler
 
 import (
+	"cakecake/internal/model/comment"
+	"cakecake/internal/model/dynamic"
 	"encoding/json"
 	"fmt"
-	"minibili/internal/model/comment"
-	"minibili/internal/model/dynamic"
 	"net/http/httptest"
 	"strconv"
 	"testing"

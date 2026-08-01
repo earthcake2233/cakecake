@@ -1,5 +1,5 @@
 #!/bin/sh
-# Minibili local pre-commit gate. Installed via: make install-hooks
+# cakecake local pre-commit gate. Installed via: make install-hooks
 # Runs the repo's check_pre_commit.py (BOM, go vet, gofmt, doc dates,
 # sensitive scan, CN/EN doc sync). Blocking issues stop the commit.
 ROOT=$(git rev-parse --show-toplevel)

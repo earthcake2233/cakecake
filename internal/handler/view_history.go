@@ -1,11 +1,11 @@
 package handler
 
 import (
+	"cakecake/internal/model/article"
+	"cakecake/internal/model/extra"
+	"cakecake/internal/model/user"
+	vmodel "cakecake/internal/model/video"
 	"context"
-	"minibili/internal/model/article"
-	"minibili/internal/model/extra"
-	"minibili/internal/model/user"
-	vmodel "minibili/internal/model/video"
 	"net/http"
 	"sort"
 	"strconv"
@@ -15,9 +15,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
-	"minibili/internal/errcode"
-	"minibili/internal/middleware"
-	"minibili/internal/pkg/resp"
+	"cakecake/internal/errcode"
+	"cakecake/internal/middleware"
+	"cakecake/internal/pkg/resp"
 )
 
 const viewHistoryMaxItems = 500

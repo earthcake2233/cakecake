@@ -12,7 +12,7 @@
   </a>
 </p>
 
-# Minibili Production Deployment Guide (Alibaba Cloud CentOS 7)
+# cakecake Production Deployment Guide (Alibaba Cloud CentOS 7)
 
 Targeted at **personal site / interview demo / low traffic**. Default architecture:
 
@@ -30,7 +30,7 @@ Targeted at **personal site / interview demo / low traffic**. Default architectu
 graph TD
     Browser[Browser]
     Nginx["Nginx<br/>(/opt/minibili/www static + reverse proxy /api)"]
-    App["mini-bili :8080<br/>(localhost only)"]
+    App["cakecake :8080<br/>(localhost only)"]
     MySQL["(MySQL :3306)"]
     Redis["(Redis :6379)"]
     RMQ["(RabbitMQ :5672)<br/>transcode queue"]
@@ -68,7 +68,7 @@ The project frontend uses **Vite 6 + Vue 3**, requiring **Node.js 18+** (recomme
 
 **Windows (PowerShell):**
 ```powershell
-cd D:\Minibili\cakecake-vue\bilibili-vue
+cd D:\cakecake\cakecake-vue\bilibili-vue
 npm install
 copy .env.production.example .env.production
 npm run build
@@ -76,7 +76,7 @@ npm run build
 
 **Linux / macOS:**
 ```bash
-cd cakecake-vue/bilibili-vue
+cd cakecake-vue/cakecake-web
 npm install
 cp .env.production.example .env.production
 npm run build
@@ -99,18 +99,18 @@ CentOS 7 doesn't need Go installed -- only upload the Linux binary.
 
 **Windows (PowerShell):**
 ```powershell
-cd D:\Minibili
+cd D:\cakecake
 $env:GOPATH="C:\gopath-empty"
 $env:GO111MODULE="on"
 $env:GOOS="linux"
 $env:GOARCH="amd64"
-go build -ldflags="-s -w" -o mini-bili-linux .\cmd\mini-bili
+go build -ldflags="-s -w" -o cakecake-linux .\cmd\cakecake
 ```
 
 **Linux / macOS:**
 ```bash
 cd /path/to/minibili
-GOPATH=/tmp/gopath-empty GO111MODULE=on GOOS=linux GOARCH=amd64   go build -ldflags="-s -w" -o mini-bili-linux ./cmd/mini-bili
+GOPATH=/tmp/gopath-empty GO111MODULE=on GOOS=linux GOARCH=amd64   go build -ldflags="-s -w" -o cakecake-linux ./cmd/cakecake
 ```
 
 **Cross-platform (requires GNU Make, recommended):**
@@ -122,7 +122,7 @@ Upload to server: `/opt/minibili/bin/mini-bili`, and `chmod +x`.
 
 **CRITICAL: After cross-compiling, verify binary format before upload:**
 ```bash
-file mini-bili-linux
+file cakecake-linux
 # Must show: ELF 64-bit LSB executable, x86-64 ... for GNU/Linux
 # If it shows PE32+, the cross-compilation failed -- see incident-20260725-502.md
 ```
@@ -151,8 +151,8 @@ sudo chown -R "$USER:$USER" /opt/minibili
 Upload examples (modify with your IP):
 
 ```bash
-scp mini-bili-linux user@your-ecs-ip:/opt/minibili/bin/mini-bili
-scp -r cakecake-vue/bilibili-vue/dist/* user@your-ecs-ip:/opt/minibili/www/
+scp cakecake-linux user@your-ecs-ip:/opt/minibili/bin/mini-bili
+scp -r cakecake-vue/cakecake-web/dist/* user@your-ecs-ip:/opt/minibili/www/
 scp -r configs user@your-ecs-ip:/opt/minibili/
 scp deploy/env.production.example user@your-ecs-ip:/opt/minibili/.env
 ```
@@ -237,7 +237,7 @@ sudo systemctl enable nginx
 Copy this repo's config:
 
 ```bash
-sudo cp /path/to/Minibili/deploy/nginx-minibili.conf /etc/nginx/conf.d/minibili.conf
+sudo cp /path/to/cakecake/deploy/nginx-minibili.conf /etc/nginx/conf.d/minibili.conf
 # Edit server_name, root path
 sudo nginx -t && sudo systemctl reload nginx
 ```
@@ -308,7 +308,7 @@ ELASTICSEARCH_PASSWORD=your-password
 ## 9. systemd Service
 
 ```bash
-sudo cp /path/to/Minibili/deploy/minibili.service /etc/systemd/system/minibili.service
+sudo cp /path/to/cakecake/deploy/minibili.service /etc/systemd/system/minibili.service
 sudo systemctl daemon-reload
 sudo systemctl enable minibili --now
 sudo systemctl status minibili

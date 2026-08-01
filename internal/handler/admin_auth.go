@@ -10,11 +10,11 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/crypto/bcrypt"
 
-	"minibili/internal/data"
-	"minibili/internal/errcode"
-	"minibili/internal/middleware"
-	"minibili/internal/model/admin"
-	"minibili/internal/pkg/resp"
+	"cakecake/internal/data"
+	"cakecake/internal/errcode"
+	"cakecake/internal/middleware"
+	"cakecake/internal/model/admin"
+	"cakecake/internal/pkg/resp"
 )
 
 type adminLoginReq struct {

@@ -4,12 +4,12 @@ package handler
 
 import (
 	"bytes"
+	"cakecake/internal/model/article"
+	"cakecake/internal/model/comment"
+	"cakecake/internal/model/user"
+	"cakecake/internal/model/video"
 	"encoding/json"
 	"fmt"
-	"minibili/internal/model/article"
-	"minibili/internal/model/comment"
-	"minibili/internal/model/user"
-	"minibili/internal/model/video"
 	"net/http"
 	"net/http/httptest"
 	"testing"

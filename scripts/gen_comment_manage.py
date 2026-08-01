@@ -2,7 +2,7 @@
 import json
 from pathlib import Path
 
-TARGET = Path(__file__).resolve().parents[1] / "cakecake-vue/bilibili-vue/src/pages/upload/commentManage.vue"
+TARGET = Path(__file__).resolve().parents[1] / "cakecake-vue/cakecake-web/src/pages/upload/commentManage.vue"
 
 S = {
     "tab_visible": "\u7528\u6237\u53ef\u89c1\u8bc4\u8bba",
@@ -29,7 +29,7 @@ S = {
     "reply": "\u56de\u590d",
     "empty": "\u6682\u65e0\u8bc4\u8bba",
     "empty_pending": "\u8fd8\u6ca1\u6709\u8bc4\u8bba\u54e6~",
-    "empty_hint": "\u8bf7\u5f00\u542f Mini-Bili \u6a21\u5f0f\u5e76\u767b\u5f55\u540e\u67e5\u770b",
+    "empty_hint": "\u8bf7\u5f00\u542f cakecake \u6a21\u5f0f\u5e76\u767b\u5f55\u540e\u67e5\u770b",
     "foot_note": "\u4ec5\u5c55\u793a\u6700\u8fd1\u768450000\u6761\u8bc4\u8bba",
     "prev": "\u4e0a\u4e00\u9875",
     "next": "\u4e0b\u4e00\u9875",
@@ -471,7 +471,7 @@ import { getAccessToken } from "@/utils/authTokens";
 import { formatVideoBvid } from "@/utils/videoBvid";
 import { minibiliUserSpaceRoute } from "@/utils/minibiliRoutes";
 
-const isMinibiliMode =
+const iscakecakeMode =
   import.meta.env.VITE_MINIBILI_API === "true" ||
   import.meta.env.VITE_MINIBILI_API === "1";
 
@@ -539,8 +539,8 @@ export default {
       minibiliMe: (s) => s.minibiliMe,
       proInfo: (s) => s.proInfo
     }),
-    isMinibiliMode() {
-      return isMinibiliMode;
+    iscakecakeMode() {
+      return iscakecakeMode;
     },
     selfAvatarSrc() {
       void this.minibiliMe;
@@ -573,12 +573,12 @@ export default {
     showEmpty() {
       if (this.loadError) return false;
       if (this.loading && this.showListArea) return false;
-      if (!this.isMinibiliMode) return true;
+      if (!this.iscakecakeMode) return true;
       if (this.mediaTab !== "video") return true;
       return !this.rows.length;
     },
     emptyUseImage() {
-      if (!this.isMinibiliMode) return false;
+      if (!this.iscakecakeMode) return false;
       return (
         this.mediaTab === "article" ||
         this.mediaTab === "dynamic" ||
@@ -586,7 +586,7 @@ export default {
       );
     },
     emptyText() {
-      if (!this.isMinibiliMode) return \"""",
+      if (!this.iscakecakeMode) return \"""",
     S["empty_hint"],
     """\";
       if (this.primaryTab === "pending") return \"""",
@@ -627,7 +627,7 @@ export default {
     }
   },
   mounted() {
-    if (this.isMinibiliMode && getAccessToken()) {
+    if (this.iscakecakeMode && getAccessToken()) {
       void this.loadVideos();
       void this.fetchList();
     }
@@ -817,7 +817,7 @@ export default {
       }
     },
     async fetchList() {
-      if (!this.showListArea || !this.isMinibiliMode || !getAccessToken()) return;
+      if (!this.showListArea || !this.iscakecakeMode || !getAccessToken()) return;
       this.loading = true;
       this.loadError = "";
       try {

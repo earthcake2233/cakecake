@@ -5,16 +5,16 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"minibili/internal/config"
-	"minibili/internal/middleware"
-	"minibili/internal/pkg/iplocate"
-	"minibili/internal/pkg/jwttoken"
-	"minibili/internal/pkg/sensitive"
-	"minibili/internal/queue"
-	"minibili/internal/search"
-	"minibili/internal/service"
-	"minibili/internal/storage"
-	"minibili/internal/ws"
+	"cakecake/internal/config"
+	"cakecake/internal/middleware"
+	"cakecake/internal/pkg/iplocate"
+	"cakecake/internal/pkg/jwttoken"
+	"cakecake/internal/pkg/sensitive"
+	"cakecake/internal/queue"
+	"cakecake/internal/search"
+	"cakecake/internal/service"
+	"cakecake/internal/storage"
+	"cakecake/internal/ws"
 )
 
 // Dependencies are shared across HTTP handlers.

@@ -4,11 +4,11 @@
 package handler
 
 import (
+	"cakecake/internal/model/article"
+	"cakecake/internal/model/dynamic"
+	"cakecake/internal/model/notification"
 	"encoding/json"
 	"fmt"
-	"minibili/internal/model/article"
-	"minibili/internal/model/dynamic"
-	"minibili/internal/model/notification"
 	"testing"
 	"time"
 

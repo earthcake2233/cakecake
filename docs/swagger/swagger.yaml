@@ -4,12 +4,12 @@ info:
   contact:
     name: earthcake2233
     url: https://github.com/earthcake2233
-  description: Mini-Bili - 轻量级弹幕视频分享平台后端 API
+  description: cakecake - 轻量级弹幕视频分享平台后端 API
   license:
     name: Custom Non-Commercial License
     url: https://github.com/earthcake2233/cakecake/blob/main/LICENSE
   termsOfService: https://github.com/earthcake2233/cakecake/blob/main/LICENSE
-  title: Mini-Bili API
+  title: cakecake API
   version: "1.0"
 paths:
   /api/v1/ws/danmaku:

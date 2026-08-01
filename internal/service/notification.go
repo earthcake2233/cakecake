@@ -1,12 +1,12 @@
 package service
 
 import (
+	"cakecake/internal/model/comment"
+	"cakecake/internal/model/notification"
+	"cakecake/internal/model/user"
 	"context"
 	"encoding/json"
 	"fmt"
-	"minibili/internal/model/comment"
-	"minibili/internal/model/notification"
-	"minibili/internal/model/user"
 
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"

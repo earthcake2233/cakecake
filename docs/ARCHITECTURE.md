@@ -47,8 +47,8 @@ graph TB
 ## 项目结构
 
 ```
-Minibili/
-├── cmd/mini-bili/main.go        # 入口：加载配置、初始化 DB、注册路由
+cakecake/
+├── cmd/cakecake/main.go        # 入口：加载配置、初始化 DB、注册路由
 ├── internal/
 │   ├── handler/                  # HTTP + WebSocket 处理器
 │   ├── service/                  # 业务逻辑层
@@ -68,7 +68,7 @@ Minibili/
 ├── configs/                      # sensitive_words.txt、ip2region_v4.xdb
 ├── deploy/                       # Nginx 配置、systemd unit、生产环境变量模板
 ├── docs/                         # 截图与指南
-├── cakecake-vue/bilibili-vue/    # Vue 3 + Vite + TypeScript 前端
+├── cakecake-vue/cakecake-web/    # Vue 3 + Vite + TypeScript 前端
 └── go.mod                        # module minibili
 ```
 

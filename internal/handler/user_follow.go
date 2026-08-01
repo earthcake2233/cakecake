@@ -1,8 +1,8 @@
 package handler
 
 import (
+	"cakecake/internal/model/user"
 	"context"
-	"minibili/internal/model/user"
 	"net/http"
 	"strconv"
 	"strings"
@@ -10,9 +10,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"minibili/internal/errcode"
-	"minibili/internal/middleware"
-	"minibili/internal/pkg/resp"
+	"cakecake/internal/errcode"
+	"cakecake/internal/middleware"
+	"cakecake/internal/pkg/resp"
 )
 
 // followUserRows converts follow rows to gin.H items for API response.

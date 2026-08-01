@@ -1,7 +1,7 @@
 package usercoin
 
 import (
-	"minibili/internal/model/user"
+	"cakecake/internal/model/user"
 	"time"
 
 	"gorm.io/gorm"

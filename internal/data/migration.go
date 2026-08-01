@@ -1,8 +1,8 @@
 package data
 
 import (
+	"cakecake/internal/model/system"
 	"fmt"
-	"minibili/internal/model/system"
 	"time"
 
 	"go.uber.org/zap"

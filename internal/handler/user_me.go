@@ -11,13 +11,13 @@ import (
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
 
-	"minibili/internal/errcode"
-	"minibili/internal/middleware"
-	"minibili/internal/pkg/coverval"
-	"minibili/internal/pkg/dailyreward"
-	"minibili/internal/pkg/resp"
-	"minibili/internal/pkg/usercoin"
-	"minibili/internal/pkg/userlevel"
+	"cakecake/internal/errcode"
+	"cakecake/internal/middleware"
+	"cakecake/internal/pkg/coverval"
+	"cakecake/internal/pkg/dailyreward"
+	"cakecake/internal/pkg/resp"
+	"cakecake/internal/pkg/usercoin"
+	"cakecake/internal/pkg/userlevel"
 )
 
 func (a *API) GetMe(c *gin.Context) {

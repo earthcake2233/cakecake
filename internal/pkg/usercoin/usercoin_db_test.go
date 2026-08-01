@@ -1,8 +1,8 @@
 package usercoin
 
 import (
+	"cakecake/internal/model/user"
 	"fmt"
-	"minibili/internal/model/user"
 	"testing"
 
 	"github.com/glebarez/sqlite"

@@ -8,7 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 
-	"minibili/internal/pkg/jwttoken"
+	"cakecake/internal/pkg/jwttoken"
 )
 
 func newTestJWTManger(t *testing.T) *jwttoken.Manager {

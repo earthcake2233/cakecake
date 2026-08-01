@@ -12,8 +12,8 @@ import (
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 
-	"minibili/internal/service"
-	"minibili/internal/ws"
+	"cakecake/internal/service"
+	"cakecake/internal/ws"
 )
 
 func newMockGORM(t *testing.T) (*gorm.DB, sqlmock.Sqlmock) {

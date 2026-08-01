@@ -5,11 +5,11 @@
   <strong><img src="https://img.shields.io/badge/🇬🇧English-00a1d6?style=flat-square" alt="English"></strong>
 </p>
 
-## Mini-Bili v1.0 Engineering Rules (Rule)
+## cakecake v1.0 Engineering Rules (Rule)
 
 **Version**: v1.0
 **Last Updated**: 2026-08-01
-**Dependencies**: Mini-Bili v1.0 SPEC
+**Dependencies**: cakecake v1.0 SPEC
 
 ---
 
@@ -25,7 +25,7 @@ As the project evolves, Rule entries will grow. When a Rule is repeatedly violat
 
 | ID       | Rule                               | Description |
 | :------- | :--------------------------------- | :---------- |
-| **R-DB-1** | **No hardcoded secrets** | Database DSN, OSS keys (Bucket `mini-bili`), JWT Secret, RabbitMQ credentials, sensitive word list paths, etc. MUST be read from environment variables, falling back to config files only when the env var is missing. NEVER hardcode them in code. |
+| **R-DB-1** | **No hardcoded secrets** | Database DSN, OSS keys (Bucket `cakecake`), JWT Secret, RabbitMQ credentials, sensitive word list paths, etc. MUST be read from environment variables, falling back to config files only when the env var is missing. NEVER hardcode them in code. |
 | **R-DB-2** | **No SQL concatenation** | All database queries MUST use GORM parameterized queries or safe methods such as `db.Where()`. NEVER use `db.Raw()` to concatenate user input. |
 | **R-DB-3** | **Schema changes MUST go through the migration system** | All `CREATE TABLE`, `ALTER TABLE`, etc. MUST be executed via the migration system. V1–V19 are managed by GORM AutoMigrate (`RegisteredMigrations()`); V20+ are managed by goose SQL migration files (`migrations/` directory). NEVER create tables in business code or modify the production database manually. |
 | **R-DB-4** | **Core query fields MUST have indexes** | The following fields MUST have explicit indexes in their tables: `play_count` (video play count, used for sorting), `created_at` (creation time, used for sorting), `user_id` (user ID, used for joins), `video_id` (video ID, used for joins). |
@@ -231,7 +231,7 @@ As the project evolves, Rule entries will grow. When a Rule is repeatedly violat
 | :--- | :--- | :--- |
 | **R-BUILD-1** | **Cross-compilation MUST go through the Makefile** | NEVER manually run `$env:GOOS=linux` + `go build` line by line in PowerShell. MUST use `make build-linux`, which exports GOCACHE/GOTMPDIR to the D: drive to avoid filling up C:. |
 | **R-BUILD-2** | **Clean the Go cache after every build** | The `build-linux` target recipe ends with `python scripts/clean_go_cache.py`, auto-deleting all `go-*/gc-*/gm-*` dirs under the C: Temp and `AppData\Local\go-build`. Other build targets MUST also call this script. |
-| **R-BUILD-3** | **No compile cache on the C: drive** | GOCACHE and GOTMPDIR MUST point to the D: drive (currently `D:\Minibili\.gocache` and `D:\Minibili\.gotmp`), both in `.gitignore`. If temporarily redirected locally, run `python scripts/clean_go_cache.py --local-only` afterwards. |
+| **R-BUILD-3** | **No compile cache on the C: drive** | GOCACHE and GOTMPDIR MUST point to the D: drive (currently `D:\cakecake\.gocache` and `D:\cakecake\.gotmp`), both in `.gitignore`. If temporarily redirected locally, run `python scripts/clean_go_cache.py --local-only` afterwards. |
 
 ---
 

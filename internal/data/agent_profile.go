@@ -1,13 +1,13 @@
 package data
 
 import (
+	"cakecake/internal/model/agent"
+	"cakecake/internal/model/dm"
+	"cakecake/internal/model/user"
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"math/big"
-	"minibili/internal/model/agent"
-	"minibili/internal/model/dm"
-	"minibili/internal/model/user"
 	"regexp"
 	"strings"
 
@@ -15,7 +15,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 
-	"minibili/internal/config"
+	"cakecake/internal/config"
 )
 
 var agentSlugRe = regexp.MustCompile(`^[a-z][a-z0-9_]{1,30}$`)

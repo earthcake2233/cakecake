@@ -1,14 +1,14 @@
 package service
 
 import (
+	"cakecake/internal/model/extra"
 	"context"
-	"minibili/internal/model/extra"
 	"time"
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"minibili/internal/pkg/searchhist"
+	"cakecake/internal/pkg/searchhist"
 )
 
 const maxUserSearchHistory = 20

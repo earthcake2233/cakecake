@@ -3,14 +3,14 @@
 package handler
 
 import (
+	"cakecake/internal/model/dm"
 	"encoding/json"
 	"fmt"
-	"minibili/internal/model/dm"
 	"testing"
 	"time"
 
+	"cakecake/internal/config"
 	"github.com/stretchr/testify/require"
-	"minibili/internal/config"
 )
 
 func TestParseArticleTagsJSON(t *testing.T) {

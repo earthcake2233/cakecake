@@ -5,8 +5,8 @@ import (
 
 	"go.uber.org/zap"
 
-	"minibili/internal/config"
-	"minibili/internal/storage"
+	"cakecake/internal/config"
+	"cakecake/internal/storage"
 )
 
 // purgeAgentAvatarOSS removes a previously stored agent avatar object when replaced.

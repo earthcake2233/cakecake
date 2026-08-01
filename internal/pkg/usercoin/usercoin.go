@@ -1,8 +1,8 @@
 package usercoin
 
 import (
+	"cakecake/internal/model/user"
 	"errors"
-	"minibili/internal/model/user"
 
 	"gorm.io/gorm"
 )

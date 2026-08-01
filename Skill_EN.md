@@ -5,11 +5,11 @@
   <strong><img src="https://img.shields.io/badge/🇬🇧English-00a1d6?style=flat-square" alt="English"></strong>
 </p>
 
-## Mini-Bili v1.0 Skill Manual
+## cakecake v1.0 Skill Manual
 
 **Version**: v1.0
 **Last updated**: 2026-07-31
-**Dependencies**: Mini-Bili v1.0 SPEC, Mini-Bili v1.0 Rule
+**Dependencies**: cakecake v1.0 SPEC, cakecake v1.0 Rule
 
 ### About Skill
 
@@ -30,7 +30,7 @@ Rule says "this thing MUST be done"; Skill says "this is HOW it is done".
 1. In the project root, run in order:
    ```go
    go mod tidy
-   go build -o ./bin/mini-bili ./cmd/
+   go build -o ./bin/cakecake ./cmd/
    ```
    `go mod tidy` MUST run before `go build` to keep `go.mod` and `go.sum` consistent with the imports in the current code.
 2. Check the build output:
@@ -41,7 +41,7 @@ Rule says "this thing MUST be done"; Skill says "this is HOW it is done".
    - Fix the FIRST error (not the last one).
    - Restart from step 1 after fixing.
    - If the same error still fails after 3 fix attempts, stop and report the exact error and the attempts made.
-4. After a successful build, confirm `./bin/mini-bili` exists and is executable.
+4. After a successful build, confirm `./bin/cakecake` exists and is executable.
 
 **Forbidden**:
 - NEVER skip `go mod tidy` and run `go build` directly.
@@ -663,7 +663,7 @@ flowchart LR
 
 **Verification**:
 - `go vet ./cmd/... ./internal/config/...` with zero errors
-- `go build -o ./bin/mini-bili ./cmd/mini-bili/` succeeds
+- `go build -o ./bin/cakecake ./cmd/cakecake/` succeeds
 - Start the app and press Ctrl+C; confirm in logs: "shutting down gracefully" → "all background tasks finished"
 
 ---

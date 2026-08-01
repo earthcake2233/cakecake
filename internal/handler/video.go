@@ -1,16 +1,16 @@
 package handler
 
 import (
+	"cakecake/internal/model/comment"
+	"cakecake/internal/model/danmaku"
+	"cakecake/internal/model/extra"
+	"cakecake/internal/model/user"
+	"cakecake/internal/model/video"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"mime/multipart"
-	"minibili/internal/model/comment"
-	"minibili/internal/model/danmaku"
-	"minibili/internal/model/extra"
-	"minibili/internal/model/user"
-	"minibili/internal/model/video"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -23,15 +23,15 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"minibili/internal/errcode"
-	"minibili/internal/ffmpeg"
-	"minibili/internal/middleware"
-	"minibili/internal/pkg/coverval"
-	"minibili/internal/pkg/dailyreward"
-	"minibili/internal/pkg/resp"
-	"minibili/internal/queue"
-	"minibili/internal/service"
-	"minibili/internal/worker"
+	"cakecake/internal/errcode"
+	"cakecake/internal/ffmpeg"
+	"cakecake/internal/middleware"
+	"cakecake/internal/pkg/coverval"
+	"cakecake/internal/pkg/dailyreward"
+	"cakecake/internal/pkg/resp"
+	"cakecake/internal/queue"
+	"cakecake/internal/service"
+	"cakecake/internal/worker"
 )
 
 func uploaderAvatarForAPI(u *user.User) string {

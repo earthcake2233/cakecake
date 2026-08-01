@@ -1,9 +1,9 @@
 package handler
 
 import (
+	"cakecake/internal/model/admin"
+	"cakecake/internal/model/agent"
 	"encoding/json"
-	"minibili/internal/model/admin"
-	"minibili/internal/model/agent"
 	"net/http"
 	"testing"
 	"time"
@@ -13,8 +13,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
-	"minibili/internal/config"
-	"minibili/internal/ws"
+	"cakecake/internal/config"
+	"cakecake/internal/ws"
 )
 
 func TestAdminAgentMeta_Configured(t *testing.T) {

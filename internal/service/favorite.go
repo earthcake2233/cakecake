@@ -1,9 +1,9 @@
 package service
 
 import (
+	"cakecake/internal/model/video"
 	"context"
 	"fmt"
-	"minibili/internal/model/video"
 	"strings"
 
 	"github.com/redis/go-redis/v9"

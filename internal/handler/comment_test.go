@@ -1,8 +1,8 @@
 package handler
 
 import (
-	"minibili/internal/model/comment"
-	"minibili/internal/model/video"
+	"cakecake/internal/model/comment"
+	"cakecake/internal/model/video"
 	"testing"
 
 	"github.com/stretchr/testify/require"

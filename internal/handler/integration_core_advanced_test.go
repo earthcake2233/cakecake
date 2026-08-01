@@ -3,10 +3,10 @@
 package handler
 
 import (
+	"cakecake/internal/model/admin"
+	"cakecake/internal/model/comment"
 	"encoding/json"
 	"fmt"
-	"minibili/internal/model/admin"
-	"minibili/internal/model/comment"
 	"net/http/httptest"
 	"strconv"
 	"testing"

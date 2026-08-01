@@ -150,6 +150,6 @@ Local dev `.env.local` can keep unset or `false` for normal upload endpoint debu
 
 | File | Description |
 |------|-------------|
-| `cakecake-vue/bilibili-vue/.env.production` | Production upload toggle |
-| `cakecake-vue/bilibili-vue/src/utils/videoUploadPolicy.js` | Frontend toggle logic |
+| `cakecake-vue/cakecake-web/.env.production` | Production upload toggle |
+| `cakecake-vue/cakecake-web/src/utils/videoUploadPolicy.js` | Frontend toggle logic |
 | `/opt/minibili/.env` | Backend OSS config (manual OSS upload uses same Bucket) |

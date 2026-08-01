@@ -1,22 +1,22 @@
 package handler
 
 import (
+	"cakecake/internal/model/article"
+	"cakecake/internal/model/dynamic"
+	"cakecake/internal/model/user"
+	"cakecake/internal/model/video"
 	"context"
 	"math"
-	"minibili/internal/model/article"
-	"minibili/internal/model/dynamic"
-	"minibili/internal/model/user"
-	"minibili/internal/model/video"
 	"net/http"
 	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 
-	"minibili/internal/errcode"
-	"minibili/internal/middleware"
-	"minibili/internal/pkg/resp"
-	"minibili/internal/service"
+	"cakecake/internal/errcode"
+	"cakecake/internal/middleware"
+	"cakecake/internal/pkg/resp"
+	"cakecake/internal/service"
 )
 
 const creatorCommentsMaxTotal = 50000

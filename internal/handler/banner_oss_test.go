@@ -1,10 +1,10 @@
 package handler
 
 import (
-	"minibili/internal/model/admin"
+	"cakecake/internal/model/admin"
 	"testing"
 
-	"minibili/internal/config"
+	"cakecake/internal/config"
 )
 
 func TestBannerOSSObjectKeys(t *testing.T) {

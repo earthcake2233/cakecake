@@ -6,9 +6,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
-	"minibili/internal/errcode"
-	"minibili/internal/pkg/resp"
-	"minibili/internal/pkg/sensitive"
+	"cakecake/internal/errcode"
+	"cakecake/internal/pkg/resp"
+	"cakecake/internal/pkg/sensitive"
 )
 
 // rejectIfCommentSensitive blocks UGC comment/reply text that hits the configured word list.

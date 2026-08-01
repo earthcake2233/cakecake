@@ -3,8 +3,8 @@
 package handler
 
 import (
+	"cakecake/internal/model/user"
 	"fmt"
-	"minibili/internal/model/user"
 	"net/http"
 	"net/http/httptest"
 	"strings"

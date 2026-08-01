@@ -1,18 +1,18 @@
 package handler
 
 import (
-	"minibili/internal/model/user"
+	"cakecake/internal/model/user"
 	"net/http"
 	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 
-	"minibili/internal/errcode"
-	"minibili/internal/middleware"
-	"minibili/internal/pkg/iplocate"
-	"minibili/internal/pkg/resp"
-	"minibili/internal/service"
+	"cakecake/internal/errcode"
+	"cakecake/internal/middleware"
+	"cakecake/internal/pkg/iplocate"
+	"cakecake/internal/pkg/resp"
+	"cakecake/internal/service"
 )
 
 func (a *API) ListArticleComments(c *gin.Context) {

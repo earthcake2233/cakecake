@@ -1,8 +1,8 @@
 package handler
 
 import (
-	"minibili/internal/model/user"
-	"minibili/internal/pkg/useravatar"
+	"cakecake/internal/model/user"
+	"cakecake/internal/pkg/useravatar"
 )
 
 func avatarURLForAPI(u *user.User) string {

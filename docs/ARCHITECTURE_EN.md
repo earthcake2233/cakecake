@@ -47,8 +47,8 @@ graph TB
 ## Directory Layout
 
 ```
-Minibili/
-├── cmd/mini-bili/main.go        # Entrypoint: wires config, DB, routes
+cakecake/
+├── cmd/cakecake/main.go        # Entrypoint: wires config, DB, routes
 ├── internal/
 │   ├── handler/                  # HTTP + WebSocket handlers (Gin routes)
 │   ├── service/                  # Business logic layer
@@ -68,7 +68,7 @@ Minibili/
 ├── configs/                      # sensitive_words.txt, ip2region_v4.xdb
 ├── deploy/                       # Nginx config, systemd unit, env template
 ├── docs/                         # Screenshots and guides
-├── cakecake-vue/bilibili-vue/    # Vue 3 + Vite + TypeScript frontend
+├── cakecake-vue/cakecake-web/    # Vue 3 + Vite + TypeScript frontend
 └── go.mod                        # module minibili
 ```
 

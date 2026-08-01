@@ -1,9 +1,9 @@
 package handler
 
 import (
+	"cakecake/internal/model/video"
 	"context"
 	"errors"
-	"minibili/internal/model/video"
 	"net/http"
 	"strconv"
 
@@ -11,10 +11,10 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"minibili/internal/errcode"
-	"minibili/internal/middleware"
-	"minibili/internal/pkg/resp"
-	"minibili/internal/pkg/usercoin"
+	"cakecake/internal/errcode"
+	"cakecake/internal/middleware"
+	"cakecake/internal/pkg/resp"
+	"cakecake/internal/pkg/usercoin"
 )
 
 func (a *API) userVideoFavoriteCount(uid, vid uint64) (int64, error) {

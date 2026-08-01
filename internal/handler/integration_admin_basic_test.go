@@ -3,11 +3,11 @@
 package handler
 
 import (
+	"cakecake/internal/model/article"
+	"cakecake/internal/model/user"
+	"cakecake/internal/model/video"
 	"encoding/json"
 	"fmt"
-	"minibili/internal/model/article"
-	"minibili/internal/model/user"
-	"minibili/internal/model/video"
 	"net/http/httptest"
 	"strconv"
 	"strings"

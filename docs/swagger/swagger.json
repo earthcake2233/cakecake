@@ -4,8 +4,8 @@
     ],
     "swagger": "2.0",
     "info": {
-        "description": "Mini-Bili - 轻量级弹幕视频分享平台后端 API",
-        "title": "Mini-Bili API",
+        "description": "cakecake - 轻量级弹幕视频分享平台后端 API",
+        "title": "cakecake API",
         "termsOfService": "https://github.com/earthcake2233/cakecake/blob/main/LICENSE",
         "contact": {
             "name": "earthcake2233",

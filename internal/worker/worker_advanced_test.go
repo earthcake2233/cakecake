@@ -1,8 +1,8 @@
 package worker
 
 import (
+	"cakecake/internal/model/video"
 	"encoding/json"
-	"minibili/internal/model/video"
 	"os"
 	"path/filepath"
 	"testing"
@@ -15,7 +15,7 @@ import (
 
 	"github.com/glebarez/sqlite"
 
-	"minibili/internal/logger"
+	"cakecake/internal/logger"
 )
 
 type mockAcknowledger struct {

@@ -1,8 +1,8 @@
 package service
 
 import (
+	"cakecake/internal/model/video"
 	"context"
-	"minibili/internal/model/video"
 
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"

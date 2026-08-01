@@ -1,12 +1,12 @@
 package handler
 
 import (
+	"cakecake/internal/model/admin"
+	"cakecake/internal/model/article"
+	"cakecake/internal/model/dynamic"
+	"cakecake/internal/model/user"
+	"cakecake/internal/model/video"
 	"mime/multipart"
-	"minibili/internal/model/admin"
-	"minibili/internal/model/article"
-	"minibili/internal/model/dynamic"
-	"minibili/internal/model/user"
-	"minibili/internal/model/video"
 	"testing"
 	"time"
 )

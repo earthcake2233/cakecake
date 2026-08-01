@@ -6,7 +6,7 @@ import (
 	"errors"
 	"testing"
 
-	"minibili/internal/aigateway"
+	"cakecake/internal/aigateway"
 )
 
 type mockExecutor struct {

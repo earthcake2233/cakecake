@@ -3,14 +3,14 @@
 package handler
 
 import (
+	"cakecake/internal/model/article"
+	"cakecake/internal/model/dynamic"
+	"cakecake/internal/model/user"
+	"cakecake/internal/model/video"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
-	"minibili/internal/model/article"
-	"minibili/internal/model/dynamic"
-	"minibili/internal/model/user"
-	"minibili/internal/model/video"
 	"net/http"
 	"net/http/httptest"
 	"strings"

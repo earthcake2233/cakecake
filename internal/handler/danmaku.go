@@ -1,8 +1,8 @@
 package handler
 
 import (
-	"minibili/internal/model/danmaku"
-	"minibili/internal/model/user"
+	"cakecake/internal/model/danmaku"
+	"cakecake/internal/model/user"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -11,9 +11,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
-	"minibili/internal/errcode"
-	"minibili/internal/middleware"
-	"minibili/internal/pkg/resp"
+	"cakecake/internal/errcode"
+	"cakecake/internal/middleware"
+	"cakecake/internal/pkg/resp"
 )
 
 var danmakuColorHexRe = regexp.MustCompile("^#[0-9A-Fa-f]{6}$")

@@ -1,8 +1,8 @@
 package config
 
 import (
+	"cakecake/internal/model/system"
 	"context"
-	"minibili/internal/model/system"
 	"strconv"
 	"sync"
 	"time"

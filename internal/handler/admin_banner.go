@@ -1,7 +1,7 @@
 package handler
 
 import (
-	"minibili/internal/model/admin"
+	"cakecake/internal/model/admin"
 	"net/http"
 	"strconv"
 	"strings"
@@ -9,8 +9,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"minibili/internal/errcode"
-	"minibili/internal/pkg/resp"
+	"cakecake/internal/errcode"
+	"cakecake/internal/pkg/resp"
 )
 
 type bannerReq struct {

@@ -1,4 +1,4 @@
-# Minibili 生产部署（企业规范：CI 通过 → 人工审批 → 自动部署）
+# cakecake 生产部署（企业规范：CI 通过 → 人工审批 → 自动部署）
 #
 # 流程：
 #   1) 推送 main/master → CI（.github/workflows/ci.yml）自动跑测试；
@@ -18,7 +18,7 @@
 # 服务器需已按 deploy/DEPLOY.md 初始化：
 #   /opt/minibili/bin、/opt/minibili/www、/opt/minibili/.env、systemd minibili、Nginx
 
-name: Deploy Minibili
+name: Deploy cakecake
 
 on:
   workflow_run:
@@ -52,10 +52,10 @@ jobs:
         with:
           node-version: "20"
           cache: npm
-          cache-dependency-path: cakecake-vue/bilibili-vue/package-lock.json
+          cache-dependency-path: cakecake-vue/cakecake-web/package-lock.json
 
       - name: Build frontend
-        working-directory: cakecake-vue/bilibili-vue
+        working-directory: cakecake-vue/cakecake-web
         run: |
           cp .env.production.example .env.production
           npm ci
@@ -69,13 +69,13 @@ jobs:
       - name: Build backend (linux/amd64)
         run: |
           GOOS=linux GOARCH=amd64 CGO_ENABLED=0 \
-            go build -ldflags="-s -w" -o mini-bili-linux ./cmd/mini-bili
+            go build -ldflags="-s -w" -o cakecake-linux ./cmd/cakecake
 
       - name: Pack release bundle
         run: |
           mkdir -p release/dist release/migrations
-          cp mini-bili-linux release/mini-bili
-          cp -a cakecake-vue/bilibili-vue/dist/. release/dist/
+          cp cakecake-linux release/cakecake
+          cp -a cakecake-vue/cakecake-web/dist/. release/dist/
           cp -a migrations/. release/migrations/
           tar czf minibili-release.tar.gz -C release .
 
@@ -109,7 +109,7 @@ jobs:
               rm -rf /opt/minibili/migrations.prev
               mv /opt/minibili/migrations /opt/minibili/migrations.prev
             fi
-            install -m 755 "$WORK/mini-bili" /opt/minibili/bin/mini-bili
+            install -m 755 "$WORK/cakecake" /opt/minibili/bin/mini-bili
             rm -rf /opt/minibili/www/*
             mkdir -p /opt/minibili/www
             cp -a "$WORK/dist/." /opt/minibili/www/
@@ -146,4 +146,4 @@ jobs:
             nginx -s reload
             curl -fsS http://127.0.0.1:8080/api/v1/health | head -c 200
             echo
-            echo "Minibili deploy OK"
+            echo "cakecake deploy OK"

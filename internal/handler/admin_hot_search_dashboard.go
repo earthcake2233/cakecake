@@ -1,8 +1,8 @@
 package handler
 
 import (
+	"cakecake/internal/model/admin"
 	"context"
-	"minibili/internal/model/admin"
 	"net/http"
 	"strconv"
 	"strings"
@@ -11,9 +11,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
-	"minibili/internal/errcode"
-	"minibili/internal/pkg/resp"
-	"minibili/internal/service"
+	"cakecake/internal/errcode"
+	"cakecake/internal/pkg/resp"
+	"cakecake/internal/service"
 )
 
 func adminHotSearchLimit(c *gin.Context, def, max int) int {

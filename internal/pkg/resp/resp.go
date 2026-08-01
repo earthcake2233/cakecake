@@ -5,7 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"minibili/internal/errcode"
+	"cakecake/internal/errcode"
 )
 
 // JSON writes the unified API response (Rule R-API-1).

@@ -1,8 +1,8 @@
 package service
 
 import (
+	"cakecake/internal/model/user"
 	"context"
-	"minibili/internal/model/user"
 	"strings"
 
 	"go.uber.org/zap"

@@ -1,10 +1,10 @@
 package worker
 
 import (
+	"cakecake/internal/model/video"
 	"context"
 	"encoding/json"
 	"fmt"
-	"minibili/internal/model/video"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,13 +14,13 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"minibili/internal/config"
-	"minibili/internal/ffmpeg"
-	"minibili/internal/logger"
-	"minibili/internal/queue"
-	"minibili/internal/search"
-	"minibili/internal/service"
-	"minibili/internal/storage"
+	"cakecake/internal/config"
+	"cakecake/internal/ffmpeg"
+	"cakecake/internal/logger"
+	"cakecake/internal/queue"
+	"cakecake/internal/search"
+	"cakecake/internal/service"
+	"cakecake/internal/storage"
 )
 
 // TranscodeJob is the JSON payload on the transcode queue.

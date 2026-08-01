@@ -9,11 +9,11 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
-	"minibili/internal/errcode"
-	"minibili/internal/middleware"
-	"minibili/internal/pkg/resp"
-	"minibili/internal/pkg/searchhist"
-	"minibili/internal/search"
+	"cakecake/internal/errcode"
+	"cakecake/internal/middleware"
+	"cakecake/internal/pkg/resp"
+	"cakecake/internal/pkg/searchhist"
+	"cakecake/internal/search"
 )
 
 const maxUserSearchHistory = 20

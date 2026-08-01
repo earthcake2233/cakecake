@@ -1,7 +1,7 @@
 package model_test
 
 import (
-	"minibili/internal/model/user"
+	"cakecake/internal/model/user"
 	"testing"
 
 	"github.com/stretchr/testify/require"

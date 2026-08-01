@@ -11,7 +11,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
-	"minibili/internal/pkg/sensitive"
+	"cakecake/internal/pkg/sensitive"
 )
 
 const (

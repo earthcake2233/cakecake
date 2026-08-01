@@ -1,15 +1,15 @@
 package service
 
 import (
+	"cakecake/internal/model/user"
+	"cakecake/internal/model/video"
 	"context"
-	"minibili/internal/model/user"
-	"minibili/internal/model/video"
 	"time"
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"minibili/internal/search"
+	"cakecake/internal/search"
 )
 
 // PublishVideo marks a video published and indexes search (post-review or direct publish).

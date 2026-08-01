@@ -1,12 +1,12 @@
 package service
 
 import (
+	"cakecake/internal/model/article"
+	"cakecake/internal/model/comment"
+	"cakecake/internal/model/dynamic"
+	"cakecake/internal/model/user"
+	"cakecake/internal/model/video"
 	"context"
-	"minibili/internal/model/article"
-	"minibili/internal/model/comment"
-	"minibili/internal/model/dynamic"
-	"minibili/internal/model/user"
-	"minibili/internal/model/video"
 
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"

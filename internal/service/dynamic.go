@@ -1,9 +1,9 @@
 package service
 
 import (
+	"cakecake/internal/model/comment"
+	"cakecake/internal/model/dynamic"
 	"context"
-	"minibili/internal/model/comment"
-	"minibili/internal/model/dynamic"
 
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"

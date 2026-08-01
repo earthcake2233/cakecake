@@ -16,7 +16,7 @@ coverage:
 flags:
   frontend:
     paths:
-      - cakecake-vue/bilibili-vue/src/
+      - cakecake-vue/cakecake-web/src/
     carryforward: true
   backend:
     paths:

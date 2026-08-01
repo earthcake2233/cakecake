@@ -1,8 +1,8 @@
 package handler
 
 import (
-	"minibili/internal/model/dynamic"
-	"minibili/internal/model/user"
+	"cakecake/internal/model/dynamic"
+	"cakecake/internal/model/user"
 	"net/http"
 	"strconv"
 	"strings"
@@ -11,9 +11,9 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"minibili/internal/errcode"
-	"minibili/internal/middleware"
-	"minibili/internal/pkg/resp"
+	"cakecake/internal/errcode"
+	"cakecake/internal/middleware"
+	"cakecake/internal/pkg/resp"
 )
 
 func adminDynamicToJSON(d *dynamic.UserDynamic, authorName string) gin.H {

@@ -1,18 +1,18 @@
 package handler
 
 import (
+	"cakecake/internal/model/user"
 	"context"
-	"minibili/internal/model/user"
 	"net/http"
 	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 
-	"minibili/internal/errcode"
-	"minibili/internal/middleware"
-	"minibili/internal/pkg/resp"
-	"minibili/internal/pkg/userlevel"
+	"cakecake/internal/errcode"
+	"cakecake/internal/middleware"
+	"cakecake/internal/pkg/resp"
+	"cakecake/internal/pkg/userlevel"
 )
 
 // GetUserPublic returns a minimal public profile for personal space (no auth).

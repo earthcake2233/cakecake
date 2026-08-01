@@ -3,10 +3,10 @@
 package service
 
 import (
+	"cakecake/internal/model/admin"
+	"cakecake/internal/model/agent"
+	"cakecake/internal/model/dm"
 	"context"
-	"minibili/internal/model/admin"
-	"minibili/internal/model/agent"
-	"minibili/internal/model/dm"
 	"testing"
 
 	"github.com/alicebob/miniredis/v2"

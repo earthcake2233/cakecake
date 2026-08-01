@@ -3,7 +3,7 @@ package handler
 import (
 	"github.com/gin-gonic/gin"
 
-	"minibili/internal/pkg/resp"
+	"cakecake/internal/pkg/resp"
 )
 
 // HomeStats returns homepage sidebar metrics (online viewers + published video count).

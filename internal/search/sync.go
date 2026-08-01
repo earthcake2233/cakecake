@@ -2,13 +2,13 @@ package search
 
 import (
 	"bytes"
+	"cakecake/internal/model/article"
+	"cakecake/internal/model/user"
+	"cakecake/internal/model/video"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
-	"minibili/internal/model/article"
-	"minibili/internal/model/user"
-	"minibili/internal/model/video"
 	"strconv"
 	"strings"
 	"time"

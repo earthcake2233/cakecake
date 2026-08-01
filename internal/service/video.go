@@ -1,16 +1,16 @@
 package service
 
 import (
+	"cakecake/internal/model/admin"
+	"cakecake/internal/model/video"
 	"context"
-	"minibili/internal/model/admin"
-	"minibili/internal/model/video"
 	"time"
 
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"minibili/internal/pkg/cursor"
+	"cakecake/internal/pkg/cursor"
 )
 
 // VideoService handles video business logic.

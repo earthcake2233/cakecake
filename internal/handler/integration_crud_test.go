@@ -4,13 +4,13 @@ package handler
 
 import (
 	"bytes"
+	"cakecake/internal/model/admin"
+	"cakecake/internal/model/article"
+	"cakecake/internal/model/comment"
+	"cakecake/internal/model/dynamic"
+	"cakecake/internal/model/user"
+	"cakecake/internal/model/video"
 	"encoding/json"
-	"minibili/internal/model/admin"
-	"minibili/internal/model/article"
-	"minibili/internal/model/comment"
-	"minibili/internal/model/dynamic"
-	"minibili/internal/model/user"
-	"minibili/internal/model/video"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -25,11 +25,11 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 
-	"minibili/internal/config"
-	"minibili/internal/data"
-	"minibili/internal/pkg/jwttoken"
-	"minibili/internal/service"
-	"minibili/internal/ws"
+	"cakecake/internal/config"
+	"cakecake/internal/data"
+	"cakecake/internal/pkg/jwttoken"
+	"cakecake/internal/service"
+	"cakecake/internal/ws"
 )
 
 func setupHandlerIntegrationDB(t *testing.T) (*API, *gin.Engine, string) {

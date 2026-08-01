@@ -12,13 +12,13 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"minibili/internal/errcode"
-	"minibili/internal/middleware"
-	"minibili/internal/model/comment"
-	"minibili/internal/pkg/iplocate"
-	"minibili/internal/pkg/netutil"
-	"minibili/internal/pkg/resp"
-	"minibili/internal/service"
+	"cakecake/internal/errcode"
+	"cakecake/internal/middleware"
+	"cakecake/internal/model/comment"
+	"cakecake/internal/pkg/iplocate"
+	"cakecake/internal/pkg/netutil"
+	"cakecake/internal/pkg/resp"
+	"cakecake/internal/service"
 )
 
 type commentPost struct {

@@ -11,9 +11,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
 
-	"minibili/internal/config"
-	"minibili/internal/errcode"
-	"minibili/internal/pkg/resp"
+	"cakecake/internal/config"
+	"cakecake/internal/errcode"
+	"cakecake/internal/pkg/resp"
 )
 
 const tokenBucketScript = `

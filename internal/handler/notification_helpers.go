@@ -1,15 +1,15 @@
 package handler
 
 import (
+	"cakecake/internal/model/article"
+	"cakecake/internal/model/comment"
+	"cakecake/internal/model/notification"
+	"cakecake/internal/model/user"
+	"cakecake/internal/model/video"
 	"encoding/json"
-	"minibili/internal/model/article"
-	"minibili/internal/model/comment"
-	"minibili/internal/model/notification"
-	"minibili/internal/model/user"
-	"minibili/internal/model/video"
 	"time"
 
-	"minibili/internal/pkg/useravatar"
+	"cakecake/internal/pkg/useravatar"
 )
 
 // replyInboxTarget holds the resolved target for a notification.

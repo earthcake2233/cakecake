@@ -1,9 +1,9 @@
 package service
 
 import (
+	"cakecake/internal/model/admin"
+	"cakecake/internal/model/user"
 	"context"
-	"minibili/internal/model/admin"
-	"minibili/internal/model/user"
 	"strings"
 
 	"github.com/redis/go-redis/v9"
@@ -11,10 +11,10 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 
-	"minibili/internal/data"
-	"minibili/internal/pkg/dailyreward"
-	"minibili/internal/pkg/jwttoken"
-	"minibili/internal/pkg/username"
+	"cakecake/internal/data"
+	"cakecake/internal/pkg/dailyreward"
+	"cakecake/internal/pkg/jwttoken"
+	"cakecake/internal/pkg/username"
 	"time"
 )
 

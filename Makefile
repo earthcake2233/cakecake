@@ -11,7 +11,7 @@ endif
 
 GO = go
 NPM = npm
-VUE_DIR = cakecake-vue/bilibili-vue
+VUE_DIR = cakecake-vue/cakecake-web
 
 all: test
 
@@ -77,7 +77,7 @@ clean-go-cache:
 # Build Linux amd64 binary (cross-compile from any platform)
 build-linux:
 	$(GO) clean -cache
-	$(GO) build -ldflags="-s -w" -o mini-bili-linux ./cmd/mini-bili
+	$(GO) build -ldflags="-s -w" -o cakecake-linux ./cmd/cakecake
 	python scripts/clean_go_cache.py --system-only
 
 # Export env vars for cross-compilation (must be env, not Make vars)

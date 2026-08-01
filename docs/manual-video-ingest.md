@@ -150,6 +150,6 @@ VITE_VIDEO_UPLOAD_DISABLED=false
 
 | 文件 | 说明 |
 |------|------|
-| `cakecake-vue/bilibili-vue/.env.production` | 生产是否关闭上传 |
-| `cakecake-vue/bilibili-vue/src/utils/videoUploadPolicy.js` | 前端开关逻辑 |
+| `cakecake-vue/cakecake-web/.env.production` | 生产是否关闭上传 |
+| `cakecake-vue/cakecake-web/src/utils/videoUploadPolicy.js` | 前端开关逻辑 |
 | `/opt/minibili/.env` | 后端 OSS 等（手动上传 OSS 与本机 ossutil 用同一 Bucket） |

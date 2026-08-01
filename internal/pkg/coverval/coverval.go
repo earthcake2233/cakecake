@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"minibili/internal/errcode"
+	"cakecake/internal/errcode"
 )
 
 const (

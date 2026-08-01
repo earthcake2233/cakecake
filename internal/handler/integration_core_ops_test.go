@@ -3,10 +3,10 @@
 package handler
 
 import (
+	"cakecake/internal/model/article"
+	"cakecake/internal/model/comment"
+	"cakecake/internal/model/video"
 	"encoding/json"
-	"minibili/internal/model/article"
-	"minibili/internal/model/comment"
-	"minibili/internal/model/video"
 	"net/http/httptest"
 	"strconv"
 	"testing"

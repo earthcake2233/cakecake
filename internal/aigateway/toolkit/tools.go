@@ -1,6 +1,6 @@
 package toolkit
 
-import "minibili/internal/aigateway"
+import "cakecake/internal/aigateway"
 
 // Tool names (constants for admin registry keys).
 const (

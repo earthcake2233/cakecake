@@ -1,11 +1,11 @@
 package handler
 
 import (
+	"cakecake/internal/model/video"
 	"context"
 	"encoding/json"
 	"fmt"
 	"mime/multipart"
-	"minibili/internal/model/video"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -16,12 +16,12 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
-	"minibili/internal/errcode"
-	"minibili/internal/ffmpeg"
-	"minibili/internal/middleware"
-	"minibili/internal/pkg/coverval"
-	"minibili/internal/pkg/resp"
-	"minibili/internal/worker"
+	"cakecake/internal/errcode"
+	"cakecake/internal/ffmpeg"
+	"cakecake/internal/middleware"
+	"cakecake/internal/pkg/coverval"
+	"cakecake/internal/pkg/resp"
+	"cakecake/internal/worker"
 )
 
 const videoStatusDraft = video.StatusDraft
