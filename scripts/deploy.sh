@@ -74,7 +74,7 @@ fi
 WORK="/tmp/minibili-deploy-latest"
 
 if [[ "$DEPLOY_ONLY" -eq 1 ]]; then
-  if [[ ! -f "$WORK/mini-bili" || ! -f "$WORK/www.tar.gz" ]]; then
+  if [[ ! -f "$WORK/mini-bili" || ! -f "$WORK/www.tar.gz" || ! -f "$WORK/migrations.tar.gz" ]]; then
     echo "找不到上次构建产物（$WORK），请先运行 ./scripts/deploy.sh --dry-run 生成。" >&2
     exit 2
   fi
@@ -112,7 +112,7 @@ fi
 # ---- [2/5] 构建 ----
 echo "==> [2/5] 构建产物..."
 if [[ "$DEPLOY_ONLY" -eq 1 ]]; then
-  echo "    复用已有产物: $WORK/mini-bili + $WORK/www.tar.gz"
+  echo "    复用已有产物: $WORK/mini-bili + $WORK/www.tar.gz + $WORK/migrations.tar.gz"
 else
   echo "    后端 (linux/amd64)..."
   go build -buildvcs=false -ldflags="-s -w" -o "$WORK/mini-bili" ./cmd/mini-bili
@@ -124,6 +124,7 @@ else
   fi
   (cd cakecake-vue/bilibili-vue && npm run build)
   tar -czf "$WORK/www.tar.gz" -C cakecake-vue/bilibili-vue/dist .
+  tar -czf "$WORK/migrations.tar.gz" -C migrations .
   dirty="no"
   git status --porcelain | grep -q . && dirty="yes"
   printf 'commit=%s branch=%s dirty=%s built=%s\n' \
@@ -164,13 +165,16 @@ SSH=(ssh -i "$DEPLOY_KEY" -p "$DEPLOY_PORT" -o BatchMode=yes -o StrictHostKeyChe
 SCP=(scp -i "$DEPLOY_KEY" -P "$DEPLOY_PORT" -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15)
 DEST="${DEPLOY_USER}@${DEPLOY_HOST}"
 
-"${SCP[@]}" "$WORK/mini-bili" "$WORK/www.tar.gz" "${DEST}:/tmp/"
+"${SCP[@]}" "$WORK/mini-bili" "$WORK/www.tar.gz" "$WORK/migrations.tar.gz" "${DEST}:/tmp/"
 "${SSH[@]}" "$DEST" "set -e
 install -m 755 /tmp/mini-bili $REMOTE_DIR/bin/mini-bili
 rm -rf $REMOTE_DIR/www/*
 mkdir -p $REMOTE_DIR/www
 tar xzf /tmp/www.tar.gz -C $REMOTE_DIR/www
-rm -f /tmp/mini-bili /tmp/www.tar.gz
+rm -rf $REMOTE_DIR/migrations
+mkdir -p $REMOTE_DIR/migrations
+tar xzf /tmp/migrations.tar.gz -C $REMOTE_DIR/migrations
+rm -f /tmp/mini-bili /tmp/www.tar.gz /tmp/migrations.tar.gz
 systemctl restart $SERVICE_NAME
 ok=0
 for _ in \$(seq 1 15); do

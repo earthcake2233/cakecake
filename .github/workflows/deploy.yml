@@ -73,9 +73,10 @@ jobs:
 
       - name: Pack release bundle
         run: |
-          mkdir -p release/dist
+          mkdir -p release/dist release/migrations
           cp mini-bili-linux release/mini-bili
           cp -a cakecake-vue/bilibili-vue/dist/. release/dist/
+          cp -a migrations/. release/migrations/
           tar czf minibili-release.tar.gz -C release .
 
       - name: Upload bundle to server
@@ -108,6 +109,9 @@ jobs:
             rm -rf /opt/minibili/www/*
             mkdir -p /opt/minibili/www
             cp -a "$WORK/dist/." /opt/minibili/www/
+            rm -rf /opt/minibili/migrations
+            mkdir -p /opt/minibili/migrations
+            cp -a "$WORK/migrations/." /opt/minibili/migrations/
             rm -rf "$WORK" /tmp/minibili-release.tar.gz
             systemctl restart minibili
             # Wait up to 30s for the app to listen (startup can take a few seconds)

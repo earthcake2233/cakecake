@@ -1,0 +1,89 @@
+name: Health Check
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe production health
+        id: probe
+        run: |
+          ok=0
+          for _ in $(seq 1 3); do
+            if curl -fsS --max-time 15 https://chengzisoft.top/api/v1/health >/dev/null 2>&1; then
+              ok=1
+              break
+            fi
+            sleep 5
+          done
+          if [ "$ok" != "1" ]; then
+            echo "status=failed" >> "$GITHUB_OUTPUT"
+          else
+            echo "status=ok" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Open alert issue on failure
+        if: steps.probe.outputs.status == 'failed'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const label = 'alert';
+            const now = new Date().toISOString();
+            const { data: open } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: label,
+              per_page: 1
+            });
+            if (open.length === 0) {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: '⚠️ 生产健康检查失败 ' + now,
+                body: 'https://chengzisoft.top/api/v1/health 连续探测失败（' + now + '）。请检查服务器与 minibili 服务状态。',
+                labels: [label],
+                assignees: [context.repo.owner]
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: open[0].number,
+                body: '又检测到一次失败：' + now
+              });
+            }
+
+      - name: Close alert issue on recovery
+        if: steps.probe.outputs.status == 'ok'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: open } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: ['alert'],
+              per_page: 10
+            });
+            for (const issue of open) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                body: '✅ 服务已恢复：' + new Date().toISOString()
+              });
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                state: 'closed'
+              });
+            }

@@ -20,6 +20,7 @@ A full-stack video-sharing community built with Go + Vue3, covering video upload
     
   <a href="https://github.com/earthcake2233/cakecake/actions">
     <img src="https://img.shields.io/github/actions/workflow/status/earthcake2233/cakecake/ci.yml?branch=main&style=flat-square&logo=github&label=CI" alt="CI">
+    <img src="https://img.shields.io/github/actions/workflow/status/earthcake2233/cakecake/deploy.yml?branch=main&style=flat-square&logo=github&label=Deploy" alt="Deploy">
   </a>
     
   <a href="https://b23.tv/9VnJIWm">
