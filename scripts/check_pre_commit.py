@@ -166,6 +166,18 @@ def check_en_sync(force_yes=False):
     return False
 
 
+def check_md_links():
+    """Run the Markdown relative-link check (R-DOC-18). Returns True if clean."""
+    script = REPO / "scripts" / "check_md_links.py"
+    out, code = run([sys.executable, str(script)])
+    if code != 0:
+        print("[FAIL] Markdown link check failed:")
+        print(out)
+        return False
+    print(out)
+    return True
+
+
 def main():
     import argparse
     parser = argparse.ArgumentParser(description="Pre-commit gate")
@@ -200,6 +212,8 @@ def main():
     if not check_sensitive():
         all_pass = False
     if not check_en_sync(force_yes=args.yes):
+        all_pass = False
+    if not check_md_links():
         all_pass = False
 
     print()

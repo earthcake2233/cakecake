@@ -8,7 +8,7 @@
 ## cakecake v1.0 Engineering Rules (Rule)
 
 **Version**: v1.0
-**Last Updated**: 2026-08-01
+**Last Updated**: 2026-08-02
 **Dependencies**: cakecake v1.0 SPEC
 
 ---
@@ -211,6 +211,7 @@ As the project evolves, Rule entries will grow. When a Rule is repeatedly violat
 | **R-DOC-15** | **gitignore MUST exclude paired EN files** | If a Chinese `.md` is excluded in `.gitignore` (e.g., `Minibili.md`, `README_REFLECT.md`, `docs/benchmark.md`), its `_EN.md` counterpart MUST also be added. Wildcards like `incident-*.md` already cover both. Violating this exposes private documents publicly. |
 | **R-DOC-16** | **New .md files MUST create the EN version and register the check** | Creating any new Chinese `.md` MUST create the corresponding `_EN.md` in the same commit and register it in `check_en_sync.py`'s whitelist. Single-language files are forbidden. |
 | **R-DOC-17** | **Pre-commit CN/EN content sync is a hard gate** | Every commit MUST run `python scripts/check_en_sync.py --check-sync` (wired into `check_pre_commit.py` and the local pre-commit hook): it verifies heading structure (title sequence) and code-block consistency across all CN/EN pairs. On failure, the commit is blocked; committing with drift requires explicit human confirmation (interactive `y`, or `--yes`). Violating this counts as failing the gate. |
+| **R-DOC-18** | **Markdown relative links MUST resolve** | Relative links (`](path)`) in `.md` docs MUST point to existing files. After renaming/moving files, all referencing links MUST be updated. Before committing, MUST run `python scripts/check_md_links.py` (wired into `check_pre_commit.py` and `make doc-check`); broken links block the commit. |
 
 ---
 

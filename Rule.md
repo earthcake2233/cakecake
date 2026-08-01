@@ -15,7 +15,7 @@
 ## cakecake v1.0 工程规则（Rule）
 
 **版本**：v1.0
-**最后更新**：2026-08-01
+**最后更新**：2026-08-02
 **依赖文档**：cakecake v1.0 SPEC
 
 
@@ -234,6 +234,7 @@
 | **R-DOC-15** | **gitignore 的中英文配对文件必须同步排除**        | 若某中文 `.md` 在 `.gitignore` 中排除（如 `Minibili.md`、`README_REFLECT.md`、`docs/benchmark.md`），其对应的 `_EN.md` 文件也必须同时加入 `.gitignore`。`incident-*.md` 等通配符规则已覆盖中英文。违反此规则将导致私密文档的英文版被公开推送。 |
 | **R-DOC-16** | **新增 .md 时必须同时创建英文版并加入检查**       | 新建任何中文 `.md` 文件时，必须在同一次 commit 中创建对应的 `_EN.md` 英文版，并在 `check_en_sync.py` 的白名单中注册。禁止只创建单语言版本。 |
 | **R-DOC-17** | **提交前中英文档内容同步为硬门禁**                | 每次 commit 前必须运行 `python scripts/check_en_sync.py --check-sync`（已接入 `check_pre_commit.py` 与本地 pre-commit hook）：校验所有 CN/EN 配对文档的章节结构（标题序列）与代码块一致。不通过时禁止提交；确需带差异提交必须人工确认（交互输入 y，或 `--yes` 显式确认）。违反此规则视为提交未过门禁。 |
+| **R-DOC-18** | **Markdown 相对链接必须可解析（跳转不失效）**   | 所有 `.md` 文档中的相对链接（`](path)`）指向的文件必须存在。改名/移动文件后必须同步更新所有引用链接。提交前必须运行 `python scripts/check_md_links.py`（已接入 `check_pre_commit.py` 与 `make doc-check`），发现失效链接直接阻断提交。 |
 
 ### 十六、文件编码规范
 

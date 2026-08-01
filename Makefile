@@ -35,6 +35,7 @@ coverage-frontend:
 
 doc-check:
 	python scripts/check_en_sync.py --check-sync
+	python scripts/check_md_links.py
 	python scripts/validate_md_tables.py
 
 install-hooks:
