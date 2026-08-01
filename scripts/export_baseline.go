@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strings"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/joho/godotenv"
@@ -66,6 +67,7 @@ func main() {
 			fmt.Fprintf(os.Stderr, "skip %s: %v\n", table, err)
 			continue
 		}
+		ddl = strings.Replace(ddl, "CREATE TABLE ", "CREATE TABLE IF NOT EXISTS ", 1)
 		fmt.Printf("%s;\n\n", ddl)
 	}
 
