@@ -119,6 +119,13 @@ GOPATH=/tmp/gopath-empty GO111MODULE=on GOOS=linux GOARCH=amd64 \
 make build-linux
 ```
 
+**关键：交叉编译后先验证二进制格式再上传：**
+```bash
+file mini-bili-linux
+# 应显示: ELF 64-bit LSB executable, x86-64 ... for GNU/Linux
+# 若显示 PE32+，说明交叉编译失败，参见 incident-20260725-502.md
+```
+
 上传到服务器：`/opt/minibili/bin/mini-bili`，并 `chmod +x`。
 
 ---
@@ -399,15 +406,15 @@ curl -sI http://127.0.0.1/
 
 ---
 
-## DB Init
+## 数据库初始化
 
-1. Create empty database:
+1. 创建空数据库：
    mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS minibili CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
 
-2. Set APP_ENV=production in .env (DB_AUTO_MIGRATE defaults to false -> goose SQL only)
+2. 在 `.env` 中设置 `APP_ENV=production`（DB_AUTO_MIGRATE 默认 false，仅执行 goose SQL 迁移）
 
-3. Start app: goose runs migrations/00001_baseline.sql, creates all 42+ tables automatically
+3. 启动应用：goose 执行 `migrations/00001_baseline.sql`，自动创建全部 42+ 张表
 
-4. Verify: mysql -u root -p minibili -e "SHOW TABLES;"
+4. 验证：`mysql -u root -p minibili -e "SHOW TABLES;"`
 
-Note: MySQL 8.0+ required. Future schema changes go in migrations/ directory (see Skill S-016).
+注意：需要 MySQL 8.0+。后续 schema 变更统一放在 `migrations/` 目录（参见 Skill S-016）。

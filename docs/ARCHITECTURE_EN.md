@@ -286,3 +286,19 @@ flowchart TB
     L --> M
     L --> N --> P
 ```
+
+---
+
+## Testing Strategy
+
+| Layer                                     | Scope                              | Examples                                                            |
+| ----------------------------------------- | ---------------------------------- | ------------------------------------------------------------------- |
+| `internal/pkg/*`                          | Unit tests (table-driven)          | Username validation, BV ID encode/decode, avatar path generation     |
+| `internal/handler/*`                      | Unit tests (SQLite in-memory)      | Login/register flow, video draft CRUD, danmaku posting, cascading comment deletion |
+| `internal/handler/*` (integration tag)    | Black-box tests (real services)    | Health check, video zone list                                       |
+| E2E                                       | Manual                             | Login → upload → watch with danmaku → search                        |
+
+```bash
+go test ./... -count=1
+go test -tags=integration ./internal/handler/... -count=1
+```

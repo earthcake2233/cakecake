@@ -7,7 +7,7 @@ SHELL := cmd.exe
 .SHELLFLAGS := /c
 endif
 
-.PHONY: all test test-backend test-frontend coverage coverage-backend coverage-frontend clean help fmt fmt-check
+.PHONY: all test test-backend test-frontend coverage coverage-backend coverage-frontend doc-check install-hooks clean help fmt fmt-check
 
 GO = go
 NPM = npm
@@ -30,6 +30,17 @@ test-frontend:
 
 coverage-frontend:
 	cd $(VUE_DIR) && $(NPM) run coverage
+
+# -- Docs --------------------------------------------------------
+
+doc-check:
+	python scripts/check_en_sync.py --check-sync
+	python scripts/validate_md_tables.py
+
+install-hooks:
+	cp scripts/pre-commit .git/hooks/pre-commit
+	chmod +x .git/hooks/pre-commit
+	@echo "pre-commit hook installed."
 
 # -- Combined -------------------------------------------------------
 

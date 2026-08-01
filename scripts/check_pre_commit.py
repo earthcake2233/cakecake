@@ -141,6 +141,31 @@ def check_sensitive():
     return ok
 
 
+def check_en_sync(force_yes=False):
+    """Run CN/EN doc content sync check (R-DOC-1 / R-DOC-17).
+    Returns True if clean, or if the user explicitly acknowledges the drift."""
+    script = REPO / "scripts" / "check_en_sync.py"
+    out, code = run([sys.executable, str(script), "--check-sync"])
+    if code == 0:
+        print(out)
+        return True
+
+    print("[FAIL] CN/EN doc sync check found issues:")
+    print(out)
+    if force_yes:
+        print("[OK]   Proceeding with acknowledged doc drift (--yes).")
+        return True
+    if sys.stdin.isatty():
+        ans = input("  中英文档不同步，是否仍要提交？(y/N): ").strip().lower()
+        if ans == "y":
+            print("[OK]   User acknowledged doc drift.")
+            return True
+        print("[BLOCK] 用户未确认，请先同步中英文文档。")
+        return False
+    print("[BLOCK] 检测到中英文档不同步（非交互环境）。请先同步文档，或用 --yes 显式确认后提交。")
+    return False
+
+
 def main():
     import argparse
     parser = argparse.ArgumentParser(description="Pre-commit gate")
@@ -174,6 +199,8 @@ def main():
         all_pass = False
     if not check_sensitive():
         all_pass = False
+    if not check_en_sync(force_yes=args.yes):
+        all_pass = False
 
     print()
 
@@ -186,11 +213,13 @@ def main():
     print("=" * 50)
     if args.yes:
         print("All checks passed. Proceeding.")
-    else:
+    elif sys.stdin.isatty():
         ans = input("  All checks passed. Confirm commit? (y/N): ").strip().lower()
         if ans != "y":
             print("Cancelled.")
             sys.exit(1)
+    else:
+        print("All checks passed (non-interactive). Proceeding.")
     print("OK, proceed with commit.")
 
 

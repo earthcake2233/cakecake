@@ -12,9 +12,20 @@ Checks:
   - Rows not starting/ending with pipe
 """
 
-import argparse, pathlib, re, sys
+import argparse, pathlib, re, subprocess, sys
 
-IGNORE_DIRS = {"node_modules", ".git", ".github", "dist", "build", "vendor"}
+IGNORE_DIRS = {"node_modules", ".git", ".github", ".gopath", ".gocache", ".gotmp", "dist", "build", "vendor", "bin", "tmp"}
+
+def is_gitignored(path):
+    """Skip files ignored by git (private docs such as docs/benchmark.md)."""
+    try:
+        r = subprocess.run(
+            ["git", "check-ignore", "-q", str(path)],
+            capture_output=True,
+        )
+        return r.returncode == 0
+    except Exception:
+        return False
 
 def scan_errors(text, filepath):
     errors = []
@@ -69,6 +80,7 @@ def main():
     else:
         files = sorted(pathlib.Path(".").rglob("*.md"))
         files = [f for f in files if not any(p in f.parts for p in IGNORE_DIRS) and not f.parent.name.startswith(".")]
+        files = [f for f in files if not is_gitignored(f)]
     
     all_errors = []
     for f in files:

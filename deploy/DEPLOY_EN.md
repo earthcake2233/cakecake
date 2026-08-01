@@ -133,18 +133,6 @@ file mini-bili-linux
 
 ---
 
-## DB Initialization
-
-1. Create empty database using mysql client.
-2. Set APP_ENV=production in .env (DB_AUTO_MIGRATE defaults to false -> goose SQL only).
-3. Start app: goose runs migrations/00001_baseline.sql, creates all 42+ tables automatically.
-4. Verify with: mysql -u root -p minibili -e "SHOW TABLES;"
-
-MySQL 8.0+ required. Future schema changes go in migrations/ directory (see Skill S-016).
-
-
----
-
 ## 5. Server Directory Layout
 
 ```bash
@@ -184,39 +172,108 @@ sudo yum install -y wget curl vim git
 
 ```bash
 sudo yum install -y ffmpeg ffmpeg-devel
+which ffprobe ffmpeg
 ```
 
----
+If the `yum` version is too old, use a [static build](https://johnvansickle.com/ffmpeg/), extract it to `/usr/local/bin`, and set absolute paths in `.env`:
 
-## 7. MySQL
+```env
+FFPROBE_PATH=/usr/local/bin/ffprobe
+FFMPEG_PATH=/usr/local/bin/ffmpeg
+```
+
+### 6.3 MySQL (5.7 / 8.0)
 
 ```bash
-sudo yum install -y mysql-server
-sudo systemctl enable mysqld --now
-mysql_secure_installation
+# Example: MariaDB 10.5 (MySQL-protocol compatible)
+sudo yum install -y mariadb-server mariadb
+sudo systemctl enable mariadb --now
+sudo mysql_secure_installation
 ```
 
----
+```sql
+CREATE DATABASE minibili CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER 'minibili'@'localhost' IDENTIFIED BY 'strong-password';
+GRANT ALL ON minibili.* TO 'minibili'@'localhost';
+FLUSH PRIVILEGES;
+```
 
-## 8. Redis
+DSN example:
+
+```env
+MYSQL_DSN=minibili:strong-password@tcp(127.0.0.1:3306)/minibili?charset=utf8mb4&parseTime=True&loc=Local
+```
+
+First deployment needs table initialization, choose one:
+
+- **Dev / single machine**: start with `APP_ENV=development` and let GORM AutoMigrate create tables
+- **Production**: apply the baseline migration with `goose -dir migrations mysql "DSN" up`, then start with `APP_ENV=production` (goose SQL migrations only)
+
+### 6.4 Redis
 
 ```bash
 sudo yum install -y redis
 sudo systemctl enable redis --now
+redis-cli ping   # PONG
 ```
 
----
-
-## 9. RabbitMQ
+### 6.5 RabbitMQ
 
 ```bash
 sudo yum install -y rabbitmq-server
 sudo systemctl enable rabbitmq-server --now
+sudo rabbitmqctl status
+```
+
+Default `guest/guest` works locally; for production create a dedicated user and put it in `RABBITMQ_URL`.
+
+### 6.6 Nginx
+
+```bash
+sudo yum install -y nginx
+sudo systemctl enable nginx
+```
+
+Copy this repo's config:
+
+```bash
+sudo cp /path/to/Minibili/deploy/nginx-minibili.conf /etc/nginx/conf.d/minibili.conf
+# Edit server_name, root path
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+### 6.7 2G Memory: enable swap
+
+```bash
+sudo fallocate -l 2G /swapfile
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+echo '/swapfile swap swap defaults 0 0' | sudo tee -a /etc/fstab
 ```
 
 ---
 
-## 10. Elasticsearch Configuration
+## 7. Environment Variables (.env)
+
+Copy `deploy/env.production.example` from the repo to `/opt/minibili/.env` and edit each item.
+
+**Must change for production:**
+
+- `JWT_SECRET`: long random string
+- `APP_ENV=production`
+- `MYSQL_DSN`, `REDIS_*`, `RABBITMQ_URL`
+- `OSS_*` (must match the Bucket region)
+- `ADMIN_SEED_*`: only for first-time admin creation; change the admin password right after going live
+- `ELASTICSEARCH_*`: search (see next section; can be empty)
+- `VIDEO_UPLOAD_DISABLED=true`: **recommended on 2G instances**. Disables web video upload and transcoding while still allowing draft metadata; videos are transcoded locally + OSS + manual DB insert, see [docs/manual-video-ingest.md](../docs/manual-video-ingest.md)
+- Frontend build uses the matching `VITE_VIDEO_UPLOAD_DISABLED=true` (see `.env.production.example`)
+
+**Do NOT** expose `8080` publicly; `HTTP_ADDR=127.0.0.1:8080` is local-only, proxied by Nginx.
+
+---
+
+## 8. Search (Elasticsearch / OpenSearch)
 
 ### Option A: Tencent Cloud ES Serverless (consistent with DEPLOY architecture)
 
@@ -241,9 +298,14 @@ ELASTICSEARCH_USERNAME=your-username
 ELASTICSEARCH_PASSWORD=your-password
 ```
 
+### Indexing & Acceptance
+
+- New videos/articles are indexed automatically after publish or review approval; historical data needs a full sync (admin endpoint or script, see SPEC).
+- Open the search page in a browser; `/api/v1/search` in the Network tab should return results instead of `search_status=unavailable`.
+
 ---
 
-## 11. systemd Service
+## 9. systemd Service
 
 ```bash
 sudo cp /path/to/Minibili/deploy/minibili.service /etc/systemd/system/minibili.service
@@ -255,7 +317,7 @@ journalctl -u minibili -f
 
 ---
 
-## 12. Alibaba Cloud Security Group & Firewall
+## 10. Alibaba Cloud Security Group & Firewall
 
 | Port | Inbound | Notes |
 |------|---------|-------|
@@ -274,7 +336,7 @@ HTTPS: use `certbot` (requires domain) or Alibaba Cloud free certificate on Ngin
 
 ---
 
-## 13. OSS Notes
+## 11. OSS Notes
 
 - `OSS_ENDPOINT`, `OSS_BUCKET`, `OSS_PUBLIC_URL_PREFIX` must match console settings.
 - If browser directly reads OSS videos/covers, allow your site domain in Bucket **CORS** settings.
@@ -282,7 +344,7 @@ HTTPS: use `certbot` (requires domain) or Alibaba Cloud free certificate on Ngin
 
 ---
 
-## 14. Go-Live Checklist
+## 12. Go-Live Checklist
 
 On **ECS locally**:
 
@@ -302,7 +364,7 @@ In browser (via domain or IP):
 
 ---
 
-## 15. Common Issues
+## 13. Common Issues
 
 ### Transcode failure / ffprobe not found
 - Confirm `which ffprobe` matches `.env` `FFPROBE_PATH` (Air/SSH PATH may differ).
@@ -324,10 +386,25 @@ In browser (via domain or IP):
 
 ---
 
-## 16. Related Docs
+## 14. Related Docs
 
 - Functional spec: [SPEC.md](../SPEC.md)
 - Engineering rules: [Rule.md](../Rule.md)
 - Local development: [README.md](../README.md)
 - Manual video ingestion: [docs/manual-video-ingest.md](../docs/manual-video-ingest.md)
 - Optional CI deploy: [.github/workflows/deploy.yml](../.github/workflows/deploy.yml)
+
+---
+
+## DB Initialization
+
+1. Create empty database:
+   mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS minibili CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+
+2. Set APP_ENV=production in .env (DB_AUTO_MIGRATE defaults to false -> goose SQL only)
+
+3. Start app: goose runs migrations/00001_baseline.sql, creates all 42+ tables automatically
+
+4. Verify: mysql -u root -p minibili -e "SHOW TABLES;"
+
+Note: MySQL 8.0+ required. Future schema changes go in migrations/ directory (see Skill S-016).

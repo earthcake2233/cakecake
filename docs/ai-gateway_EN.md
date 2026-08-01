@@ -63,6 +63,13 @@ Login to admin panel -> **AI Roles** (`/admin/agent`):
 3. **Async replies**: User requests return quickly; LLM runs in background goroutine, results pushed.
 4. **Observability extensions**: `trace_id`, Prometheus, streaming first-token latency (currently non-streaming full reply).
 
+## Related Code
+
+- `internal/aigateway/` -- DeepSeek client & Redis context
+- `internal/service/agent.go` -- Orchestration, quotas, persistence
+- `internal/handler/dm.go` -- Agent conversation branch
+- `internal/data/agent_seed.go` -- System user & conversation initialization
+
 ## Tool Use / Function Calling
 
 ### Architecture
@@ -169,10 +176,3 @@ Each tool can be independently enabled/disabled via RuntimeConfig, key format: `
 3. **Parallel Execution**: Same-round tool_calls execute in goroutines, improving response speed.
 4. **Three-layer Anti-abuse**: Quota check -> sensitive word input/output filter -> per-tool RuntimeConfig toggle.
 5. **trace_id??**: Same trace_id in both Zap logs and frontend push, shared debugging chain.
-
-## Related Code
-
-- `internal/aigateway/` -- DeepSeek client & Redis context
-- `internal/service/agent.go` -- Orchestration, quotas, persistence
-- `internal/handler/dm.go` -- Agent conversation branch
-- `internal/data/agent_seed.go` -- System user & conversation initialization
