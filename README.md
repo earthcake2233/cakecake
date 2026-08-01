@@ -1,4 +1,8 @@
 <p align="center">
+  <img src="cakecake-vue/cakecake-web/src/assets/cakelogo.png" alt="cakecake" width="480">
+</p>
+
+<p align="center">
   <strong><img src="https://img.shields.io/badge/🇨🇳中文-00a1d6?style=flat-square" alt="中文"></strong>
   <a href="README_EN.md">
     <img src="https://img.shields.io/badge/🇬🇧English-999999?style=flat-square" alt="English">
@@ -25,12 +29,15 @@
   <a href="https://github.com/earthcake2233/cakecake">
     <img src="https://img.shields.io/github/stars/earthcake2233/cakecake?style=flat-square&logo=github" alt="Stars">
   </a>
+  <img src="https://img.shields.io/github/go-mod/go-version/earthcake2233/cakecake?style=flat-square&logo=go&logoColor=white&label=Go" alt="Go">
+  <img src="https://img.shields.io/badge/License-PolyForm%20Noncommercial%201.0.0-important?style=flat-square" alt="License">
   <a href="https://github.com/earthcake2233/cakecake/actions">
     <img src="https://img.shields.io/github/actions/workflow/status/earthcake2233/cakecake/ci.yml?branch=main&style=flat-square&logo=github&label=CI" alt="CI">
     <img src="https://img.shields.io/github/actions/workflow/status/earthcake2233/cakecake/deploy.yml?branch=main&style=flat-square&logo=github&label=Deploy" alt="Deploy">
   </a>
-  <a href="https://codecov.io/gh/earthcake2233/cakecake"><img src="https://img.shields.io/codecov/c/github/earthcake2233/cakecake?flag=frontend&style=flat-square&label=Vue%20Coverage" alt="Vue Coverage"></a>
-  <a href="https://codecov.io/gh/earthcake2233/cakecake"><img src="https://img.shields.io/codecov/c/github/earthcake2233/cakecake?flag=backend&style=flat-square&label=Go%20Coverage" alt="Go Coverage"></a>
+  <a href="https://codecov.io/gh/earthcake2233/cakecake"><img src="https://img.shields.io/codecov/c/github/earthcake2233/cakecake?flag=frontend&style=flat-square&logo=codecov&logoColor=white&label=Vue%20Coverage" alt="Vue Coverage"></a>
+  <a href="https://codecov.io/gh/earthcake2233/cakecake"><img src="https://img.shields.io/codecov/c/github/earthcake2233/cakecake?flag=backend&style=flat-square&logo=codecov&logoColor=white&label=Go%20Coverage" alt="Go Coverage"></a>
+  <img src="https://img.shields.io/github/commit-activity/m/earthcake2233/cakecake?style=flat-square&logo=github" alt="Commit activity">
 </p>
 
 ---
