@@ -1,10 +1,19 @@
-# Minibili 生产部署（ECS + Nginx + systemd）
+# Minibili 生产部署（企业规范：CI 通过 → 人工审批 → 自动部署）
 #
-# 在 GitHub 仓库 Settings → Secrets and variables → Actions 中配置：
-#   DEPLOY_HOST          服务器 IP 或域名
-#   DEPLOY_USER          SSH 用户名
-#   DEPLOY_SSH_KEY       SSH 私钥（PEM 全文）
-#   DEPLOY_PORT          可选，默认 22
+# 流程：
+#   1) 推送 main/master → CI（.github/workflows/ci.yml）自动跑测试；
+#   2) CI 成功后本工作流自动启动，进入 production 环境审批门（GitHub 暂停等待批准）；
+#   3) 你在 Actions 页面批准后，按 CI 验证过的 commit 构建并部署，失败自动回滚。
+#
+# GitHub 仓库 Settings → Environments 配置：
+#   - 新建环境 production（URL: https://chengzisoft.top）
+#   - 开启 Required reviewers 并添加自己，形成人工审批门
+#
+# Settings → Secrets and variables → Actions 配置：
+#   DEPLOY_HOST      服务器 IP 或域名（当前: 47.100.219.13）
+#   DEPLOY_USER      SSH 用户名（当前: root）
+#   DEPLOY_SSH_KEY   SSH 私钥（PEM 全文）
+#   DEPLOY_PORT      可选，默认 22
 #
 # 服务器需已按 deploy/DEPLOY.md 初始化：
 #   /opt/minibili/bin、/opt/minibili/www、/opt/minibili/.env、systemd minibili、Nginx
@@ -12,20 +21,31 @@
 name: Deploy Minibili
 
 on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main, master]
   workflow_dispatch:
-  # push:
-  #   branches: [main, master]
 
 concurrency:
   group: deploy-minibili
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   deploy:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://chengzisoft.top
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.ref }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -81,14 +101,24 @@ jobs:
             rm -rf "$WORK"
             mkdir -p "$WORK"
             tar xzf /tmp/minibili-release.tar.gz -C "$WORK"
+            if [ -f /opt/minibili/bin/mini-bili ]; then
+              cp -a /opt/minibili/bin/mini-bili /opt/minibili/bin/mini-bili.prev
+            fi
             install -m 755 "$WORK/mini-bili" /opt/minibili/bin/mini-bili
             rm -rf /opt/minibili/www/*
             mkdir -p /opt/minibili/www
             cp -a "$WORK/dist/." /opt/minibili/www/
             rm -rf "$WORK" /tmp/minibili-release.tar.gz
             systemctl restart minibili
+            sleep 3
+            if ! curl -fsS --max-time 10 http://127.0.0.1:8080/api/v1/health; then
+              echo "health check failed, rolling back..." >&2
+              cp -a /opt/minibili/bin/mini-bili.prev /opt/minibili/bin/mini-bili
+              systemctl restart minibili
+              exit 1
+            fi
             nginx -t
-            systemctl reload nginx
+            nginx -s reload
             curl -fsS http://127.0.0.1:8080/api/v1/health | head -c 200
             echo
             echo "Minibili deploy OK"

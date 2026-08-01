@@ -15,6 +15,7 @@ cakecake-vue/bilibili-vue/.env.local
 cakecake-vue/bilibili-vue/.env.*.local
 !cakecake-vue/bilibili-vue/.env.example
 !cakecake-vue/bilibili-vue/.env.production.example
+scripts/deploy.local.env
 
 # ── Binaries & build artifacts ──
 /bin/
