@@ -110,11 +110,25 @@ jobs:
             cp -a "$WORK/dist/." /opt/minibili/www/
             rm -rf "$WORK" /tmp/minibili-release.tar.gz
             systemctl restart minibili
-            sleep 3
-            if ! curl -fsS --max-time 10 http://127.0.0.1:8080/api/v1/health; then
+            # Wait up to 30s for the app to listen (startup can take a few seconds)
+            ok=0
+            for _ in $(seq 1 15); do
+              sleep 2
+              if curl -fsS --max-time 3 http://127.0.0.1:8080/api/v1/health >/dev/null 2>&1; then
+                ok=1
+                break
+              fi
+            done
+            if [ "$ok" != "1" ]; then
               echo "health check failed, rolling back..." >&2
-              cp -a /opt/minibili/bin/mini-bili.prev /opt/minibili/bin/mini-bili
-              systemctl restart minibili
+              systemctl stop minibili || true
+              sleep 1
+              if [ -f /opt/minibili/bin/mini-bili.prev ]; then
+                install -m 755 /opt/minibili/bin/mini-bili.prev /opt/minibili/bin/mini-bili
+              fi
+              systemctl start minibili || true
+              sleep 3
+              curl -fsS --max-time 5 http://127.0.0.1:8080/api/v1/health || true
               exit 1
             fi
             nginx -t

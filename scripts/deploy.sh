@@ -172,9 +172,28 @@ mkdir -p $REMOTE_DIR/www
 tar xzf /tmp/www.tar.gz -C $REMOTE_DIR/www
 rm -f /tmp/mini-bili /tmp/www.tar.gz
 systemctl restart $SERVICE_NAME
+ok=0
+for _ in \$(seq 1 15); do
+  sleep 2
+  if curl -fsS --max-time 3 http://127.0.0.1:8080/api/v1/health >/dev/null 2>&1; then
+    ok=1
+    break
+  fi
+done
+if [ \"\$ok\" != \"1\" ]; then
+  echo 'health check failed, rolling back...' >&2
+  systemctl stop $SERVICE_NAME || true
+  sleep 1
+  if [ -f $REMOTE_DIR/bin/mini-bili.prev ]; then
+    install -m 755 $REMOTE_DIR/bin/mini-bili.prev $REMOTE_DIR/bin/mini-bili
+  fi
+  systemctl start $SERVICE_NAME || true
+  exit 1
+fi
 nginx -t && nginx -s reload
-sleep 2
-curl -fsS http://127.0.0.1:8080/api/v1/health"
+curl -fsS http://127.0.0.1:8080/api/v1/health | head -c 200
+echo
+echo 'Minibili deploy OK'"
 
 # ---- [5/5] 公网健康检查 ----
 echo "==> [5/5] 健康检查"
