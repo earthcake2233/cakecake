@@ -22,6 +22,97 @@ import (
 const creatorCommentsMaxTotal = 50000
 
 // ListCreatorComments lists comments on the authenticated uploader's videos or articles (Creator Hub comment management).
+type creatorCommentParentDTO struct {
+	ID       uint64 `json:"id"`
+	UserID   uint64 `json:"user_id"`
+	Username string `json:"username"`
+	Content  string `json:"content"`
+}
+
+type creatorCommentMediaRef struct {
+	ID       uint64 `json:"id"`
+	Title    string `json:"title"`
+	CoverURL string `json:"cover_url,omitempty"`
+}
+
+type creatorVideoCommentItem struct {
+	ID             uint64                   `json:"id"`
+	VideoID        uint64                   `json:"video_id"`
+	UserID         uint64                   `json:"user_id"`
+	Username       string                   `json:"username"`
+	AvatarURL      string                   `json:"avatar_url"`
+	ParentID       uint64                   `json:"parent_id"`
+	Content        string                   `json:"content"`
+	LikeCount      uint64                   `json:"like_count"`
+	LikedByMe      bool                     `json:"liked_by_me"`
+	ReplyCount     uint64                   `json:"reply_count"`
+	CreatedAt      string                   `json:"created_at"`
+	Approved       bool                     `json:"approved"`
+	CuratedIgnored bool                     `json:"curated_ignored"`
+	Video          creatorCommentMediaRef   `json:"video"`
+	Parent         *creatorCommentParentDTO `json:"parent,omitempty"`
+}
+
+type creatorArticleCommentItem struct {
+	ID             uint64                   `json:"id"`
+	ArticleID      uint64                   `json:"article_id"`
+	UserID         uint64                   `json:"user_id"`
+	Username       string                   `json:"username"`
+	AvatarURL      string                   `json:"avatar_url"`
+	ParentID       uint64                   `json:"parent_id"`
+	Content        string                   `json:"content"`
+	LikeCount      uint64                   `json:"like_count"`
+	LikedByMe      bool                     `json:"liked_by_me"`
+	ReplyCount     uint64                   `json:"reply_count"`
+	CreatedAt      string                   `json:"created_at"`
+	Approved       bool                     `json:"approved"`
+	CuratedIgnored bool                     `json:"curated_ignored"`
+	Article        creatorCommentMediaRef   `json:"article"`
+	Parent         *creatorCommentParentDTO `json:"parent,omitempty"`
+}
+
+type creatorDynamicCommentItem struct {
+	ID             uint64                   `json:"id"`
+	DynamicID      uint64                   `json:"dynamic_id"`
+	UserID         uint64                   `json:"user_id"`
+	Username       string                   `json:"username"`
+	AvatarURL      string                   `json:"avatar_url"`
+	ParentID       uint64                   `json:"parent_id"`
+	Content        string                   `json:"content"`
+	LikeCount      uint64                   `json:"like_count"`
+	LikedByMe      bool                     `json:"liked_by_me"`
+	ReplyCount     uint64                   `json:"reply_count"`
+	CreatedAt      string                   `json:"created_at"`
+	Approved       bool                     `json:"approved"`
+	CuratedIgnored bool                     `json:"curated_ignored"`
+	Dynamic        creatorCommentMediaRef   `json:"dynamic"`
+	Parent         *creatorCommentParentDTO `json:"parent,omitempty"`
+}
+
+type creatorVideoCommentListResponse struct {
+	Items      []creatorVideoCommentItem `json:"items"`
+	Page       int                       `json:"page"`
+	PageSize   int                       `json:"page_size"`
+	Total      int64                     `json:"total"`
+	TotalPages int                       `json:"total_pages"`
+}
+
+type creatorArticleCommentListResponse struct {
+	Items      []creatorArticleCommentItem `json:"items"`
+	Page       int                         `json:"page"`
+	PageSize   int                         `json:"page_size"`
+	Total      int64                       `json:"total"`
+	TotalPages int                         `json:"total_pages"`
+}
+
+type creatorDynamicCommentListResponse struct {
+	Items      []creatorDynamicCommentItem `json:"items"`
+	Page       int                         `json:"page"`
+	PageSize   int                         `json:"page_size"`
+	Total      int64                       `json:"total"`
+	TotalPages int                         `json:"total_pages"`
+}
+
 func (a *API) ListCreatorComments(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -94,7 +185,7 @@ func (a *API) ListCreatorComments(c *gin.Context) {
 			}
 		}
 	}
-	parents := map[uint64]gin.H{}
+	parents := map[uint64]creatorCommentParentDTO{}
 	if len(result.ParentIDs) > 0 {
 		pmap, err := a.CreatorCommentSvc.BatchFetchComments(context.Background(), result.ParentIDs)
 		if err == nil {
@@ -110,10 +201,11 @@ func (a *API) ListCreatorComments(c *gin.Context) {
 						if pu, ok2 := pumap[p.UserID]; ok2 {
 							pname = user.DisplayUsername(&pu)
 						}
-						parents[id] = gin.H{
-							"id": p.ID, "user_id": p.UserID,
-							"username": pname,
-							"content":  previewCommentContent(p.Content, 80),
+						parents[id] = creatorCommentParentDTO{
+							ID:       p.ID,
+							UserID:   p.UserID,
+							Username: pname,
+							Content:  previewCommentContent(p.Content, 80),
 						}
 					}
 				}
@@ -125,24 +217,24 @@ func (a *API) ListCreatorComments(c *gin.Context) {
 	if likedByViewer == nil {
 		likedByViewer = map[uint64]bool{}
 	}
-	items := make([]gin.H, 0, len(list))
+	items := make([]creatorVideoCommentItem, 0, len(list))
 	for _, cm := range list {
 		v := videos[cm.VideoID]
-		item := gin.H{
-			"id": cm.ID, "video_id": cm.VideoID, "user_id": cm.UserID,
-			"username": names[cm.UserID], "avatar_url": avatars[cm.UserID],
-			"parent_id": cm.ParentID, "content": cm.Content,
-			"like_count": cm.LikeCount, "liked_by_me": likedByViewer[cm.ID],
-			"reply_count": replyCounts[cm.ID],
-			"created_at":  cm.CreatedAt.Format("2006-01-02 15:04:05"),
-			"approved":    cm.Approved, "curated_ignored": cm.CuratedIgnored,
-			"video": gin.H{
-				"id": v.ID, "title": v.Title, "cover_url": v.CoverURL,
+		item := creatorVideoCommentItem{
+			ID: cm.ID, VideoID: cm.VideoID, UserID: cm.UserID,
+			Username: names[cm.UserID], AvatarURL: avatars[cm.UserID],
+			ParentID: cm.ParentID, Content: cm.Content,
+			LikeCount: cm.LikeCount, LikedByMe: likedByViewer[cm.ID],
+			ReplyCount: replyCounts[cm.ID],
+			CreatedAt:  cm.CreatedAt.Format("2006-01-02 15:04:05"),
+			Approved:   cm.Approved, CuratedIgnored: cm.CuratedIgnored,
+			Video: creatorCommentMediaRef{
+				ID: v.ID, Title: v.Title, CoverURL: v.CoverURL,
 			},
 		}
 		if cm.ParentID > 0 {
 			if p, ok := parents[cm.ParentID]; ok {
-				item["parent"] = p
+				item.Parent = &p
 			}
 		}
 		items = append(items, item)
@@ -151,9 +243,9 @@ func (a *API) ListCreatorComments(c *gin.Context) {
 	if total > 0 {
 		totalPages = int(math.Ceil(float64(total) / float64(pageSize)))
 	}
-	resp.OK(c, gin.H{
-		"items": items, "page": page, "page_size": pageSize,
-		"total": total, "total_pages": totalPages,
+	resp.OK(c, creatorVideoCommentListResponse{
+		Items: items, Page: page, PageSize: pageSize,
+		Total: total, TotalPages: totalPages,
 	})
 }
 
@@ -240,7 +332,7 @@ func (a *API) listCreatorArticleComments(c *gin.Context, uid uint64) {
 			}
 		}
 	}
-	parents := map[uint64]gin.H{}
+	parents := map[uint64]creatorCommentParentDTO{}
 	if len(result.ParentIDs) > 0 {
 		pmap, err := a.CreatorCommentSvc.BatchFetchArticleComments(context.Background(), result.ParentIDs)
 		if err == nil {
@@ -256,10 +348,11 @@ func (a *API) listCreatorArticleComments(c *gin.Context, uid uint64) {
 						if pu, ok2 := pumap[p.UserID]; ok2 {
 							pname = user.DisplayUsername(&pu)
 						}
-						parents[id] = gin.H{
-							"id": p.ID, "user_id": p.UserID,
-							"username": pname,
-							"content":  previewCommentContent(p.Content, 80),
+						parents[id] = creatorCommentParentDTO{
+							ID:       p.ID,
+							UserID:   p.UserID,
+							Username: pname,
+							Content:  previewCommentContent(p.Content, 80),
 						}
 					}
 				}
@@ -271,22 +364,22 @@ func (a *API) listCreatorArticleComments(c *gin.Context, uid uint64) {
 	if likedByViewer == nil {
 		likedByViewer = map[uint64]bool{}
 	}
-	items := make([]gin.H, 0, len(list))
+	items := make([]creatorArticleCommentItem, 0, len(list))
 	for _, cm := range list {
 		a := articles[cm.ArticleID]
-		item := gin.H{
-			"id": cm.ID, "article_id": cm.ArticleID, "user_id": cm.UserID,
-			"username": names[cm.UserID], "avatar_url": avatars[cm.UserID],
-			"parent_id": cm.ParentID, "content": cm.Content,
-			"like_count": cm.LikeCount, "liked_by_me": likedByViewer[cm.ID],
-			"reply_count": replyCounts[cm.ID],
-			"created_at":  cm.CreatedAt.Format("2006-01-02 15:04:05"),
-			"approved":    cm.Approved, "curated_ignored": cm.CuratedIgnored,
-			"article": gin.H{"id": a.ID, "title": a.Title},
+		item := creatorArticleCommentItem{
+			ID: cm.ID, ArticleID: cm.ArticleID, UserID: cm.UserID,
+			Username: names[cm.UserID], AvatarURL: avatars[cm.UserID],
+			ParentID: cm.ParentID, Content: cm.Content,
+			LikeCount: cm.LikeCount, LikedByMe: likedByViewer[cm.ID],
+			ReplyCount: replyCounts[cm.ID],
+			CreatedAt:  cm.CreatedAt.Format("2006-01-02 15:04:05"),
+			Approved:   cm.Approved, CuratedIgnored: cm.CuratedIgnored,
+			Article: creatorCommentMediaRef{ID: a.ID, Title: a.Title},
 		}
 		if cm.ParentID > 0 {
 			if p, ok := parents[cm.ParentID]; ok {
-				item["parent"] = p
+				item.Parent = &p
 			}
 		}
 		items = append(items, item)
@@ -295,9 +388,9 @@ func (a *API) listCreatorArticleComments(c *gin.Context, uid uint64) {
 	if total > 0 {
 		totalPages = int(math.Ceil(float64(total) / float64(pageSize)))
 	}
-	resp.OK(c, gin.H{
-		"items": items, "page": page, "page_size": pageSize,
-		"total": total, "total_pages": totalPages,
+	resp.OK(c, creatorArticleCommentListResponse{
+		Items: items, Page: page, PageSize: pageSize,
+		Total: total, TotalPages: totalPages,
 	})
 }
 
@@ -385,7 +478,7 @@ func (a *API) listCreatorDynamicComments(c *gin.Context, uid uint64) {
 			}
 		}
 	}
-	parents := map[uint64]gin.H{}
+	parents := map[uint64]creatorCommentParentDTO{}
 	if len(result.ParentIDs) > 0 {
 		pmap, err := a.CreatorCommentSvc.BatchFetchDynamicComments(context.Background(), result.ParentIDs)
 		if err == nil {
@@ -401,10 +494,11 @@ func (a *API) listCreatorDynamicComments(c *gin.Context, uid uint64) {
 						if pu, ok2 := pumap[p.UserID]; ok2 {
 							pname = user.DisplayUsername(&pu)
 						}
-						parents[id] = gin.H{
-							"id": p.ID, "user_id": p.UserID,
-							"username": pname,
-							"content":  previewCommentContent(p.Content, 80),
+						parents[id] = creatorCommentParentDTO{
+							ID:       p.ID,
+							UserID:   p.UserID,
+							Username: pname,
+							Content:  previewCommentContent(p.Content, 80),
 						}
 					}
 				}
@@ -416,22 +510,22 @@ func (a *API) listCreatorDynamicComments(c *gin.Context, uid uint64) {
 	if likedByViewer == nil {
 		likedByViewer = map[uint64]bool{}
 	}
-	items := make([]gin.H, 0, len(list))
+	items := make([]creatorDynamicCommentItem, 0, len(list))
 	for _, cm := range list {
 		d := dynamics[cm.DynamicID]
-		item := gin.H{
-			"id": cm.ID, "dynamic_id": cm.DynamicID, "user_id": cm.UserID,
-			"username": names[cm.UserID], "avatar_url": avatars[cm.UserID],
-			"parent_id": cm.ParentID, "content": cm.Content,
-			"like_count": cm.LikeCount, "liked_by_me": likedByViewer[cm.ID],
-			"reply_count": replyCounts[cm.ID],
-			"created_at":  cm.CreatedAt.Format("2006-01-02 15:04:05"),
-			"approved":    cm.Approved, "curated_ignored": cm.CuratedIgnored,
-			"dynamic": gin.H{"id": d.ID, "title": dynamicDisplayTitle(&d)},
+		item := creatorDynamicCommentItem{
+			ID: cm.ID, DynamicID: cm.DynamicID, UserID: cm.UserID,
+			Username: names[cm.UserID], AvatarURL: avatars[cm.UserID],
+			ParentID: cm.ParentID, Content: cm.Content,
+			LikeCount: cm.LikeCount, LikedByMe: likedByViewer[cm.ID],
+			ReplyCount: replyCounts[cm.ID],
+			CreatedAt:  cm.CreatedAt.Format("2006-01-02 15:04:05"),
+			Approved:   cm.Approved, CuratedIgnored: cm.CuratedIgnored,
+			Dynamic: creatorCommentMediaRef{ID: d.ID, Title: dynamicDisplayTitle(&d)},
 		}
 		if cm.ParentID > 0 {
 			if p, ok := parents[cm.ParentID]; ok {
-				item["parent"] = p
+				item.Parent = &p
 			}
 		}
 		items = append(items, item)
@@ -440,8 +534,8 @@ func (a *API) listCreatorDynamicComments(c *gin.Context, uid uint64) {
 	if total > 0 {
 		totalPages = int(math.Ceil(float64(total) / float64(pageSize)))
 	}
-	resp.OK(c, gin.H{
-		"items": items, "page": page, "page_size": pageSize,
-		"total": total, "total_pages": totalPages,
+	resp.OK(c, creatorDynamicCommentListResponse{
+		Items: items, Page: page, PageSize: pageSize,
+		Total: total, TotalPages: totalPages,
 	})
 }

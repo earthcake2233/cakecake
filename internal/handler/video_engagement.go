@@ -15,6 +15,7 @@ import (
 	"cakecake/internal/middleware"
 	"cakecake/internal/pkg/resp"
 	"cakecake/internal/pkg/usercoin"
+	"cakecake/internal/service"
 )
 
 func (a *API) userVideoFavoriteCount(uid, vid uint64) (int64, error) {
@@ -122,10 +123,107 @@ func (a *API) ToggleVideoFavorite(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	resp.OK(c, gin.H{"favorited": favorited, "fav_count": favCount})
+	resp.OK(c, videoFavToggleResponse{Favorited: favorited, FavCount: favCount})
 }
 
 const favoriteFolderCapacity = 999
+
+type videoFavToggleResponse struct {
+	Favorited bool   `json:"favorited"`
+	FavCount  uint64 `json:"fav_count"`
+}
+
+type favoriteFolderSelectItem struct {
+	ID         uint64 `json:"id"`
+	Title      string `json:"title"`
+	IsDefault  bool   `json:"is_default"`
+	VideoCount int64  `json:"video_count"`
+	CountLabel string `json:"count_label"`
+	Selected   bool   `json:"selected"`
+}
+
+type videoFavFolderSelectResponse struct {
+	Favorited bool                       `json:"favorited"`
+	FavCount  uint64                     `json:"fav_count"`
+	FolderIDs []uint64                   `json:"folder_ids"`
+	Items     []favoriteFolderSelectItem `json:"items"`
+}
+
+type videoFavSetResponse struct {
+	Favorited bool     `json:"favorited"`
+	FavCount  uint64   `json:"fav_count"`
+	FolderIDs []uint64 `json:"folder_ids"`
+}
+
+type videoFavRemoveResponse struct {
+	OK      bool `json:"ok"`
+	Removed bool `json:"removed"`
+}
+
+type videoFavCopyResponse struct {
+	OK     bool `json:"ok"`
+	Copied bool `json:"copied"`
+}
+
+type videoFavMoveResponse struct {
+	OK    bool `json:"ok"`
+	Moved bool `json:"moved"`
+}
+
+type watchLaterToggleResponse struct {
+	InWatchLater bool `json:"in_watch_later"`
+}
+
+type watchLaterListResponse struct {
+	Items    []service.WatchLaterVideoItem `json:"items"`
+	Total    int64                         `json:"total"`
+	MaxLimit int                           `json:"max_limit"`
+}
+
+type favoriteVideoItemDTO struct {
+	ID                uint64 `json:"id"`
+	Title             string `json:"title"`
+	CoverURL          string `json:"cover_url"`
+	PlayCount         uint64 `json:"play_count"`
+	DanmakuCount      uint64 `json:"danmaku_count"`
+	Duration          uint64 `json:"duration"`
+	Uploader          string `json:"uploader"`
+	UploaderID        uint64 `json:"uploader_id"`
+	UploaderAvatarURL string `json:"uploader_avatar_url"`
+	CreatedAt         string `json:"created_at"`
+	FavoritedAt       string `json:"favorited_at"`
+	FolderID          uint64 `json:"folder_id"`
+}
+
+type favoriteListResponse struct {
+	Items    []favoriteVideoItemDTO `json:"items"`
+	Total    int64                  `json:"total"`
+	MaxLimit int                    `json:"max_limit"`
+}
+
+type coinVideoItemDTO struct {
+	ID                uint64  `json:"id"`
+	Title             string  `json:"title"`
+	CoverURL          string  `json:"cover_url"`
+	PlayCount         uint64  `json:"play_count"`
+	DanmakuCount      uint64  `json:"danmaku_count"`
+	CommentCount      uint64  `json:"comment_count"`
+	Duration          float64 `json:"duration"`
+	Uploader          string  `json:"uploader"`
+	UploaderAvatarURL string  `json:"uploader_avatar_url"`
+	CreatedAt         string  `json:"created_at"`
+	CoinedAt          string  `json:"coined_at"`
+}
+
+type coinListResponse struct {
+	Items    []coinVideoItemDTO `json:"items"`
+	Total    int64              `json:"total"`
+	MaxLimit int                `json:"max_limit"`
+}
+
+type msgOKResponse struct {
+	Msg string `json:"msg"`
+}
 
 type setVideoFavoriteFoldersJSON struct {
 	FolderIDs []uint64 `json:"folder_ids"`
@@ -161,22 +259,20 @@ func (a *API) GetVideoFavoritePicker(c *gin.Context) {
 		return
 	}
 	selected := make(map[uint64]bool)
-	items := make([]gin.H, 0, len(folderRows))
+	items := make([]favoriteFolderSelectItem, 0, len(folderRows))
 	for _, row := range folderRows {
-		id, _ := row["id"].(uint64)
-		isDefault, _ := row["is_default"].(bool)
-		videoCount, _ := row["video_count"].(int64)
-		countLabel := strconv.FormatInt(videoCount, 10)
-		if !isDefault {
-			countLabel = strconv.FormatInt(videoCount, 10) + "/" + strconv.Itoa(favoriteFolderCapacity)
+		countLabel := strconv.FormatInt(row.VideoCount, 10)
+		if !row.IsDefault {
+			countLabel = strconv.FormatInt(row.VideoCount, 10) + "/" + strconv.Itoa(favoriteFolderCapacity)
 		}
-		inFolder, _ := a.FavoriteSvc.CheckFavoriteExists(context.Background(), uid, id, vid)
+		inFolder, _ := a.FavoriteSvc.CheckFavoriteExists(context.Background(), uid, row.ID, vid)
 		if inFolder {
-			selected[id] = true
+			selected[row.ID] = true
 		}
-		items = append(items, gin.H{"id": id, "title": row["title"],
-			"is_default": isDefault, "video_count": videoCount,
-			"count_label": countLabel, "selected": selected[id],
+		items = append(items, favoriteFolderSelectItem{
+			ID: row.ID, Title: row.Title,
+			IsDefault: row.IsDefault, VideoCount: row.VideoCount,
+			CountLabel: countLabel, Selected: selected[row.ID],
 		})
 	}
 	v, _ := a.VideoSvc.GetPublishedVideo(context.Background(), vid)
@@ -184,7 +280,7 @@ func (a *API) GetVideoFavoritePicker(c *gin.Context) {
 	if v != nil {
 		favCount = v.FavCount
 	}
-	resp.OK(c, gin.H{"favorited": len(selected) > 0, "fav_count": favCount, "folder_ids": folderIDsFromMap(selected), "items": items})
+	resp.OK(c, videoFavFolderSelectResponse{Favorited: len(selected) > 0, FavCount: favCount, FolderIDs: folderIDsFromMap(selected), Items: items})
 }
 
 func folderIDsFromMap(m map[uint64]bool) []uint64 {
@@ -240,7 +336,7 @@ func (a *API) SetVideoFavoriteFolders(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	resp.OK(c, gin.H{"favorited": result.Favorited, "fav_count": result.FavCount, "folder_ids": result.FolderIDs})
+	resp.OK(c, videoFavSetResponse{Favorited: result.Favorited, FavCount: result.FavCount, FolderIDs: result.FolderIDs})
 }
 
 func (a *API) syncVideoFavCountAfterUserChange(vid uint64, before, after int64) {
@@ -295,7 +391,7 @@ func (a *API) RemoveVideoFromFavoriteFolder(c *gin.Context) {
 	}
 	after, _ := a.userVideoFavoriteCount(uid, vid)
 	a.syncVideoFavCountAfterUserChange(vid, before, after)
-	resp.OK(c, gin.H{"ok": true, "removed": after < before})
+	resp.OK(c, videoFavRemoveResponse{OK: true, Removed: after < before})
 }
 
 // AddVideoToFavoriteFolder copies the video into another folder.
@@ -332,7 +428,7 @@ func (a *API) AddVideoToFavoriteFolder(c *gin.Context) {
 		return
 	}
 	if exists {
-		resp.OK(c, gin.H{"ok": true, "copied": false})
+		resp.OK(c, videoFavCopyResponse{OK: true, Copied: false})
 		return
 	}
 	cnt, err := a.FavoriteSvc.CountFavoritesInFolder(context.Background(), folderID)
@@ -355,7 +451,7 @@ func (a *API) AddVideoToFavoriteFolder(c *gin.Context) {
 	}
 	after, _ := a.userVideoFavoriteCount(uid, vid)
 	a.syncVideoFavCountAfterUserChange(vid, before, after)
-	resp.OK(c, gin.H{"ok": true, "copied": true})
+	resp.OK(c, videoFavCopyResponse{OK: true, Copied: true})
 }
 
 type moveVideoFavoriteFolderJSON struct {
@@ -415,7 +511,7 @@ func (a *API) MoveVideoFavoriteFolder(c *gin.Context) {
 			resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 			return
 		}
-		resp.OK(c, gin.H{"ok": true, "moved": true})
+		resp.OK(c, videoFavMoveResponse{OK: true, Moved: true})
 		return
 	}
 	cnt, err := a.FavoriteSvc.CountFavoritesInFolder(context.Background(), body.ToFolderID)
@@ -435,7 +531,7 @@ func (a *API) MoveVideoFavoriteFolder(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	resp.OK(c, gin.H{"ok": true, "moved": true})
+	resp.OK(c, videoFavMoveResponse{OK: true, Moved: true})
 }
 
 func parseVideoFolderParams(c *gin.Context) (vid, folderID uint64, ok bool) {
@@ -506,15 +602,15 @@ func (a *API) PostVideoCoin(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeAlreadyCoined)
 		return
 	}
-	resp.OK(c, gin.H{
-		"coined":                  true,
-		"coin_count":              result.CoinCount,
-		"amount":                  result.Amount,
-		"my_coin_amount":          result.MyCoinAmount,
-		"coined_by_me":            true,
-		"coin_balance":            result.CoinBalance,
-		"daily_coin_exp_progress": result.DailyProgress,
-		"daily_coin_exp_max":      result.DailyMax,
+	resp.OK(c, articleCoinResponse{
+		Coined:               true,
+		CoinCount:            result.CoinCount,
+		Amount:               result.Amount,
+		MyCoinAmount:         result.MyCoinAmount,
+		CoinedByMe:           true,
+		CoinBalance:          result.CoinBalance,
+		DailyCoinExpProgress: result.DailyProgress,
+		DailyCoinExpMax:      result.DailyMax,
 	})
 }
 
@@ -547,7 +643,7 @@ func (a *API) ToggleWatchLater(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	resp.OK(c, gin.H{"in_watch_later": added})
+	resp.OK(c, watchLaterToggleResponse{InWatchLater: added})
 }
 
 const watchLaterMaxItems = 100
@@ -574,7 +670,7 @@ func (a *API) ListMyWatchLater(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	resp.OK(c, gin.H{"items": items, "total": total, "max_limit": watchLaterMaxItems})
+	resp.OK(c, watchLaterListResponse{Items: items, Total: total, MaxLimit: watchLaterMaxItems})
 }
 
 // ClearMyWatchLater removes all watch-later entries for the current user.
@@ -595,7 +691,7 @@ func (a *API) ClearMyWatchLater(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	resp.OK(c, gin.H{"msg": "ok"})
+	resp.OK(c, msgOKResponse{Msg: "ok"})
 }
 
 // ClearWatchedWatchLater removes watched entries from the user's watch-later queue.
@@ -616,7 +712,7 @@ func (a *API) ClearWatchedWatchLater(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	resp.OK(c, gin.H{"msg": "ok"})
+	resp.OK(c, msgOKResponse{Msg: "ok"})
 }
 
 // MarkWatchLaterWatched marks a watch-later item as watched.
@@ -643,10 +739,10 @@ func (a *API) MarkWatchLaterWatched(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	resp.OK(c, gin.H{"msg": "ok"})
+	resp.OK(c, msgOKResponse{Msg: "ok"})
 }
 
-func (a *API) favoriteListItems(ctx context.Context, ownerID uint64, limit int, folderID uint64, filterFolder bool) ([]gin.H, int64, error) {
+func (a *API) favoriteListItems(ctx context.Context, ownerID uint64, limit int, folderID uint64, filterFolder bool) ([]favoriteVideoItemDTO, int64, error) {
 	if _, err := a.ensureDefaultFavoriteFolder(ownerID); err != nil {
 		return nil, 0, err
 	}
@@ -654,15 +750,15 @@ func (a *API) favoriteListItems(ctx context.Context, ownerID uint64, limit int, 
 	if err != nil {
 		return nil, 0, err
 	}
-	items := make([]gin.H, 0, len(result.Items))
+	items := make([]favoriteVideoItemDTO, 0, len(result.Items))
 	for _, item := range result.Items {
-		items = append(items, gin.H{
-			"id": item.ID, "title": item.Title, "cover_url": item.CoverURL,
-			"play_count": item.PlayCount, "danmaku_count": item.DanmakuCount, "duration": item.Duration,
-			"uploader": item.UploaderName, "uploader_id": item.UploaderID,
-			"uploader_avatar_url": item.UploaderAvatar,
-			"created_at":          item.CreatedAt, "favorited_at": item.FavoritedAt,
-			"folder_id": item.FolderID,
+		items = append(items, favoriteVideoItemDTO{
+			ID: item.ID, Title: item.Title, CoverURL: item.CoverURL,
+			PlayCount: item.PlayCount, DanmakuCount: item.DanmakuCount, Duration: item.Duration,
+			Uploader: item.UploaderName, UploaderID: item.UploaderID,
+			UploaderAvatarURL: item.UploaderAvatar,
+			CreatedAt:         item.CreatedAt, FavoritedAt: item.FavoritedAt,
+			FolderID: item.FolderID,
 		})
 	}
 	return items, result.Total, nil
@@ -686,7 +782,7 @@ func (a *API) ListMyFavorites(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	resp.OK(c, gin.H{"items": items, "total": total, "max_limit": watchLaterMaxItems})
+	resp.OK(c, favoriteListResponse{Items: items, Total: total, MaxLimit: watchLaterMaxItems})
 }
 
 // ListUserFavorites returns a user's favorited published videos for their public space.
@@ -703,7 +799,7 @@ func (a *API) ListUserFavorites(c *gin.Context) {
 	}
 	viewer, viewerOK := middleware.UserID(c)
 	if !spaceViewerCanSee(ownerID, viewerOK, viewer, up.PrivacyPublicFavorites) {
-		resp.OK(c, gin.H{"items": []gin.H{}, "total": 0})
+		resp.OK(c, favoriteListResponse{Items: []favoriteVideoItemDTO{}, Total: 0})
 		return
 	}
 	limit := parseLimit(c, 200, 200)
@@ -728,22 +824,22 @@ func (a *API) ListUserFavorites(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	resp.OK(c, gin.H{"items": items, "total": total, "max_limit": watchLaterMaxItems})
+	resp.OK(c, favoriteListResponse{Items: items, Total: total, MaxLimit: watchLaterMaxItems})
 }
 
-func (a *API) coinRecentListItems(ctx context.Context, ownerID uint64, limit int) ([]gin.H, int64, error) {
+func (a *API) coinRecentListItems(ctx context.Context, ownerID uint64, limit int) ([]coinVideoItemDTO, int64, error) {
 	items, total, err := a.EngagementSvc.ListUserCoinedVideos(ctx, ownerID, limit)
 	if err != nil {
 		return nil, 0, err
 	}
-	result := make([]gin.H, 0, len(items))
+	result := make([]coinVideoItemDTO, 0, len(items))
 	for _, item := range items {
-		result = append(result, gin.H{
-			"id": item.ID, "title": item.Title, "cover_url": item.CoverURL,
-			"play_count": item.PlayCount, "danmaku_count": item.DanmakuCount,
-			"comment_count": item.CommentCount, "duration": item.Duration,
-			"uploader": item.UploaderName, "uploader_avatar_url": item.UploaderAvatar,
-			"created_at": item.CreatedAt, "coined_at": item.CoinedAt,
+		result = append(result, coinVideoItemDTO{
+			ID: item.ID, Title: item.Title, CoverURL: item.CoverURL,
+			PlayCount: item.PlayCount, DanmakuCount: item.DanmakuCount,
+			CommentCount: item.CommentCount, Duration: item.Duration,
+			Uploader: item.UploaderName, UploaderAvatarURL: item.UploaderAvatar,
+			CreatedAt: item.CreatedAt, CoinedAt: item.CoinedAt,
 		})
 	}
 	return result, total, nil
@@ -764,7 +860,7 @@ func (a *API) ListUserRecentCoinVideos(c *gin.Context) {
 	viewer, viewerOK := middleware.UserID(c)
 	isOwner := viewerOK && viewer == ownerID
 	if !isOwner && !up.PrivacyPublicRecentCoins {
-		resp.OK(c, gin.H{"items": []gin.H{}, "total": 0})
+		resp.OK(c, coinListResponse{Items: []coinVideoItemDTO{}, Total: 0})
 		return
 	}
 	limit := parseLimit(c, 20, 50)
@@ -773,5 +869,5 @@ func (a *API) ListUserRecentCoinVideos(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	resp.OK(c, gin.H{"items": items, "total": total, "max_limit": watchLaterMaxItems})
+	resp.OK(c, coinListResponse{Items: items, Total: total, MaxLimit: watchLaterMaxItems})
 }

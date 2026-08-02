@@ -81,26 +81,76 @@ func (a *API) dmUserBrief(ctx context.Context, uid uint64) (name, avatar string)
 	return name, avatar
 }
 
-func (a *API) dmFormatMessage(m *dm.DmMessage, senderName, senderAvatar string) gin.H {
+type dmMessageDTO struct {
+	ID             uint64 `json:"id"`
+	ConversationID uint64 `json:"conversation_id"`
+	SenderID       uint64 `json:"sender_id"`
+	SenderName     string `json:"sender_name"`
+	SenderAvatar   string `json:"sender_avatar"`
+	Content        string `json:"content"`
+	Role           string `json:"role"`
+	ToolActivities string `json:"tool_activities"`
+	ToolResultData string `json:"tool_result_data"`
+	CreatedAt      string `json:"created_at"`
+}
+
+type dmConversationDTO struct {
+	ID             uint64 `json:"id"`
+	PeerID         uint64 `json:"peer_id"`
+	PeerName       string `json:"peer_name"`
+	PeerAvatar     string `json:"peer_avatar"`
+	LastPreview    string `json:"last_preview"`
+	LastMessageAt  string `json:"last_message_at"`
+	UnreadCount    uint32 `json:"unread_count"`
+	Pinned         bool   `json:"pinned"`
+	Muted          bool   `json:"muted"`
+	Kind           string `json:"kind"`
+	IsAgent        bool   `json:"is_agent"`
+	AgentProfileID uint64 `json:"agent_profile_id"`
+}
+
+type dmConversationListResponse struct {
+	Items []dmConversationDTO `json:"items"`
+}
+
+type dmMessageListResponse struct {
+	Items      []dmMessageDTO `json:"items"`
+	NextCursor string         `json:"next_cursor"`
+	PeerID     uint64         `json:"peer_id"`
+	PeerName   string         `json:"peer_name"`
+	PeerAvatar string         `json:"peer_avatar"`
+}
+
+type dmMessageEvent struct {
+	Type    string       `json:"type"`
+	Message dmMessageDTO `json:"message"`
+}
+
+type dmConversationEvent struct {
+	Type         string            `json:"type"`
+	Conversation dmConversationDTO `json:"conversation"`
+}
+
+func (a *API) dmFormatMessage(m *dm.DmMessage, senderName, senderAvatar string) dmMessageDTO {
 	role := m.Role
 	if role == "" {
 		role = "user"
 	}
-	return gin.H{
-		"id":               m.ID,
-		"conversation_id":  m.ConversationID,
-		"sender_id":        m.SenderID,
-		"sender_name":      senderName,
-		"sender_avatar":    senderAvatar,
-		"content":          m.Content,
-		"role":             role,
-		"tool_activities":  m.ToolActivities,
-		"tool_result_data": m.ToolResultData,
-		"created_at":       m.CreatedAt.Format("2006-01-02 15:04:05"),
+	return dmMessageDTO{
+		ID:             m.ID,
+		ConversationID: m.ConversationID,
+		SenderID:       m.SenderID,
+		SenderName:     senderName,
+		SenderAvatar:   senderAvatar,
+		Content:        m.Content,
+		Role:           role,
+		ToolActivities: m.ToolActivities,
+		ToolResultData: m.ToolResultData,
+		CreatedAt:      m.CreatedAt.Format("2006-01-02 15:04:05"),
 	}
 }
 
-func (a *API) dmFormatConversation(conv *dm.DmConversation, self uint64, part *dm.DmParticipant) gin.H {
+func (a *API) dmFormatConversation(conv *dm.DmConversation, self uint64, part *dm.DmParticipant) dmConversationDTO {
 	peer := dmPeerID(conv, self)
 	name, avatar := a.dmUserBrief(context.Background(), peer)
 	unread := uint32(0)
@@ -115,23 +165,23 @@ func (a *API) dmFormatConversation(conv *dm.DmConversation, self uint64, part *d
 	if kind == "" {
 		kind = dm.DmKindHuman
 	}
-	return gin.H{
-		"id":               conv.ID,
-		"peer_id":          peer,
-		"peer_name":        name,
-		"peer_avatar":      avatar,
-		"last_preview":     conv.LastPreview,
-		"last_message_at":  conv.LastMessageAt.Format("2006-01-02 15:04:05"),
-		"unread_count":     unread,
-		"pinned":           pinned,
-		"muted":            muted,
-		"kind":             kind,
-		"is_agent":         a.dmIsAgentConv(conv),
-		"agent_profile_id": conv.AgentProfileID,
+	return dmConversationDTO{
+		ID:             conv.ID,
+		PeerID:         peer,
+		PeerName:       name,
+		PeerAvatar:     avatar,
+		LastPreview:    conv.LastPreview,
+		LastMessageAt:  conv.LastMessageAt.Format("2006-01-02 15:04:05"),
+		UnreadCount:    unread,
+		Pinned:         pinned,
+		Muted:          muted,
+		Kind:           kind,
+		IsAgent:        a.dmIsAgentConv(conv),
+		AgentProfileID: conv.AgentProfileID,
 	}
 }
 
-func (a *API) dmPushEvent(userID uint64, payload gin.H) {
+func (a *API) dmPushEvent(userID uint64, payload interface{}) {
 	if a.ChatHub == nil || userID == 0 {
 		return
 	}
@@ -175,7 +225,7 @@ func (a *API) ListDmConversations(c *gin.Context) {
 		}
 		return convs[i].LastMessageAt.After(convs[j].LastMessageAt)
 	})
-	items := make([]gin.H, 0, len(convs))
+	items := make([]dmConversationDTO, 0, len(convs))
 	for i := range convs {
 		conv := &convs[i]
 		part := partMap[conv.ID]
@@ -184,7 +234,7 @@ func (a *API) ListDmConversations(c *gin.Context) {
 		}
 		items = append(items, a.dmFormatConversation(conv, uid, part))
 	}
-	resp.OK(c, gin.H{"items": items})
+	resp.OK(c, dmConversationListResponse{Items: items})
 }
 
 // CreateDmConversation finds or creates a thread with peer_id.
@@ -268,7 +318,7 @@ func (a *API) DeleteDmConversation(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	resp.OK(c, gin.H{"ok": true})
+	resp.OK(c, okResponse{OK: true})
 }
 
 // ResetDmAgentConversation POST /api/v1/dm/conversations/:id/reset — clear AI chat history and restart.
@@ -295,7 +345,7 @@ func (a *API) ResetDmAgentConversation(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	resp.OK(c, gin.H{"ok": true})
+	resp.OK(c, okResponse{OK: true})
 }
 
 // PatchDmConversationSettings updates pin / mute for the current user's participant row.
@@ -338,7 +388,7 @@ func (a *API) PatchDmConversationSettings(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	resp.OK(c, gin.H{"ok": true})
+	resp.OK(c, okResponse{OK: true})
 }
 
 // ListDmMessages lists messages in a conversation (ASC by id).
@@ -403,7 +453,7 @@ func (a *API) ListDmMessages(c *gin.Context) {
 		name   string
 		avatar string
 	}{}
-	items := make([]gin.H, 0, len(list))
+	items := make([]dmMessageDTO, 0, len(list))
 	for i := range list {
 		m := &list[i]
 		sc, ok := senderCache[m.SenderID]
@@ -419,12 +469,12 @@ func (a *API) ListDmMessages(c *gin.Context) {
 	}
 	_ = a.DmSvc.MarkConversationRead(context.Background(), convID, uid)
 	peerName, peerAvatar := a.dmUserBrief(context.Background(), peer)
-	resp.OK(c, gin.H{
-		"items":       items,
-		"next_cursor": next,
-		"peer_id":     peer,
-		"peer_name":   peerName,
-		"peer_avatar": peerAvatar,
+	resp.OK(c, dmMessageListResponse{
+		Items:      items,
+		NextCursor: next,
+		PeerID:     peer,
+		PeerName:   peerName,
+		PeerAvatar: peerAvatar,
 	})
 }
 
@@ -489,18 +539,19 @@ func (a *API) PostDmMessage(c *gin.Context) {
 	senderName, senderAvatar := a.dmUserBrief(context.Background(), uid)
 	out := a.dmFormatMessage(result.Message, senderName, senderAvatar)
 	convPayload := a.dmFormatConversation(result.Conversation, uid, result.SelfPart)
-	var peerConv gin.H
+	var peerConv *dmConversationDTO
 	if !isAgent && result.PeerPart != nil {
-		peerConv = a.dmFormatConversation(result.Conversation, peer, result.PeerPart)
+		pc := a.dmFormatConversation(result.Conversation, peer, result.PeerPart)
+		peerConv = &pc
 	}
-	event := gin.H{"type": "dm_message", "message": out}
+	event := dmMessageEvent{Type: "dm_message", Message: out}
 	a.dmPushEvent(uid, event)
 	if !isAgent && result.PeerPart != nil && !result.PeerPart.Muted {
 		a.dmPushEvent(peer, event)
 	}
-	a.dmPushEvent(uid, gin.H{"type": "dm_conversation", "conversation": convPayload})
+	a.dmPushEvent(uid, dmConversationEvent{Type: "dm_conversation", Conversation: convPayload})
 	if !isAgent && result.PeerPart != nil && !result.PeerPart.Muted {
-		a.dmPushEvent(peer, gin.H{"type": "dm_conversation", "conversation": peerConv})
+		a.dmPushEvent(peer, dmConversationEvent{Type: "dm_conversation", Conversation: *peerConv})
 	}
 	if isAgent {
 		convCopy := result.Conversation

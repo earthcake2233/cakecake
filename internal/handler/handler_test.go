@@ -8,8 +8,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/gin-gonic/gin"
-
 	"cakecake/internal/config"
 )
 
@@ -400,19 +398,19 @@ func TestNormalizeSearchHistoryKeywords(t *testing.T) {
 }
 
 func TestAppendVideoZoneFields(t *testing.T) {
-	m := gin.H{}
+	m := &videoZoneFields{}
 	appendVideoZoneFields(m, "生活-日常")
-	if m["zone"] != "生活-日常" {
-		t.Errorf("zone = %q", m["zone"])
+	if m.Zone != "生活-日常" {
+		t.Errorf("zone = %q", m.Zone)
 	}
-	if m["zone_parent"] != "生活" {
-		t.Errorf("zone_parent = %q", m["zone_parent"])
+	if m.ZoneParent != "生活" {
+		t.Errorf("zone_parent = %q", m.ZoneParent)
 	}
-	if m["zone_child"] != "日常" {
-		t.Errorf("zone_child = %q", m["zone_child"])
+	if m.ZoneChild != "日常" {
+		t.Errorf("zone_child = %q", m.ZoneChild)
 	}
-	if m["category"] != "生活 > 日常" {
-		t.Errorf("category = %q", m["category"])
+	if m.Category != "生活 > 日常" {
+		t.Errorf("category = %q", m.Category)
 	}
 }
 

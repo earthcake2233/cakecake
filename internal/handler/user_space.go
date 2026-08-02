@@ -15,6 +15,29 @@ import (
 	"cakecake/internal/pkg/userlevel"
 )
 
+type spaceProfileResponse struct {
+	UserID         uint64              `json:"user_id"`
+	Nickname       string              `json:"nickname"`
+	CakeID         string              `json:"cake_id"`
+	AvatarURL      string              `json:"avatar_url"`
+	Sign           string              `json:"sign"`
+	Announcement   string              `json:"announcement"`
+	Gender         string              `json:"gender"`
+	Birthday       string              `json:"birthday"`
+	Privacy        spacePrivacyPayload `json:"privacy"`
+	IsOwner        bool                `json:"is_owner"`
+	FollowingCount int64               `json:"following_count"`
+	FollowerCount  int64               `json:"follower_count"`
+	PublishedCount int64               `json:"published_count"`
+	FollowedByMe   bool                `json:"followed_by_me"`
+	LevelInfo      userlevel.Info      `json:"level_info"`
+}
+
+type userVideoListResponse struct {
+	Items      []videoCardDTO `json:"items"`
+	NextCursor string         `json:"next_cursor"`
+}
+
 // GetUserPublic returns a minimal public profile for personal space (no auth).
 // GetUserPublic godoc
 // @Summary      Get user public profile
@@ -70,26 +93,26 @@ func (a *API) GetUserPublic(c *gin.Context) {
 	}
 	counts, _ := a.FollowSvc.GetFollowCounts(c.Request.Context(), id)
 	pubCount, _ := a.FollowSvc.GetUploaderPublishedCount(c.Request.Context(), id)
-	payload := gin.H{
-		"user_id":         u.ID,
-		"nickname":        nick,
-		"cake_id":         strings.TrimSpace(u.CakeID),
-		"avatar_url":      avatar,
-		"sign":            sign,
-		"announcement":    announcement,
-		"gender":          gender,
-		"birthday":        birthday,
-		"privacy":         privacy,
-		"is_owner":        isOwner,
-		"following_count": counts.Following,
-		"follower_count":  counts.Followers,
-		"published_count": pubCount,
-		"followed_by_me":  false,
-		"level_info":      userlevel.FromExperience(u.Experience),
+	payload := spaceProfileResponse{
+		UserID:         u.ID,
+		Nickname:       nick,
+		CakeID:         strings.TrimSpace(u.CakeID),
+		AvatarURL:      avatar,
+		Sign:           sign,
+		Announcement:   announcement,
+		Gender:         gender,
+		Birthday:       birthday,
+		Privacy:        privacy,
+		IsOwner:        isOwner,
+		FollowingCount: counts.Following,
+		FollowerCount:  counts.Followers,
+		PublishedCount: pubCount,
+		FollowedByMe:   false,
+		LevelInfo:      userlevel.FromExperience(u.Experience),
 	}
 	if viewerOK && viewer != id {
 		following, _ := a.FollowSvc.IsFollowing(c.Request.Context(), viewer, id)
-		payload["followed_by_me"] = following
+		payload.FollowedByMe = following
 	}
 	resp.OK(c, payload)
 }
@@ -142,7 +165,7 @@ func (a *API) ListUserPublishedVideos(c *gin.Context) {
 		ids = append(ids, v.ID)
 	}
 	eng := a.engagementByViewer(viewer, ids)
-	items := make([]gin.H, 0, len(list))
+	items := make([]videoCardDTO, 0, len(list))
 	for _, v := range list {
 		pc, _ := a.Play.Display(ctx, &v)
 		items = append(items, videoCard(v, up, pc, eng[v.ID]))
@@ -152,5 +175,5 @@ func (a *API) ListUserPublishedVideos(c *gin.Context) {
 		last := list[len(list)-1]
 		next = strconv.FormatUint(last.ID, 10)
 	}
-	resp.OK(c, gin.H{"items": items, "next_cursor": next})
+	resp.OK(c, userVideoListResponse{Items: items, NextCursor: next})
 }

@@ -253,12 +253,12 @@ func (a *API) UploadVideo(c *gin.Context) {
 		zap.Uint64("video_id", v.ID),
 		zap.String("queue", queue.TranscodeQueue),
 	)
-	resp.JSON(c, http.StatusCreated, errcode.CodeSuccess, gin.H{
-		"id":         v.ID,
-		"status":     v.Status,
-		"title":      v.Title,
-		"duration":   v.DurationSec,
-		"created_at": v.CreatedAt.Format("2006-01-02 15:04:05"),
+	resp.JSON(c, http.StatusCreated, errcode.CodeSuccess, createVideoResponse{
+		ID:        v.ID,
+		Status:    v.Status,
+		Title:     v.Title,
+		Duration:  v.DurationSec,
+		CreatedAt: v.CreatedAt.Format("2006-01-02 15:04:05"),
 	})
 }
 
@@ -327,12 +327,17 @@ func (a *API) ListPublishedVideos(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	items := make([]gin.H, 0, len(res.Videos))
+	items := make([]videoCardDTO, 0, len(res.Videos))
 	for _, v := range res.Videos {
 		pc, _ := a.Play.Display(context.Background(), &v)
 		items = append(items, videoCard(v, user.DisplayUsername(&user.User{Username: ""}), pc, videoEngagement{}))
 	}
-	resp.OK(c, gin.H{"items": items, "next_cursor": res.NextCursor, "zone_video_count": res.ZoneVideoCount, "has_more": res.HasMore})
+	resp.OK(c, zoneVideoListResponse{
+		Items:          items,
+		NextCursor:     res.NextCursor,
+		ZoneVideoCount: res.ZoneVideoCount,
+		HasMore:        res.HasMore,
+	})
 }
 func (a *API) countZoneVideos(zoneParent string) int64 {
 	return a.VideoSvc.CountZoneVideos(zoneParent)
@@ -386,8 +391,8 @@ func orderClauseForMyVideos(sort string) string {
 	}
 }
 
-func (a *API) countMyVideosByStatus(uid uint64) gin.H {
-	result := gin.H{}
+func (a *API) countMyVideosByStatus(uid uint64) map[string]int64 {
+	result := map[string]int64{}
 	for st, n := range a.VideoSvc.CountMyVideosByStatus(uid) {
 		result[st] = n
 	}
@@ -421,33 +426,33 @@ func (a *API) ListMyVideos(c *gin.Context) {
 		return
 	}
 	ctx := context.Background()
-	items := make([]gin.H, 0, len(res.Videos))
+	items := make([]myVideoItem, 0, len(res.Videos))
 	for _, v := range res.Videos {
 		pc, _ := a.Play.Display(ctx, &v)
-		items = append(items, gin.H{
-			"id":            v.ID,
-			"title":         v.Title,
-			"status":        v.Status,
-			"fail_reason":   ffmpeg.HumanizeFailReason(v.FailReason),
-			"cover_url":     v.CoverURL,
-			"duration":      v.DurationSec,
-			"play_count":    pc,
-			"danmaku_count": v.DanmakuCount,
-			"comment_count": v.CommentCount,
-			"fav_count":     v.FavCount,
-			"coin_count":    v.CoinCount,
-			"tags":          videoTagsForResponse(v.TagsJSON),
-			"zone":          normalizeVideoZone(v.Zone),
-			"created_at":    v.CreatedAt.Format("2006-01-02 15:04:05"),
+		items = append(items, myVideoItem{
+			ID:           v.ID,
+			Title:        v.Title,
+			Status:       v.Status,
+			FailReason:   ffmpeg.HumanizeFailReason(v.FailReason),
+			CoverURL:     v.CoverURL,
+			Duration:     v.DurationSec,
+			PlayCount:    pc,
+			DanmakuCount: v.DanmakuCount,
+			CommentCount: v.CommentCount,
+			FavCount:     v.FavCount,
+			CoinCount:    v.CoinCount,
+			Tags:         videoTagsForResponse(v.TagsJSON),
+			Zone:         normalizeVideoZone(v.Zone),
+			CreatedAt:    v.CreatedAt.Format("2006-01-02 15:04:05"),
 		})
 	}
-	resp.OK(c, gin.H{
-		"items":       items,
-		"page":        page,
-		"page_size":   pageSize,
-		"total":       res.Total,
-		"total_pages": res.TotalPages,
-		"counts":      a.countMyVideosByStatus(uid),
+	resp.OK(c, myVideoListResponse{
+		Items:      items,
+		Page:       page,
+		PageSize:   pageSize,
+		Total:      res.Total,
+		TotalPages: res.TotalPages,
+		Counts:     a.countMyVideosByStatus(uid),
 	})
 }
 
@@ -495,17 +500,20 @@ func (a *API) GetVideo(c *gin.Context) {
 	eng := a.getVideoEngagementFlags(viewer, v.ID)
 	detail := videoDetail(*v, u, pc, watching, eng)
 	if v.Status == videoStatusDraft && viewer == v.UserID {
-		detail["draft_has_source"] = strings.TrimSpace(v.DraftRawPath) != ""
+		draftHasSource := strings.TrimSpace(v.DraftRawPath) != ""
+		detail.DraftHasSource = &draftHasSource
 	}
 	_, followerCnt := a.getFollowCounts(v.UserID)
-	detail["uploader_follower_count"] = followerCnt
-	detail["uploader_published_count"] = a.getUploaderPublishedCount(v.UserID)
+	detail.UploaderFollowerCount = followerCnt
+	detail.UploaderPublishedCount = a.getUploaderPublishedCount(v.UserID)
 	if viewer > 0 && v.UserID != viewer {
-		detail["followed_by_me"] = a.isFollowing(viewer, v.UserID)
-		detail["daily_coin_exp_progress"] = dailyreward.CoinProgress(a.DB, viewer)
-		detail["daily_coin_exp_max"] = dailyreward.ExpCoinMax
+		detail.FollowedByMe = a.isFollowing(viewer, v.UserID)
+		prog := dailyreward.CoinProgress(a.DB, viewer)
+		max := dailyreward.ExpCoinMax
+		detail.DailyCoinExpProgress = &prog
+		detail.DailyCoinExpMax = &max
 	} else {
-		detail["followed_by_me"] = false
+		detail.FollowedByMe = false
 	}
 	resp.OK(c, detail)
 }
@@ -585,7 +593,7 @@ func (a *API) UpdateMyVideo(c *gin.Context) {
 	if v.Status == video.StatusPublished {
 		a.esIndexVideo(id)
 	}
-	resp.OK(c, gin.H{"ok": true})
+	resp.OK(c, okResponse{OK: true})
 }
 
 // UpdateVideoCover replaces cover on OSS (F3).
@@ -651,7 +659,7 @@ func (a *API) UpdateVideoCover(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	resp.OK(c, gin.H{"cover_url": url})
+	resp.OK(c, imageURLResponse{ImageURL: url})
 }
 
 type videoPlaybackPatch struct {
@@ -723,10 +731,10 @@ func (a *API) PatchVideoPlayback(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	resp.OK(c, gin.H{
-		"comments_closed":  v.CommentsClosed,
-		"comments_curated": v.CommentsCurated,
-		"danmaku_closed":   v.DanmakuClosed,
+	resp.OK(c, videoPlaybackResponse{
+		CommentsClosed:  v.CommentsClosed,
+		CommentsCurated: v.CommentsCurated,
+		DanmakuClosed:   v.DanmakuClosed,
 	})
 }
 
@@ -764,67 +772,178 @@ func (a *API) getVideoEngagementFlags(viewer, videoID uint64) videoEngagement {
 	return e
 }
 
-func videoCard(v video.Video, up string, play uint64, eng videoEngagement) gin.H {
-	m := gin.H{
-		"id":               v.ID,
-		"user_id":          v.UserID,
-		"title":            v.Title,
-		"description":      v.Description,
-		"cover_url":        v.CoverURL,
-		"play_count":       play,
-		"danmaku_count":    v.DanmakuCount,
-		"comment_count":    v.CommentCount,
-		"like_count":       v.LikeCount,
-		"fav_count":        v.FavCount,
-		"coin_count":       v.CoinCount,
-		"liked_by_me":      eng.LikedByMe,
-		"favorited_by_me":  eng.FavoritedByMe,
-		"coined_by_me":     eng.CoinedByMe,
-		"in_watch_later":   eng.InWatchLater,
-		"duration":         v.DurationSec,
-		"uploader":         up,
-		"created_at":       v.CreatedAt.Format("2006-01-02 15:04:05"),
-		"comments_closed":  v.CommentsClosed,
-		"comments_curated": v.CommentsCurated,
-		"danmaku_closed":   v.DanmakuClosed,
+type videoCardDTO struct {
+	ID              uint64  `json:"id"`
+	UserID          uint64  `json:"user_id"`
+	Title           string  `json:"title"`
+	Description     string  `json:"description"`
+	CoverURL        string  `json:"cover_url"`
+	PlayCount       uint64  `json:"play_count"`
+	DanmakuCount    uint64  `json:"danmaku_count"`
+	CommentCount    uint64  `json:"comment_count"`
+	LikeCount       uint64  `json:"like_count"`
+	FavCount        uint64  `json:"fav_count"`
+	CoinCount       uint64  `json:"coin_count"`
+	LikedByMe       bool    `json:"liked_by_me"`
+	FavoritedByMe   bool    `json:"favorited_by_me"`
+	CoinedByMe      bool    `json:"coined_by_me"`
+	InWatchLater    bool    `json:"in_watch_later"`
+	Duration        float64 `json:"duration"`
+	Uploader        string  `json:"uploader"`
+	CreatedAt       string  `json:"created_at"`
+	CommentsClosed  bool    `json:"comments_closed"`
+	CommentsCurated bool    `json:"comments_curated"`
+	DanmakuClosed   bool    `json:"danmaku_closed"`
+	videoZoneFields
+}
+
+type videoDetailDTO struct {
+	ID                     uint64   `json:"id"`
+	UserID                 uint64   `json:"user_id"`
+	Title                  string   `json:"title"`
+	Description            string   `json:"description"`
+	PlayCount              uint64   `json:"play_count"`
+	DanmakuCount           uint64   `json:"danmaku_count"`
+	CommentCount           uint64   `json:"comment_count"`
+	LikeCount              uint64   `json:"like_count"`
+	FavCount               uint64   `json:"fav_count"`
+	CoinCount              uint64   `json:"coin_count"`
+	LikedByMe              bool     `json:"liked_by_me"`
+	FavoritedByMe          bool     `json:"favorited_by_me"`
+	CoinedByMe             bool     `json:"coined_by_me"`
+	MyCoinAmount           int      `json:"my_coin_amount"`
+	InWatchLater           bool     `json:"in_watch_later"`
+	WatchingCount          int      `json:"watching_count"`
+	Duration               float64  `json:"duration"`
+	Uploader               string   `json:"uploader"`
+	UploaderSign           string   `json:"uploader_sign"`
+	UploaderAvatarURL      string   `json:"uploader_avatar_url"`
+	CreatedAt              string   `json:"created_at"`
+	VideoURL               string   `json:"video_url"`
+	CoverURL               string   `json:"cover_url"`
+	Status                 string   `json:"status"`
+	FailReason             string   `json:"fail_reason"`
+	Tags                   []string `json:"tags"`
+	CommentsClosed         bool     `json:"comments_closed"`
+	CommentsCurated        bool     `json:"comments_curated"`
+	DanmakuClosed          bool     `json:"danmaku_closed"`
+	DraftHasSource         *bool    `json:"draft_has_source,omitempty"`
+	UploaderFollowerCount  int64    `json:"uploader_follower_count"`
+	UploaderPublishedCount int64    `json:"uploader_published_count"`
+	FollowedByMe           bool     `json:"followed_by_me"`
+	DailyCoinExpProgress   *int     `json:"daily_coin_exp_progress,omitempty"`
+	DailyCoinExpMax        *int     `json:"daily_coin_exp_max,omitempty"`
+	videoZoneFields
+}
+
+type createVideoResponse struct {
+	ID        uint64  `json:"id"`
+	Status    string  `json:"status"`
+	Title     string  `json:"title"`
+	Duration  float64 `json:"duration"`
+	CreatedAt string  `json:"created_at"`
+}
+
+type zoneVideoListResponse struct {
+	Items          []videoCardDTO `json:"items"`
+	NextCursor     string         `json:"next_cursor"`
+	ZoneVideoCount int64          `json:"zone_video_count"`
+	HasMore        bool           `json:"has_more"`
+}
+
+type myVideoItem struct {
+	ID           uint64   `json:"id"`
+	Title        string   `json:"title"`
+	Status       string   `json:"status"`
+	FailReason   string   `json:"fail_reason"`
+	CoverURL     string   `json:"cover_url"`
+	Duration     float64  `json:"duration"`
+	PlayCount    uint64   `json:"play_count"`
+	DanmakuCount uint64   `json:"danmaku_count"`
+	CommentCount uint64   `json:"comment_count"`
+	FavCount     uint64   `json:"fav_count"`
+	CoinCount    uint64   `json:"coin_count"`
+	Tags         []string `json:"tags"`
+	Zone         string   `json:"zone"`
+	CreatedAt    string   `json:"created_at"`
+}
+
+type myVideoListResponse struct {
+	Items      []myVideoItem    `json:"items"`
+	Page       int              `json:"page"`
+	PageSize   int              `json:"page_size"`
+	Total      int64            `json:"total"`
+	TotalPages int              `json:"total_pages"`
+	Counts     map[string]int64 `json:"counts"`
+}
+
+type videoPlaybackResponse struct {
+	CommentsClosed  bool `json:"comments_closed"`
+	CommentsCurated bool `json:"comments_curated"`
+	DanmakuClosed   bool `json:"danmaku_closed"`
+}
+
+func videoCard(v video.Video, up string, play uint64, eng videoEngagement) videoCardDTO {
+	m := videoCardDTO{
+		ID:              v.ID,
+		UserID:          v.UserID,
+		Title:           v.Title,
+		Description:     v.Description,
+		CoverURL:        v.CoverURL,
+		PlayCount:       play,
+		DanmakuCount:    v.DanmakuCount,
+		CommentCount:    v.CommentCount,
+		LikeCount:       v.LikeCount,
+		FavCount:        v.FavCount,
+		CoinCount:       v.CoinCount,
+		LikedByMe:       eng.LikedByMe,
+		FavoritedByMe:   eng.FavoritedByMe,
+		CoinedByMe:      eng.CoinedByMe,
+		InWatchLater:    eng.InWatchLater,
+		Duration:        v.DurationSec,
+		Uploader:        up,
+		CreatedAt:       v.CreatedAt.Format("2006-01-02 15:04:05"),
+		CommentsClosed:  v.CommentsClosed,
+		CommentsCurated: v.CommentsCurated,
+		DanmakuClosed:   v.DanmakuClosed,
 	}
-	appendVideoZoneFields(m, v.Zone)
+	appendVideoZoneFields(&m.videoZoneFields, v.Zone)
 	return m
 }
 
-func videoDetail(v video.Video, u user.User, play uint64, watching int, eng videoEngagement) gin.H {
-	m := gin.H{
-		"id":                  v.ID,
-		"user_id":             v.UserID,
-		"title":               v.Title,
-		"description":         v.Description,
-		"play_count":          play,
-		"danmaku_count":       v.DanmakuCount,
-		"comment_count":       v.CommentCount,
-		"like_count":          v.LikeCount,
-		"fav_count":           v.FavCount,
-		"coin_count":          v.CoinCount,
-		"liked_by_me":         eng.LikedByMe,
-		"favorited_by_me":     eng.FavoritedByMe,
-		"coined_by_me":        eng.CoinedByMe,
-		"my_coin_amount":      eng.MyCoinAmount,
-		"in_watch_later":      eng.InWatchLater,
-		"watching_count":      watching,
-		"duration":            v.DurationSec,
-		"uploader":            user.DisplayUsername(&u),
-		"uploader_sign":       strings.TrimSpace(u.Sign),
-		"uploader_avatar_url": uploaderAvatarForAPI(&u),
-		"created_at":          v.CreatedAt.Format("2006-01-02 15:04:05"),
-		"video_url":           v.VideoURL,
-		"cover_url":           v.CoverURL,
-		"status":              v.Status,
-		"fail_reason":         ffmpeg.HumanizeFailReason(v.FailReason),
-		"tags":                videoTagsForResponse(v.TagsJSON),
-		"comments_closed":     v.CommentsClosed,
-		"comments_curated":    v.CommentsCurated,
-		"danmaku_closed":      v.DanmakuClosed,
+func videoDetail(v video.Video, u user.User, play uint64, watching int, eng videoEngagement) videoDetailDTO {
+	m := videoDetailDTO{
+		ID:                v.ID,
+		UserID:            v.UserID,
+		Title:             v.Title,
+		Description:       v.Description,
+		PlayCount:         play,
+		DanmakuCount:      v.DanmakuCount,
+		CommentCount:      v.CommentCount,
+		LikeCount:         v.LikeCount,
+		FavCount:          v.FavCount,
+		CoinCount:         v.CoinCount,
+		LikedByMe:         eng.LikedByMe,
+		FavoritedByMe:     eng.FavoritedByMe,
+		CoinedByMe:        eng.CoinedByMe,
+		MyCoinAmount:      eng.MyCoinAmount,
+		InWatchLater:      eng.InWatchLater,
+		WatchingCount:     watching,
+		Duration:          v.DurationSec,
+		Uploader:          user.DisplayUsername(&u),
+		UploaderSign:      strings.TrimSpace(u.Sign),
+		UploaderAvatarURL: uploaderAvatarForAPI(&u),
+		CreatedAt:         v.CreatedAt.Format("2006-01-02 15:04:05"),
+		VideoURL:          v.VideoURL,
+		CoverURL:          v.CoverURL,
+		Status:            v.Status,
+		FailReason:        ffmpeg.HumanizeFailReason(v.FailReason),
+		Tags:              videoTagsForResponse(v.TagsJSON),
+		CommentsClosed:    v.CommentsClosed,
+		CommentsCurated:   v.CommentsCurated,
+		DanmakuClosed:     v.DanmakuClosed,
 	}
-	appendVideoZoneFields(m, v.Zone)
+	appendVideoZoneFields(&m.videoZoneFields, v.Zone)
 	return m
 }
 
@@ -904,5 +1023,5 @@ func (a *API) DeleteMyVideo(c *gin.Context) {
 	}
 	purgeVideoOSSObjects(a.Cfg, a.OSS, a.Log, *v)
 	a.esDeleteVideo(id)
-	resp.OK(c, gin.H{"ok": true})
+	resp.OK(c, okResponse{OK: true})
 }

@@ -1,10 +1,6 @@
 package handler
 
-import (
-	"strings"
-
-	"github.com/gin-gonic/gin"
-)
+import "strings"
 
 // videoZoneAllowed matches the top bar menuLeft / constants/videoZones.js.
 var videoZoneAllowed = initVideoZoneAllowed()
@@ -45,11 +41,19 @@ func videoZoneCategoryLabel(zone string) string {
 	return parent
 }
 
-func appendVideoZoneFields(m gin.H, zone string) {
+// videoZoneFields is embedded in video response DTOs to expose zone metadata.
+type videoZoneFields struct {
+	Zone       string `json:"zone"`
+	ZoneParent string `json:"zone_parent"`
+	ZoneChild  string `json:"zone_child"`
+	Category   string `json:"category"`
+}
+
+func appendVideoZoneFields(m *videoZoneFields, zone string) {
 	z := normalizeVideoZone(zone)
 	parent, child := splitVideoZone(z)
-	m["zone"] = z
-	m["zone_parent"] = parent
-	m["zone_child"] = child
-	m["category"] = videoZoneCategoryLabel(z)
+	m.Zone = z
+	m.ZoneParent = parent
+	m.ZoneChild = child
+	m.Category = videoZoneCategoryLabel(z)
 }

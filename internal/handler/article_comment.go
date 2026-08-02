@@ -15,6 +15,40 @@ import (
 	"cakecake/internal/service"
 )
 
+type articleCommentItemDTO struct {
+	ID           uint64 `json:"id"`
+	UserID       uint64 `json:"user_id"`
+	Username     string `json:"username"`
+	AvatarURL    string `json:"avatar_url"`
+	ParentID     uint64 `json:"parent_id"`
+	Level        int    `json:"level"`
+	UserLevel    int    `json:"user_level"`
+	Content      string `json:"content"`
+	LikeCount    uint64 `json:"like_count"`
+	CreatedAt    string `json:"created_at"`
+	LikedByMe    bool   `json:"liked_by_me"`
+	DislikedByMe bool   `json:"disliked_by_me"`
+	Pinned       bool   `json:"pinned"`
+	IsByAuthor   bool   `json:"is_by_author"`
+	IPLocation   string `json:"ip_location"`
+}
+
+type articleCommentListResponse struct {
+	Items           []articleCommentItemDTO `json:"items"`
+	CommentsCurated bool                    `json:"comments_curated"`
+	CommentsClosed  bool                    `json:"comments_closed"`
+}
+
+type postArticleCommentResponse struct {
+	ID        uint64  `json:"id"`
+	UserID    uint64  `json:"user_id"`
+	Content   string  `json:"content"`
+	ParentID  *uint64 `json:"parent_id"`
+	Level     int     `json:"level"`
+	Approved  bool    `json:"approved"`
+	LikeCount uint64  `json:"like_count"`
+}
+
 func (a *API) ListArticleComments(c *gin.Context) {
 	aid, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil || aid == 0 {
@@ -27,19 +61,19 @@ func (a *API) ListArticleComments(c *gin.Context) {
 		resp.Err(c, httpStatusFromSvc(errCodeFromSvc(svcErr)), errCodeFromSvc(svcErr))
 		return
 	}
-	out := make([]gin.H, 0, len(result.Items))
+	out := make([]articleCommentItemDTO, 0, len(result.Items))
 	for _, item := range result.Items {
-		out = append(out, gin.H{
-			"id": item.ID, "user_id": item.UserID, "username": item.Username,
-			"avatar_url": item.AvatarURL, "parent_id": item.ParentID,
-			"level": item.Level, "user_level": item.UserLevel, "content": item.Content,
-			"like_count": item.LikeCount, "created_at": item.CreatedAt,
-			"liked_by_me": item.LikedByMe, "disliked_by_me": item.DislikedByMe,
-			"pinned": item.Pinned, "is_by_author": item.IsByAuthor,
-			"ip_location": iplocate.DisplayLabel(item.IPLocation),
+		out = append(out, articleCommentItemDTO{
+			ID: item.ID, UserID: item.UserID, Username: item.Username,
+			AvatarURL: item.AvatarURL, ParentID: item.ParentID,
+			Level: item.Level, UserLevel: item.UserLevel, Content: item.Content,
+			LikeCount: item.LikeCount, CreatedAt: item.CreatedAt,
+			LikedByMe: item.LikedByMe, DislikedByMe: item.DislikedByMe,
+			Pinned: item.Pinned, IsByAuthor: item.IsByAuthor,
+			IPLocation: iplocate.DisplayLabel(item.IPLocation),
 		})
 	}
-	resp.OK(c, gin.H{"items": out, "comments_curated": result.CommentsCurated, "comments_closed": result.CommentsClosed})
+	resp.OK(c, articleCommentListResponse{Items: out, CommentsCurated: result.CommentsCurated, CommentsClosed: result.CommentsClosed})
 }
 
 func (a *API) PostArticleComment(c *gin.Context) {
@@ -84,7 +118,7 @@ func (a *API) PostArticleComment(c *gin.Context) {
 		resp.Err(c, httpStatusFromSvc(errCodeFromSvc(svcErr)), errCodeFromSvc(svcErr))
 		return
 	}
-	resp.JSON(c, http.StatusCreated, errcode.CodeSuccess, gin.H{"id": cm.ID, "user_id": cm.UserID, "content": cm.Content, "parent_id": nil, "level": cm.Level, "approved": !art.CommentsCurated, "like_count": 0})
+	resp.JSON(c, http.StatusCreated, errcode.CodeSuccess, postArticleCommentResponse{ID: cm.ID, UserID: cm.UserID, Content: cm.Content, Level: cm.Level, Approved: !art.CommentsCurated})
 }
 
 func getClientIP(c *gin.Context) string {
@@ -129,7 +163,7 @@ func (a *API) DeleteArticleComment(c *gin.Context) {
 		resp.Err(c, httpStatusFromSvc(errCodeFromSvc(err)), errCodeFromSvc(err))
 		return
 	}
-	resp.OK(c, gin.H{"ok": true})
+	resp.OK(c, okResponse{OK: true})
 }
 
 func (a *API) PinArticleComment(c *gin.Context) {
@@ -158,7 +192,7 @@ func (a *API) PinArticleComment(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	resp.OK(c, gin.H{"pinned": pinned})
+	resp.OK(c, pinnedResponse{Pinned: pinned})
 }
 
 func (a *API) ToggleArticleCommentLike(c *gin.Context) {
@@ -177,7 +211,7 @@ func (a *API) ToggleArticleCommentLike(c *gin.Context) {
 		resp.Err(c, httpStatusFromSvc(errCodeFromSvc(svcErr)), errCodeFromSvc(svcErr))
 		return
 	}
-	resp.OK(c, gin.H{"liked": liked, "like_count": total})
+	resp.OK(c, likeToggleResponse{Liked: liked, LikeCount: total})
 }
 
 func (a *API) ToggleArticleCommentDislike(c *gin.Context) {
@@ -196,7 +230,7 @@ func (a *API) ToggleArticleCommentDislike(c *gin.Context) {
 		resp.Err(c, httpStatusFromSvc(errCodeFromSvc(svcErr)), errCodeFromSvc(svcErr))
 		return
 	}
-	resp.OK(c, gin.H{"disliked": disliked})
+	resp.OK(c, dislikeToggleResponse{Disliked: disliked})
 }
 
 func (a *API) ApproveArticleComment(c *gin.Context) {
@@ -209,7 +243,7 @@ func (a *API) ApproveArticleComment(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	resp.OK(c, gin.H{"ok": true})
+	resp.OK(c, okResponse{OK: true})
 }
 
 func (a *API) IgnoreCuratedArticleComment(c *gin.Context) {
@@ -222,7 +256,7 @@ func (a *API) IgnoreCuratedArticleComment(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	resp.OK(c, gin.H{"ok": true})
+	resp.OK(c, okResponse{OK: true})
 }
 
 // GetMyArticle returns a user's own article.

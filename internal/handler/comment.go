@@ -26,6 +26,90 @@ type commentPost struct {
 	ParentID uint64 `json:"parent_id"`
 }
 
+type commentItemDTO struct {
+	ID           uint64 `json:"id"`
+	UserID       uint64 `json:"user_id"`
+	Username     string `json:"username"`
+	AvatarURL    string `json:"avatar_url"`
+	ParentID     uint64 `json:"parent_id"`
+	Level        int    `json:"level"`
+	UserLevel    int    `json:"user_level"`
+	Content      string `json:"content"`
+	LikeCount    uint64 `json:"like_count"`
+	CreatedAt    string `json:"created_at"`
+	LikedByMe    bool   `json:"liked_by_me"`
+	DislikedByMe bool   `json:"disliked_by_me"`
+	Pinned       bool   `json:"pinned"`
+	IsByUploader bool   `json:"is_by_uploader"`
+	IPLocation   string `json:"ip_location"`
+}
+
+type commentListResponse struct {
+	Items           []commentItemDTO `json:"items"`
+	CommentsCurated bool             `json:"comments_curated"`
+	CommentsClosed  bool             `json:"comments_closed"`
+}
+
+type postCommentResponse struct {
+	ID        uint64  `json:"id"`
+	UserID    uint64  `json:"user_id"`
+	Content   string  `json:"content"`
+	LikeCount uint64  `json:"like_count"`
+	CreatedAt string  `json:"created_at"`
+	Level     int     `json:"level"`
+	LikedByMe bool    `json:"liked_by_me"`
+	Pinned    bool    `json:"pinned"`
+	Approved  bool    `json:"approved"`
+	ParentID  *uint64 `json:"parent_id"`
+}
+
+type notificationItemDTO struct {
+	ID              uint64 `json:"id"`
+	Type            string `json:"type"`
+	RelatedID       uint64 `json:"related_id"`
+	CommentPreview  string `json:"comment_preview"`
+	PayloadJSON     string `json:"payload_json"`
+	SenderNamesJSON string `json:"sender_names_json"`
+	TotalLikes      int    `json:"total_likes"`
+	IsRead          bool   `json:"is_read"`
+	CreatedAt       string `json:"created_at"`
+}
+
+type notificationListResponse struct {
+	Items []notificationItemDTO `json:"items"`
+	Total int64                 `json:"total"`
+}
+
+type notificationLikerDTO struct {
+	UserID   uint64 `json:"user_id"`
+	Username string `json:"username"`
+}
+
+type notificationLikerListResponse struct {
+	Items []notificationLikerDTO `json:"items"`
+}
+
+type pinnedResponse struct {
+	Pinned bool `json:"pinned"`
+}
+
+type likeToggleResponse struct {
+	Liked     bool `json:"liked"`
+	LikeCount int  `json:"like_count"`
+}
+
+type dislikeToggleResponse struct {
+	Disliked bool `json:"disliked"`
+}
+
+type curatedIgnoredResponse struct {
+	CuratedIgnored bool `json:"curated_ignored"`
+}
+
+type likesMutedResponse struct {
+	LikesMuted bool `json:"likes_muted"`
+}
+
 func errCodeFromSvc(err error) int {
 	var se *service.SvcError
 	if errors.As(err, &se) {
@@ -75,19 +159,19 @@ func (a *API) ListComments(c *gin.Context) {
 		resp.Err(c, httpStatusFromSvc(errCodeFromSvc(svcErr)), errCodeFromSvc(svcErr))
 		return
 	}
-	out := make([]gin.H, 0, len(result.Items))
+	out := make([]commentItemDTO, 0, len(result.Items))
 	for _, item := range result.Items {
-		out = append(out, gin.H{
-			"id": item.ID, "user_id": item.UserID, "username": item.Username,
-			"avatar_url": item.AvatarURL, "parent_id": item.ParentID,
-			"level": item.Level, "user_level": item.UserLevel, "content": item.Content,
-			"like_count": item.LikeCount, "created_at": item.CreatedAt,
-			"liked_by_me": item.LikedByMe, "disliked_by_me": item.DislikedByMe,
-			"pinned": item.Pinned, "is_by_uploader": item.IsByUploader,
-			"ip_location": iplocate.DisplayLabel(item.IPLocation),
+		out = append(out, commentItemDTO{
+			ID: item.ID, UserID: item.UserID, Username: item.Username,
+			AvatarURL: item.AvatarURL, ParentID: item.ParentID,
+			Level: item.Level, UserLevel: item.UserLevel, Content: item.Content,
+			LikeCount: item.LikeCount, CreatedAt: item.CreatedAt,
+			LikedByMe: item.LikedByMe, DislikedByMe: item.DislikedByMe,
+			Pinned: item.Pinned, IsByUploader: item.IsByUploader,
+			IPLocation: iplocate.DisplayLabel(item.IPLocation),
 		})
 	}
-	resp.OK(c, gin.H{"items": out, "comments_curated": result.CommentsCurated, "comments_closed": result.CommentsClosed})
+	resp.OK(c, commentListResponse{Items: out, CommentsCurated: result.CommentsCurated, CommentsClosed: result.CommentsClosed})
 }
 
 // PostComment creates a comment or reply.
@@ -119,12 +203,11 @@ func (a *API) PostComment(c *gin.Context) {
 	if !cm.CreatedAt.IsZero() {
 		uploadedAt = cm.CreatedAt.Format("2006-01-02 15:04:05")
 	}
-	r := gin.H{"id": cm.ID, "user_id": cm.UserID, "content": cm.Content, "like_count": 0,
-		"created_at": uploadedAt, "level": cm.Level, "liked_by_me": false, "pinned": false, "approved": cm.Approved}
+	r := postCommentResponse{ID: cm.ID, UserID: cm.UserID, Content: cm.Content, LikeCount: 0,
+		CreatedAt: uploadedAt, Level: cm.Level, LikedByMe: false, Pinned: false, Approved: cm.Approved}
 	if req.ParentID != 0 {
-		r["parent_id"] = req.ParentID
-	} else {
-		r["parent_id"] = nil
+		pid := req.ParentID
+		r.ParentID = &pid
 	}
 	resp.JSON(c, http.StatusCreated, errcode.CodeSuccess, r)
 }
@@ -145,7 +228,7 @@ func (a *API) DeleteComment(c *gin.Context) {
 		resp.Err(c, httpStatusFromSvc(errCodeFromSvc(err)), errCodeFromSvc(err))
 		return
 	}
-	resp.OK(c, gin.H{"ok": true})
+	resp.OK(c, okResponse{OK: true})
 }
 
 // PinComment toggles pin status.
@@ -176,7 +259,7 @@ func (a *API) PinComment(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	resp.OK(c, gin.H{"pinned": pinned})
+	resp.OK(c, pinnedResponse{Pinned: pinned})
 }
 
 // ToggleLike toggles like on a comment.
@@ -196,7 +279,7 @@ func (a *API) ToggleLike(c *gin.Context) {
 		resp.Err(c, httpStatusFromSvc(errCodeFromSvc(svcErr)), errCodeFromSvc(svcErr))
 		return
 	}
-	resp.OK(c, gin.H{"liked": liked, "like_count": total})
+	resp.OK(c, likeToggleResponse{Liked: liked, LikeCount: total})
 }
 
 // ToggleDislike toggles dislike on a comment.
@@ -216,7 +299,7 @@ func (a *API) ToggleDislike(c *gin.Context) {
 		resp.Err(c, httpStatusFromSvc(errCodeFromSvc(svcErr)), errCodeFromSvc(svcErr))
 		return
 	}
-	resp.OK(c, gin.H{"disliked": disliked})
+	resp.OK(c, dislikeToggleResponse{Disliked: disliked})
 }
 
 // ApproveComment approves a curated comment.
@@ -230,7 +313,7 @@ func (a *API) ApproveComment(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	resp.OK(c, gin.H{"ok": true})
+	resp.OK(c, okResponse{OK: true})
 }
 
 // IgnoreCuratedComment ignores (deletes) a curated comment.
@@ -244,7 +327,7 @@ func (a *API) IgnoreCuratedComment(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	resp.OK(c, gin.H{"curated_ignored": true})
+	resp.OK(c, curatedIgnoredResponse{CuratedIgnored: true})
 }
 
 // UnreadSummary returns unread notification counts.
@@ -272,16 +355,16 @@ func (a *API) ListNotifications(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	out := make([]gin.H, 0, len(list))
+	out := make([]notificationItemDTO, 0, len(list))
 	for _, n := range list {
-		out = append(out, gin.H{
-			"id": n.ID, "type": n.Type, "related_id": n.RelatedID,
-			"comment_preview": n.CommentPreview, "payload_json": n.PayloadJSON,
-			"sender_names_json": n.SenderNamesJSON, "total_likes": n.TotalLikes,
-			"is_read": n.IsRead, "created_at": n.CreatedAt.Format("2006-01-02 15:04:05"),
+		out = append(out, notificationItemDTO{
+			ID: n.ID, Type: n.Type, RelatedID: n.RelatedID,
+			CommentPreview: n.CommentPreview, PayloadJSON: n.PayloadJSON,
+			SenderNamesJSON: n.SenderNamesJSON, TotalLikes: n.TotalLikes,
+			IsRead: n.IsRead, CreatedAt: n.CreatedAt.Format("2006-01-02 15:04:05"),
 		})
 	}
-	resp.OK(c, gin.H{"items": out, "total": total})
+	resp.OK(c, notificationListResponse{Items: out, Total: total})
 }
 
 // MarkNotificationCategoryRead marks all notifications in a category as read.
@@ -296,7 +379,7 @@ func (a *API) MarkNotificationCategoryRead(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	resp.OK(c, gin.H{"ok": true})
+	resp.OK(c, okResponse{OK: true})
 }
 
 // MarkNotificationsReadBatch marks specific notifications as read.
@@ -315,7 +398,7 @@ func (a *API) MarkNotificationsReadBatch(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	resp.OK(c, gin.H{"ok": true})
+	resp.OK(c, okResponse{OK: true})
 }
 
 // MarkNotificationRead marks a single notification as read.
@@ -334,7 +417,7 @@ func (a *API) MarkNotificationRead(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	resp.OK(c, gin.H{"ok": true})
+	resp.OK(c, okResponse{OK: true})
 }
 
 // DeleteNotification deletes a notification.
@@ -353,7 +436,7 @@ func (a *API) DeleteNotification(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	resp.OK(c, gin.H{"ok": true})
+	resp.OK(c, okResponse{OK: true})
 }
 
 // MuteLikeNotification mutes like notifications for a comment.
@@ -380,7 +463,7 @@ func (a *API) MuteLikeNotification(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	resp.OK(c, gin.H{"likes_muted": true})
+	resp.OK(c, likesMutedResponse{LikesMuted: true})
 }
 
 // ToggleNotificationCommentLike toggles a like on the comment referenced by a notification.
@@ -461,9 +544,9 @@ func (a *API) ListNotificationLikeLikers(c *gin.Context) {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
-	out := make([]gin.H, 0, len(users))
+	out := make([]notificationLikerDTO, 0, len(users))
 	for _, u := range users {
-		out = append(out, gin.H{"user_id": u.ID, "username": u.Nickname})
+		out = append(out, notificationLikerDTO{UserID: u.ID, Username: u.Nickname})
 	}
-	resp.OK(c, gin.H{"items": out})
+	resp.OK(c, notificationLikerListResponse{Items: out})
 }

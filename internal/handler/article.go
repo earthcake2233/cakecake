@@ -136,7 +136,90 @@ func parseArticleTagsJSON(raw string) []string {
 	return arr
 }
 
-func articleDetailPayload(a *API, art *article.Article, author *user.User, eng articleEngagement, viewer uint64) gin.H {
+type articleDetailDTO struct {
+	ID              uint64              `json:"id"`
+	CVID            uint64              `json:"cv_id"`
+	UserID          uint64              `json:"user_id"`
+	Title           string              `json:"title"`
+	CoverURL        string              `json:"cover_url"`
+	BodyMD          string              `json:"body_md"`
+	BodyHTML        string              `json:"body_html"`
+	TOC             []markdown.TocEntry `json:"toc"`
+	Tags            []string            `json:"tags"`
+	Status          string              `json:"status"`
+	FailReason      string              `json:"fail_reason"`
+	ViewCount       uint64              `json:"view_count"`
+	CommentCount    uint64              `json:"comment_count"`
+	CoinCount       uint64              `json:"coin_count"`
+	FavCount        uint64              `json:"fav_count"`
+	ForwardCount    uint64              `json:"forward_count"`
+	PublishedAt     string              `json:"published_at"`
+	CreatedAt       string              `json:"created_at"`
+	AuthorName      string              `json:"author_name"`
+	AuthorAvatar    string              `json:"author_avatar"`
+	FavoritedByMe   bool                `json:"favorited_by_me"`
+	CoinedByMe      bool                `json:"coined_by_me"`
+	MyCoinAmount    int                 `json:"my_coin_amount"`
+	IsAuthor        bool                `json:"is_author"`
+	CommentsClosed  bool                `json:"comments_closed"`
+	CommentsCurated bool                `json:"comments_curated"`
+}
+
+type articleListItemDTO struct {
+	ID              uint64 `json:"id"`
+	Title           string `json:"title"`
+	CoverURL        string `json:"cover_url"`
+	Status          string `json:"status"`
+	FailReason      string `json:"fail_reason"`
+	ViewCount       uint64 `json:"view_count"`
+	CommentCount    uint64 `json:"comment_count"`
+	CoinCount       uint64 `json:"coin_count"`
+	FavCount        uint64 `json:"fav_count"`
+	ForwardCount    uint64 `json:"forward_count"`
+	PublishedAt     string `json:"published_at"`
+	CreatedAt       string `json:"created_at"`
+	AuthorName      string `json:"author_name"`
+	FavoritedByMe   bool   `json:"favorited_by_me"`
+	CommentsClosed  bool   `json:"comments_closed"`
+	CommentsCurated bool   `json:"comments_curated"`
+	FavoritedAt     string `json:"favorited_at,omitempty"`
+	Unavailable     bool   `json:"unavailable,omitempty"`
+}
+
+type articlePlaybackResponse struct {
+	CommentsClosed  bool `json:"comments_closed"`
+	CommentsCurated bool `json:"comments_curated"`
+}
+
+type createArticleResponse struct {
+	ID     uint64 `json:"id"`
+	Status string `json:"status"`
+}
+
+type articleStatusResponse struct {
+	ID     uint64 `json:"id"`
+	Status string `json:"status"`
+}
+
+type articleViewCountResponse struct {
+	ViewCount uint64 `json:"view_count"`
+}
+
+type myArticleListResponse struct {
+	Items      []articleListItemDTO `json:"items"`
+	Page       int                  `json:"page"`
+	PageSize   int                  `json:"page_size"`
+	Total      int64                `json:"total"`
+	TotalPages int                  `json:"total_pages"`
+	Counts     map[string]int64     `json:"counts"`
+}
+
+type articleCursorListResponse struct {
+	Items      []articleListItemDTO `json:"items"`
+	NextCursor string               `json:"next_cursor"`
+}
+
+func articleDetailPayload(a *API, art *article.Article, author *user.User, eng articleEngagement, viewer uint64) articleDetailDTO {
 	bodyHTML, toc, _ := markdown.Render(art.BodyMD)
 	upName := ""
 	avatar := ""
@@ -151,58 +234,58 @@ func articleDetailPayload(a *API, art *article.Article, author *user.User, eng a
 	if art.PublishedAt != nil {
 		pubAt = art.PublishedAt.Format("2006-01-02 15:04:05")
 	}
-	return gin.H{
-		"id":               art.ID,
-		"cv_id":            art.ID,
-		"user_id":          art.UserID,
-		"title":            art.Title,
-		"cover_url":        art.CoverURL,
-		"body_md":          art.BodyMD,
-		"body_html":        bodyHTML,
-		"toc":              toc,
-		"tags":             parseArticleTagsJSON(art.TagsJSON),
-		"status":           art.Status,
-		"fail_reason":      strings.TrimSpace(art.FailReason),
-		"view_count":       art.ViewCount,
-		"comment_count":    art.CommentCount,
-		"coin_count":       art.CoinCount,
-		"fav_count":        art.FavCount,
-		"forward_count":    art.ForwardCount,
-		"published_at":     pubAt,
-		"created_at":       art.CreatedAt.Format("2006-01-02 15:04:05"),
-		"author_name":      upName,
-		"author_avatar":    avatar,
-		"favorited_by_me":  eng.FavoritedByMe,
-		"coined_by_me":     eng.CoinedByMe,
-		"my_coin_amount":   eng.MyCoinAmount,
-		"is_author":        viewer > 0 && viewer == art.UserID,
-		"comments_closed":  art.CommentsClosed,
-		"comments_curated": art.CommentsCurated,
+	return articleDetailDTO{
+		ID:              art.ID,
+		CVID:            art.ID,
+		UserID:          art.UserID,
+		Title:           art.Title,
+		CoverURL:        art.CoverURL,
+		BodyMD:          art.BodyMD,
+		BodyHTML:        bodyHTML,
+		TOC:             toc,
+		Tags:            parseArticleTagsJSON(art.TagsJSON),
+		Status:          art.Status,
+		FailReason:      strings.TrimSpace(art.FailReason),
+		ViewCount:       art.ViewCount,
+		CommentCount:    art.CommentCount,
+		CoinCount:       art.CoinCount,
+		FavCount:        art.FavCount,
+		ForwardCount:    art.ForwardCount,
+		PublishedAt:     pubAt,
+		CreatedAt:       art.CreatedAt.Format("2006-01-02 15:04:05"),
+		AuthorName:      upName,
+		AuthorAvatar:    avatar,
+		FavoritedByMe:   eng.FavoritedByMe,
+		CoinedByMe:      eng.CoinedByMe,
+		MyCoinAmount:    eng.MyCoinAmount,
+		IsAuthor:        viewer > 0 && viewer == art.UserID,
+		CommentsClosed:  art.CommentsClosed,
+		CommentsCurated: art.CommentsCurated,
 	}
 }
 
-func articleListItem(art article.Article, authorName string, eng articleEngagement) gin.H {
+func articleListItem(art article.Article, authorName string, eng articleEngagement) articleListItemDTO {
 	pubAt := ""
 	if art.PublishedAt != nil {
 		pubAt = art.PublishedAt.Format("2006-01-02 15:04:05")
 	}
-	return gin.H{
-		"id":               art.ID,
-		"title":            art.Title,
-		"cover_url":        art.CoverURL,
-		"status":           art.Status,
-		"fail_reason":      strings.TrimSpace(art.FailReason),
-		"view_count":       art.ViewCount,
-		"comment_count":    art.CommentCount,
-		"coin_count":       art.CoinCount,
-		"fav_count":        art.FavCount,
-		"forward_count":    art.ForwardCount,
-		"published_at":     pubAt,
-		"created_at":       art.CreatedAt.Format("2006-01-02 15:04:05"),
-		"author_name":      authorName,
-		"favorited_by_me":  eng.FavoritedByMe,
-		"comments_closed":  art.CommentsClosed,
-		"comments_curated": art.CommentsCurated,
+	return articleListItemDTO{
+		ID:              art.ID,
+		Title:           art.Title,
+		CoverURL:        art.CoverURL,
+		Status:          art.Status,
+		FailReason:      strings.TrimSpace(art.FailReason),
+		ViewCount:       art.ViewCount,
+		CommentCount:    art.CommentCount,
+		CoinCount:       art.CoinCount,
+		FavCount:        art.FavCount,
+		ForwardCount:    art.ForwardCount,
+		PublishedAt:     pubAt,
+		CreatedAt:       art.CreatedAt.Format("2006-01-02 15:04:05"),
+		AuthorName:      authorName,
+		FavoritedByMe:   eng.FavoritedByMe,
+		CommentsClosed:  art.CommentsClosed,
+		CommentsCurated: art.CommentsCurated,
 	}
 }
 
@@ -261,9 +344,9 @@ func (a *API) PatchArticlePlayback(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	resp.OK(c, gin.H{
-		"comments_closed":  updated.CommentsClosed,
-		"comments_curated": updated.CommentsCurated,
+	resp.OK(c, articlePlaybackResponse{
+		CommentsClosed:  updated.CommentsClosed,
+		CommentsCurated: updated.CommentsCurated,
 	})
 }
 
@@ -362,9 +445,9 @@ func (a *API) PostArticle(c *gin.Context) {
 	} else {
 		a.esDeleteArticle(art.ID)
 	}
-	resp.JSON(c, http.StatusCreated, errcode.CodeSuccess, gin.H{
-		"id":     art.ID,
-		"status": art.Status,
+	resp.JSON(c, http.StatusCreated, errcode.CodeSuccess, createArticleResponse{
+		ID:     art.ID,
+		Status: art.Status,
 	})
 }
 
@@ -455,7 +538,7 @@ func (a *API) PutMyArticle(c *gin.Context) {
 	} else {
 		a.esDeleteArticle(art.ID)
 	}
-	resp.OK(c, gin.H{"id": art.ID, "status": art.Status})
+	resp.OK(c, articleStatusResponse{ID: art.ID, Status: art.Status})
 }
 
 // GetArticle returns a published article for reading.
@@ -519,7 +602,7 @@ func (a *API) PostArticleView(c *gin.Context) {
 	if art2 != nil {
 		art = *art2
 	}
-	resp.OK(c, gin.H{"view_count": art.ViewCount})
+	resp.OK(c, articleViewCountResponse{ViewCount: art.ViewCount})
 }
 
 func manuscriptArticleStatusToDB(st string) string {
@@ -552,27 +635,27 @@ func orderClauseForMyArticles(sort string) string {
 	}
 }
 
-func (a *API) countMyArticlesByStatus(uid uint64) gin.H {
+func (a *API) countMyArticlesByStatus(uid uint64) map[string]int64 {
 	type row struct {
 		Status string
 		N      int64
 	}
 	var rows []row
 	_ = a.ArticleSvc.CountArticlesByStatus(context.Background(), uid)
-	out := gin.H{
-		"draft":      int64(0),
-		"processing": int64(0),
-		"passed":     int64(0),
-		"rejected":   int64(0),
+	out := map[string]int64{
+		"draft":      0,
+		"processing": 0,
+		"passed":     0,
+		"rejected":   0,
 	}
 	for _, r := range rows {
 		switch r.Status {
 		case article.StatusDraft:
 			out["draft"] = r.N
 		case article.StatusPublished:
-			out["passed"] = out["passed"].(int64) + r.N
+			out["passed"] += r.N
 		case article.StatusPendingReview:
-			out["processing"] = out["processing"].(int64) + r.N
+			out["processing"] += r.N
 		case article.StatusRejected:
 			out["rejected"] = r.N
 		}
@@ -609,17 +692,17 @@ func (a *API) ListMyArticles(c *gin.Context) {
 	if page > totalPages {
 		page = totalPages
 	}
-	items := make([]gin.H, 0, len(list))
+	items := make([]articleListItemDTO, 0, len(list))
 	for _, art := range list {
 		items = append(items, articleListItem(art, "", articleEngagement{}))
 	}
-	resp.OK(c, gin.H{
-		"items":       items,
-		"page":        page,
-		"page_size":   pageSize,
-		"total":       total,
-		"total_pages": totalPages,
-		"counts":      a.countMyArticlesByStatus(uid),
+	resp.OK(c, myArticleListResponse{
+		Items:      items,
+		Page:       page,
+		PageSize:   pageSize,
+		Total:      total,
+		TotalPages: totalPages,
+		Counts:     a.countMyArticlesByStatus(uid),
 	})
 }
 
@@ -671,7 +754,7 @@ func (a *API) ListUserPublishedArticles(c *gin.Context) {
 	for id, e := range engMapSvc {
 		engMap[id] = toArticleEngagement(e)
 	}
-	items := make([]gin.H, 0, len(list))
+	items := make([]articleListItemDTO, 0, len(list))
 	for _, art := range list {
 		items = append(items, articleListItem(art, name, engMap[art.ID]))
 	}
@@ -679,7 +762,7 @@ func (a *API) ListUserPublishedArticles(c *gin.Context) {
 	if hasMore && len(list) > 0 {
 		next = strconv.FormatUint(list[len(list)-1].ID, 10)
 	}
-	resp.OK(c, gin.H{"items": items, "next_cursor": next})
+	resp.OK(c, articleCursorListResponse{Items: items, NextCursor: next})
 }
 
 // deleteArticleCascade removes one article and related engagement rows.
@@ -734,7 +817,7 @@ func (a *API) DeleteMyArticle(c *gin.Context) {
 	}
 	purgeArticleOSSObjects(a.Cfg, a.OSS, a.Log, *art)
 	a.esDeleteArticle(id)
-	resp.OK(c, gin.H{"ok": true})
+	resp.OK(c, okResponse{OK: true})
 }
 
 // UpdateArticleCover uploads/replaces article cover on OSS (same flow as video cover).
@@ -796,5 +879,5 @@ func (a *API) UpdateArticleCover(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	resp.OK(c, gin.H{"cover_url": url})
+	resp.OK(c, imageURLResponse{ImageURL: url})
 }

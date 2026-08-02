@@ -26,6 +26,29 @@ import (
 
 const videoStatusDraft = video.StatusDraft
 
+type videoDraftFullResponse struct {
+	ID        uint64  `json:"id"`
+	Status    string  `json:"status"`
+	Title     string  `json:"title"`
+	CoverURL  string  `json:"cover_url"`
+	Duration  float64 `json:"duration"`
+	CreatedAt string  `json:"created_at"`
+	videoZoneFields
+}
+
+type videoDraftBriefResponse struct {
+	ID       uint64 `json:"id"`
+	Status   string `json:"status"`
+	Title    string `json:"title"`
+	CoverURL string `json:"cover_url"`
+	videoZoneFields
+}
+
+type videoDraftStatusResponse struct {
+	ID     uint64 `json:"id"`
+	Status string `json:"status"`
+}
+
 func videoDraftDir(cfgTemp string) string {
 	return filepath.Join(cfgTemp, "drafts")
 }
@@ -244,15 +267,15 @@ func (a *API) SaveVideoDraft(c *gin.Context) {
 				}
 			}
 		}
-		out := gin.H{
-			"id":         v.ID,
-			"status":     v.Status,
-			"title":      v.Title,
-			"cover_url":  v.CoverURL,
-			"duration":   v.DurationSec,
-			"created_at": v.CreatedAt.Format("2006-01-02 15:04:05"),
+		out := videoDraftFullResponse{
+			ID:        v.ID,
+			Status:    v.Status,
+			Title:     v.Title,
+			CoverURL:  v.CoverURL,
+			Duration:  v.DurationSec,
+			CreatedAt: v.CreatedAt.Format("2006-01-02 15:04:05"),
 		}
-		appendVideoZoneFields(out, v.Zone)
+		appendVideoZoneFields(&out.videoZoneFields, v.Zone)
 		resp.JSON(c, http.StatusCreated, errcode.CodeSuccess, out)
 		return
 	}
@@ -304,15 +327,15 @@ func (a *API) SaveVideoDraft(c *gin.Context) {
 			}
 		}
 	}
-	out := gin.H{
-		"id":         v.ID,
-		"status":     v.Status,
-		"title":      v.Title,
-		"cover_url":  v.CoverURL,
-		"duration":   v.DurationSec,
-		"created_at": v.CreatedAt.Format("2006-01-02 15:04:05"),
+	out := videoDraftFullResponse{
+		ID:        v.ID,
+		Status:    v.Status,
+		Title:     v.Title,
+		CoverURL:  v.CoverURL,
+		Duration:  v.DurationSec,
+		CreatedAt: v.CreatedAt.Format("2006-01-02 15:04:05"),
 	}
-	appendVideoZoneFields(out, v.Zone)
+	appendVideoZoneFields(&out.videoZoneFields, v.Zone)
 	resp.JSON(c, http.StatusCreated, errcode.CodeSuccess, out)
 }
 
@@ -476,13 +499,13 @@ func (a *API) UpdateVideoDraft(c *gin.Context) {
 			}
 		}
 	}
-	out := gin.H{
-		"id":        v.ID,
-		"status":    v.Status,
-		"title":     v.Title,
-		"cover_url": v.CoverURL,
+	out := videoDraftBriefResponse{
+		ID:       v.ID,
+		Status:   v.Status,
+		Title:    v.Title,
+		CoverURL: v.CoverURL,
 	}
-	appendVideoZoneFields(out, v.Zone)
+	appendVideoZoneFields(&out.videoZoneFields, v.Zone)
 	resp.OK(c, out)
 }
 
@@ -556,7 +579,7 @@ func (a *API) PublishVideoDraft(c *gin.Context) {
 		return
 	}
 	a.Log.Info("draft published to transcode queue", zap.Uint64("video_id", v.ID))
-	resp.OK(c, gin.H{"id": v.ID, "status": video.StatusProcessing})
+	resp.OK(c, videoDraftStatusResponse{ID: v.ID, Status: video.StatusProcessing})
 }
 
 func videoStatusAllowsMediaReplace(st string) bool {
@@ -706,7 +729,7 @@ func (a *API) ReplaceVideoMedia(c *gin.Context) {
 		return
 	}
 	a.Log.Info("video media replaced and queued for transcode", zap.Uint64("video_id", v.ID))
-	resp.OK(c, gin.H{"id": v.ID, "status": video.StatusProcessing})
+	resp.OK(c, videoDraftStatusResponse{ID: v.ID, Status: video.StatusProcessing})
 }
 
 // GetMyVideoDraftSource streams the draft raw file for the uploader preview.

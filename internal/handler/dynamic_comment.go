@@ -16,6 +16,37 @@ import (
 	"cakecake/internal/service"
 )
 
+type dynamicCommentItemDTO struct {
+	ID           uint64 `json:"id"`
+	UserID       uint64 `json:"user_id"`
+	Username     string `json:"username"`
+	AvatarURL    string `json:"avatar_url"`
+	ParentID     uint64 `json:"parent_id"`
+	Level        int    `json:"level"`
+	UserLevel    int    `json:"user_level"`
+	Content      string `json:"content"`
+	LikeCount    uint64 `json:"like_count"`
+	CreatedAt    string `json:"created_at"`
+	LikedByMe    bool   `json:"liked_by_me"`
+	DislikedByMe bool   `json:"disliked_by_me"`
+	IPLocation   string `json:"ip_location"`
+	IsByUploader bool   `json:"is_by_uploader"`
+}
+
+type dynamicCommentListResponse struct {
+	Items           []dynamicCommentItemDTO `json:"items"`
+	CommentsCurated bool                    `json:"comments_curated"`
+	CommentsClosed  bool                    `json:"comments_closed"`
+}
+
+type postDynamicCommentResponse struct {
+	ID        uint64  `json:"id"`
+	UserID    uint64  `json:"user_id"`
+	Content   string  `json:"content"`
+	ParentID  *uint64 `json:"parent_id"`
+	LikeCount uint64  `json:"like_count"`
+}
+
 func (a *API) ListDynamicComments(c *gin.Context) {
 	did, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil || did == 0 {
@@ -28,18 +59,18 @@ func (a *API) ListDynamicComments(c *gin.Context) {
 		resp.Err(c, httpStatusFromSvc(errCodeFromSvc(svcErr)), errCodeFromSvc(svcErr))
 		return
 	}
-	out := make([]gin.H, 0, len(result.Items))
+	out := make([]dynamicCommentItemDTO, 0, len(result.Items))
 	for _, item := range result.Items {
-		out = append(out, gin.H{
-			"id": item.ID, "user_id": item.UserID, "username": item.Username,
-			"avatar_url": item.AvatarURL, "parent_id": item.ParentID,
-			"level": item.Level, "user_level": item.UserLevel, "content": item.Content,
-			"like_count": item.LikeCount, "created_at": item.CreatedAt,
-			"liked_by_me": item.LikedByMe, "disliked_by_me": item.DislikedByMe,
-			"ip_location": iplocate.DisplayLabel(item.IPLocation), "is_by_uploader": item.IsByUploader,
+		out = append(out, dynamicCommentItemDTO{
+			ID: item.ID, UserID: item.UserID, Username: item.Username,
+			AvatarURL: item.AvatarURL, ParentID: item.ParentID,
+			Level: item.Level, UserLevel: item.UserLevel, Content: item.Content,
+			LikeCount: item.LikeCount, CreatedAt: item.CreatedAt,
+			LikedByMe: item.LikedByMe, DislikedByMe: item.DislikedByMe,
+			IPLocation: iplocate.DisplayLabel(item.IPLocation), IsByUploader: item.IsByUploader,
 		})
 	}
-	resp.OK(c, gin.H{"items": out, "comments_curated": result.CommentsCurated, "comments_closed": result.CommentsClosed})
+	resp.OK(c, dynamicCommentListResponse{Items: out, CommentsCurated: result.CommentsCurated, CommentsClosed: result.CommentsClosed})
 }
 
 func (a *API) PostDynamicComment(c *gin.Context) {
@@ -69,7 +100,7 @@ func (a *API) PostDynamicComment(c *gin.Context) {
 		resp.Err(c, httpStatusFromSvc(errCodeFromSvc(svcErr)), errCodeFromSvc(svcErr))
 		return
 	}
-	resp.OK(c, gin.H{"id": cm.ID, "user_id": cm.UserID, "content": cm.Content, "parent_id": nil, "like_count": 0})
+	resp.OK(c, postDynamicCommentResponse{ID: cm.ID, UserID: cm.UserID, Content: cm.Content})
 }
 
 func (a *API) DeleteDynamicComment(c *gin.Context) {
@@ -100,7 +131,7 @@ func (a *API) DeleteDynamicComment(c *gin.Context) {
 		resp.Err(c, httpStatusFromSvc(errCodeFromSvc(err)), errCodeFromSvc(err))
 		return
 	}
-	resp.OK(c, gin.H{"ok": true})
+	resp.OK(c, okResponse{OK: true})
 }
 
 func (a *API) ToggleDynamicCommentLike(c *gin.Context) {
@@ -119,7 +150,7 @@ func (a *API) ToggleDynamicCommentLike(c *gin.Context) {
 		resp.Err(c, httpStatusFromSvc(errCodeFromSvc(svcErr)), errCodeFromSvc(svcErr))
 		return
 	}
-	resp.OK(c, gin.H{"liked": liked, "like_count": total})
+	resp.OK(c, likeToggleResponse{Liked: liked, LikeCount: total})
 }
 
 func (a *API) ToggleDynamicCommentDislike(c *gin.Context) {
@@ -139,7 +170,7 @@ func (a *API) ToggleDynamicCommentDislike(c *gin.Context) {
 		return
 	}
 	disliked := liked
-	resp.OK(c, gin.H{"disliked": disliked})
+	resp.OK(c, dislikeToggleResponse{Disliked: disliked})
 }
 
 func (a *API) ApproveDynamicComment(c *gin.Context) {
@@ -152,7 +183,7 @@ func (a *API) ApproveDynamicComment(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	resp.OK(c, gin.H{"ok": true})
+	resp.OK(c, okResponse{OK: true})
 }
 
 func (a *API) IgnoreCuratedDynamicComment(c *gin.Context) {
@@ -165,7 +196,7 @@ func (a *API) IgnoreCuratedDynamicComment(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	resp.OK(c, gin.H{"ok": true})
+	resp.OK(c, okResponse{OK: true})
 }
 func loadUserDynamic(a *API, id uint64) (*dynamic.UserDynamic, bool) {
 	dyn, err := a.DynamicSvc.GetDynamicByID(context.Background(), id)

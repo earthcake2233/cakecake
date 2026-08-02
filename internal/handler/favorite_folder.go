@@ -65,26 +65,52 @@ func (a *API) resolveFolderCoverURL(f *video.FavoriteFolder) string {
 	return a.folderCoverFromVideos(f.ID)
 }
 
-func (a *API) folderRowPayload(f *video.FavoriteFolder) gin.H {
+type folderItemDTO struct {
+	ID          uint64  `json:"id"`
+	Title       string  `json:"title"`
+	Description string  `json:"description"`
+	IsPublic    bool    `json:"is_public"`
+	IsDefault   bool    `json:"is_default"`
+	VideoCount  int64   `json:"video_count"`
+	CoverURL    *string `json:"cover_url"`
+}
+
+type folderListResponse struct {
+	Items []folderItemDTO `json:"items"`
+}
+
+type folderListWithCountsResponse struct {
+	Items       []folderItemDTO `json:"items"`
+	Total       int64           `json:"total"`
+	HiddenCount int64           `json:"hidden_count"`
+}
+
+type clearedResponse struct {
+	Cleared int `json:"cleared"`
+}
+
+type removedResponse struct {
+	Removed int `json:"removed"`
+}
+
+func (a *API) folderRowPayload(f *video.FavoriteFolder) folderItemDTO {
 	vCnt, _ := a.FavoriteSvc.CountFavoritesInFolder(context.Background(), f.ID)
 	cover := a.resolveFolderCoverURL(f)
-	out := gin.H{
-		"id":          f.ID,
-		"title":       f.Title,
-		"description": f.Description,
-		"is_public":   f.IsPublic,
-		"is_default":  f.IsDefault,
-		"video_count": vCnt,
+	out := folderItemDTO{
+		ID:          f.ID,
+		Title:       f.Title,
+		Description: f.Description,
+		IsPublic:    f.IsPublic,
+		IsDefault:   f.IsDefault,
+		VideoCount:  vCnt,
 	}
 	if cover != "" {
-		out["cover_url"] = cover
-	} else {
-		out["cover_url"] = nil
+		out.CoverURL = &cover
 	}
 	return out
 }
 
-func (a *API) folderListPayload(userID uint64, publicOnly bool) ([]gin.H, error) {
+func (a *API) folderListPayload(userID uint64, publicOnly bool) ([]folderItemDTO, error) {
 	if _, err := a.ensureDefaultFavoriteFolder(userID); err != nil {
 		return nil, err
 	}
@@ -92,7 +118,7 @@ func (a *API) folderListPayload(userID uint64, publicOnly bool) ([]gin.H, error)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]gin.H, 0, len(folders))
+	out := make([]folderItemDTO, 0, len(folders))
 	for i := range folders {
 		if publicOnly && !folders[i].IsPublic {
 			continue
@@ -159,7 +185,7 @@ func (a *API) ListMyFavoriteFolders(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	resp.OK(c, gin.H{"items": items})
+	resp.OK(c, folderListResponse{Items: items})
 }
 
 // CreateFavoriteFolder creates a new favorite folder for the caller.
@@ -290,7 +316,7 @@ func (a *API) ListUserFavoriteFolders(c *gin.Context) {
 	viewer, viewerOK := middleware.UserID(c)
 	isOwner := viewerOK && viewer == ownerID
 	if !isOwner && !u.PrivacyPublicFavorites {
-		resp.OK(c, gin.H{"items": []gin.H{}, "total": 0, "hidden_count": 0})
+		resp.OK(c, folderListWithCountsResponse{Items: []folderItemDTO{}, Total: 0, HiddenCount: 0})
 		return
 	}
 	publicOnly := !isOwner
@@ -313,10 +339,10 @@ func (a *API) ListUserFavoriteFolders(c *gin.Context) {
 	if publicOnly {
 		displayTotal = int64(len(items))
 	}
-	resp.OK(c, gin.H{
-		"items":        items,
-		"total":        displayTotal,
-		"hidden_count": hiddenCount,
+	resp.OK(c, folderListWithCountsResponse{
+		Items:       items,
+		Total:       displayTotal,
+		HiddenCount: hiddenCount,
 	})
 }
 
@@ -505,7 +531,7 @@ func (a *API) DeleteFavoriteFolder(c *gin.Context) {
 		return
 	}
 	purgeFavoriteFolderOSSObjects(a.Cfg, a.OSS, a.Log, row)
-	resp.OK(c, gin.H{"deleted": true})
+	resp.OK(c, deletedResponse{Deleted: true})
 }
 
 func (a *API) validateFolderOwnedByUser(uid, folderID uint64) bool {
@@ -541,7 +567,7 @@ func (a *API) ClearInvalidFavoritesInFolder(c *gin.Context) {
 		return
 	}
 	if len(favs) == 0 {
-		resp.OK(c, gin.H{"cleared": 0})
+		resp.OK(c, clearedResponse{Cleared: 0})
 		return
 	}
 	vids := make([]uint64, 0, len(favs))
@@ -564,7 +590,7 @@ func (a *API) ClearInvalidFavoritesInFolder(c *gin.Context) {
 		}
 	}
 	if len(invalidVids) == 0 {
-		resp.OK(c, gin.H{"cleared": 0})
+		resp.OK(c, clearedResponse{Cleared: 0})
 		return
 	}
 	for _, vid := range invalidVids {
@@ -580,7 +606,7 @@ func (a *API) ClearInvalidFavoritesInFolder(c *gin.Context) {
 		after, _ := a.userVideoFavoriteCount(uid, vid)
 		a.syncVideoFavCountAfterUserChange(vid, before, after)
 	}
-	resp.OK(c, gin.H{"cleared": len(invalidVids)})
+	resp.OK(c, clearedResponse{Cleared: len(invalidVids)})
 }
 
 type batchRemoveFavoritesJSON struct {
@@ -651,5 +677,5 @@ func (a *API) BatchRemoveVideosFromFavoriteFolder(c *gin.Context) {
 		after, _ := a.userVideoFavoriteCount(uid, vid)
 		a.syncVideoFavCountAfterUserChange(vid, before, after)
 	}
-	resp.OK(c, gin.H{"removed": removed})
+	resp.OK(c, removedResponse{Removed: removed})
 }

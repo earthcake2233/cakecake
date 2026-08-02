@@ -5,7 +5,6 @@ import (
 	"context"
 	"strings"
 
-	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
 
@@ -76,11 +75,11 @@ func (a *API) dmPushAgentMessage(humanID uint64, conv *dm.DmConversation, msg *d
 	out := a.dmFormatMessage(msg, senderName, senderAvatar)
 	part, _ := a.DmSvc.GetParticipant(context.Background(), conv.ID, humanID)
 	convPayload := a.dmFormatConversation(conv, humanID, part)
-	event := gin.H{"type": "dm_message", "message": out}
+	event := dmMessageEvent{Type: "dm_message", Message: out}
 	if part == nil || !part.Muted {
 		a.dmPushEvent(humanID, event)
 	}
-	a.dmPushEvent(humanID, gin.H{"type": "dm_conversation", "conversation": convPayload})
+	a.dmPushEvent(humanID, dmConversationEvent{Type: "dm_conversation", Conversation: convPayload})
 }
 
 // dmTrimPreview and dmFormatMessage - dmFormatMessage needs role in output for frontend optional

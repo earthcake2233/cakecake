@@ -62,13 +62,58 @@ func userDynamicAuthorName(author *user.User) string {
 	return user.DisplayUsername(author)
 }
 
-func userDynamicReadPayload(d *dynamic.UserDynamic, author *user.User, likedByMe bool, viewer uint64) gin.H {
-	out := userDynamicPayload(d, likedByMe)
-	out["user_id"] = d.UserID
-	out["author_name"] = userDynamicAuthorName(author)
-	out["author_avatar"] = uploaderAvatarForAPI(author)
-	out["is_author"] = viewer > 0 && viewer == d.UserID
-	return out
+type userDynamicItemDTO struct {
+	ID              uint64   `json:"id"`
+	Title           string   `json:"title"`
+	Content         string   `json:"content"`
+	Images          []string `json:"images"`
+	LikeCount       uint64   `json:"like_count"`
+	CommentCount    uint64   `json:"comment_count"`
+	LikedByMe       bool     `json:"liked_by_me"`
+	CommentsClosed  bool     `json:"comments_closed"`
+	CommentsCurated bool     `json:"comments_curated"`
+	CreatedAt       string   `json:"created_at"`
+}
+
+type userDynamicReadDTO struct {
+	userDynamicItemDTO
+	UserID       uint64 `json:"user_id"`
+	AuthorName   string `json:"author_name"`
+	AuthorAvatar string `json:"author_avatar"`
+	IsAuthor     bool   `json:"is_author"`
+}
+
+type dynamicPlaybackResponse struct {
+	CommentsClosed  bool `json:"comments_closed"`
+	CommentsCurated bool `json:"comments_curated"`
+}
+
+type dynamicLikeResponse struct {
+	Liked          bool `json:"liked"`
+	LikeCountDelta int  `json:"like_count_delta"`
+}
+
+type userDynamicListResponse struct {
+	Items      []userDynamicItemDTO `json:"items"`
+	Page       int                  `json:"page"`
+	PageSize   int                  `json:"page_size"`
+	Total      int64                `json:"total"`
+	TotalPages int                  `json:"total_pages"`
+}
+
+type userDynamicCursorListResponse struct {
+	Items      []userDynamicItemDTO `json:"items"`
+	NextCursor string               `json:"next_cursor"`
+}
+
+func userDynamicReadPayload(d *dynamic.UserDynamic, author *user.User, likedByMe bool, viewer uint64) userDynamicReadDTO {
+	return userDynamicReadDTO{
+		userDynamicItemDTO: userDynamicPayload(d, likedByMe),
+		UserID:             d.UserID,
+		AuthorName:         userDynamicAuthorName(author),
+		AuthorAvatar:       uploaderAvatarForAPI(author),
+		IsAuthor:           viewer > 0 && viewer == d.UserID,
+	}
 }
 
 // GetUserDynamic returns a single user dynamic for reading (public).
@@ -106,22 +151,22 @@ func (a *API) GetUserDynamic(c *gin.Context) {
 	resp.OK(c, userDynamicReadPayload(dyn, &author, likedMap[id], viewer))
 }
 
-func userDynamicPayload(d *dynamic.UserDynamic, likedByMe bool) gin.H {
+func userDynamicPayload(d *dynamic.UserDynamic, likedByMe bool) userDynamicItemDTO {
 	imgs := parseDynamicImagesJSON(d.ImagesJSON)
 	if imgs == nil {
 		imgs = []string{}
 	}
-	return gin.H{
-		"id":               d.ID,
-		"title":            d.Title,
-		"content":          d.Content,
-		"images":           imgs,
-		"like_count":       d.LikeCount,
-		"comment_count":    d.CommentCount,
-		"liked_by_me":      likedByMe,
-		"comments_closed":  d.CommentsClosed,
-		"comments_curated": d.CommentsCurated,
-		"created_at":       d.CreatedAt.Format("2006-01-02 15:04:05"),
+	return userDynamicItemDTO{
+		ID:              d.ID,
+		Title:           d.Title,
+		Content:         d.Content,
+		Images:          imgs,
+		LikeCount:       d.LikeCount,
+		CommentCount:    d.CommentCount,
+		LikedByMe:       likedByMe,
+		CommentsClosed:  d.CommentsClosed,
+		CommentsCurated: d.CommentsCurated,
+		CreatedAt:       d.CreatedAt.Format("2006-01-02 15:04:05"),
 	}
 }
 
@@ -177,9 +222,9 @@ func (a *API) PatchUserDynamicPlayback(c *gin.Context) {
 		return
 	}
 	dyn = d
-	resp.OK(c, gin.H{
-		"comments_closed":  dyn.CommentsClosed,
-		"comments_curated": dyn.CommentsCurated,
+	resp.OK(c, dynamicPlaybackResponse{
+		CommentsClosed:  dyn.CommentsClosed,
+		CommentsCurated: dyn.CommentsCurated,
 	})
 }
 
@@ -392,9 +437,9 @@ func (a *API) ToggleDynamicLike(c *gin.Context) {
 		return
 	}
 	if liked {
-		resp.OK(c, gin.H{"liked": true, "like_count_delta": 1})
+		resp.OK(c, dynamicLikeResponse{Liked: true, LikeCountDelta: 1})
 	} else {
-		resp.OK(c, gin.H{"liked": false, "like_count_delta": -1})
+		resp.OK(c, dynamicLikeResponse{Liked: false, LikeCountDelta: -1})
 	}
 }
 
@@ -444,7 +489,7 @@ func (a *API) DeleteMyDynamic(c *gin.Context) {
 		return
 	}
 	purgeDynamicOSSObjects(a.Cfg, a.OSS, a.Log, *dyn)
-	resp.OK(c, gin.H{"ok": true})
+	resp.OK(c, okResponse{OK: true})
 }
 
 // ListMyDynamics lists the current user's image/text dynamics (content management).
@@ -466,16 +511,16 @@ func (a *API) ListMyDynamics(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	items := make([]gin.H, 0, len(resDyn.Dynamics))
+	items := make([]userDynamicItemDTO, 0, len(resDyn.Dynamics))
 	for i := range resDyn.Dynamics {
 		items = append(items, userDynamicPayload(&resDyn.Dynamics[i], false))
 	}
-	resp.OK(c, gin.H{
-		"items":       items,
-		"page":        page,
-		"page_size":   pageSize,
-		"total":       resDyn.Total,
-		"total_pages": resDyn.TotalPages,
+	resp.OK(c, userDynamicListResponse{
+		Items:      items,
+		Page:       page,
+		PageSize:   pageSize,
+		Total:      resDyn.Total,
+		TotalPages: resDyn.TotalPages,
 	})
 }
 
@@ -529,7 +574,7 @@ func (a *API) ListUserPublishedDynamics(c *gin.Context) {
 		ids = append(ids, d.ID)
 	}
 	likedMap := a.DynamicSvc.BatchCheckLiked(c.Request.Context(), viewer, ids)
-	items := make([]gin.H, 0, len(list))
+	items := make([]userDynamicItemDTO, 0, len(list))
 	for i := range list {
 		items = append(items, userDynamicPayload(&list[i], likedMap[list[i].ID]))
 	}
@@ -537,8 +582,8 @@ func (a *API) ListUserPublishedDynamics(c *gin.Context) {
 	if hasMore && len(list) > 0 {
 		nextCursor = strconv.FormatUint(list[len(list)-1].ID, 10)
 	}
-	resp.OK(c, gin.H{
-		"items":       items,
-		"next_cursor": nextCursor,
+	resp.OK(c, userDynamicCursorListResponse{
+		Items:      items,
+		NextCursor: nextCursor,
 	})
 }

@@ -47,28 +47,26 @@ func TestArticleListItem_Unit(t *testing.T) {
 	now := time.Now()
 	art := article.Article{ID: 1, Title: "T", PublishedAt: &now}
 	item := articleListItem(art, "Author", articleEngagement{FavoritedByMe: true})
-	if item["author_name"].(string) != "Author" {
-		t.Errorf("got %v", item["author_name"])
+	if item.AuthorName != "Author" {
+		t.Errorf("got %v", item.AuthorName)
 	}
-	v, ok := item["favorited_by_me"].(bool)
-	if !ok || v != true {
-		t.Errorf("favorited_by_me=%v", item["favorited_by_me"])
+	if item.FavoritedByMe != true {
+		t.Errorf("favorited_by_me=%v", item.FavoritedByMe)
 	}
 }
 
 func TestArticleListItem_NilPubAt(t *testing.T) {
 	art := article.Article{Title: "Draft"}
 	item := articleListItem(art, "", articleEngagement{})
-	if item["published_at"].(string) != "" {
-		t.Errorf("got %v", item["published_at"])
+	if item.PublishedAt != "" {
+		t.Errorf("got %v", item.PublishedAt)
 	}
 }
 
 func TestUserDynamicPayload_EmptyImages(t *testing.T) {
 	d := &dynamic.UserDynamic{}
 	p := userDynamicPayload(d, false)
-	imgs := p["images"].([]string)
-	if len(imgs) != 0 {
+	if len(p.Images) != 0 {
 		t.Error("expected empty")
 	}
 }
@@ -79,8 +77,8 @@ func TestUserDynamicPayload_WithData(t *testing.T) {
 		LikeCount:  10,
 	}
 	p := userDynamicPayload(d, true)
-	if p["liked_by_me"].(bool) != true {
-		t.Errorf("got %v", p["liked_by_me"])
+	if p.LikedByMe != true {
+		t.Errorf("got %v", p.LikedByMe)
 	}
 }
 

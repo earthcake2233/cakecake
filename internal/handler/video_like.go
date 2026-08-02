@@ -14,6 +14,9 @@ import (
 
 // ToggleVideoLike toggles the current user's like on a published video.
 func (a *API) ToggleVideoLike(c *gin.Context) {
+	type videoLikeResponse struct {
+		Liked bool `json:"liked"`
+	}
 	uid, ok := middleware.UserID(c)
 	if !ok {
 		resp.Err(c, http.StatusUnauthorized, errcode.CodeUnauthorized)
@@ -33,5 +36,5 @@ func (a *API) ToggleVideoLike(c *gin.Context) {
 		}
 		return
 	}
-	resp.OK(c, gin.H{"liked": liked})
+	resp.OK(c, videoLikeResponse{Liked: liked})
 }

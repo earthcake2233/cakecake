@@ -16,6 +16,28 @@ import (
 )
 
 // ToggleArticleFavorite toggles favorite on an article.
+type articleFavoriteToggleResponse struct {
+	Favorited bool   `json:"favorited"`
+	FavCount  uint64 `json:"fav_count"`
+}
+
+type articleCoinResponse struct {
+	Coined               bool    `json:"coined"`
+	CoinCount            uint64  `json:"coin_count"`
+	Amount               int     `json:"amount"`
+	MyCoinAmount         int     `json:"my_coin_amount"`
+	CoinedByMe           bool    `json:"coined_by_me"`
+	CoinBalance          float64 `json:"coin_balance"`
+	DailyCoinExpProgress int     `json:"daily_coin_exp_progress"`
+	DailyCoinExpMax      int     `json:"daily_coin_exp_max"`
+}
+
+type articleFavListResponse struct {
+	Items      []articleListItemDTO `json:"items"`
+	NextCursor string               `json:"next_cursor"`
+	Total      int64                `json:"total"`
+}
+
 func (a *API) ToggleArticleFavorite(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -32,7 +54,7 @@ func (a *API) ToggleArticleFavorite(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	resp.OK(c, gin.H{"favorited": favorited, "fav_count": favCount})
+	resp.OK(c, articleFavoriteToggleResponse{Favorited: favorited, FavCount: favCount})
 }
 
 type articleCoinJSON struct {
@@ -85,15 +107,15 @@ func (a *API) PostArticleCoin(c *gin.Context) {
 		coinBalance = usercoin.BalanceFloat(viewerModel.CoinBalanceTenths)
 	}
 
-	resp.OK(c, gin.H{
-		"coined":                  true,
-		"coin_count":              result.CoinCount,
-		"amount":                  result.Amount,
-		"my_coin_amount":          result.MyCoinAmount,
-		"coined_by_me":            true,
-		"coin_balance":            coinBalance,
-		"daily_coin_exp_progress": result.DailyProgress,
-		"daily_coin_exp_max":      dailyreward.ExpCoinMax,
+	resp.OK(c, articleCoinResponse{
+		Coined:               true,
+		CoinCount:            result.CoinCount,
+		Amount:               result.Amount,
+		MyCoinAmount:         result.MyCoinAmount,
+		CoinedByMe:           true,
+		CoinBalance:          coinBalance,
+		DailyCoinExpProgress: result.DailyProgress,
+		DailyCoinExpMax:      dailyreward.ExpCoinMax,
 	})
 }
 
@@ -130,7 +152,7 @@ func (a *API) ListUserArticleFavorites(c *gin.Context) {
 	}
 	viewer, viewerOK := middleware.UserID(c)
 	if !spaceViewerCanSee(userID, viewerOK, viewer, u.PrivacyPublicFavorites) {
-		resp.OK(c, gin.H{"items": []gin.H{}, "next_cursor": "", "total": 0})
+		resp.OK(c, articleFavListResponse{Items: []articleListItemDTO{}, NextCursor: "", Total: 0})
 		return
 	}
 	a.listArticleFavoritesForUser(c, userID)
@@ -168,32 +190,22 @@ func (a *API) listArticleFavoritesForUser(c *gin.Context, uid uint64) {
 			}
 		}
 	}
-	items := make([]gin.H, 0, len(favs))
+	items := make([]articleListItemDTO, 0, len(favs))
 	for _, f := range favs {
 		art, ok := arts[f.ArticleID]
 		if !ok {
 			if isOwnerView {
-				items = append(items, gin.H{
-					"id":            f.ArticleID,
-					"title":         "专栏已不可用",
-					"cover_url":     "",
-					"status":        "",
-					"view_count":    0,
-					"comment_count": 0,
-					"coin_count":    0,
-					"fav_count":     0,
-					"forward_count": 0,
-					"published_at":  "",
-					"created_at":    "",
-					"author_name":   "",
-					"favorited_at":  f.CreatedAt.Format("2006-01-02 15:04:05"),
-					"unavailable":   true,
+				items = append(items, articleListItemDTO{
+					ID:          f.ArticleID,
+					Title:       "专栏已不可用",
+					FavoritedAt: f.CreatedAt.Format("2006-01-02 15:04:05"),
+					Unavailable: true,
 				})
 			}
 			continue
 		}
 		row := articleListItem(art, names[art.UserID], articleEngagement{FavoritedByMe: true})
-		row["favorited_at"] = f.CreatedAt.Format("2006-01-02 15:04:05")
+		row.FavoritedAt = f.CreatedAt.Format("2006-01-02 15:04:05")
 		items = append(items, row)
 	}
 	next := ""
@@ -206,5 +218,5 @@ func (a *API) listArticleFavoritesForUser(c *gin.Context, uid uint64) {
 	} else {
 		total, _ = a.ArticleSvc.CountFavoritedArticles(c.Request.Context(), uid, true)
 	}
-	resp.OK(c, gin.H{"items": items, "next_cursor": next, "total": total})
+	resp.OK(c, articleFavListResponse{Items: items, NextCursor: next, Total: total})
 }

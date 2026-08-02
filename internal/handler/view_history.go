@@ -20,6 +20,41 @@ import (
 	"cakecake/internal/pkg/resp"
 )
 
+type viewHistoryItemDTO struct {
+	MediaType         string  `json:"media_type"`
+	VideoID           uint64  `json:"video_id"`
+	ArticleID         uint64  `json:"article_id"`
+	Title             string  `json:"title"`
+	CoverURL          string  `json:"cover_url"`
+	DurationSec       float64 `json:"duration_sec"`
+	ProgressSec       float64 `json:"progress_sec"`
+	Device            string  `json:"device"`
+	ViewedAt          string  `json:"viewed_at"`
+	ViewedTime        string  `json:"viewed_time"`
+	UploaderID        uint64  `json:"uploader_id"`
+	UploaderName      string  `json:"uploader_name,omitempty"`
+	UploaderAvatarURL string  `json:"uploader_avatar_url,omitempty"`
+	Category          string  `json:"category"`
+}
+
+type viewHistoryRecordResponse struct {
+	Recorded bool `json:"recorded"`
+	Paused   bool `json:"paused,omitempty"`
+}
+
+type viewHistoryListResponse struct {
+	Items  []viewHistoryItemDTO `json:"items"`
+	Paused bool                 `json:"paused"`
+}
+
+type viewHistoryClearedResponse struct {
+	Cleared bool `json:"cleared"`
+}
+
+type pausedResponse struct {
+	Paused bool `json:"paused"`
+}
+
 const viewHistoryMaxItems = 500
 
 type viewHistoryPostJSON struct {
@@ -45,7 +80,7 @@ func (a *API) PostVideoViewHistory(c *gin.Context) {
 		return
 	}
 	if paused {
-		resp.OK(c, gin.H{"recorded": false, "paused": true})
+		resp.OK(c, viewHistoryRecordResponse{Recorded: false, Paused: true})
 		return
 	}
 	vid, err := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -81,7 +116,7 @@ func (a *API) PostVideoViewHistory(c *gin.Context) {
 		return
 	}
 	a.ViewHistorySvc.TrimViewHistoryCombined(context.Background(), uid, viewHistoryMaxItems)
-	resp.OK(c, gin.H{"recorded": true})
+	resp.OK(c, viewHistoryRecordResponse{Recorded: true})
 }
 
 // RecordArticleViewHistory upserts read history for a published article.
@@ -125,23 +160,20 @@ func (a *API) ListMyViewHistory(c *gin.Context) {
 	}
 	items := append(a.viewHistoryVideoItems(vrows), a.viewHistoryArticleItems(arows)...)
 	sort.Slice(items, func(i, j int) bool {
-		ti, _ := items[i]["viewed_at"].(string)
-		tj, _ := items[j]["viewed_at"].(string)
+		ti := items[i].ViewedAt
+		tj := items[j].ViewedAt
 		return ti > tj
 	})
 	limit := viewHistoryMaxItems
 	if len(items) > limit {
 		items = items[:limit]
 	}
-	resp.OK(c, gin.H{
-		"items":  items,
-		"paused": paused,
-	})
+	resp.OK(c, viewHistoryListResponse{Items: items, Paused: paused})
 }
 
-func (a *API) viewHistoryVideoItems(rows []extra.VideoViewHistory) []gin.H {
+func (a *API) viewHistoryVideoItems(rows []extra.VideoViewHistory) []viewHistoryItemDTO {
 	if len(rows) == 0 {
-		return []gin.H{}
+		return []viewHistoryItemDTO{}
 	}
 	vids := make([]uint64, 0, len(rows))
 	for i := range rows {
@@ -149,14 +181,14 @@ func (a *API) viewHistoryVideoItems(rows []extra.VideoViewHistory) []gin.H {
 	}
 	videos, err := a.ViewHistorySvc.BatchFetchVideosByIDs(context.Background(), vids)
 	if err != nil {
-		return []gin.H{}
+		return []viewHistoryItemDTO{}
 	}
 	uids := make([]uint64, 0, len(videos))
 	for _, v := range videos {
 		uids = append(uids, v.UserID)
 	}
 	users, _ := a.ViewHistorySvc.BatchFetchUsersByIDs(context.Background(), uids)
-	items := make([]gin.H, 0, len(rows))
+	items := make([]viewHistoryItemDTO, 0, len(rows))
 	for i := range rows {
 		h := rows[i]
 		video, ok := videos[h.VideoID]
@@ -169,31 +201,31 @@ func (a *API) viewHistoryVideoItems(rows []extra.VideoViewHistory) []gin.H {
 	return items
 }
 
-func (a *API) formatVideoHistoryItem(h extra.VideoViewHistory, video vmodel.Video, u user.User) gin.H {
-	item := gin.H{
-		"media_type":   "video",
-		"video_id":     video.ID,
-		"article_id":   0,
-		"title":        video.Title,
-		"cover_url":    video.CoverURL,
-		"duration_sec": video.DurationSec,
-		"progress_sec": h.ProgressSec,
-		"device":       h.Device,
-		"viewed_at":    h.ViewedAt.Format("2006-01-02 15:04:05"),
-		"viewed_time":  h.ViewedAt.Format("15:04"),
-		"uploader_id":  video.UserID,
-		"category":     video.Zone,
+func (a *API) formatVideoHistoryItem(h extra.VideoViewHistory, video vmodel.Video, u user.User) viewHistoryItemDTO {
+	item := viewHistoryItemDTO{
+		MediaType:   "video",
+		VideoID:     video.ID,
+		ArticleID:   0,
+		Title:       video.Title,
+		CoverURL:    video.CoverURL,
+		DurationSec: video.DurationSec,
+		ProgressSec: h.ProgressSec,
+		Device:      h.Device,
+		ViewedAt:    h.ViewedAt.Format("2006-01-02 15:04:05"),
+		ViewedTime:  h.ViewedAt.Format("15:04"),
+		UploaderID:  video.UserID,
+		Category:    video.Zone,
 	}
 	if u.ID > 0 {
-		item["uploader_name"] = user.DisplayUsername(&u)
-		item["uploader_avatar_url"] = uploaderAvatarForAPI(&u)
+		item.UploaderName = user.DisplayUsername(&u)
+		item.UploaderAvatarURL = uploaderAvatarForAPI(&u)
 	}
 	return item
 }
 
-func (a *API) viewHistoryArticleItems(rows []extra.ArticleViewHistory) []gin.H {
+func (a *API) viewHistoryArticleItems(rows []extra.ArticleViewHistory) []viewHistoryItemDTO {
 	if len(rows) == 0 {
-		return []gin.H{}
+		return []viewHistoryItemDTO{}
 	}
 	aids := make([]uint64, 0, len(rows))
 	for i := range rows {
@@ -201,14 +233,14 @@ func (a *API) viewHistoryArticleItems(rows []extra.ArticleViewHistory) []gin.H {
 	}
 	articles, err := a.ViewHistorySvc.BatchFetchArticlesByIDs(context.Background(), aids)
 	if err != nil {
-		return []gin.H{}
+		return []viewHistoryItemDTO{}
 	}
 	uids := make([]uint64, 0, len(articles))
 	for _, art := range articles {
 		uids = append(uids, art.UserID)
 	}
 	users, _ := a.ViewHistorySvc.BatchFetchUsersByIDs(context.Background(), uids)
-	items := make([]gin.H, 0, len(rows))
+	items := make([]viewHistoryItemDTO, 0, len(rows))
 	for i := range rows {
 		h := rows[i]
 		art, ok := articles[h.ArticleID]
@@ -216,21 +248,21 @@ func (a *API) viewHistoryArticleItems(rows []extra.ArticleViewHistory) []gin.H {
 			continue
 		}
 		u := users[art.UserID]
-		items = append(items, gin.H{
-			"media_type":          "article",
-			"video_id":            0,
-			"article_id":          art.ID,
-			"title":               art.Title,
-			"cover_url":           art.CoverURL,
-			"duration_sec":        0,
-			"progress_sec":        0,
-			"device":              h.Device,
-			"viewed_at":           h.ViewedAt.Format("2006-01-02 15:04:05"),
-			"viewed_time":         h.ViewedAt.Format("15:04"),
-			"uploader_id":         art.UserID,
-			"uploader_name":       user.DisplayUsername(&u),
-			"uploader_avatar_url": uploaderAvatarForAPI(&u),
-			"category":            "专栏",
+		items = append(items, viewHistoryItemDTO{
+			MediaType:         "article",
+			VideoID:           0,
+			ArticleID:         art.ID,
+			Title:             art.Title,
+			CoverURL:          art.CoverURL,
+			DurationSec:       0,
+			ProgressSec:       0,
+			Device:            h.Device,
+			ViewedAt:          h.ViewedAt.Format("2006-01-02 15:04:05"),
+			ViewedTime:        h.ViewedAt.Format("15:04"),
+			UploaderID:        art.UserID,
+			UploaderName:      user.DisplayUsername(&u),
+			UploaderAvatarURL: uploaderAvatarForAPI(&u),
+			Category:          "专栏",
 		})
 	}
 	return items
@@ -252,7 +284,7 @@ func (a *API) DeleteMyViewHistoryEntry(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	resp.OK(c, gin.H{"deleted": true})
+	resp.OK(c, deletedResponse{Deleted: true})
 }
 
 // DeleteMyArticleViewHistoryEntry removes one article history row.
@@ -271,7 +303,7 @@ func (a *API) DeleteMyArticleViewHistoryEntry(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	resp.OK(c, gin.H{"deleted": true})
+	resp.OK(c, deletedResponse{Deleted: true})
 }
 
 // ClearMyViewHistory removes all history for the user.
@@ -289,7 +321,7 @@ func (a *API) ClearMyViewHistory(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	resp.OK(c, gin.H{"cleared": true})
+	resp.OK(c, viewHistoryClearedResponse{Cleared: true})
 }
 
 // GetMyViewHistorySettings returns whether history recording is paused.
@@ -311,7 +343,7 @@ func (a *API) GetMyViewHistorySettings(c *gin.Context) {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
-	resp.OK(c, gin.H{"paused": paused})
+	resp.OK(c, pausedResponse{Paused: paused})
 }
 
 // PutMyViewHistorySettings toggles pause for history recording.
@@ -330,5 +362,5 @@ func (a *API) PutMyViewHistorySettings(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	resp.OK(c, gin.H{"paused": body.Paused})
+	resp.OK(c, pausedResponse{Paused: body.Paused})
 }
