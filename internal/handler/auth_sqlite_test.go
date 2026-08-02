@@ -93,7 +93,7 @@ func newTestAPI(t *testing.T) (*API, *gin.Engine, *jwttoken.Manager) {
 	hotSearchSvc := service.NewHotSearchService(db, searchHot)
 	engagementSvc := service.NewEngagementService(db, rdb, log, userProv, videoProv)
 	viewHistorySvc := service.NewViewHistoryService(db, rdb, log)
-	videoDraftSvc := service.NewVideoDraftService(db, rdb, log, nil)
+	videoDraftSvc := service.NewVideoDraftService(db, rdb, log, noopMQ{})
 	creatorCommentSvc := service.NewCreatorCommentService(db, rdb, log)
 	searchHistorySvc := service.NewSearchHistoryService(db, log)
 	api := &API{

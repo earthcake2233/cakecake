@@ -408,6 +408,7 @@ func (a *API) PutMyUserDynamic(c *gin.Context) {
 	}
 	dyn.Title = title
 	updates := map[string]interface{}{
+		"title":       title,
 		"content":     content,
 		"images_json": string(imgsJSON),
 	}
