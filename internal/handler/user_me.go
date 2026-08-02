@@ -30,6 +30,9 @@ type meResponse struct {
 	Birthday     string `json:"birthday"`
 	AvatarURL    string `json:"avatar_url"`
 	CreatedAt    string `json:"created_at"`
+	// PendingDeletion is true during the account-deletion cooling-off period.
+	PendingDeletion     bool    `json:"pending_deletion,omitempty"`
+	DeletionEffectiveAt *string `json:"deletion_effective_at,omitempty"`
 
 	// Extra fields only present for normal (non-anonymized) users.
 	SpacePrivacy *spacePrivacyPayload `json:"space_privacy,omitempty"`
@@ -86,6 +89,12 @@ func (a *API) GetMe(c *gin.Context) {
 		out.SpacePrivacy = &sp
 		out.LevelInfo = &li
 		out.CoinBalance = &cb
+		if userModel.DeletionRequestedAt != nil && userModel.DeletionEffectiveAt != nil &&
+			time.Now().Before(*userModel.DeletionEffectiveAt) {
+			eff := userModel.DeletionEffectiveAt.Format(time.RFC3339)
+			out.PendingDeletion = true
+			out.DeletionEffectiveAt = &eff
+		}
 	}
 	resp.OK(c, out)
 }
