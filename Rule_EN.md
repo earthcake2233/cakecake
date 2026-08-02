@@ -165,7 +165,7 @@ As the project evolves, Rule entries will grow. When a Rule is repeatedly violat
 | **R-FE-TEST-1** | **New .vue / .js / .ts files MUST come with tests** | When adding/modifying modules under `src/api/`, `src/router/`, `src/utils/`, `src/components/`, `src/pages/`, MUST provide a matching Vitest test file (`.spec.ts`) placed in the corresponding `src/__tests__/` subdirectory, aligned with source structure. Pure type definitions and constant files are exempt. |
 | **R-FE-TEST-2** | **Tests MUST mock external dependencies with `vi.mock`** | Frontend tests MUST mock HTTP requests (mock `@/utils/http`), Vuex Store, routes, etc. NEVER make real network requests in unit tests. `import.meta.env` MUST be set via `vi.stubEnv` in `beforeAll`; beware module caching — different env configs need separate test files. |
 | **R-FE-TEST-3** | **Coverage target ≥ 70%** | Overall frontend statement coverage target ≥ 70%. New code MUST maintain or raise current coverage. Current: Statements `73.02%`, Branches `68.8%`, Functions `68.01%`, Lines `72.66%`. |
-| **R-FE-TEST-4** | **README CN/EN MUST sync test data** | When updating test statistics in `README.md` or `README_EN.md` (badges, coverage), the other file MUST be updated too. Current frontend: 77 test files, 73% statement coverage; frontend badge labeled Vue Coverage, backend labeled Go Coverage. |
+| **R-FE-TEST-4** | **README CN/EN MUST sync test data** | When updating test statistics in `README.md` or `README_EN.md` (badges, coverage), the other file MUST be updated too. Never hardcode test file counts / case counts / coverage numbers in docs (see R-DOC-19); use relative descriptions or auto-updating badges. |
 
 ---
 
@@ -212,6 +212,7 @@ As the project evolves, Rule entries will grow. When a Rule is repeatedly violat
 | **R-DOC-16** | **New .md files MUST create the EN version and register the check** | Creating any new Chinese `.md` MUST create the corresponding `_EN.md` in the same commit and register it in `check_en_sync.py`'s whitelist. Single-language files are forbidden. |
 | **R-DOC-17** | **Pre-commit CN/EN content sync is a hard gate** | Every commit MUST run `python scripts/check_en_sync.py --check-sync` (wired into `check_pre_commit.py` and the local pre-commit hook): it verifies heading structure (title sequence) and code-block consistency across all CN/EN pairs. On failure, the commit is blocked; committing with drift requires explicit human confirmation (interactive `y`, or `--yes`). Violating this counts as failing the gate. |
 | **R-DOC-18** | **Markdown relative links MUST resolve** | Relative links (`](path)`) in `.md` docs MUST point to existing files. After renaming/moving files, all referencing links MUST be updated. Before committing, MUST run `python scripts/check_md_links.py` (wired into `check_pre_commit.py` and `make doc-check`); broken links block the commit. |
+| **R-DOC-19** | **Docs MUST NOT hardcode test statistics** | `.md` docs MUST NOT hardcode test file counts, case counts, or coverage percentages (they go stale as code evolves — e.g., "27 test files" was actually 130). Use relative descriptions (e.g., "full frontend test suite", "backend unit + integration tests") or auto-updating CI / Codecov badges. Before committing, check added/modified docs and replace hardcoded numbers. |
 
 ---
 

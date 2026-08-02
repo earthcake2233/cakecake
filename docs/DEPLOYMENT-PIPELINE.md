@@ -10,34 +10,24 @@
 
 ```mermaid
 %%{init: {"flowchart": {"nodeSpacing": 45, "rankSpacing": 70}}}%%
-flowchart LR
-    subgraph S1["① 质量门禁"]
-        direction TB
-        Push["push main"] --> CI["CI：gofmt + go vet<br/>后端测试 + 前端 829 用例 + 覆盖率"]
-    end
-    subgraph S2["② 审批与构建"]
-        direction TB
-        CI -- "success" --> Deploy["Deploy Minibili"]
-        Deploy -->|"environment: production"| Approve{"人工审批门<br/>Required reviewers"}
-        Approve -- "approve" --> Build["构建产物"]
-        Build --> BE["后端 linux/amd64"]
-        Build --> FE["前端 dist + migrations"]
-    end
-    subgraph S3["③ 发布执行"]
-        direction TB
-        BE & FE --> Pack["打包 release"]
-        Pack --> Upload["SCP 上传服务器"]
-        Upload --> Install["安装 + systemctl restart"]
-        Install --> Health{"健康检查<br/>30s 就绪轮询"}
-        Health -- "ok" --> Reload["nginx -s reload"] --> Done["✅ 部署完成"]
-    end
-    subgraph S4["④ 失败处理与运行期保障"]
-        direction TB
-        Health -- "fail" --> Rollback["回滚：stop → 恢复 .prev → start"]
-        Rollback --> Alert["任务标红 + 审计留痕"]
-        Monitor["巡检：每 10 分钟探测健康接口"] -.->|"连续失败"| Issue["自动开 Issue 并指派"]
-    end
-    Done -. "持续" .-> Monitor
+flowchart TB
+    Push["push main"] --> CI["CI：gofmt + go vet<br/>后端测试 + 前端测试 + 覆盖率"]
+    CI -- "success" --> Deploy["Deploy Minibili"]
+    Deploy -->|"environment: production"| Approve{"人工审批门<br/>Required reviewers"}
+    Approve -- "approve" --> Build["构建产物"]
+    Build --> BE["后端 linux/amd64"]
+    Build --> FE["前端 dist + migrations"]
+    BE & FE --> Pack["打包 release"]
+    Pack --> Upload["SCP 上传服务器"]
+    Upload --> Install["安装 + systemctl restart"]
+    Install --> Health{"健康检查<br/>30s 就绪轮询"}
+    Health -- "ok" --> Reload["nginx -s reload"]
+    Reload --> Done["✅ 部署完成"]
+    Health -- "fail" --> Rollback["回滚：stop → 恢复 .prev → start"]
+    Rollback --> Alert["任务标红 + 审计留痕"]
+    Monitor["巡检：每 10 分钟探测健康接口"]
+    Monitor -.->|"连续失败"| Issue["自动开 Issue 并指派"]
+    Done -.->|"持续"| Monitor
 ```
 
 ---
@@ -46,7 +36,7 @@ flowchart LR
 
 | 决策 | 选择 | 理由 |
 |------|------|------|
-| 测试门禁 | push 后自动跑 CI（gofmt / go vet / 后端测试 / 前端 829 用例 / 覆盖率） | 测试不过不进入发布，从源头拦截回归 |
+| 测试门禁 | push 后自动跑 CI（gofmt / go vet / 后端测试 / 前端测试 / 覆盖率） | 测试不过不进入发布，从源头拦截回归 |
 | 人工审批门 | `environment: production` + Required reviewers | 发布是高风险动作，必须有人为确认，防误发、防机器自动上线 |
 | 精确版本 | checkout `workflow_run.head_sha` | 部署的代码与 CI 验证过的提交严格一致，杜绝“测了 A 发了 B” |
 | 自动回滚 | 健康检查失败 → `stop` → 恢复 `.prev` 二进制与 migrations → `start` | 快速恢复线上，回滚必须覆盖全部共享状态 |

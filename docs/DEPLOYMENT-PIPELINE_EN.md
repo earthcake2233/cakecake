@@ -10,34 +10,24 @@ This document records how cakecake evolved from manual scp releases to a full pi
 
 ```mermaid
 %%{init: {"flowchart": {"nodeSpacing": 45, "rankSpacing": 70}}}%%
-flowchart LR
-    subgraph S1["① Quality Gate"]
-        direction TB
-        Push["push main"] --> CI["CI: gofmt + go vet<br/>backend tests + 829 frontend tests + coverage"]
-    end
-    subgraph S2["② Approval & Build"]
-        direction TB
-        CI -- "success" --> Deploy["Deploy Minibili"]
-        Deploy -->|"environment: production"| Approve{"Approval gate<br/>Required reviewers"}
-        Approve -- "approve" --> Build["Build artifacts"]
-        Build --> BE["backend linux/amd64"]
-        Build --> FE["frontend dist + migrations"]
-    end
-    subgraph S3["③ Release Execution"]
-        direction TB
-        BE & FE --> Pack["Pack release"]
-        Pack --> Upload["SCP upload to server"]
-        Upload --> Install["Install + systemctl restart"]
-        Install --> Health{"Health check<br/>30s readiness poll"}
-        Health -- "ok" --> Reload["nginx -s reload"] --> Done["✅ Deploy complete"]
-    end
-    subgraph S4["④ Failure Handling & Runtime Guarantees"]
-        direction TB
-        Health -- "fail" --> Rollback["Rollback: stop → restore .prev → start"]
-        Rollback --> Alert["Job marked red + audit trail"]
-        Monitor["Watchdog: probe health every 10 min"] -.->|"repeated failure"| Issue["Auto-open Issue & assign"]
-    end
-    Done -. "continuous" .-> Monitor
+flowchart TB
+    Push["push main"] --> CI["CI: gofmt + go vet<br/>backend tests + frontend tests + coverage"]
+    CI -- "success" --> Deploy["Deploy Minibili"]
+    Deploy -->|"environment: production"| Approve{"Approval gate<br/>Required reviewers"}
+    Approve -- "approve" --> Build["Build artifacts"]
+    Build --> BE["backend linux/amd64"]
+    Build --> FE["frontend dist + migrations"]
+    BE & FE --> Pack["Pack release"]
+    Pack --> Upload["SCP upload to server"]
+    Upload --> Install["Install + systemctl restart"]
+    Install --> Health{"Health check<br/>30s readiness poll"}
+    Health -- "ok" --> Reload["nginx -s reload"]
+    Reload --> Done["✅ Deploy complete"]
+    Health -- "fail" --> Rollback["Rollback: stop → restore .prev → start"]
+    Rollback --> Alert["Job marked red + audit trail"]
+    Monitor["Watchdog: probe health every 10 min"]
+    Monitor -.->|"repeated failure"| Issue["Auto-open Issue & assign"]
+    Done -.->|"continuous"| Monitor
 ```
 
 ---
@@ -46,7 +36,7 @@ flowchart LR
 
 | Decision | Choice | Rationale |
 |----------|--------|-----------|
-| Test gate | CI runs on push (gofmt / go vet / backend tests / 829 frontend tests / coverage) | No release without passing tests; stop regressions at the source |
+| Test gate | CI runs on push (gofmt / go vet / backend tests / frontend tests / coverage) | No release without passing tests; stop regressions at the source |
 | Approval gate | `environment: production` + Required reviewers | Releases are high-risk; a human confirmation prevents accidental or fully-automated deploys |
 | Exact version | checkout `workflow_run.head_sha` | Deploy exactly what CI verified — never "tested A, shipped B" |
 | Auto rollback | On health-check failure: `stop` → restore `.prev` binary & migrations → `start` | Fast recovery; rollback must cover all shared state |

@@ -101,7 +101,7 @@ src/
 ## 测试
 
 ```bash
-npm run test        # 50 个测试文件，496 个测试用例（Vitest + jsdom）
+npm run test        # Vitest 全量测试（jsdom）
 npm run test:watch  # 监听模式
 npm run test:ui     # Vitest UI 仪表盘
 npm run coverage    # 覆盖率报告

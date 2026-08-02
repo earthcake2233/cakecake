@@ -102,7 +102,7 @@ src/
 ## Tests
 
 ```bash
-npm run test        # 50 test files, 496 cases (Vitest + jsdom)
+npm run test        # full Vitest suite (jsdom)
 npm run test:watch  # Watch mode
 npm run test:ui     # Vitest UI dashboard
 npm run coverage    # Coverage report

@@ -190,7 +190,7 @@
 | **R-FE-TEST-1** | **新增 .vue / .js / .ts 文件必须同步写测试**           | 新增或修改 `src/api/`、`src/router/`、`src/utils/`、`src/components/`、`src/pages/` 下的模块时，必须提供对应的 Vitest 测试文件（`.spec.ts`）。测试文件需放置在 `src/__tests__/` 对应子目录中，与源码结构对齐。仅纯类型定义、常量文件可豁免。 |
 | **R-FE-TEST-2** | **测试必须使用 `vi.mock` Mock 外部依赖**              | 前端测试必须 Mock HTTP 请求（mock `@/utils/http`）、Vuex Store、路由等外部依赖。禁止在单元测试中发起真实网络请求。`import.meta.env` 需通过 `vi.stubEnv` 在 `beforeAll` 中设置，注意模块缓存问题——不同 env 配置需用独立的测试文件。     |
 | **R-FE-TEST-3** | **覆盖率目标 ≥ 70%**                                | 前端总体语句覆盖率目标 ≥ 70%。新增代码必须维持或提升当前覆盖率。当前覆盖：Statements `73.02%`、Branches `68.8%`、Functions `68.01%`、Lines `72.66%`。                                                         |
-| **R-FE-TEST-4** | **README 中文/英文必须同步测试数据**                    | 更新 `README.md` 或 `README_EN.md` 中的测试统计（徽章、覆盖率 badge）时，必须同步更新另一个文件。当前前端：77 测试文件、73% 语句覆盖、前端 badge 标为 Vue Coverage、后端标为 Go Coverage。                         |
+| **R-FE-TEST-4** | **README 中文/英文必须同步测试数据**                    | 更新 `README.md` 或 `README_EN.md` 中的测试统计（徽章、覆盖率 badge）时，必须同步更新另一个文件。禁止在文档中写死测试文件数/用例数/覆盖率数值（见 R-DOC-19），以相对描述或自动更新的徽章为准。                         |
 
 ---
 
@@ -235,6 +235,7 @@
 | **R-DOC-16** | **新增 .md 时必须同时创建英文版并加入检查**       | 新建任何中文 `.md` 文件时，必须在同一次 commit 中创建对应的 `_EN.md` 英文版，并在 `check_en_sync.py` 的白名单中注册。禁止只创建单语言版本。 |
 | **R-DOC-17** | **提交前中英文档内容同步为硬门禁**                | 每次 commit 前必须运行 `python scripts/check_en_sync.py --check-sync`（已接入 `check_pre_commit.py` 与本地 pre-commit hook）：校验所有 CN/EN 配对文档的章节结构（标题序列）与代码块一致。不通过时禁止提交；确需带差异提交必须人工确认（交互输入 y，或 `--yes` 显式确认）。违反此规则视为提交未过门禁。 |
 | **R-DOC-18** | **Markdown 相对链接必须可解析（跳转不失效）**   | 所有 `.md` 文档中的相对链接（`](path)`）指向的文件必须存在。改名/移动文件后必须同步更新所有引用链接。提交前必须运行 `python scripts/check_md_links.py`（已接入 `check_pre_commit.py` 与 `make doc-check`），发现失效链接直接阻断提交。 |
+| **R-DOC-19** | **文档禁止写死测试统计数字**                    | `.md` 文档中禁止写死测试文件数、用例数、覆盖率百分比等统计数值（会随代码演进而过时，如曾出现"27 个测试文件"实际 130 个的失实现象）。应使用相对描述（如"前端全量测试"、"后端单测 + 集成测试"），或引用自动更新的 CI / Codecov 徽章。提交前检查新增/修改的文档，发现写死数字必须改为相对描述。 |
 
 ### 十六、文件编码规范
 
