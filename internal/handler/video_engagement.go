@@ -9,7 +9,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
-	"gorm.io/gorm"
 
 	"cakecake/internal/errcode"
 	"cakecake/internal/middleware"
@@ -20,28 +19,6 @@ import (
 
 func (a *API) userVideoFavoriteCount(uid, vid uint64) (int64, error) {
 	return a.EngagementSvc.UserFavoriteCount(context.Background(), uid, vid)
-}
-
-func videoCoinsByViewer(db *gorm.DB, viewer uint64, ids []uint64) map[uint64]int {
-	out := make(map[uint64]int)
-	if viewer == 0 || len(ids) == 0 {
-		return out
-	}
-	var rows []video.VideoCoin
-	if err := db.Where("user_id = ? AND video_id IN ?", viewer, ids).Find(&rows).Error; err != nil {
-		return out
-	}
-	for i := range rows {
-		amt := rows[i].Amount
-		if amt < 0 {
-			amt = 0
-		}
-		if amt > 2 {
-			amt = 2
-		}
-		out[rows[i].VideoID] = amt
-	}
-	return out
 }
 
 func (a *API) engagementByViewer(viewer uint64, ids []uint64) map[uint64]videoEngagement {
@@ -62,21 +39,6 @@ func (a *API) engagementByViewer(viewer uint64, ids []uint64) map[uint64]videoEn
 			MyCoinAmount:  coinAmt,
 			InWatchLater:  later[id],
 		}
-	}
-	return out
-}
-
-func watchLaterByViewer(db *gorm.DB, viewer uint64, ids []uint64) map[uint64]bool {
-	out := make(map[uint64]bool)
-	if viewer == 0 || len(ids) == 0 {
-		return out
-	}
-	var rows []video.WatchLater
-	if err := db.Where("user_id = ? AND video_id IN ?", viewer, ids).Find(&rows).Error; err != nil {
-		return out
-	}
-	for i := range rows {
-		out[rows[i].VideoID] = true
 	}
 	return out
 }

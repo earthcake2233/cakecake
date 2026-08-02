@@ -239,3 +239,316 @@ func (s *CommentService) collectCommentDescendants(tx *gorm.DB, pluck func(tx *g
 	}
 	return ids
 }
+
+// commentDeleteAdapter maps a comment domain's tables to the shared delete logic.
+type commentDeleteAdapter struct {
+	fetch          func(ctx context.Context, id uint64) (ownerID, targetID uint64, err error)
+	cascade        bool
+	descendants    func(tx *gorm.DB, root uint64) []uint64
+	deleteLikes    func(tx *gorm.DB, ids []uint64) error
+	deleteDislikes func(tx *gorm.DB, ids []uint64) error
+	deleteRows     func(tx *gorm.DB, ids []uint64) (int64, error)
+	incrCount      func(ctx context.Context, targetID uint64, delta int)
+}
+
+// deleteCommentGeneric is the shared delete implementation for all comment domains.
+func (s *CommentService) deleteCommentGeneric(ctx context.Context, userID, commentID uint64, isOwner bool, ad commentDeleteAdapter) error {
+	ownerID, targetID, err := ad.fetch(ctx, commentID)
+	if err != nil {
+		return ErrNotFound
+	}
+	if !isOwner && ownerID != userID {
+		return ErrForbidden
+	}
+	if !ad.cascade {
+		_ = ad.deleteLikes(s.db.WithContext(ctx), []uint64{commentID})
+		_ = ad.deleteDislikes(s.db.WithContext(ctx), []uint64{commentID})
+		_, err := ad.deleteRows(s.db.WithContext(ctx), []uint64{commentID})
+		return err
+	}
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		descIDs := ad.descendants(tx, commentID)
+		allIDs := append([]uint64{commentID}, descIDs...)
+		_ = ad.deleteLikes(tx, allIDs)
+		_ = ad.deleteDislikes(tx, allIDs)
+		affected, err := ad.deleteRows(tx, allIDs)
+		if err != nil || affected == 0 {
+			return ErrNotFound
+		}
+		if ad.incrCount != nil {
+			ad.incrCount(ctx, targetID, -int(affected))
+		}
+		return nil
+	})
+}
+
+// commentPinAdapter maps a comment domain's tables to the shared pin logic.
+type commentPinAdapter struct {
+	checkTarget func(ctx context.Context, targetID uint64) error
+	fetch       func(ctx context.Context, id uint64) (targetID uint64, pinned bool, err error)
+	unpinOthers func(ctx context.Context, targetID uint64) error
+	update      func(ctx context.Context, id uint64, pinned bool) error
+}
+
+// pinCommentGeneric is the shared pin toggle for all comment domains.
+func (s *CommentService) pinCommentGeneric(ctx context.Context, targetID, commentID uint64, ad commentPinAdapter) (bool, error) {
+	if err := ad.checkTarget(ctx, targetID); err != nil {
+		return false, ErrNotFound
+	}
+	tid, pinned, err := ad.fetch(ctx, commentID)
+	if err != nil {
+		return false, ErrNotFound
+	}
+	if tid != targetID {
+		return false, ErrParamError
+	}
+	newPinned := !pinned
+	if newPinned {
+		_ = ad.unpinOthers(ctx, targetID)
+	}
+	if err := ad.update(ctx, commentID, newPinned); err != nil {
+		return false, ErrInternalError
+	}
+	return newPinned, nil
+}
+
+// approveCommentGeneric marks a comment approved on the given model table.
+func (s *CommentService) approveCommentGeneric(ctx context.Context, model interface{}, commentID uint64) error {
+	return s.db.WithContext(ctx).Model(model).Where("id = ?", commentID).Update("approved", true).Error
+}
+
+// ignoreCommentGeneric marks a comment as curated-ignored (soft mark: kept in
+// the database but not shown in public curated lists; visible in the creator
+// panel's "ignored" tab).
+func (s *CommentService) ignoreCommentGeneric(ctx context.Context, model interface{}, commentID uint64) error {
+	return s.db.WithContext(ctx).Model(model).Where("id = ?", commentID).Update("curated_ignored", true).Error
+}
+
+// getCommentGeneric fetches a comment row by ID for the given model type.
+func getCommentGeneric[T any](s *CommentService, ctx context.Context, id uint64) (*T, error) {
+	var out T
+	if err := s.db.WithContext(ctx).First(&out, id).Error; err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// commentReactionAdapter maps a comment domain's like/dislike tables to the shared toggle logic.
+type commentReactionAdapter struct {
+	fetch         func(ctx context.Context, id uint64) (uint64, error)
+	clearDislike  func(ctx context.Context, userID, commentID uint64) error
+	clearLike     func(ctx context.Context, userID, commentID uint64) error
+	hasLike       func(ctx context.Context, userID, commentID uint64) (bool, error)
+	hasDislike    func(ctx context.Context, userID, commentID uint64) (bool, error)
+	createLike    func(ctx context.Context, userID, commentID uint64) error
+	deleteLike    func(ctx context.Context, userID, commentID uint64) error
+	createDislike func(ctx context.Context, userID, commentID uint64) error
+	deleteDislike func(ctx context.Context, userID, commentID uint64) error
+	updateCount   func(ctx context.Context, commentID uint64, delta int) error
+	count         func(ctx context.Context, commentID uint64) uint64
+	notifyLike    func(ctx context.Context, commentID, userID uint64)
+}
+
+// toggleCommentLikeGeneric is the shared like-toggle implementation.
+func (s *CommentService) toggleCommentLikeGeneric(ctx context.Context, userID, commentID uint64, ad commentReactionAdapter) (bool, int, error) {
+	if _, err := ad.fetch(ctx, commentID); err != nil {
+		return false, 0, ErrNotFound
+	}
+	_ = ad.clearDislike(ctx, userID, commentID)
+	liked, err := ad.hasLike(ctx, userID, commentID)
+	if err == nil && liked {
+		_ = ad.deleteLike(ctx, userID, commentID)
+		_ = ad.updateCount(ctx, commentID, -1)
+		return false, int(ad.count(ctx, commentID)), nil
+	}
+	if err := ad.createLike(ctx, userID, commentID); err != nil {
+		return false, 0, ErrInternalError
+	}
+	_ = ad.updateCount(ctx, commentID, 1)
+	if ad.notifyLike != nil {
+		ad.notifyLike(ctx, commentID, userID)
+	}
+	return true, int(ad.count(ctx, commentID)), nil
+}
+
+// toggleCommentDislikeGeneric is the shared dislike-toggle implementation.
+func (s *CommentService) toggleCommentDislikeGeneric(ctx context.Context, userID, commentID uint64, ad commentReactionAdapter) (bool, error) {
+	if _, err := ad.fetch(ctx, commentID); err != nil {
+		return false, ErrNotFound
+	}
+	_ = ad.clearLike(ctx, userID, commentID)
+	disliked, err := ad.hasDislike(ctx, userID, commentID)
+	if err == nil && disliked {
+		_ = ad.deleteDislike(ctx, userID, commentID)
+		return false, nil
+	}
+	if err := ad.createDislike(ctx, userID, commentID); err != nil {
+		return false, ErrInternalError
+	}
+	return true, nil
+}
+
+// videoReactionAdapter maps comment.CommentLike/CommentDislike to the shared toggle logic.
+func (s *CommentService) videoReactionAdapter() commentReactionAdapter {
+	return commentReactionAdapter{
+		fetch: func(ctx context.Context, id uint64) (uint64, error) {
+			var cm comment.Comment
+			if err := s.db.WithContext(ctx).First(&cm, id).Error; err != nil {
+				return 0, err
+			}
+			return cm.LikeCount, nil
+		},
+		clearDislike: func(ctx context.Context, userID, commentID uint64) error {
+			return s.db.WithContext(ctx).Where("user_id = ? AND comment_id = ?", userID, commentID).Delete(&comment.CommentDislike{}).Error
+		},
+		clearLike: func(ctx context.Context, userID, commentID uint64) error {
+			return s.db.WithContext(ctx).Where("user_id = ? AND comment_id = ?", userID, commentID).Delete(&comment.CommentLike{}).Error
+		},
+		hasLike: func(ctx context.Context, userID, commentID uint64) (bool, error) {
+			var existing comment.CommentLike
+			return s.db.WithContext(ctx).Where("user_id = ? AND comment_id = ?", userID, commentID).First(&existing).Error == nil, nil
+		},
+		hasDislike: func(ctx context.Context, userID, commentID uint64) (bool, error) {
+			var existing comment.CommentDislike
+			return s.db.WithContext(ctx).Where("user_id = ? AND comment_id = ?", userID, commentID).First(&existing).Error == nil, nil
+		},
+		createLike: func(ctx context.Context, userID, commentID uint64) error {
+			return s.db.WithContext(ctx).Create(&comment.CommentLike{UserID: userID, CommentID: commentID}).Error
+		},
+		deleteLike: func(ctx context.Context, userID, commentID uint64) error {
+			return s.db.WithContext(ctx).Where("user_id = ? AND comment_id = ?", userID, commentID).Delete(&comment.CommentLike{}).Error
+		},
+		createDislike: func(ctx context.Context, userID, commentID uint64) error {
+			return s.db.WithContext(ctx).Create(&comment.CommentDislike{UserID: userID, CommentID: commentID}).Error
+		},
+		deleteDislike: func(ctx context.Context, userID, commentID uint64) error {
+			return s.db.WithContext(ctx).Where("user_id = ? AND comment_id = ?", userID, commentID).Delete(&comment.CommentDislike{}).Error
+		},
+		updateCount: func(ctx context.Context, commentID uint64, delta int) error {
+			if delta < 0 {
+				return s.db.WithContext(ctx).Model(&comment.Comment{}).Where("id = ?", commentID).
+					UpdateColumn("like_count", gorm.Expr("GREATEST(like_count - ?)", -delta)).Error
+			}
+			return s.db.WithContext(ctx).Model(&comment.Comment{}).Where("id = ?", commentID).
+				UpdateColumn("like_count", gorm.Expr("like_count + ?", delta)).Error
+		},
+		count: func(ctx context.Context, commentID uint64) uint64 {
+			var u comment.Comment
+			_ = s.db.WithContext(ctx).First(&u, commentID)
+			return u.LikeCount
+		},
+		notifyLike: func(ctx context.Context, commentID, userID uint64) {
+			if s.notifSvc == nil {
+				return
+			}
+			var cm comment.Comment
+			if err := s.db.WithContext(ctx).First(&cm, commentID).Error; err == nil {
+				s.notifSvc.NotifyCommentLike(ctx, cm, userID)
+			}
+		},
+	}
+}
+
+// articleReactionAdapter maps comment.ArticleCommentLike/Dislike to the shared toggle logic.
+func (s *CommentService) articleReactionAdapter() commentReactionAdapter {
+	return commentReactionAdapter{
+		fetch: func(ctx context.Context, id uint64) (uint64, error) {
+			var cm comment.ArticleComment
+			if err := s.db.WithContext(ctx).First(&cm, id).Error; err != nil {
+				return 0, err
+			}
+			return cm.LikeCount, nil
+		},
+		clearDislike: func(ctx context.Context, userID, commentID uint64) error {
+			return s.db.WithContext(ctx).Where("user_id = ? AND comment_id = ?", userID, commentID).Delete(&comment.ArticleCommentDislike{}).Error
+		},
+		clearLike: func(ctx context.Context, userID, commentID uint64) error {
+			return s.db.WithContext(ctx).Where("user_id = ? AND comment_id = ?", userID, commentID).Delete(&comment.ArticleCommentLike{}).Error
+		},
+		hasLike: func(ctx context.Context, userID, commentID uint64) (bool, error) {
+			var existing comment.ArticleCommentLike
+			return s.db.WithContext(ctx).Where("user_id = ? AND comment_id = ?", userID, commentID).First(&existing).Error == nil, nil
+		},
+		hasDislike: func(ctx context.Context, userID, commentID uint64) (bool, error) {
+			var existing comment.ArticleCommentDislike
+			return s.db.WithContext(ctx).Where("user_id = ? AND comment_id = ?", userID, commentID).First(&existing).Error == nil, nil
+		},
+		createLike: func(ctx context.Context, userID, commentID uint64) error {
+			return s.db.WithContext(ctx).Create(&comment.ArticleCommentLike{UserID: userID, CommentID: commentID}).Error
+		},
+		deleteLike: func(ctx context.Context, userID, commentID uint64) error {
+			return s.db.WithContext(ctx).Where("user_id = ? AND comment_id = ?", userID, commentID).Delete(&comment.ArticleCommentLike{}).Error
+		},
+		createDislike: func(ctx context.Context, userID, commentID uint64) error {
+			return s.db.WithContext(ctx).Create(&comment.ArticleCommentDislike{UserID: userID, CommentID: commentID}).Error
+		},
+		deleteDislike: func(ctx context.Context, userID, commentID uint64) error {
+			return s.db.WithContext(ctx).Where("user_id = ? AND comment_id = ?", userID, commentID).Delete(&comment.ArticleCommentDislike{}).Error
+		},
+		updateCount: func(ctx context.Context, commentID uint64, delta int) error {
+			if delta < 0 {
+				return s.db.WithContext(ctx).Model(&comment.ArticleComment{}).Where("id = ?", commentID).
+					UpdateColumn("like_count", gorm.Expr("GREATEST(like_count - ?)", -delta)).Error
+			}
+			return s.db.WithContext(ctx).Model(&comment.ArticleComment{}).Where("id = ?", commentID).
+				UpdateColumn("like_count", gorm.Expr("like_count + ?", delta)).Error
+		},
+		count: func(ctx context.Context, commentID uint64) uint64 {
+			var u comment.ArticleComment
+			_ = s.db.WithContext(ctx).First(&u, commentID)
+			return u.LikeCount
+		},
+	}
+}
+
+// dynamicReactionAdapter maps comment.DynamicCommentLike/Dislike to the shared toggle logic.
+func (s *CommentService) dynamicReactionAdapter() commentReactionAdapter {
+	return commentReactionAdapter{
+		fetch: func(ctx context.Context, id uint64) (uint64, error) {
+			var cm comment.DynamicComment
+			if err := s.db.WithContext(ctx).First(&cm, id).Error; err != nil {
+				return 0, err
+			}
+			return cm.LikeCount, nil
+		},
+		clearDislike: func(ctx context.Context, userID, commentID uint64) error {
+			return s.db.WithContext(ctx).Where("user_id = ? AND comment_id = ?", userID, commentID).Delete(&comment.DynamicCommentDislike{}).Error
+		},
+		clearLike: func(ctx context.Context, userID, commentID uint64) error {
+			return s.db.WithContext(ctx).Where("user_id = ? AND comment_id = ?", userID, commentID).Delete(&comment.DynamicCommentLike{}).Error
+		},
+		hasLike: func(ctx context.Context, userID, commentID uint64) (bool, error) {
+			var existing comment.DynamicCommentLike
+			return s.db.WithContext(ctx).Where("user_id = ? AND comment_id = ?", userID, commentID).First(&existing).Error == nil, nil
+		},
+		hasDislike: func(ctx context.Context, userID, commentID uint64) (bool, error) {
+			var existing comment.DynamicCommentDislike
+			return s.db.WithContext(ctx).Where("user_id = ? AND comment_id = ?", userID, commentID).First(&existing).Error == nil, nil
+		},
+		createLike: func(ctx context.Context, userID, commentID uint64) error {
+			return s.db.WithContext(ctx).Create(&comment.DynamicCommentLike{UserID: userID, CommentID: commentID}).Error
+		},
+		deleteLike: func(ctx context.Context, userID, commentID uint64) error {
+			return s.db.WithContext(ctx).Where("user_id = ? AND comment_id = ?", userID, commentID).Delete(&comment.DynamicCommentLike{}).Error
+		},
+		createDislike: func(ctx context.Context, userID, commentID uint64) error {
+			return s.db.WithContext(ctx).Create(&comment.DynamicCommentDislike{UserID: userID, CommentID: commentID}).Error
+		},
+		deleteDislike: func(ctx context.Context, userID, commentID uint64) error {
+			return s.db.WithContext(ctx).Where("user_id = ? AND comment_id = ?", userID, commentID).Delete(&comment.DynamicCommentDislike{}).Error
+		},
+		updateCount: func(ctx context.Context, commentID uint64, delta int) error {
+			if delta < 0 {
+				return s.db.WithContext(ctx).Model(&comment.DynamicComment{}).Where("id = ?", commentID).
+					UpdateColumn("like_count", gorm.Expr("GREATEST(like_count - ?)", -delta)).Error
+			}
+			return s.db.WithContext(ctx).Model(&comment.DynamicComment{}).Where("id = ?", commentID).
+				UpdateColumn("like_count", gorm.Expr("like_count + ?", delta)).Error
+		},
+		count: func(ctx context.Context, commentID uint64) uint64 {
+			var u comment.DynamicComment
+			_ = s.db.WithContext(ctx).First(&u, commentID)
+			return u.LikeCount
+		},
+	}
+}
