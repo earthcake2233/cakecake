@@ -9,18 +9,35 @@
 ## 一、总体架构
 
 ```mermaid
+%%{init: {"flowchart": {"nodeSpacing": 45, "rankSpacing": 70}}}%%
 flowchart LR
-    Push["push main"] --> CI["CI 工作流<br/>gofmt + go vet + 前后端测试 + 覆盖率"]
-    CI -- "success" --> Deploy["Deploy Minibili 工作流"]
-    Deploy -->|"environment: production"| Approve{"人工审批门<br/>Required reviewers"}
-    Approve -- "approve" --> Build["构建前后端产物"]
-    Build --> Upload["SCP 上传服务器"]
-    Upload --> Install["安装二进制/静态资源/migrations<br/>systemctl restart"]
-    Install --> Health{"健康检查<br/>30s 轮询"}
-    Health -- "ok" --> Nginx["nginx -s reload"] --> Done["部署完成"]
-    Health -- "fail" --> Rollback["stop → 恢复 .prev → start"]
-    Rollback --> Alert["任务失败标红"]
-    Monitor["巡检：每 10 分钟探测公网健康接口"] -.->|"连续失败"| Issue["自动开 GitHub Issue 并指派"]
+    subgraph S1["① 质量门禁"]
+        direction TB
+        Push["push main"] --> CI["CI：gofmt + go vet<br/>后端测试 + 前端 829 用例 + 覆盖率"]
+    end
+    subgraph S2["② 审批与构建"]
+        direction TB
+        CI -- "success" --> Deploy["Deploy Minibili"]
+        Deploy -->|"environment: production"| Approve{"人工审批门<br/>Required reviewers"}
+        Approve -- "approve" --> Build["构建产物"]
+        Build --> BE["后端 linux/amd64"]
+        Build --> FE["前端 dist + migrations"]
+    end
+    subgraph S3["③ 发布执行"]
+        direction TB
+        BE & FE --> Pack["打包 release"]
+        Pack --> Upload["SCP 上传服务器"]
+        Upload --> Install["安装 + systemctl restart"]
+        Install --> Health{"健康检查<br/>30s 就绪轮询"}
+        Health -- "ok" --> Reload["nginx -s reload"] --> Done["✅ 部署完成"]
+    end
+    subgraph S4["④ 失败处理与运行期保障"]
+        direction TB
+        Health -- "fail" --> Rollback["回滚：stop → 恢复 .prev → start"]
+        Rollback --> Alert["任务标红 + 审计留痕"]
+        Monitor["巡检：每 10 分钟探测健康接口"] -.->|"连续失败"| Issue["自动开 Issue 并指派"]
+    end
+    Done -. "持续" .-> Monitor
 ```
 
 ---

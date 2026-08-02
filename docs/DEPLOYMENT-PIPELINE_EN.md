@@ -9,18 +9,35 @@ This document records how cakecake evolved from manual scp releases to a full pi
 ## 1. Architecture Overview
 
 ```mermaid
+%%{init: {"flowchart": {"nodeSpacing": 45, "rankSpacing": 70}}}%%
 flowchart LR
-    Push["push main"] --> CI["CI workflow<br/>gofmt + go vet + frontend/backend tests + coverage"]
-    CI -- "success" --> Deploy["Deploy Minibili workflow"]
-    Deploy -->|"environment: production"| Approve{"Approval gate<br/>Required reviewers"}
-    Approve -- "approve" --> Build["Build frontend & backend"]
-    Build --> Upload["SCP upload to server"]
-    Upload --> Install["Install binary/static/migrations<br/>systemctl restart"]
-    Install --> Health{"Health check<br/>30s polling"}
-    Health -- "ok" --> Nginx["nginx -s reload"] --> Done["Deploy complete"]
-    Health -- "fail" --> Rollback["stop → restore .prev → start"]
-    Rollback --> Alert["Job marked failed"]
-    Monitor["Watchdog: probe public health every 10 min"] -.->|"repeated failure"| Issue["Auto-open GitHub Issue & assign"]
+    subgraph S1["① Quality Gate"]
+        direction TB
+        Push["push main"] --> CI["CI: gofmt + go vet<br/>backend tests + 829 frontend tests + coverage"]
+    end
+    subgraph S2["② Approval & Build"]
+        direction TB
+        CI -- "success" --> Deploy["Deploy Minibili"]
+        Deploy -->|"environment: production"| Approve{"Approval gate<br/>Required reviewers"}
+        Approve -- "approve" --> Build["Build artifacts"]
+        Build --> BE["backend linux/amd64"]
+        Build --> FE["frontend dist + migrations"]
+    end
+    subgraph S3["③ Release Execution"]
+        direction TB
+        BE & FE --> Pack["Pack release"]
+        Pack --> Upload["SCP upload to server"]
+        Upload --> Install["Install + systemctl restart"]
+        Install --> Health{"Health check<br/>30s readiness poll"}
+        Health -- "ok" --> Reload["nginx -s reload"] --> Done["✅ Deploy complete"]
+    end
+    subgraph S4["④ Failure Handling & Runtime Guarantees"]
+        direction TB
+        Health -- "fail" --> Rollback["Rollback: stop → restore .prev → start"]
+        Rollback --> Alert["Job marked red + audit trail"]
+        Monitor["Watchdog: probe health every 10 min"] -.->|"repeated failure"| Issue["Auto-open Issue & assign"]
+    end
+    Done -. "continuous" .-> Monitor
 ```
 
 ---
