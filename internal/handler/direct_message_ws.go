@@ -19,7 +19,7 @@ func (a *API) ServeChat(c *gin.Context) {
 	if err != nil || uid == 0 {
 		conn, errUp := wsUpgrader.Upgrade(c.Writer, c.Request, nil)
 		if errUp == nil && conn != nil {
-			_ = conn.WriteJSON(gin.H{"type": "auth_failed", "msg": "Token 无效或已过期"})
+			_ = conn.WriteJSON(wsErrorFrame{Type: "auth_failed", Msg: "Token 无效或已过期"})
 			_ = conn.Close()
 		}
 		return
@@ -37,7 +37,7 @@ func (a *API) ServeChat(c *gin.Context) {
 		_ = conn.Close()
 	}()
 	a.ChatHub.Join(uid, conn)
-	_ = conn.WriteJSON(gin.H{"type": "connected", "user_id": uid})
+	_ = conn.WriteJSON(wsConnectedFrame{Type: "connected", UserID: uid})
 
 	for {
 		_ = conn.SetReadDeadline(time.Now().Add(120 * time.Second))

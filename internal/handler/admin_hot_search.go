@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -23,19 +24,37 @@ type hotSearchOpReq struct {
 	EndAt        *int64 `json:"end_at"`
 }
 
-func hotSearchOpToJSON(op *admin.HotSearchOp) gin.H {
-	return gin.H{
-		"id":            op.ID,
-		"op_type":       op.OpType,
-		"keyword":       op.Keyword,
-		"display_title": op.DisplayTitle,
-		"badge":         op.Badge,
-		"pin_rank":      op.PinRank,
-		"enabled":       op.Enabled,
-		"start_at":      op.StartAt,
-		"end_at":        op.EndAt,
-		"created_at":    op.CreatedAt,
-		"updated_at":    op.UpdatedAt,
+type hotSearchOpItem struct {
+	ID           uint64     `json:"id"`
+	OpType       string     `json:"op_type"`
+	Keyword      string     `json:"keyword"`
+	DisplayTitle string     `json:"display_title"`
+	Badge        string     `json:"badge"`
+	PinRank      int        `json:"pin_rank"`
+	Enabled      bool       `json:"enabled"`
+	StartAt      *time.Time `json:"start_at"`
+	EndAt        *time.Time `json:"end_at"`
+	CreatedAt    time.Time  `json:"created_at"`
+	UpdatedAt    time.Time  `json:"updated_at"`
+}
+
+type hotSearchOpListResponse struct {
+	Items []hotSearchOpItem `json:"items"`
+}
+
+func hotSearchOpToJSON(op *admin.HotSearchOp) hotSearchOpItem {
+	return hotSearchOpItem{
+		ID:           op.ID,
+		OpType:       op.OpType,
+		Keyword:      op.Keyword,
+		DisplayTitle: op.DisplayTitle,
+		Badge:        op.Badge,
+		PinRank:      op.PinRank,
+		Enabled:      op.Enabled,
+		StartAt:      op.StartAt,
+		EndAt:        op.EndAt,
+		CreatedAt:    op.CreatedAt,
+		UpdatedAt:    op.UpdatedAt,
 	}
 }
 
@@ -46,11 +65,11 @@ func (a *API) AdminListHotSearchOps(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	out := make([]gin.H, 0, len(rows))
+	out := make([]hotSearchOpItem, 0, len(rows))
 	for i := range rows {
 		out = append(out, hotSearchOpToJSON(&rows[i]))
 	}
-	resp.OK(c, gin.H{"items": out})
+	resp.OK(c, hotSearchOpListResponse{Items: out})
 }
 
 // AdminCreateHotSearchOp POST /api/v1/admin/hot-search/ops
@@ -141,7 +160,7 @@ func (a *API) AdminDeleteHotSearchOp(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	resp.OK(c, gin.H{"deleted": true})
+	resp.OK(c, deletedResponse{Deleted: true})
 }
 
 // AdminPreviewHotSearch GET /api/v1/admin/hot-search/preview?limit=10
@@ -152,13 +171,13 @@ func (a *API) AdminPreviewHotSearch(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	out := make([]gin.H, 0, len(items))
+	out := make([]hotSearchItem, 0, len(items))
 	for _, it := range items {
-		out = append(out, gin.H{
-			"rank":  it.Rank,
-			"title": it.Title,
-			"badge": it.Badge,
+		out = append(out, hotSearchItem{
+			Rank:  it.Rank,
+			Title: it.Title,
+			Badge: it.Badge,
 		})
 	}
-	resp.OK(c, gin.H{"items": out})
+	resp.OK(c, hotSearchListResponse{Items: out})
 }

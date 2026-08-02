@@ -12,6 +12,7 @@ import (
 	"cakecake/internal/middleware"
 	"cakecake/internal/pkg/resp"
 	"cakecake/internal/search"
+	"cakecake/internal/service"
 )
 
 // SearchSuggest GET /api/v1/search/suggest?term=xxx&limit=10
@@ -24,6 +25,9 @@ import (
 // @Success      200 {object} map[string]interface{}
 // @Router       /search/suggest [get]
 func (a *API) SearchSuggest(c *gin.Context) {
+	type searchSuggestResponse struct {
+		Tag []service.SearchSuggestTag `json:"tag"`
+	}
 	term := strings.TrimSpace(c.Query("term"))
 	if term == "" {
 		term = strings.TrimSpace(c.Query("q"))
@@ -46,5 +50,5 @@ func (a *API) SearchSuggest(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 800*time.Millisecond)
 	defer cancel()
 	tags := a.HotSearchSvc.SearchSuggest(ctx, uid, term, limit)
-	resp.OK(c, gin.H{"tag": tags})
+	resp.OK(c, searchSuggestResponse{Tag: tags})
 }

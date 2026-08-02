@@ -22,6 +22,10 @@ import (
 // @Success      200 {object} map[string]interface{}
 // @Router       /users/{userId}/block [post]
 func (a *API) BlockUser(c *gin.Context) {
+	type userBlockResponse struct {
+		Blocked bool   `json:"blocked"`
+		UserID  uint64 `json:"user_id"`
+	}
 	uid, ok := middleware.UserID(c)
 	if !ok {
 		resp.Err(c, http.StatusUnauthorized, errcode.CodeUnauthorized)
@@ -55,5 +59,5 @@ func (a *API) BlockUser(c *gin.Context) {
 			return
 		}
 	}
-	resp.OK(c, gin.H{"blocked": true, "user_id": blockedID})
+	resp.OK(c, userBlockResponse{Blocked: true, UserID: blockedID})
 }

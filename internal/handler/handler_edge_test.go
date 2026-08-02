@@ -59,14 +59,14 @@ func TestFormatCoinLedgerItem(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			got := formatCoinLedgerItem(tc.row)
-			if got["created_at"] != tc.row.CreatedAt.Format("2006-01-02 15:04:05") {
-				t.Errorf("created_at = %q, want %q", got["created_at"], tc.row.CreatedAt.Format("2006-01-02 15:04:05"))
+			if got.CreatedAt != tc.row.CreatedAt.Format("2006-01-02 15:04:05") {
+				t.Errorf("created_at = %q, want %q", got.CreatedAt, tc.row.CreatedAt.Format("2006-01-02 15:04:05"))
 			}
 			wantChange := float64(tc.row.DeltaTenths) / float64(usercoin.TenthsPerCoin)
-			if got["change"] != wantChange {
-				t.Errorf("change = %v, want %v", got["change"], wantChange)
+			if got.Change != wantChange {
+				t.Errorf("change = %v, want %v", got.Change, wantChange)
 			}
-			if got["reason"] == "" || got["reason"] == nil {
+			if got.Reason == "" {
 				t.Error("reason should not be empty")
 			}
 		})

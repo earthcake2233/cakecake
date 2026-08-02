@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
@@ -38,6 +39,33 @@ func validateFollowGroupName(name string) bool {
 	return name != "" && utf8.RuneCountInString(name) <= 16
 }
 
+type followGroupItem struct {
+	ID          uint64    `json:"id"`
+	Name        string    `json:"name"`
+	MemberCount int64     `json:"member_count"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+type followGroupListResponse struct {
+	Items []followGroupItem `json:"items"`
+}
+
+type followGroupIDsResponse struct {
+	GroupIDs []uint64 `json:"group_ids"`
+}
+
+type followGroupMemberResponse struct {
+	Added      bool   `json:"added"`
+	GroupID    uint64 `json:"group_id"`
+	FolloweeID uint64 `json:"followee_id"`
+}
+
+type followGroupMemberRemoveResponse struct {
+	Removed    bool   `json:"removed"`
+	GroupID    uint64 `json:"group_id"`
+	FolloweeID uint64 `json:"followee_id"`
+}
+
 // ListMyFollowGroups lists the caller's custom following groups.
 // ListMyFollowGroups godoc
 // @Summary      List my follow groups
@@ -66,16 +94,16 @@ func (a *API) ListMyFollowGroups(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	items := make([]gin.H, 0, len(groups))
+	items := make([]followGroupItem, 0, len(groups))
 	for i := range groups {
-		items = append(items, gin.H{
-			"id":           groups[i].ID,
-			"name":         groups[i].Name,
-			"member_count": counts[groups[i].ID],
-			"created_at":   groups[i].CreatedAt,
+		items = append(items, followGroupItem{
+			ID:          groups[i].ID,
+			Name:        groups[i].Name,
+			MemberCount: counts[groups[i].ID],
+			CreatedAt:   groups[i].CreatedAt,
 		})
 	}
-	resp.OK(c, gin.H{"items": items})
+	resp.OK(c, followGroupListResponse{Items: items})
 }
 
 // CreateFollowGroup creates a custom following group for the caller.
@@ -113,11 +141,11 @@ func (a *API) CreateFollowGroup(c *gin.Context) {
 		return
 	}
 	cnt, _ := a.FollowSvc.GetGroupMemberCounts(c.Request.Context(), []uint64{g.ID})
-	resp.OK(c, gin.H{
-		"id":           g.ID,
-		"name":         g.Name,
-		"member_count": cnt[g.ID],
-		"created_at":   g.CreatedAt,
+	resp.OK(c, followGroupItem{
+		ID:          g.ID,
+		Name:        g.Name,
+		MemberCount: cnt[g.ID],
+		CreatedAt:   g.CreatedAt,
 	})
 }
 
@@ -162,11 +190,11 @@ func (a *API) UpdateFollowGroup(c *gin.Context) {
 		return
 	}
 	cnt, _ := a.FollowSvc.GetGroupMemberCounts(c.Request.Context(), []uint64{g.ID})
-	resp.OK(c, gin.H{
-		"id":           g.ID,
-		"name":         g.Name,
-		"member_count": cnt[g.ID],
-		"created_at":   g.CreatedAt,
+	resp.OK(c, followGroupItem{
+		ID:          g.ID,
+		Name:        g.Name,
+		MemberCount: cnt[g.ID],
+		CreatedAt:   g.CreatedAt,
 	})
 }
 
@@ -198,7 +226,7 @@ func (a *API) DeleteFollowGroup(c *gin.Context) {
 		}
 		return
 	}
-	resp.OK(c, gin.H{"deleted": true})
+	resp.OK(c, deletedResponse{Deleted: true})
 }
 
 // ListFolloweeGroupIDs lists which of the caller's follow groups include a followee.
@@ -223,7 +251,7 @@ func (a *API) ListFolloweeGroupIDs(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	resp.OK(c, gin.H{"group_ids": groupIDs})
+	resp.OK(c, followGroupIDsResponse{GroupIDs: groupIDs})
 }
 
 // AddFollowGroupMember adds a followee into one of the caller's groups (must already follow them).
@@ -271,7 +299,7 @@ func (a *API) AddFollowGroupMember(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	resp.OK(c, gin.H{"added": true, "group_id": groupID, "followee_id": body.FolloweeID})
+	resp.OK(c, followGroupMemberResponse{Added: true, GroupID: groupID, FolloweeID: body.FolloweeID})
 }
 
 // RemoveFollowGroupMember removes a followee from one of the caller's groups.
@@ -309,5 +337,5 @@ func (a *API) RemoveFollowGroupMember(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	resp.OK(c, gin.H{"removed": true, "group_id": groupID, "followee_id": followeeID})
+	resp.OK(c, followGroupMemberRemoveResponse{Removed: true, GroupID: groupID, FolloweeID: followeeID})
 }

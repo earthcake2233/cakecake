@@ -38,30 +38,54 @@ func adminVideoStatusFilter(q string) []string {
 	}
 }
 
-func adminVideoToJSON(v *video.Video, uploaderName string) gin.H {
-	out := gin.H{
-		"id":            v.ID,
-		"title":         v.Title,
-		"description":   v.Description,
-		"status":        v.Status,
-		"fail_reason":   strings.TrimSpace(v.FailReason),
-		"cover_url":     v.CoverURL,
-		"video_url":     v.VideoURL,
-		"duration_sec":  v.DurationSec,
-		"zone":          v.Zone,
-		"user_id":       v.UserID,
-		"uploader_name": uploaderName,
-		"play_count":    v.PlayCount,
-		"created_at":    v.CreatedAt,
-		"updated_at":    v.UpdatedAt,
+type adminVideoItem struct {
+	ID                uint64     `json:"id"`
+	Title             string     `json:"title"`
+	Description       string     `json:"description"`
+	Status            string     `json:"status"`
+	FailReason        string     `json:"fail_reason"`
+	CoverURL          string     `json:"cover_url"`
+	VideoURL          string     `json:"video_url"`
+	DurationSec       float64    `json:"duration_sec"`
+	Zone              string     `json:"zone"`
+	UserID            uint64     `json:"user_id"`
+	UploaderName      string     `json:"uploader_name"`
+	PlayCount         uint64     `json:"play_count"`
+	CreatedAt         time.Time  `json:"created_at"`
+	UpdatedAt         time.Time  `json:"updated_at"`
+	ReviewedAt        *time.Time `json:"reviewed_at,omitempty"`
+	ReviewedByAdminID *uint64    `json:"reviewed_by_admin_id,omitempty"`
+}
+
+type adminVideoListResponse struct {
+	Items        []adminVideoItem `json:"items"`
+	Page         int              `json:"page"`
+	PageSize     int              `json:"page_size"`
+	Total        int64            `json:"total"`
+	TotalPages   int              `json:"total_pages"`
+	PendingCount int64            `json:"pending_count"`
+}
+
+func adminVideoToJSON(v *video.Video, uploaderName string) adminVideoItem {
+	item := adminVideoItem{
+		ID:           v.ID,
+		Title:        v.Title,
+		Description:  v.Description,
+		Status:       v.Status,
+		FailReason:   strings.TrimSpace(v.FailReason),
+		CoverURL:     v.CoverURL,
+		VideoURL:     v.VideoURL,
+		DurationSec:  v.DurationSec,
+		Zone:         v.Zone,
+		UserID:       v.UserID,
+		UploaderName: uploaderName,
+		PlayCount:    v.PlayCount,
+		CreatedAt:    v.CreatedAt,
+		UpdatedAt:    v.UpdatedAt,
 	}
-	if v.ReviewedAt != nil {
-		out["reviewed_at"] = v.ReviewedAt
-	}
-	if v.ReviewedByAdminID != nil {
-		out["reviewed_by_admin_id"] = *v.ReviewedByAdminID
-	}
-	return out
+	item.ReviewedAt = v.ReviewedAt
+	item.ReviewedByAdminID = v.ReviewedByAdminID
+	return item
 }
 
 // AdminListVideos GET /api/v1/admin/videos
@@ -97,18 +121,18 @@ func (a *API) AdminListVideos(c *gin.Context) {
 			names[id] = user.DisplayUsername(u)
 		}
 	}
-	items := make([]gin.H, 0, len(result.Rows))
+	items := make([]adminVideoItem, 0, len(result.Rows))
 	for i := range result.Rows {
 		items = append(items, adminVideoToJSON(&result.Rows[i], names[result.Rows[i].UserID]))
 	}
 
-	resp.OK(c, gin.H{
-		"items":         items,
-		"page":          page,
-		"page_size":     pageSize,
-		"total":         result.Total,
-		"total_pages":   totalPages,
-		"pending_count": result.PendingCount,
+	resp.OK(c, adminVideoListResponse{
+		Items:        items,
+		Page:         page,
+		PageSize:     pageSize,
+		Total:        result.Total,
+		TotalPages:   totalPages,
+		PendingCount: result.PendingCount,
 	})
 }
 
@@ -256,5 +280,5 @@ func (a *API) AdminDeleteVideo(c *gin.Context) {
 		zap.Uint64("admin_id", adminID),
 		zap.String("status", v.Status),
 	)
-	resp.OK(c, gin.H{"ok": true})
+	resp.OK(c, okResponse{OK: true})
 }

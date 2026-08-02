@@ -49,6 +49,29 @@ type danmakuPost struct {
 }
 
 // PostDanmaku persists and broadcasts a danmaku (F5, S-007, S-014).
+type danmakuResponse struct {
+	ID        uint64  `json:"id"`
+	Content   string  `json:"content"`
+	Color     string  `json:"color"`
+	Type      string  `json:"type"`
+	FontSize  string  `json:"font_size"`
+	VideoTime float64 `json:"video_time"`
+	User      string  `json:"user"`
+	CreatedAt string  `json:"created_at"`
+}
+
+// danmakuEvent is the WebSocket/Redis broadcast payload.
+type danmakuEvent struct {
+	Type string          `json:"type"`
+	Data danmakuResponse `json:"data"`
+}
+
+type danmakuLikeResponse struct {
+	Liked     bool   `json:"liked"`
+	LikeCount uint64 `json:"like_count"`
+}
+
+// PostDanmaku godoc
 func (a *API) PostDanmaku(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -100,17 +123,17 @@ func (a *API) PostDanmaku(c *gin.Context) {
 	d := result.Danmaku
 	displayName := user.DisplayUsername(result.User)
 
-	payload := gin.H{
-		"type": "danmaku",
-		"data": gin.H{
-			"id":         d.ID,
-			"content":    d.Content,
-			"color":      d.Color,
-			"type":       d.Type,
-			"font_size":  fontSize,
-			"video_time": d.VideoTime,
-			"user":       displayName,
-			"created_at": d.CreatedAt.Format("2006-01-02 15:04:05"),
+	payload := danmakuEvent{
+		Type: "danmaku",
+		Data: danmakuResponse{
+			ID:        d.ID,
+			Content:   d.Content,
+			Color:     d.Color,
+			Type:      d.Type,
+			FontSize:  fontSize,
+			VideoTime: d.VideoTime,
+			User:      displayName,
+			CreatedAt: d.CreatedAt.Format("2006-01-02 15:04:05"),
 		},
 	}
 	if a.DanmakuRelay != nil {
@@ -120,15 +143,15 @@ func (a *API) PostDanmaku(c *gin.Context) {
 	} else {
 		a.Hub.BroadcastJSON(vid, payload)
 	}
-	resp.OK(c, gin.H{
-		"id":         d.ID,
-		"content":    d.Content,
-		"color":      d.Color,
-		"type":       d.Type,
-		"font_size":  fontSize,
-		"video_time": d.VideoTime,
-		"user":       displayName,
-		"created_at": d.CreatedAt.Format("2006-01-02 15:04:05"),
+	resp.OK(c, danmakuResponse{
+		ID:        d.ID,
+		Content:   d.Content,
+		Color:     d.Color,
+		Type:      d.Type,
+		FontSize:  fontSize,
+		VideoTime: d.VideoTime,
+		User:      displayName,
+		CreatedAt: d.CreatedAt.Format("2006-01-02 15:04:05"),
 	})
 }
 
@@ -154,5 +177,5 @@ func (a *API) ToggleDanmakuLike(c *gin.Context) {
 		resp.Err(c, httpStatus, code)
 		return
 	}
-	resp.OK(c, gin.H{"liked": result.Liked, "like_count": result.LikeCount})
+	resp.OK(c, danmakuLikeResponse{Liked: result.Liked, LikeCount: result.LikeCount})
 }

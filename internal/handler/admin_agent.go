@@ -20,31 +20,74 @@ import (
 	"cakecake/internal/pkg/resp"
 )
 
-func (a *API) adminAgentMeta() gin.H {
-	return gin.H{
-		"deepseek_configured": a.Cfg != nil && strings.TrimSpace(a.Cfg.DeepSeekAPIKey) != "",
-		"max_profiles":        data.MaxAgentProfilesLimit(),
+type adminAgentMetaResponse struct {
+	DeepseekConfigured bool `json:"deepseek_configured"`
+	MaxProfiles        int  `json:"max_profiles"`
+}
+
+type adminAgentProfileItem struct {
+	ID                 uint64   `json:"id"`
+	Slug               string   `json:"slug"`
+	BotUserID          uint64   `json:"bot_user_id"`
+	DisplayName        string   `json:"display_name"`
+	AvatarURL          string   `json:"avatar_url"`
+	Sign               string   `json:"sign"`
+	SystemPrompt       string   `json:"system_prompt"`
+	WelcomeMessages    []string `json:"welcome_messages"`
+	SortOrder          int      `json:"sort_order"`
+	Enabled            bool     `json:"enabled"`
+	UpdatedAt          string   `json:"updated_at"`
+	GlobalSystemPrompt string   `json:"global_system_prompt"`
+}
+
+type adminAgentProfileListResponse struct {
+	DeepseekConfigured bool                    `json:"deepseek_configured"`
+	MaxProfiles        int                     `json:"max_profiles"`
+	Items              []adminAgentProfileItem `json:"items"`
+}
+
+type adminAgentAvatarResponse struct {
+	AvatarURL string                `json:"avatar_url"`
+	Profile   adminAgentProfileItem `json:"profile"`
+}
+
+type adminAgentSettingsResponse struct {
+	DisplayName        string `json:"display_name"`
+	AvatarURL          string `json:"avatar_url"`
+	Sign               string `json:"sign"`
+	SystemPrompt       string `json:"system_prompt"`
+	WelcomeMessage     string `json:"welcome_message"`
+	AssistantEnabled   bool   `json:"assistant_enabled"`
+	BotUserID          uint64 `json:"bot_user_id"`
+	UpdatedAt          string `json:"updated_at"`
+	DeepseekConfigured bool   `json:"deepseek_configured"`
+}
+
+func (a *API) adminAgentMeta() adminAgentMetaResponse {
+	return adminAgentMetaResponse{
+		DeepseekConfigured: a.Cfg != nil && strings.TrimSpace(a.Cfg.DeepSeekAPIKey) != "",
+		MaxProfiles:        data.MaxAgentProfilesLimit(),
 	}
 }
 
-func adminAgentProfilePayload(p *agent.AgentProfile, globalPrompt string) gin.H {
+func adminAgentProfilePayload(p *agent.AgentProfile, globalPrompt string) adminAgentProfileItem {
 	if p == nil {
-		return gin.H{}
+		return adminAgentProfileItem{}
 	}
 	welcome := agent.ParseWelcomeMessages(p.WelcomeMessagesJSON)
-	return gin.H{
-		"id":                   p.ID,
-		"slug":                 p.Slug,
-		"bot_user_id":          p.BotUserID,
-		"display_name":         p.DisplayName,
-		"avatar_url":           p.AvatarURL,
-		"sign":                 p.Sign,
-		"system_prompt":        p.SystemPrompt,
-		"welcome_messages":     welcome,
-		"sort_order":           p.SortOrder,
-		"enabled":              p.Enabled,
-		"updated_at":           p.UpdatedAt.Format("2006-01-02 15:04:05"),
-		"global_system_prompt": globalPrompt,
+	return adminAgentProfileItem{
+		ID:                 p.ID,
+		Slug:               p.Slug,
+		BotUserID:          p.BotUserID,
+		DisplayName:        p.DisplayName,
+		AvatarURL:          p.AvatarURL,
+		Sign:               p.Sign,
+		SystemPrompt:       p.SystemPrompt,
+		WelcomeMessages:    welcome,
+		SortOrder:          p.SortOrder,
+		Enabled:            p.Enabled,
+		UpdatedAt:          p.UpdatedAt.Format("2006-01-02 15:04:05"),
+		GlobalSystemPrompt: globalPrompt,
 	}
 }
 
@@ -56,13 +99,15 @@ func (a *API) AdminListAgentProfiles(c *gin.Context) {
 		return
 	}
 	gp := a.Agent.GetGlobalSystemPrompt(c.Request.Context())
-	items := make([]gin.H, 0, len(list))
+	items := make([]adminAgentProfileItem, 0, len(list))
 	for i := range list {
 		items = append(items, adminAgentProfilePayload(&list[i], gp))
 	}
-	out := a.adminAgentMeta()
-	out["items"] = items
-	resp.OK(c, out)
+	resp.OK(c, adminAgentProfileListResponse{
+		DeepseekConfigured: a.Cfg != nil && strings.TrimSpace(a.Cfg.DeepSeekAPIKey) != "",
+		MaxProfiles:        data.MaxAgentProfilesLimit(),
+		Items:              items,
+	})
 }
 
 type adminAgentProfileWriteReq struct {
@@ -260,7 +305,7 @@ func (a *API) AdminDeleteAgentProfile(c *gin.Context) {
 	if a.Agent != nil {
 		a.Agent.ReloadProfiles()
 	}
-	resp.OK(c, gin.H{"deleted": true})
+	resp.OK(c, deletedResponse{Deleted: true})
 }
 
 // AdminUploadAgentProfileAvatar POST /api/v1/admin/agent-profiles/:id/avatar
@@ -301,7 +346,7 @@ func (a *API) AdminUploadAgentProfileAvatar(c *gin.Context) {
 		purgeAgentAvatarOSS(a.Cfg, a.OSS, a.Log, oldAvatar)
 	}
 	gp := a.Agent.GetGlobalSystemPrompt(ctx)
-	resp.OK(c, gin.H{"avatar_url": url, "profile": adminAgentProfilePayload(p2, gp)})
+	resp.OK(c, adminAgentAvatarResponse{AvatarURL: url, Profile: adminAgentProfilePayload(p2, gp)})
 }
 
 func (a *API) uploadAgentProfileAvatarToOSS(fh *multipart.FileHeader, slug string) (string, int) {
@@ -340,16 +385,16 @@ func (a *API) AdminGetAgentSettings(c *gin.Context) {
 	if len(welcome) > 0 {
 		welcomeOne = welcome[0]
 	}
-	resp.OK(c, gin.H{
-		"display_name":        p.DisplayName,
-		"avatar_url":          p.AvatarURL,
-		"sign":                p.Sign,
-		"system_prompt":       p.SystemPrompt,
-		"welcome_message":     welcomeOne,
-		"assistant_enabled":   p.Enabled,
-		"bot_user_id":         p.BotUserID,
-		"updated_at":          p.UpdatedAt.Format("2006-01-02 15:04:05"),
-		"deepseek_configured": a.Cfg != nil && strings.TrimSpace(a.Cfg.DeepSeekAPIKey) != "",
+	resp.OK(c, adminAgentSettingsResponse{
+		DisplayName:        p.DisplayName,
+		AvatarURL:          p.AvatarURL,
+		Sign:               p.Sign,
+		SystemPrompt:       p.SystemPrompt,
+		WelcomeMessage:     welcomeOne,
+		AssistantEnabled:   p.Enabled,
+		BotUserID:          p.BotUserID,
+		UpdatedAt:          p.UpdatedAt.Format("2006-01-02 15:04:05"),
+		DeepseekConfigured: a.Cfg != nil && strings.TrimSpace(a.Cfg.DeepSeekAPIKey) != "",
 	})
 }
 

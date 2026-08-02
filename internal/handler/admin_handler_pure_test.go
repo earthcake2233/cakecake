@@ -80,10 +80,10 @@ func TestAdminAgentMeta(t *testing.T) {
 	t.Run("nil cfg", func(t *testing.T) {
 		api := &API{Dependencies: &Dependencies{Cfg: nil}}
 		m := api.adminAgentMeta()
-		if m["deepseek_configured"] != false {
-			t.Errorf("nil cfg: deepseek_configured should be false, got %v", m["deepseek_configured"])
+		if m.DeepseekConfigured != false {
+			t.Errorf("nil cfg: deepseek_configured should be false, got %v", m.DeepseekConfigured)
 		}
-		if _, ok := m["max_profiles"]; !ok {
+		if m.MaxProfiles <= 0 {
 			t.Error("max_profiles should be present")
 		}
 	})
@@ -91,7 +91,7 @@ func TestAdminAgentMeta(t *testing.T) {
 	t.Run("no api key", func(t *testing.T) {
 		api := &API{Dependencies: &Dependencies{Cfg: &config.C{DeepSeekAPIKey: ""}}}
 		m := api.adminAgentMeta()
-		if m["deepseek_configured"] != false {
+		if m.DeepseekConfigured != false {
 			t.Error("empty key: deepseek_configured should be false")
 		}
 	})
@@ -99,7 +99,7 @@ func TestAdminAgentMeta(t *testing.T) {
 	t.Run("api key with spaces", func(t *testing.T) {
 		api := &API{Dependencies: &Dependencies{Cfg: &config.C{DeepSeekAPIKey: "  "}}}
 		m := api.adminAgentMeta()
-		if m["deepseek_configured"] != false {
+		if m.DeepseekConfigured != false {
 			t.Error("whitespace key: deepseek_configured should be false")
 		}
 	})
@@ -107,7 +107,7 @@ func TestAdminAgentMeta(t *testing.T) {
 	t.Run("configured", func(t *testing.T) {
 		api := &API{Dependencies: &Dependencies{Cfg: &config.C{DeepSeekAPIKey: "sk-abc123"}}}
 		m := api.adminAgentMeta()
-		if m["deepseek_configured"] != true {
+		if m.DeepseekConfigured != true {
 			t.Error("valid key: deepseek_configured should be true")
 		}
 	})

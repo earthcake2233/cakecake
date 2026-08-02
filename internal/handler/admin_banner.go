@@ -32,19 +32,37 @@ func parseOptionalUnix(p *int64) *time.Time {
 	return &t
 }
 
-func bannerToJSON(b *admin.HomeBanner) gin.H {
-	return gin.H{
-		"id":          b.ID,
-		"title":       b.Title,
-		"image_url":   b.ImageURL,
-		"link_type":   b.LinkType,
-		"link_target": b.LinkTarget,
-		"sort_order":  b.SortOrder,
-		"enabled":     b.Enabled,
-		"start_at":    b.StartAt,
-		"end_at":      b.EndAt,
-		"created_at":  b.CreatedAt,
-		"updated_at":  b.UpdatedAt,
+type bannerItem struct {
+	ID         uint64     `json:"id"`
+	Title      string     `json:"title"`
+	ImageURL   string     `json:"image_url"`
+	LinkType   string     `json:"link_type"`
+	LinkTarget string     `json:"link_target"`
+	SortOrder  int        `json:"sort_order"`
+	Enabled    bool       `json:"enabled"`
+	StartAt    *time.Time `json:"start_at"`
+	EndAt      *time.Time `json:"end_at"`
+	CreatedAt  time.Time  `json:"created_at"`
+	UpdatedAt  time.Time  `json:"updated_at"`
+}
+
+type bannerListResponse struct {
+	Items []bannerItem `json:"items"`
+}
+
+func bannerToJSON(b *admin.HomeBanner) bannerItem {
+	return bannerItem{
+		ID:         b.ID,
+		Title:      b.Title,
+		ImageURL:   b.ImageURL,
+		LinkType:   b.LinkType,
+		LinkTarget: b.LinkTarget,
+		SortOrder:  b.SortOrder,
+		Enabled:    b.Enabled,
+		StartAt:    b.StartAt,
+		EndAt:      b.EndAt,
+		CreatedAt:  b.CreatedAt,
+		UpdatedAt:  b.UpdatedAt,
 	}
 }
 
@@ -55,11 +73,11 @@ func (a *API) AdminListBanners(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	out := make([]gin.H, 0, len(rows))
+	out := make([]bannerItem, 0, len(rows))
 	for i := range rows {
 		out = append(out, bannerToJSON(&rows[i]))
 	}
-	resp.OK(c, gin.H{"items": out})
+	resp.OK(c, bannerListResponse{Items: out})
 }
 
 // AdminCreateBanner POST /api/v1/admin/home-banners
@@ -168,5 +186,5 @@ func (a *API) AdminDeleteBanner(c *gin.Context) {
 		return
 	}
 	purgeBannerOSSObjects(a.Cfg, a.OSS, a.Log, *b)
-	resp.OK(c, gin.H{"deleted": true})
+	resp.OK(c, deletedResponse{Deleted: true})
 }

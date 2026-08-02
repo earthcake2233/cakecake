@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"time"
+
 	"cakecake/internal/model/dynamic"
 	"cakecake/internal/model/user"
 	"net/http"
@@ -16,7 +18,28 @@ import (
 	"cakecake/internal/pkg/resp"
 )
 
-func adminDynamicToJSON(d *dynamic.UserDynamic, authorName string) gin.H {
+type adminDynamicItem struct {
+	ID           uint64    `json:"id"`
+	Title        string    `json:"title"`
+	Content      string    `json:"content"`
+	Images       []string  `json:"images"`
+	CoverURL     string    `json:"cover_url"`
+	UserID       uint64    `json:"user_id"`
+	UploaderName string    `json:"uploader_name"`
+	LikeCount    uint64    `json:"like_count"`
+	CommentCount uint64    `json:"comment_count"`
+	CreatedAt    time.Time `json:"created_at"`
+}
+
+type adminDynamicListResponse struct {
+	Items      []adminDynamicItem `json:"items"`
+	Page       int                `json:"page"`
+	PageSize   int                `json:"page_size"`
+	Total      int64              `json:"total"`
+	TotalPages int                `json:"total_pages"`
+}
+
+func adminDynamicToJSON(d *dynamic.UserDynamic, authorName string) adminDynamicItem {
 	imgs := parseDynamicImagesJSON(d.ImagesJSON)
 	if imgs == nil {
 		imgs = []string{}
@@ -25,17 +48,17 @@ func adminDynamicToJSON(d *dynamic.UserDynamic, authorName string) gin.H {
 	if len(imgs) > 0 {
 		cover = imgs[0]
 	}
-	return gin.H{
-		"id":            d.ID,
-		"title":         d.Title,
-		"content":       d.Content,
-		"images":        imgs,
-		"cover_url":     cover,
-		"user_id":       d.UserID,
-		"uploader_name": authorName,
-		"like_count":    d.LikeCount,
-		"comment_count": d.CommentCount,
-		"created_at":    d.CreatedAt,
+	return adminDynamicItem{
+		ID:           d.ID,
+		Title:        d.Title,
+		Content:      d.Content,
+		Images:       imgs,
+		CoverURL:     cover,
+		UserID:       d.UserID,
+		UploaderName: authorName,
+		LikeCount:    d.LikeCount,
+		CommentCount: d.CommentCount,
+		CreatedAt:    d.CreatedAt,
 	}
 }
 
@@ -74,16 +97,16 @@ func (a *API) AdminListDynamics(c *gin.Context) {
 			names[id] = name
 		}
 	}
-	items := make([]gin.H, 0, len(result.Rows))
+	items := make([]adminDynamicItem, 0, len(result.Rows))
 	for i := range result.Rows {
 		items = append(items, adminDynamicToJSON(&result.Rows[i], names[result.Rows[i].UserID]))
 	}
-	resp.OK(c, gin.H{
-		"items":       items,
-		"page":        page,
-		"page_size":   pageSize,
-		"total":       result.Total,
-		"total_pages": totalPages,
+	resp.OK(c, adminDynamicListResponse{
+		Items:      items,
+		Page:       page,
+		PageSize:   pageSize,
+		Total:      result.Total,
+		TotalPages: totalPages,
 	})
 }
 
@@ -137,5 +160,5 @@ func (a *API) AdminDeleteDynamic(c *gin.Context) {
 		zap.Uint64("admin_id", adminID),
 		zap.Uint64("user_id", dyn.UserID),
 	)
-	resp.OK(c, gin.H{"ok": true})
+	resp.OK(c, okResponse{OK: true})
 }

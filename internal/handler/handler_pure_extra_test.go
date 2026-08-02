@@ -171,28 +171,28 @@ func TestAdminVideoToJSON(t *testing.T) {
 		UpdatedAt:         now,
 	}
 	out := adminVideoToJSON(v, "uploader")
-	if out["title"] != "Test Video" {
-		t.Errorf("title = %q", out["title"])
+	if out.Title != "Test Video" {
+		t.Errorf("title = %q", out.Title)
 	}
-	if out["fail_reason"] != "" {
-		t.Errorf("fail_reason should be trimmed, got %q", out["fail_reason"])
+	if out.FailReason != "" {
+		t.Errorf("fail_reason should be trimmed, got %q", out.FailReason)
 	}
-	if out["reviewed_by_admin_id"] != uint64(5) {
-		t.Errorf("reviewed_by_admin_id = %v", out["reviewed_by_admin_id"])
+	if out.ReviewedByAdminID == nil || *out.ReviewedByAdminID != 5 {
+		t.Errorf("reviewed_by_admin_id = %v", out.ReviewedByAdminID)
 	}
-	if _, ok := out["reviewed_at"]; !ok {
+	if out.ReviewedAt == nil {
 		t.Error("reviewed_at should be present")
 	}
-	if out["uploader_name"] != "uploader" {
-		t.Errorf("uploader_name = %q", out["uploader_name"])
+	if out.UploaderName != "uploader" {
+		t.Errorf("uploader_name = %q", out.UploaderName)
 	}
 	// Without reviewed fields
 	v2 := &video.Video{ID: 2, Title: "No Review", Status: "draft"}
 	out2 := adminVideoToJSON(v2, "")
-	if _, ok := out2["reviewed_at"]; ok {
+	if out2.ReviewedAt != nil {
 		t.Error("reviewed_at should NOT be present")
 	}
-	if _, ok := out2["reviewed_by_admin_id"]; ok {
+	if out2.ReviewedByAdminID != nil {
 		t.Error("reviewed_by_admin_id should NOT be present")
 	}
 }
@@ -227,34 +227,34 @@ func TestAdminArticleToJSON(t *testing.T) {
 		UpdatedAt:         now,
 	}
 	out := adminArticleToJSON(art, "author")
-	if out["title"] != "My Article" {
-		t.Errorf("title = %q", out["title"])
+	if out.Title != "My Article" {
+		t.Errorf("title = %q", out.Title)
 	}
-	if out["fail_reason"] != "" {
-		t.Errorf("fail_reason should be trimmed, got %q", out["fail_reason"])
+	if out.FailReason != "" {
+		t.Errorf("fail_reason should be trimmed, got %q", out.FailReason)
 	}
-	if out["uploader_name"] != "author" {
-		t.Errorf("uploader_name = %q", out["uploader_name"])
+	if out.UploaderName != "author" {
+		t.Errorf("uploader_name = %q", out.UploaderName)
 	}
-	if out["user_id"] != uint64(7) {
-		t.Errorf("user_id = %v", out["user_id"])
+	if out.UserID != 7 {
+		t.Errorf("user_id = %v", out.UserID)
 	}
-	if _, ok := out["reviewed_at"]; !ok {
+	if out.ReviewedAt == nil {
 		t.Error("reviewed_at should be present")
 	}
-	if out["reviewed_by_admin_id"] != uint64(3) {
-		t.Errorf("reviewed_by_admin_id = %v", out["reviewed_by_admin_id"])
+	if out.ReviewedByAdminID == nil || *out.ReviewedByAdminID != 3 {
+		t.Errorf("reviewed_by_admin_id = %v", out.ReviewedByAdminID)
 	}
-	if out["body_html"] == "" {
+	if out.BodyHTML == "" {
 		t.Error("body_html should be rendered")
 	}
 	// Without reviewed fields
 	art2 := &article.Article{ID: 11, Title: "Draft", BodyMD: "draft", Status: "draft"}
 	out2 := adminArticleToJSON(art2, "")
-	if _, ok := out2["reviewed_at"]; ok {
+	if out2.ReviewedAt != nil {
 		t.Error("reviewed_at should NOT be present without reviewed fields")
 	}
-	if _, ok := out2["reviewed_by_admin_id"]; ok {
+	if out2.ReviewedByAdminID != nil {
 		t.Error("reviewed_by_admin_id should NOT be present")
 	}
 }
@@ -276,27 +276,26 @@ func TestAdminDynamicToJSON(t *testing.T) {
 		CreatedAt:       now,
 	}
 	out := adminDynamicToJSON(d, "nickname")
-	if out["title"] != "My Day" {
-		t.Errorf("title = %q", out["title"])
+	if out.Title != "My Day" {
+		t.Errorf("title = %q", out.Title)
 	}
-	if out["cover_url"] != "https://img.example.com/1.jpg" {
-		t.Errorf("cover_url = %q", out["cover_url"])
+	if out.CoverURL != "https://img.example.com/1.jpg" {
+		t.Errorf("cover_url = %q", out.CoverURL)
 	}
-	if out["uploader_name"] != "nickname" {
-		t.Errorf("uploader_name = %q", out["uploader_name"])
+	if out.UploaderName != "nickname" {
+		t.Errorf("uploader_name = %q", out.UploaderName)
 	}
-	if out["user_id"] != uint64(42) {
-		t.Errorf("user_id = %v", out["user_id"])
+	if out.UserID != 42 {
+		t.Errorf("user_id = %v", out.UserID)
 	}
 	// Empty images
 	d2 := &dynamic.UserDynamic{ID: 100, Title: "No Images", Content: "text"}
 	out2 := adminDynamicToJSON(d2, "")
-	imgs := out2["images"].([]string)
-	if len(imgs) != 0 {
-		t.Errorf("expected empty images, got %v", imgs)
+	if len(out2.Images) != 0 {
+		t.Errorf("expected empty images, got %v", out2.Images)
 	}
-	if out2["cover_url"] != "" {
-		t.Errorf("expected empty cover_url, got %q", out2["cover_url"])
+	if out2.CoverURL != "" {
+		t.Errorf("expected empty cover_url, got %q", out2.CoverURL)
 	}
 }
 
@@ -318,14 +317,14 @@ func TestBannerToJSON(t *testing.T) {
 		UpdatedAt:  now,
 	}
 	out := bannerToJSON(b)
-	if out["title"] != "Summer Sale" {
-		t.Errorf("title = %q", out["title"])
+	if out.Title != "Summer Sale" {
+		t.Errorf("title = %q", out.Title)
 	}
-	if out["link_type"] != "url" {
-		t.Errorf("link_type = %q", out["link_type"])
+	if out.LinkType != "url" {
+		t.Errorf("link_type = %q", out.LinkType)
 	}
-	if out["sort_order"] != 1 {
-		t.Errorf("sort_order = %v", out["sort_order"])
+	if out.SortOrder != 1 {
+		t.Errorf("sort_order = %v", out.SortOrder)
 	}
 }
 
@@ -347,17 +346,17 @@ func TestHotSearchOpToJSON(t *testing.T) {
 		UpdatedAt:    now,
 	}
 	out := hotSearchOpToJSON(op)
-	if out["op_type"] != "pin" {
-		t.Errorf("op_type = %q", out["op_type"])
+	if out.OpType != "pin" {
+		t.Errorf("op_type = %q", out.OpType)
 	}
-	if out["keyword"] != "summer" {
-		t.Errorf("keyword = %q", out["keyword"])
+	if out.Keyword != "summer" {
+		t.Errorf("keyword = %q", out.Keyword)
 	}
-	if out["display_title"] != "Summer Hot" {
-		t.Errorf("display_title = %q", out["display_title"])
+	if out.DisplayTitle != "Summer Hot" {
+		t.Errorf("display_title = %q", out.DisplayTitle)
 	}
-	if out["pin_rank"] != 1 {
-		t.Errorf("pin_rank = %v", out["pin_rank"])
+	if out.PinRank != 1 {
+		t.Errorf("pin_rank = %v", out.PinRank)
 	}
 }
 
@@ -506,16 +505,16 @@ func TestValidateArticleContent_Extra(t *testing.T) {
 func TestAdminVideoToJSONMinimal(t *testing.T) {
 	v := &video.Video{ID: 1, Title: "Minimal", Description: "desc", Status: "draft"}
 	out := adminVideoToJSON(v, "")
-	if out["duration_sec"] != float64(0) {
-		t.Errorf("duration_sec = %v", out["duration_sec"])
+	if out.DurationSec != float64(0) {
+		t.Errorf("duration_sec = %v", out.DurationSec)
 	}
 }
 
 func TestAdminArticleToJSONMinimal(t *testing.T) {
 	art := &article.Article{ID: 1, Title: "Minimal", BodyMD: "body"}
 	out := adminArticleToJSON(art, "")
-	if out["published_at"] != "" {
-		t.Errorf("published_at = %q, want empty", out["published_at"])
+	if out.PublishedAt != "" {
+		t.Errorf("published_at = %q, want empty", out.PublishedAt)
 	}
 }
 

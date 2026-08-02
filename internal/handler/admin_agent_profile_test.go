@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
-	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
@@ -20,20 +19,20 @@ import (
 func TestAdminAgentMeta_Configured(t *testing.T) {
 	api := &API{Dependencies: &Dependencies{Cfg: &config.C{DeepSeekAPIKey: "sk-xxx"}, Log: zap.NewNop(), Hub: ws.NewHub()}}
 	m := api.adminAgentMeta()
-	require.Equal(t, true, m["deepseek_configured"])
-	require.Greater(t, m["max_profiles"], 0)
+	require.Equal(t, true, m.DeepseekConfigured)
+	require.Greater(t, m.MaxProfiles, 0)
 }
 
 func TestAdminAgentMeta_NotConfigured(t *testing.T) {
 	api := &API{Dependencies: &Dependencies{Cfg: &config.C{DeepSeekAPIKey: ""}, Log: zap.NewNop(), Hub: ws.NewHub()}}
 	m := api.adminAgentMeta()
-	require.Equal(t, false, m["deepseek_configured"])
+	require.Equal(t, false, m.DeepseekConfigured)
 }
 
 func TestAdminAgentMeta_NilCfg(t *testing.T) {
 	api := &API{Dependencies: &Dependencies{Log: zap.NewNop(), Hub: ws.NewHub()}}
 	m := api.adminAgentMeta()
-	require.Equal(t, false, m["deepseek_configured"])
+	require.Equal(t, false, m.DeepseekConfigured)
 }
 
 func TestAdminAgentProfilePayload(t *testing.T) {
@@ -48,27 +47,27 @@ func TestAdminAgentProfilePayload(t *testing.T) {
 		SortOrder:           1, Enabled: true, UpdatedAt: now,
 	}
 	out := adminAgentProfilePayload(p, "")
-	require.Equal(t, uint64(1), out["id"])
-	require.Equal(t, "assistant", out["slug"])
-	require.Equal(t, uint64(100), out["bot_user_id"])
-	require.Equal(t, "AI Assistant", out["display_name"])
-	require.Equal(t, "https://ex.com/avatar.png", out["avatar_url"])
-	require.Equal(t, "I am an AI", out["sign"])
-	require.Equal(t, "You are a helpful assistant", out["system_prompt"])
-	require.ElementsMatch(t, []string{"Hello!", "How can I help?"}, out["welcome_messages"])
-	require.Equal(t, 1, out["sort_order"])
-	require.Equal(t, true, out["enabled"])
+	require.Equal(t, uint64(1), out.ID)
+	require.Equal(t, "assistant", out.Slug)
+	require.Equal(t, uint64(100), out.BotUserID)
+	require.Equal(t, "AI Assistant", out.DisplayName)
+	require.Equal(t, "https://ex.com/avatar.png", out.AvatarURL)
+	require.Equal(t, "I am an AI", out.Sign)
+	require.Equal(t, "You are a helpful assistant", out.SystemPrompt)
+	require.ElementsMatch(t, []string{"Hello!", "How can I help?"}, out.WelcomeMessages)
+	require.Equal(t, 1, out.SortOrder)
+	require.Equal(t, true, out.Enabled)
 }
 
 func TestAdminAgentProfilePayload_Nil(t *testing.T) {
 	out := adminAgentProfilePayload(nil, "")
-	require.Equal(t, gin.H{}, out)
+	require.Equal(t, adminAgentProfileItem{}, out)
 }
 
 func TestAdminAgentProfilePayload_EmptyWelcome(t *testing.T) {
 	p := &agent.AgentProfile{ID: 1, Slug: "test", WelcomeMessagesJSON: "[]", UpdatedAt: time.Now()}
 	out := adminAgentProfilePayload(p, "")
-	require.Equal(t, []string{}, out["welcome_messages"])
+	require.Equal(t, []string{}, out.WelcomeMessages)
 }
 
 func TestHotSearchDisplayTitle(t *testing.T) {

@@ -15,6 +15,27 @@ import (
 	"go.uber.org/zap"
 )
 
+type wsErrorFrame struct {
+	Type string `json:"type"`
+	Msg  string `json:"msg"`
+}
+
+type wsHistoryFrame struct {
+	Type          string            `json:"type"`
+	Items         []danmakuResponse `json:"items"`
+	WatchingCount int               `json:"watching_count"`
+}
+
+type wsWatchingFrame struct {
+	Type  string `json:"type"`
+	Count int    `json:"count"`
+}
+
+type wsConnectedFrame struct {
+	Type   string `json:"type"`
+	UserID uint64 `json:"user_id"`
+}
+
 var wsUpgrader = websocket.Upgrader{
 	ReadBufferSize:  4096,
 	WriteBufferSize: 4096,
@@ -57,7 +78,7 @@ func (a *API) ServeDanmaku(c *gin.Context) {
 		if err != nil {
 			conn, errUp := wsUpgrader.Upgrade(c.Writer, c.Request, nil)
 			if errUp == nil && conn != nil {
-				_ = conn.WriteJSON(gin.H{"type": "auth_failed", "msg": "Token 无效或已过期"})
+				_ = conn.WriteJSON(wsErrorFrame{Type: "auth_failed", Msg: "Token 无效或已过期"})
 				_ = conn.Close()
 			}
 			return
@@ -106,23 +127,23 @@ func (a *API) ServeDanmaku(c *gin.Context) {
 		}
 	}
 
-	items := make([]gin.H, 0, len(hist))
+	items := make([]danmakuResponse, 0, len(hist))
 	for _, d := range hist {
 		u := userMap[d.UserID]
-		items = append(items, gin.H{
-			"id":         d.ID,
-			"content":    d.Content,
-			"color":      strings.ToUpper(strings.TrimSpace(d.Color)),
-			"type":       d.Type,
-			"font_size":  danmakuFontSizeField(d),
-			"video_time": d.VideoTime,
-			"user":       user.DisplayUsername(&u),
-			"created_at": d.CreatedAt.Format("2006-01-02 15:04:05"),
+		items = append(items, danmakuResponse{
+			ID:        d.ID,
+			Content:   d.Content,
+			Color:     strings.ToUpper(strings.TrimSpace(d.Color)),
+			Type:      d.Type,
+			FontSize:  danmakuFontSizeField(d),
+			VideoTime: d.VideoTime,
+			User:      user.DisplayUsername(&u),
+			CreatedAt: d.CreatedAt.Format("2006-01-02 15:04:05"),
 		})
 	}
 
 	watching := a.Hub.RoomSize(videoID)
-	historyPayload := gin.H{"type": "history", "items": items, "watching_count": watching}
+	historyPayload := wsHistoryFrame{Type: "history", Items: items, WatchingCount: watching}
 	historyBytes, _ := json.Marshal(historyPayload)
 	cl.Send(historyBytes)
 
@@ -139,7 +160,7 @@ func (a *API) pushWatchingCount(videoID uint64) {
 		return
 	}
 	n := a.Hub.RoomSize(videoID)
-	payload := gin.H{"type": "watching", "count": n}
+	payload := wsWatchingFrame{Type: "watching", Count: n}
 	if a.DanmakuRelay != nil {
 		if err := a.DanmakuRelay.Publish(context.Background(), videoID, payload); err != nil {
 			a.Log.Error("danmaku relay publish watching", zap.Error(err))

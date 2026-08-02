@@ -17,6 +17,15 @@ import (
 
 const creatorDanmakuMaxList = 1000
 
+type danmakuDeletedEvent struct {
+	Type      string `json:"type"`
+	DanmakuID string `json:"danmaku_id"`
+}
+
+type danmakuDeleteResponse struct {
+	ID uint64 `json:"id"`
+}
+
 // ListCreatorDanmakus lists danmaku on the authenticated uploader's videos (???? ? ????).
 func (a *API) ListCreatorDanmakus(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
@@ -50,33 +59,59 @@ func (a *API) ListCreatorDanmakus(c *gin.Context) {
 		return
 	}
 
-	items := make([]gin.H, 0, len(result.Items))
+	type creatorDanmakuVideo struct {
+		ID       uint64 `json:"id"`
+		Title    string `json:"title"`
+		CoverURL string `json:"cover_url"`
+	}
+	type creatorDanmakuItem struct {
+		ID        uint64              `json:"id"`
+		VideoID   uint64              `json:"video_id"`
+		UserID    uint64              `json:"user_id"`
+		Username  string              `json:"username"`
+		Content   string              `json:"content"`
+		Color     string              `json:"color"`
+		Type      string              `json:"type"`
+		TypeLabel string              `json:"type_label"`
+		VideoTime float64             `json:"video_time"`
+		PlayTime  string              `json:"play_time"`
+		LikeCount int64               `json:"like_count"`
+		LikedByMe bool                `json:"liked_by_me"`
+		CreatedAt string              `json:"created_at"`
+		Video     creatorDanmakuVideo `json:"video"`
+	}
+	type creatorDanmakuListResponse struct {
+		Items []creatorDanmakuItem `json:"items"`
+		Total int64                `json:"total"`
+		Limit int                  `json:"limit"`
+	}
+	items := make([]creatorDanmakuItem, 0, len(result.Items))
 	for _, d := range result.Items {
-		items = append(items, gin.H{
-			"id":          d.ID,
-			"video_id":    d.VideoID,
-			"user_id":     d.UserID,
-			"username":    d.Username,
-			"content":     d.Content,
-			"color":       d.Color,
-			"type":        d.Type,
-			"type_label":  danmakuTypeLabel(d.Type),
-			"video_time":  d.VideoTime,
-			"play_time":   formatDanmakuPlayTime(d.VideoTime),
-			"like_count":  d.LikeCount,
-			"liked_by_me": d.LikedByMe,
-			"created_at":  d.CreatedAt,
-			"video": gin.H{
-				"id":        d.VideoID,
-				"title":     d.VideoTitle,
-				"cover_url": d.CoverURL,
+		items = append(items, creatorDanmakuItem{
+			ID:        d.ID,
+			VideoID:   d.VideoID,
+			UserID:    d.UserID,
+			Username:  d.Username,
+			Content:   d.Content,
+			Color:     d.Color,
+			Type:      d.Type,
+			TypeLabel: danmakuTypeLabel(d.Type),
+			VideoTime: d.VideoTime,
+			PlayTime:  formatDanmakuPlayTime(d.VideoTime),
+			LikeCount: d.LikeCount,
+			LikedByMe: d.LikedByMe,
+			CreatedAt: d.CreatedAt,
+			Video: creatorDanmakuVideo{
+				ID:       d.VideoID,
+				Title:    d.VideoTitle,
+				CoverURL: d.CoverURL,
 			},
 		})
 	}
-	resp.OK(c, gin.H{
-		"items": items,
-		"total": result.Total,
-		"limit": result.Limit,
+	resp.OK(c, creatorDanmakuListResponse{
+		Items: items,
+		Total: result.Total,
+		Limit: result.Limit,
 	})
 }
 
@@ -101,11 +136,11 @@ func (a *API) DeleteDanmaku(c *gin.Context) {
 		}
 		return
 	}
-	a.Hub.BroadcastJSON(d.VideoID, gin.H{
-		"type":       "danmaku_deleted",
-		"danmaku_id": strconv.FormatUint(did, 10),
+	a.Hub.BroadcastJSON(d.VideoID, danmakuDeletedEvent{
+		Type:      "danmaku_deleted",
+		DanmakuID: strconv.FormatUint(did, 10),
 	})
-	resp.OK(c, gin.H{"id": did})
+	resp.OK(c, danmakuDeleteResponse{ID: did})
 }
 
 func danmakuTypeLabel(t string) string {

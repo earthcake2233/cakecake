@@ -14,5 +14,8 @@ import (
 // @Success      200 {object} map[string]string
 // @Router       /health [get]
 func (a *API) Health(c *gin.Context) {
-	resp.OK(c, gin.H{"status": "ok"})
+	type healthResponse struct {
+		Status string `json:"status"`
+	}
+	resp.OK(c, healthResponse{Status: "ok"})
 }

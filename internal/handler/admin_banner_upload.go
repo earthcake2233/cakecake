@@ -71,7 +71,7 @@ func (a *API) AdminUploadBannerImage(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, code)
 		return
 	}
-	resp.OK(c, gin.H{"image_url": url})
+	resp.OK(c, imageURLResponse{ImageURL: url})
 }
 
 // AdminUploadBannerImageByID POST /api/v1/admin/home-banners/:id/image — replace slide image on OSS.
@@ -109,5 +109,5 @@ func (a *API) AdminUploadBannerImageByID(c *gin.Context) {
 	if oldURL != "" && oldURL != url {
 		purgeBannerImageURL(a.Cfg, a.OSS, a.Log, oldURL)
 	}
-	resp.OK(c, gin.H{"image_url": url})
+	resp.OK(c, imageURLResponse{ImageURL: url})
 }

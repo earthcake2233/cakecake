@@ -115,6 +115,17 @@ func maybeFinalizeAccountDeletion(a *API, uid uint64) error {
 
 // RequestAccountDeletion starts the cooling-off period (password required).
 func (a *API) RequestAccountDeletion(c *gin.Context) {
+	type deletionPendingResponse struct {
+		OK                  bool   `json:"ok"`
+		Pending             bool   `json:"pending"`
+		DeletionEffectiveAt string `json:"deletion_effective_at"`
+	}
+	type deletionRequestResponse struct {
+		OK                  bool   `json:"ok"`
+		Pending             bool   `json:"pending"`
+		DeletionEffectiveAt string `json:"deletion_effective_at"`
+		CoolingDays         int    `json:"cooling_days"`
+	}
 	uid, ok := middleware.UserID(c)
 	if !ok {
 		resp.Err(c, http.StatusUnauthorized, errcode.CodeUnauthorized)
@@ -144,10 +155,10 @@ func (a *API) RequestAccountDeletion(c *gin.Context) {
 		return
 	}
 	if u.DeletionRequestedAt != nil && u.DeletionEffectiveAt != nil && time.Now().Before(*u.DeletionEffectiveAt) {
-		resp.OK(c, gin.H{
-			"ok":                    true,
-			"pending":               true,
-			"deletion_effective_at": u.DeletionEffectiveAt.Format(time.RFC3339),
+		resp.OK(c, deletionPendingResponse{
+			OK:                  true,
+			Pending:             true,
+			DeletionEffectiveAt: u.DeletionEffectiveAt.Format(time.RFC3339),
 		})
 		return
 	}
@@ -159,11 +170,11 @@ func (a *API) RequestAccountDeletion(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	resp.OK(c, gin.H{
-		"ok":                    true,
-		"pending":               true,
-		"deletion_effective_at": eff.Format(time.RFC3339),
-		"cooling_days":          days,
+	resp.OK(c, deletionRequestResponse{
+		OK:                  true,
+		Pending:             true,
+		DeletionEffectiveAt: eff.Format(time.RFC3339),
+		CoolingDays:         days,
 	})
 }
 
@@ -197,5 +208,5 @@ func (a *API) RevokeAccountDeletion(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	resp.OK(c, gin.H{"ok": true})
+	resp.OK(c, okResponse{OK: true})
 }

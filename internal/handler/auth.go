@@ -32,6 +32,11 @@ type tokenPairResp struct {
 
 // Register creates a new user (F1).
 func (a *API) Register(c *gin.Context) {
+	type registerResponse struct {
+		UserID   uint64 `json:"user_id"`
+		Username string `json:"username"`
+		CakeID   string `json:"cake_id"`
+	}
 	var req registerReq
 	if err := c.ShouldBindJSON(&req); err != nil {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
@@ -49,10 +54,10 @@ func (a *API) Register(c *gin.Context) {
 		return
 	}
 	a.esIndexUser(result.UserID)
-	resp.JSON(c, http.StatusCreated, errcode.CodeSuccess, gin.H{
-		"user_id":  result.UserID,
-		"username": result.Username,
-		"cake_id":  result.CakeID,
+	resp.JSON(c, http.StatusCreated, errcode.CodeSuccess, registerResponse{
+		UserID:   result.UserID,
+		Username: result.Username,
+		CakeID:   result.CakeID,
 	})
 }
 

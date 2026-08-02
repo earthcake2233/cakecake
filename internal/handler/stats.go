@@ -15,6 +15,10 @@ import (
 // @Success     200 {object} map[string]interface{}
 // @Router      /stats/home [get]
 func (a *API) HomeStats(c *gin.Context) {
+	type statsResponse struct {
+		WebOnline int   `json:"web_online"`
+		AllCount  int64 `json:"all_count"`
+	}
 	var published int64
 	if a.VideoSvc != nil {
 		published = a.VideoSvc.CountPublishedVideos(c.Request.Context())
@@ -23,8 +27,5 @@ func (a *API) HomeStats(c *gin.Context) {
 	if a.Hub != nil {
 		webOnline = a.Hub.TotalConnections()
 	}
-	resp.OK(c, gin.H{
-		"web_online": webOnline,
-		"all_count":  published,
-	})
+	resp.OK(c, statsResponse{WebOnline: webOnline, AllCount: published})
 }

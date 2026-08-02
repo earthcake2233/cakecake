@@ -35,35 +35,59 @@ func adminArticleStatusFilter(q string) []string {
 	}
 }
 
-func adminArticleToJSON(art *article.Article, uploaderName string) gin.H {
+type adminArticleItem struct {
+	ID                uint64     `json:"id"`
+	Title             string     `json:"title"`
+	CoverURL          string     `json:"cover_url"`
+	BodyMD            string     `json:"body_md"`
+	BodyHTML          string     `json:"body_html"`
+	Status            string     `json:"status"`
+	FailReason        string     `json:"fail_reason"`
+	UserID            uint64     `json:"user_id"`
+	UploaderName      string     `json:"uploader_name"`
+	ViewCount         uint64     `json:"view_count"`
+	CommentCount      uint64     `json:"comment_count"`
+	PublishedAt       string     `json:"published_at"`
+	CreatedAt         time.Time  `json:"created_at"`
+	UpdatedAt         time.Time  `json:"updated_at"`
+	ReviewedAt        *time.Time `json:"reviewed_at,omitempty"`
+	ReviewedByAdminID *uint64    `json:"reviewed_by_admin_id,omitempty"`
+}
+
+type adminArticleListResponse struct {
+	Items        []adminArticleItem `json:"items"`
+	Page         int                `json:"page"`
+	PageSize     int                `json:"page_size"`
+	Total        int64              `json:"total"`
+	TotalPages   int                `json:"total_pages"`
+	PendingCount int64              `json:"pending_count"`
+}
+
+func adminArticleToJSON(art *article.Article, uploaderName string) adminArticleItem {
 	bodyHTML, _, _ := markdown.Render(art.BodyMD)
 	pubAt := ""
 	if art.PublishedAt != nil {
 		pubAt = art.PublishedAt.Format("2006-01-02 15:04:05")
 	}
-	out := gin.H{
-		"id":            art.ID,
-		"title":         art.Title,
-		"cover_url":     art.CoverURL,
-		"body_md":       art.BodyMD,
-		"body_html":     bodyHTML,
-		"status":        art.Status,
-		"fail_reason":   strings.TrimSpace(art.FailReason),
-		"user_id":       art.UserID,
-		"uploader_name": uploaderName,
-		"view_count":    art.ViewCount,
-		"comment_count": art.CommentCount,
-		"published_at":  pubAt,
-		"created_at":    art.CreatedAt,
-		"updated_at":    art.UpdatedAt,
+	item := adminArticleItem{
+		ID:           art.ID,
+		Title:        art.Title,
+		CoverURL:     art.CoverURL,
+		BodyMD:       art.BodyMD,
+		BodyHTML:     bodyHTML,
+		Status:       art.Status,
+		FailReason:   strings.TrimSpace(art.FailReason),
+		UserID:       art.UserID,
+		UploaderName: uploaderName,
+		ViewCount:    art.ViewCount,
+		CommentCount: art.CommentCount,
+		PublishedAt:  pubAt,
+		CreatedAt:    art.CreatedAt,
+		UpdatedAt:    art.UpdatedAt,
 	}
-	if art.ReviewedAt != nil {
-		out["reviewed_at"] = art.ReviewedAt
-	}
-	if art.ReviewedByAdminID != nil {
-		out["reviewed_by_admin_id"] = *art.ReviewedByAdminID
-	}
-	return out
+	item.ReviewedAt = art.ReviewedAt
+	item.ReviewedByAdminID = art.ReviewedByAdminID
+	return item
 }
 
 // AdminListArticles GET /api/v1/admin/articles
@@ -99,18 +123,18 @@ func (a *API) AdminListArticles(c *gin.Context) {
 			names[id] = user.DisplayUsername(u)
 		}
 	}
-	items := make([]gin.H, 0, len(result.Rows))
+	items := make([]adminArticleItem, 0, len(result.Rows))
 	for i := range result.Rows {
 		items = append(items, adminArticleToJSON(&result.Rows[i], names[result.Rows[i].UserID]))
 	}
 
-	resp.OK(c, gin.H{
-		"items":         items,
-		"page":          page,
-		"page_size":     pageSize,
-		"total":         result.Total,
-		"total_pages":   totalPages,
-		"pending_count": result.PendingCount,
+	resp.OK(c, adminArticleListResponse{
+		Items:        items,
+		Page:         page,
+		PageSize:     pageSize,
+		Total:        result.Total,
+		TotalPages:   totalPages,
+		PendingCount: result.PendingCount,
 	})
 }
 
@@ -253,5 +277,5 @@ func (a *API) AdminDeleteArticle(c *gin.Context) {
 		zap.Uint64("admin_id", adminID),
 		zap.String("status", art.Status),
 	)
-	resp.OK(c, gin.H{"ok": true})
+	resp.OK(c, okResponse{OK: true})
 }

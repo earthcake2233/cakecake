@@ -15,14 +15,35 @@ import (
 	"cakecake/internal/pkg/resp"
 )
 
-// followUserRows converts follow rows to gin.H items for API response.
+// followUserRows converts follow rows to typed items for API response.
+type followUserItem struct {
+	UserID     uint64 `json:"user_id"`
+	Nickname   string `json:"nickname"`
+	Sign       string `json:"sign"`
+	AvatarURL  string `json:"avatar_url"`
+	FollowedAt string `json:"followed_at"`
+	Mutual     *bool  `json:"mutual,omitempty"`
+}
+
+type followListResponse struct {
+	Items   []followUserItem `json:"items"`
+	Total   int64            `json:"total"`
+	GroupID uint64           `json:"group_id,omitempty"`
+}
+
+type followToggleResponse struct {
+	Followed      bool  `json:"followed"`
+	FollowerCount int64 `json:"follower_count"`
+}
+
+// buildFollowUserRows converts follow rows to typed items for API response.
 func (a *API) buildFollowUserRows(
 	ownerID uint64,
 	rows []user.UserFollow,
 	followerField bool,
-) ([]gin.H, error) {
+) ([]followUserItem, error) {
 	if len(rows) == 0 {
-		return []gin.H{}, nil
+		return []followUserItem{}, nil
 	}
 	ids := make([]uint64, 0, len(rows))
 	created := make(map[uint64]time.Time, len(rows))
@@ -48,7 +69,7 @@ func (a *API) buildFollowUserRows(
 			mutual[fid] = true
 		}
 	}
-	items := make([]gin.H, 0, len(rows))
+	items := make([]followUserItem, 0, len(rows))
 	for i := range rows {
 		var uid uint64
 		if followerField {
@@ -68,15 +89,16 @@ func (a *API) buildFollowUserRows(
 		if sign == "" {
 			sign = ""
 		}
-		item := gin.H{
-			"user_id":     u.ID,
-			"nickname":    nick,
-			"sign":        sign,
-			"avatar_url":  avatarURLForAPI(&u),
-			"followed_at": created[uid].Format(time.RFC3339),
+		item := followUserItem{
+			UserID:     u.ID,
+			Nickname:   nick,
+			Sign:       sign,
+			AvatarURL:  avatarURLForAPI(&u),
+			FollowedAt: created[uid].Format(time.RFC3339),
 		}
 		if followerField {
-			item["mutual"] = mutual[uid]
+			m := mutual[uid]
+			item.Mutual = &m
 		}
 		items = append(items, item)
 	}
@@ -133,10 +155,7 @@ func (a *API) ListUserFollowing(c *gin.Context) {
 	}
 	counts, _ := a.FollowSvc.GetFollowCounts(c.Request.Context(), ownerID)
 	total := counts.Following
-	payload := gin.H{"items": items, "total": total}
-	if groupID > 0 {
-		payload["group_id"] = groupID
-	}
+	payload := followListResponse{Items: items, Total: total, GroupID: groupID}
 	resp.OK(c, payload)
 }
 
@@ -169,7 +188,7 @@ func (a *API) ListUserFollowers(c *gin.Context) {
 		return
 	}
 	counts, _ := a.FollowSvc.GetFollowCounts(c.Request.Context(), ownerID)
-	resp.OK(c, gin.H{"items": items, "total": counts.Followers})
+	resp.OK(c, followListResponse{Items: items, Total: counts.Followers})
 }
 
 // ToggleFollowUser toggles the caller's follow on another user.
@@ -202,8 +221,5 @@ func (a *API) ToggleFollowUser(c *gin.Context) {
 		return
 	}
 	counts, _ := a.FollowSvc.GetFollowCounts(c.Request.Context(), followeeID)
-	resp.OK(c, gin.H{
-		"followed":       followed,
-		"follower_count": counts.Followers,
-	})
+	resp.OK(c, followToggleResponse{Followed: followed, FollowerCount: counts.Followers})
 }

@@ -37,19 +37,28 @@ func bannerSlideURL(linkType, linkTarget string) string {
 // @Success     200 {object} map[string]interface{}
 // @Router      /home-banners [get]
 func (a *API) ListHomeBanners(c *gin.Context) {
+	type homeBannerItem struct {
+		ID   uint64 `json:"id"`
+		Name string `json:"name"`
+		Pic  string `json:"pic"`
+		URL  string `json:"url"`
+	}
+	type homeBannerListResponse struct {
+		Items []homeBannerItem `json:"items"`
+	}
 	rows, err := a.VideoSvc.ListActiveBanners(c.Request.Context())
 	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	items := make([]gin.H, 0, len(rows))
+	items := make([]homeBannerItem, 0, len(rows))
 	for _, b := range rows {
-		items = append(items, gin.H{
-			"id":   b.ID,
-			"name": b.Title,
-			"pic":  b.ImageURL,
-			"url":  bannerSlideURL(b.LinkType, b.LinkTarget),
+		items = append(items, homeBannerItem{
+			ID:   b.ID,
+			Name: b.Title,
+			Pic:  b.ImageURL,
+			URL:  bannerSlideURL(b.LinkType, b.LinkTarget),
 		})
 	}
-	resp.OK(c, gin.H{"items": items})
+	resp.OK(c, homeBannerListResponse{Items: items})
 }

@@ -91,6 +91,11 @@ func (a *API) AdminRefresh(c *gin.Context) {
 
 // AdminMe GET /api/v1/admin/me
 func (a *API) AdminMe(c *gin.Context) {
+	type adminMeResponse struct {
+		ID          uint64 `json:"id"`
+		Username    string `json:"username"`
+		DisplayName string `json:"display_name"`
+	}
 	aid, ok := adminIDFromCtx(c)
 	if !ok {
 		resp.Err(c, http.StatusUnauthorized, errcode.CodeUnauthorized)
@@ -101,10 +106,10 @@ func (a *API) AdminMe(c *gin.Context) {
 		resp.Err(c, http.StatusUnauthorized, errcode.CodeUnauthorized)
 		return
 	}
-	resp.OK(c, gin.H{
-		"id":           adm.ID,
-		"username":     adm.Username,
-		"display_name": adm.DisplayName,
+	resp.OK(c, adminMeResponse{
+		ID:          adm.ID,
+		Username:    adm.Username,
+		DisplayName: adm.DisplayName,
 	})
 }
 

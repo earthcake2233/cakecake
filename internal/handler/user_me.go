@@ -20,6 +20,36 @@ import (
 	"cakecake/internal/pkg/userlevel"
 )
 
+type meResponse struct {
+	UserID       uint64 `json:"user_id"`
+	Username     string `json:"username"`
+	CakeID       string `json:"cake_id"`
+	Nickname     string `json:"nickname"`
+	Sign         string `json:"sign"`
+	Announcement string `json:"announcement"`
+	Gender       string `json:"gender"`
+	Birthday     string `json:"birthday"`
+	AvatarURL    string `json:"avatar_url"`
+	CreatedAt    string `json:"created_at"`
+
+	// Extra fields only present for normal (non-anonymized) users.
+	SpacePrivacy *spacePrivacyPayload `json:"space_privacy,omitempty"`
+	LevelInfo    *userlevel.Info      `json:"level_info,omitempty"`
+	CoinBalance  *float64             `json:"coin_balance,omitempty"`
+}
+
+type updateMeProfileResponse struct {
+	Nickname string `json:"nickname"`
+	Sign     string `json:"sign"`
+	Gender   string `json:"gender"`
+	Birthday string `json:"birthday"`
+	CakeID   string `json:"cake_id"`
+}
+
+type announcementResponse struct {
+	Announcement string `json:"announcement"`
+}
+
 func (a *API) GetMe(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -34,24 +64,27 @@ func (a *API) GetMe(c *gin.Context) {
 	}
 	_ = dailyreward.MarkLogin(a.DB, uid)
 	g := normalizeGender(profile.Gender)
-	out := gin.H{
-		"user_id":      profile.ID,
-		"username":     profile.Username,
-		"cake_id":      strings.TrimSpace(profile.CakeID),
-		"nickname":     profile.Nickname,
-		"sign":         profile.Sign,
-		"announcement": strings.TrimSpace(profile.Announcement),
-		"gender":       g,
-		"birthday":     strings.TrimSpace(profile.Birthday),
-		"avatar_url":   profile.AvatarURL,
-		"created_at":   profile.CreatedAt,
+	out := meResponse{
+		UserID:       profile.ID,
+		Username:     profile.Username,
+		CakeID:       strings.TrimSpace(profile.CakeID),
+		Nickname:     profile.Nickname,
+		Sign:         profile.Sign,
+		Announcement: strings.TrimSpace(profile.Announcement),
+		Gender:       g,
+		Birthday:     strings.TrimSpace(profile.Birthday),
+		AvatarURL:    profile.AvatarURL,
+		CreatedAt:    profile.CreatedAt,
 	}
 	// Add extra fields expected by integration tests
 	userModel, _ := a.UserSvc.GetUserByID(c.Request.Context(), uid)
 	if userModel != nil {
-		out["space_privacy"] = spacePrivacyFromUser(userModel)
-		out["level_info"] = userlevel.FromExperience(userModel.Experience)
-		out["coin_balance"] = usercoin.BalanceFloat(userModel.CoinBalanceTenths)
+		sp := spacePrivacyFromUser(userModel)
+		li := userlevel.FromExperience(userModel.Experience)
+		cb := usercoin.BalanceFloat(userModel.CoinBalanceTenths)
+		out.SpacePrivacy = &sp
+		out.LevelInfo = &li
+		out.CoinBalance = &cb
 	}
 	resp.OK(c, out)
 }
@@ -95,12 +128,12 @@ func (a *API) UpdateMeProfile(c *gin.Context) {
 		return
 	}
 	g := normalizeGender(profile.Gender)
-	resp.OK(c, gin.H{
-		"nickname": profile.Nickname,
-		"sign":     profile.Sign,
-		"gender":   g,
-		"birthday": strings.TrimSpace(profile.Birthday),
-		"cake_id":  strings.TrimSpace(profile.CakeID),
+	resp.OK(c, updateMeProfileResponse{
+		Nickname: profile.Nickname,
+		Sign:     profile.Sign,
+		Gender:   g,
+		Birthday: strings.TrimSpace(profile.Birthday),
+		CakeID:   strings.TrimSpace(profile.CakeID),
 	})
 }
 
@@ -121,7 +154,7 @@ func (a *API) UpdateMeUsername(c *gin.Context) {
 		resp.Err(c, http.StatusConflict, errcode.CodeUsernameExists)
 		return
 	}
-	resp.OK(c, gin.H{"ok": true})
+	resp.OK(c, okResponse{OK: true})
 }
 
 func (a *API) UpdateMePassword(c *gin.Context) {
@@ -162,7 +195,7 @@ func (a *API) UpdateMePassword(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	resp.OK(c, gin.H{"ok": true})
+	resp.OK(c, okResponse{OK: true})
 }
 
 func (a *API) UpdateMeAvatar(c *gin.Context) {
@@ -199,7 +232,7 @@ func (a *API) UpdateMeAvatar(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	resp.OK(c, gin.H{"avatar_url": objectKey})
+	resp.OK(c, imageURLResponse{ImageURL: objectKey})
 }
 
 func (a *API) UpdateMeAnnouncement(c *gin.Context) {
@@ -223,7 +256,7 @@ func (a *API) UpdateMeAnnouncement(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	resp.OK(c, gin.H{"announcement": body.Announcement})
+	resp.OK(c, announcementResponse{Announcement: body.Announcement})
 }
 
 func validProfileBirthday(s string) bool {

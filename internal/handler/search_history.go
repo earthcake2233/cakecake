@@ -50,6 +50,11 @@ func normalizeSearchHistoryKeywords(raw []string) []string {
 
 // GetMySearchHistory returns the caller's recent search keywords (newest first).
 // GET /api/v1/users/me/search-history
+type searchHistoryResponse struct {
+	Keywords []string `json:"keywords"`
+}
+
+// GetMySearchHistory godoc
 // GetMySearchHistory godoc
 // @Summary      Get search history
 // @Description  Get recent search history for current user
@@ -69,7 +74,7 @@ func (a *API) GetMySearchHistory(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	resp.OK(c, gin.H{"keywords": keywords})
+	resp.OK(c, searchHistoryResponse{Keywords: keywords})
 }
 
 type searchHistoryPutReq struct {
@@ -103,7 +108,7 @@ func (a *API) PutMySearchHistory(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	resp.OK(c, gin.H{"keywords": keywords})
+	resp.OK(c, searchHistoryResponse{Keywords: keywords})
 }
 
 type searchHistoryPostReq struct {
@@ -148,5 +153,5 @@ func (a *API) PostMySearchHistory(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	resp.OK(c, gin.H{"keywords": keywords})
+	resp.OK(c, searchHistoryResponse{Keywords: keywords})
 }

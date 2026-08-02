@@ -20,6 +20,19 @@ import (
 
 // ListMeCoinLedger returns paginated coin change history for the personal-center page.
 // Query: range=month|week (default month), limit, offset.
+type coinLedgerItem struct {
+	CreatedAt string  `json:"created_at"`
+	Change    float64 `json:"change"`
+	Reason    string  `json:"reason"`
+}
+
+type coinLedgerListResponse struct {
+	Range   string           `json:"range"`
+	Total   int64            `json:"total"`
+	HasMore bool             `json:"has_more"`
+	Items   []coinLedgerItem `json:"items"`
+}
+
 func (a *API) ListMeCoinLedger(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -51,25 +64,25 @@ func (a *API) ListMeCoinLedger(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	items := make([]gin.H, 0, len(rows))
+	items := make([]coinLedgerItem, 0, len(rows))
 	for i := range rows {
 		items = append(items, formatCoinLedgerItem(&rows[i]))
 	}
-	resp.OK(c, gin.H{
-		"range":    rng,
-		"total":    total,
-		"has_more": int64(offset+len(rows)) < total,
-		"items":    items,
+	resp.OK(c, coinLedgerListResponse{
+		Range:   rng,
+		Total:   total,
+		HasMore: int64(offset+len(rows)) < total,
+		Items:   items,
 	})
 }
 
-func formatCoinLedgerItem(row *user.CoinLedger) gin.H {
+func formatCoinLedgerItem(row *user.CoinLedger) coinLedgerItem {
 	change := float64(row.DeltaTenths) / float64(usercoin.TenthsPerCoin)
 	reason := coinLedgerReasonText(row)
-	return gin.H{
-		"created_at": row.CreatedAt.Format("2006-01-02 15:04:05"),
-		"change":     change,
-		"reason":     reason,
+	return coinLedgerItem{
+		CreatedAt: row.CreatedAt.Format("2006-01-02 15:04:05"),
+		Change:    change,
+		Reason:    reason,
 	}
 }
 

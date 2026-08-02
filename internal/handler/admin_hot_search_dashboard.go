@@ -16,6 +16,45 @@ import (
 	"cakecake/internal/service"
 )
 
+type hotSearchMergedItem struct {
+	Rank    int    `json:"rank"`
+	Title   string `json:"title"`
+	Badge   string `json:"badge"`
+	Source  string `json:"source"`
+	Keyword string `json:"keyword"`
+	OpID    uint64 `json:"op_id"`
+}
+
+type hotSearchRedisRowItem struct {
+	Rank    int     `json:"rank"`
+	Title   string  `json:"title"`
+	Keyword string  `json:"keyword"`
+	Score   float64 `json:"score"`
+	Badge   string  `json:"badge"`
+	Blocked bool    `json:"blocked"`
+	Pinned  bool    `json:"pinned"`
+	Manual  bool    `json:"manual"`
+	OpID    uint64  `json:"op_id"`
+	OpType  string  `json:"op_type"`
+}
+
+type hotSearchDashboardResponse struct {
+	Merged      []hotSearchMergedItem   `json:"merged"`
+	Redis       []hotSearchRedisRowItem `json:"redis"`
+	Ops         []hotSearchOpItem       `json:"ops"`
+	CustomOrder bool                    `json:"custom_order"`
+}
+
+type hotSearchDeltaResponse struct {
+	OK    bool    `json:"ok"`
+	Delta float64 `json:"delta"`
+}
+
+type hotSearchCustomOrderResponse struct {
+	OK          bool `json:"ok"`
+	CustomOrder bool `json:"custom_order"`
+}
+
 func adminHotSearchLimit(c *gin.Context, def, max int) int {
 	limit := def
 	if s := c.Query("limit"); s != "" {
@@ -47,7 +86,7 @@ func (a *API) AdminHotSearchDashboard(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	opItems := make([]gin.H, 0, len(ops))
+	opItems := make([]hotSearchOpItem, 0, len(ops))
 	for i := range ops {
 		opItems = append(opItems, hotSearchOpToJSON(&ops[i]))
 	}
@@ -57,7 +96,7 @@ func (a *API) AdminHotSearchDashboard(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 3*time.Second)
 	defer cancel()
 
-	merged := make([]gin.H, 0)
+	merged := make([]hotSearchMergedItem, 0)
 	if a.SearchHot != nil {
 		items, err := a.HotSearchSvc.ListMergedDetail(ctx, mergedLimit)
 		if err != nil {
@@ -66,18 +105,18 @@ func (a *API) AdminHotSearchDashboard(c *gin.Context) {
 			return
 		}
 		for _, it := range items {
-			merged = append(merged, gin.H{
-				"rank":    it.Rank,
-				"title":   it.Title,
-				"badge":   it.Badge,
-				"source":  it.Source,
-				"keyword": it.Keyword,
-				"op_id":   it.OpID,
+			merged = append(merged, hotSearchMergedItem{
+				Rank:    it.Rank,
+				Title:   it.Title,
+				Badge:   it.Badge,
+				Source:  it.Source,
+				Keyword: it.Keyword,
+				OpID:    it.OpID,
 			})
 		}
 	}
 
-	redisRows := make([]gin.H, 0)
+	redisRows := make([]hotSearchRedisRowItem, 0)
 	if a.SearchHot != nil {
 		rows, err := a.HotSearchSvc.TopWithScores(ctx, redisLimit)
 		if err != nil {
@@ -87,26 +126,26 @@ func (a *API) AdminHotSearchDashboard(c *gin.Context) {
 		}
 		for _, row := range rows {
 			f := flags[row.Keyword]
-			redisRows = append(redisRows, gin.H{
-				"rank":    row.Rank,
-				"title":   row.Title,
-				"keyword": row.Keyword,
-				"score":   row.Score,
-				"badge":   row.Badge,
-				"blocked": f.Blocked,
-				"pinned":  f.Pin,
-				"manual":  f.Manual,
-				"op_id":   f.OpID,
-				"op_type": f.OpType,
+			redisRows = append(redisRows, hotSearchRedisRowItem{
+				Rank:    row.Rank,
+				Title:   row.Title,
+				Keyword: row.Keyword,
+				Score:   row.Score,
+				Badge:   row.Badge,
+				Blocked: f.Blocked,
+				Pinned:  f.Pin,
+				Manual:  f.Manual,
+				OpID:    f.OpID,
+				OpType:  f.OpType,
 			})
 		}
 	}
 
-	resp.OK(c, gin.H{
-		"merged":       merged,
-		"redis":        redisRows,
-		"ops":          opItems,
-		"custom_order": a.HotSearchSvc.HasDisplayLayout(c.Request.Context()),
+	resp.OK(c, hotSearchDashboardResponse{
+		Merged:      merged,
+		Redis:       redisRows,
+		Ops:         opItems,
+		CustomOrder: a.HotSearchSvc.HasDisplayLayout(c.Request.Context()),
 	})
 }
 
@@ -137,7 +176,7 @@ func (a *API) AdminRemoveHotSearchRedis(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	resp.OK(c, gin.H{"ok": true})
+	resp.OK(c, okResponse{OK: true})
 }
 
 // AdminBoostHotSearchRedis POST /api/v1/admin/hot-search/redis/boost
@@ -166,7 +205,7 @@ func (a *API) AdminBoostHotSearchRedis(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	resp.OK(c, gin.H{"ok": true, "delta": delta})
+	resp.OK(c, hotSearchDeltaResponse{OK: true, Delta: delta})
 }
 
 type hotSearchQuickOpReq struct {
@@ -233,7 +272,7 @@ func (a *API) AdminReorderHotSearch(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	resp.OK(c, gin.H{"ok": true, "custom_order": true})
+	resp.OK(c, hotSearchCustomOrderResponse{OK: true, CustomOrder: true})
 }
 
 // AdminResetHotSearchDisplayOrder POST /api/v1/admin/hot-search/display-order/reset
@@ -242,7 +281,7 @@ func (a *API) AdminResetHotSearchDisplayOrder(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	resp.OK(c, gin.H{"ok": true, "custom_order": false})
+	resp.OK(c, hotSearchCustomOrderResponse{OK: true, CustomOrder: false})
 }
 func hotSearchDisplayTitle(op *admin.HotSearchOp) string {
 	if op == nil {
