@@ -239,7 +239,7 @@ func (a *API) UploadVideo(c *gin.Context) {
 	}
 	job := worker.TranscodeJob{VideoID: v.ID, RawPath: rawPath, CoverPath: coverPath, RetryCount: 0}
 	body, _ := json.Marshal(job)
-	if err := a.MQ.PublishTranscode(context.Background(), body); err != nil {
+	if err := a.VideoSvc.PublishTranscode(context.Background(), body); err != nil {
 		_ = a.VideoSvc.DeleteVideoByID(c.Request.Context(), v.ID)
 		_ = os.Remove(rawPath)
 		if coverPath != "" {
@@ -508,7 +508,10 @@ func (a *API) GetVideo(c *gin.Context) {
 	detail.UploaderPublishedCount = a.getUploaderPublishedCount(v.UserID)
 	if viewer > 0 && v.UserID != viewer {
 		detail.FollowedByMe = a.isFollowing(viewer, v.UserID)
-		prog := dailyreward.CoinProgress(a.DB, viewer)
+		prog := 0
+		if a.DailyRewardSvc != nil {
+			prog = a.DailyRewardSvc.CoinProgress(viewer)
+		}
 		max := dailyreward.ExpCoinMax
 		detail.DailyCoinExpProgress = &prog
 		detail.DailyCoinExpMax = &max

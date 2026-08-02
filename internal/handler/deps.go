@@ -19,24 +19,26 @@ import (
 
 // Dependencies are shared across HTTP handlers.
 type Dependencies struct {
-	Cfg          *config.C
-	DB           *gorm.DB
-	Redis        *redis.Client
-	Log          *zap.Logger
-	Hub          *ws.Hub
-	ChatHub      *ws.ChatHub
-	JWT          *jwttoken.Manager
-	Sens         *sensitive.Filter
-	OSS          *storage.OSS
-	MQ           queue.TranscodePublisher
-	ES           *search.Client
-	Play         *service.PlayCounter
-	SearchHot    *service.SearchHotRecorder
-	DanmakuRelay *service.DanmakuRelay
-	IPLocate     *iplocate.Searcher
-	RuntimeCfg   *config.RuntimeConfig
-	RateLimiter  *middleware.RateLimiter
-	Agent        *service.AgentService
+	Cfg            *config.C
+	DB             *gorm.DB
+	Redis          *redis.Client
+	Log            *zap.Logger
+	Hub            *ws.Hub
+	ChatHub        *ws.ChatHub
+	JWT            *jwttoken.Manager
+	Sens           *sensitive.Filter
+	OSS            *storage.OSS
+	MQ             queue.TranscodePublisher
+	ES             *search.Client
+	Play           *service.PlayCounter
+	SearchHot      *service.SearchHotRecorder
+	SearchSvc      *service.SearchService
+	DailyRewardSvc *service.DailyRewardService
+	DanmakuRelay   *service.DanmakuRelay
+	IPLocate       *iplocate.Searcher
+	RuntimeCfg     *config.RuntimeConfig
+	RateLimiter    *middleware.RateLimiter
+	Agent          *service.AgentService
 
 	// Phase 1 domain services (thin service layer over business logic).
 	VideoSvc          *service.VideoService

@@ -14,7 +14,6 @@ import (
 
 	"cakecake/internal/errcode"
 	"cakecake/internal/middleware"
-	"cakecake/internal/model/comment"
 	"cakecake/internal/pkg/iplocate"
 	"cakecake/internal/pkg/netutil"
 	"cakecake/internal/pkg/resp"
@@ -244,8 +243,8 @@ func (a *API) PinComment(c *gin.Context) {
 		return
 	}
 	// look up the comment to find the video ID, then verify caller owns the video
-	var cm comment.Comment
-	if err := a.DB.First(&cm, cid).Error; err != nil {
+	cm, err := a.CommentSvc.GetCommentByID(c.Request.Context(), cid)
+	if err != nil {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}

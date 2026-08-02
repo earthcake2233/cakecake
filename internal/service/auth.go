@@ -27,6 +27,16 @@ type AuthService struct {
 	cfg AuthConfig
 }
 
+// AdminRefreshTokenInvalid reports whether an admin refresh token was already invalidated.
+func (s *AuthService) AdminRefreshTokenInvalid(ctx context.Context, tokenID string) bool {
+	return s.rdb.Exists(ctx, data.AdminRefreshInvalidKey(tokenID)).Val() == 1
+}
+
+// MarkAdminRefreshTokenInvalid records an admin refresh token as used/invalid.
+func (s *AuthService) MarkAdminRefreshTokenInvalid(ctx context.Context, tokenID string) error {
+	return s.rdb.Set(ctx, data.AdminRefreshInvalidKey(tokenID), "1", data.RefreshInvalidTTL).Err()
+}
+
 // AuthConfig carries config values needed by AuthService.
 type AuthConfig struct {
 	AgentBotUsername string

@@ -8,7 +8,6 @@ import (
 
 	"cakecake/internal/errcode"
 	"cakecake/internal/middleware"
-	"cakecake/internal/pkg/dailyreward"
 	"cakecake/internal/pkg/resp"
 )
 
@@ -19,8 +18,12 @@ func (a *API) GetMeDailyRewards(c *gin.Context) {
 		resp.Err(c, http.StatusUnauthorized, errcode.CodeUnauthorized)
 		return
 	}
-	_ = dailyreward.MarkLogin(a.DB, uid)
-	snap, err := dailyreward.BuildSnapshot(a.DB, uid)
+	if a.DailyRewardSvc == nil {
+		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
+		return
+	}
+	_ = a.DailyRewardSvc.MarkLogin(uid)
+	snap, err := a.DailyRewardSvc.BuildSnapshot(uid)
 	if err != nil {
 		a.Log.Error("daily rewards snapshot", zap.Error(err))
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
@@ -36,12 +39,12 @@ func (a *API) PostMeDailyRewardWatch(c *gin.Context) {
 		resp.Err(c, http.StatusUnauthorized, errcode.CodeUnauthorized)
 		return
 	}
-	if err := dailyreward.MarkWatch(a.DB, uid); err != nil {
+	if err := a.DailyRewardSvc.MarkWatch(uid); err != nil {
 		a.Log.Error("daily reward watch", zap.Error(err))
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	snap, err := dailyreward.BuildSnapshot(a.DB, uid)
+	snap, err := a.DailyRewardSvc.BuildSnapshot(uid)
 	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return

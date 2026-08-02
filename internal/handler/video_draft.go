@@ -564,7 +564,7 @@ func (a *API) PublishVideoDraft(c *gin.Context) {
 	coverPath := strings.TrimSpace(v.DraftCoverPath)
 	job := worker.TranscodeJob{VideoID: v.ID, RawPath: rawPath, CoverPath: coverPath, RetryCount: 0}
 	body, _ := json.Marshal(job)
-	if err := a.MQ.PublishTranscode(context.Background(), body); err != nil {
+	if err := a.VideoDraftSvc.PublishTranscode(context.Background(), body); err != nil {
 		a.Log.Error("publish transcode from draft", zap.Error(err))
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
@@ -715,7 +715,7 @@ func (a *API) ReplaceVideoMedia(c *gin.Context) {
 
 	job := worker.TranscodeJob{VideoID: v.ID, RawPath: rawPath, CoverPath: coverPath, RetryCount: 0}
 	body, _ := json.Marshal(job)
-	if err := a.MQ.PublishTranscode(context.Background(), body); err != nil {
+	if err := a.VideoDraftSvc.PublishTranscode(context.Background(), body); err != nil {
 		a.Log.Error("publish transcode after replace", zap.Error(err))
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return

@@ -3,10 +3,13 @@ package service
 import (
 	"cakecake/internal/model/video"
 	"context"
+	"fmt"
 
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
+
+	"cakecake/internal/queue"
 )
 
 // VideoDraftService handles video draft business logic.
@@ -14,10 +17,19 @@ type VideoDraftService struct {
 	db  *gorm.DB
 	rdb *redis.Client
 	log *zap.Logger
+	mq  queue.TranscodePublisher
 }
 
-func NewVideoDraftService(db *gorm.DB, rdb *redis.Client, log *zap.Logger) *VideoDraftService {
-	return &VideoDraftService{db: db, rdb: rdb, log: log}
+func NewVideoDraftService(db *gorm.DB, rdb *redis.Client, log *zap.Logger, mq queue.TranscodePublisher) *VideoDraftService {
+	return &VideoDraftService{db: db, rdb: rdb, log: log, mq: mq}
+}
+
+// PublishTranscode enqueues a transcode job (best-effort via RabbitMQ).
+func (s *VideoDraftService) PublishTranscode(ctx context.Context, body []byte) error {
+	if s.mq == nil {
+		return fmt.Errorf("transcode queue not configured")
+	}
+	return s.mq.PublishTranscode(ctx, body)
 }
 
 // CreateDraft inserts a new draft video record.

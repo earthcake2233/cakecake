@@ -84,16 +84,16 @@ func newTestAPI(t *testing.T) (*API, *gin.Engine, *jwttoken.Manager) {
 	notifSvc := service.NewNotificationService(db, rdb, log, userProv)
 	commentSvc := service.NewCommentService(db, rdb, log, sens, notifSvc, userProv, videoProv, articleProv, dynamicProv)
 	userSvc := service.NewUserService(db, log)
-	videoSvc := service.NewVideoService(db, rdb, log)
+	videoSvc := service.NewVideoService(db, rdb, log, nil, nil)
 	dmSvc := service.NewDmService(db, rdb, log)
 	favoriteSvc := service.NewFavoriteService(db, rdb, log, userProv, videoProv)
-	articleSvc := service.NewArticleService(db, rdb, log, userSvc)
+	articleSvc := service.NewArticleService(db, rdb, log, userSvc, nil)
 	dynamicSvc := service.NewDynamicService(db, rdb, log)
 	searchHot := &service.SearchHotRecorder{Rdb: rdb, Sens: sens}
 	hotSearchSvc := service.NewHotSearchService(db, searchHot)
 	engagementSvc := service.NewEngagementService(db, rdb, log, userProv, videoProv)
 	viewHistorySvc := service.NewViewHistoryService(db, rdb, log)
-	videoDraftSvc := service.NewVideoDraftService(db, rdb, log)
+	videoDraftSvc := service.NewVideoDraftService(db, rdb, log, nil)
 	creatorCommentSvc := service.NewCreatorCommentService(db, rdb, log)
 	searchHistorySvc := service.NewSearchHistoryService(db, log)
 	api := &API{
@@ -108,6 +108,8 @@ func newTestAPI(t *testing.T) (*API, *gin.Engine, *jwttoken.Manager) {
 			OSS:               nil,
 			MQ:                noopMQ{},
 			Play:              pc,
+			DailyRewardSvc:    service.NewDailyRewardService(db),
+			SearchSvc:         service.NewSearchService(nil, db, rdb, log),
 			DanmakuRelay:      relay,
 			AuthSvc:           authSvc,
 			FollowSvc:         followSvc,

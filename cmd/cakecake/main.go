@@ -257,14 +257,16 @@ func main() {
 	followSvc := service.NewFollowService(db, log)
 	danmakuSvc := service.NewDanmakuService(db, rdb, log, sens)
 	userSvc := service.NewUserService(db, log)
-	videoSvc := service.NewVideoService(db, rdb, log)
+	searchSvc := service.NewSearchService(esc, db, rdb, log)
+	dailyRewardSvc := service.NewDailyRewardService(db)
+	videoSvc := service.NewVideoService(db, rdb, log, esc, mq)
 	dmSvc := service.NewDmService(db, rdb, log)
 	favoriteSvc := service.NewFavoriteService(db, rdb, log, userProv, videoProv)
-	articleSvc := service.NewArticleService(db, rdb, log, userSvc)
+	articleSvc := service.NewArticleService(db, rdb, log, userSvc, esc)
 	dynamicSvc := service.NewDynamicService(db, rdb, log)
 	engagementSvc := service.NewEngagementService(db, rdb, log, userProv, videoProv)
 	viewHistorySvc := service.NewViewHistoryService(db, rdb, log)
-	videoDraftSvc := service.NewVideoDraftService(db, rdb, log)
+	videoDraftSvc := service.NewVideoDraftService(db, rdb, log, mq)
 	creatorCommentSvc := service.NewCreatorCommentService(db, rdb, log)
 	searchHistorySvc := service.NewSearchHistoryService(db, log)
 	hotSearchSvc := service.NewHotSearchService(db, searchHot)
@@ -274,6 +276,8 @@ func main() {
 		JWT: jm, Sens: sens, OSS: ossc, MQ: mq, ES: esc, Play: pc,
 		SearchHot: searchHot, DanmakuRelay: relay, IPLocate: ipLoc, Agent: agentSvc,
 		RateLimiter: rl, RuntimeCfg: runtimeCfg,
+		SearchSvc:         searchSvc,
+		DailyRewardSvc:    dailyRewardSvc,
 		AuthSvc:           authSvc,
 		FollowSvc:         followSvc,
 		DanmakuSvc:        danmakuSvc,

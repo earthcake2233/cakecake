@@ -17,7 +17,6 @@ import (
 	"cakecake/internal/middleware"
 	"cakecake/internal/pkg/markdown"
 	"cakecake/internal/pkg/resp"
-	"cakecake/internal/service"
 )
 
 func adminArticleStatusFilter(q string) []string {
@@ -182,7 +181,7 @@ func (a *API) AdminApproveArticle(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 20*time.Second)
 	defer cancel()
 	aid := adminID
-	if err := service.PublishArticle(ctx, a.DB, a.ES, a.Log, id, &aid); err != nil {
+	if err := a.ArticleSvc.Publish(ctx, id, &aid); err != nil {
 		a.Log.Error("admin approve article", zap.Error(err), zap.Uint64("article_id", id))
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
@@ -231,9 +230,9 @@ func (a *API) AdminRejectArticle(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	if a.ES != nil && a.ES.Enabled() {
+	if a.SearchSvc != nil && a.SearchSvc.Enabled() {
 		ictx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
-		_ = a.ES.DeleteArticle(ictx, id)
+		_ = a.SearchSvc.DeleteArticle(ictx, id)
 		cancel()
 	}
 	art, _ = a.ArticleSvc.GetArticleByID(c.Request.Context(), id)

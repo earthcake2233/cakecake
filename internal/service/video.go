@@ -4,6 +4,7 @@ import (
 	"cakecake/internal/model/admin"
 	"cakecake/internal/model/video"
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -11,6 +12,8 @@ import (
 	"gorm.io/gorm"
 
 	"cakecake/internal/pkg/cursor"
+	"cakecake/internal/queue"
+	"cakecake/internal/search"
 )
 
 // VideoService handles video business logic.
@@ -18,10 +21,25 @@ type VideoService struct {
 	db  *gorm.DB
 	rdb *redis.Client
 	log *zap.Logger
+	es  *search.Client
+	mq  queue.TranscodePublisher
 }
 
-func NewVideoService(db *gorm.DB, rdb *redis.Client, log *zap.Logger) *VideoService {
-	return &VideoService{db: db, rdb: rdb, log: log}
+func NewVideoService(db *gorm.DB, rdb *redis.Client, log *zap.Logger, es *search.Client, mq queue.TranscodePublisher) *VideoService {
+	return &VideoService{db: db, rdb: rdb, log: log, es: es, mq: mq}
+}
+
+// Publish marks a video published and re-indexes search (post-review or direct publish).
+func (s *VideoService) Publish(ctx context.Context, videoID uint64, adminID *uint64) error {
+	return PublishVideo(ctx, s.db, s.es, s.log, videoID, adminID)
+}
+
+// PublishTranscode enqueues a transcode job (best-effort via RabbitMQ).
+func (s *VideoService) PublishTranscode(ctx context.Context, body []byte) error {
+	if s.mq == nil {
+		return fmt.Errorf("transcode queue not configured")
+	}
+	return s.mq.PublishTranscode(ctx, body)
 }
 
 // CreateVideoRecord inserts a new video record into the database.

@@ -74,7 +74,7 @@ func (a *API) SearchAll(c *gin.Context) {
 		}
 	}
 
-	if a.ES == nil || !a.ES.Enabled() {
+	if a.SearchSvc == nil || !a.SearchSvc.Enabled() {
 		if strings.TrimSpace(a.Cfg.ElasticsearchURL) != "" {
 			resp.Err(c, http.StatusServiceUnavailable, errcode.CodeSearchUnavailable)
 			return
@@ -98,9 +98,9 @@ func (a *API) SearchAll(c *gin.Context) {
 	// ── Redis cache lookup (skip for highlighted queries) ──
 	var out *search.AllResult
 	cacheHit := false
-	if !highlight && a.Redis != nil {
+	if !highlight && a.SearchSvc != nil {
 		cacheKey := searchCacheKey(keyword, searchType, sort, page, pageSize)
-		if cached, err := a.Redis.Get(c.Request.Context(), cacheKey).Result(); err == nil && cached != "" {
+		if cached, err := a.SearchSvc.CacheGet(c.Request.Context(), cacheKey); err == nil && cached != "" {
 			if err := json.Unmarshal([]byte(cached), &out); err == nil {
 				cacheHit = true
 			}
@@ -112,7 +112,7 @@ func (a *API) SearchAll(c *gin.Context) {
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
 		var err error
-		out, err = a.ES.SearchAll(ctx, search.SearchParams{
+		out, err = a.SearchSvc.SearchAll(ctx, search.SearchParams{
 			Keyword:   keyword,
 			Highlight: highlight,
 			Page:      page,
@@ -128,10 +128,10 @@ func (a *API) SearchAll(c *gin.Context) {
 		}
 
 		// Write to cache (async, best-effort)
-		if !highlight && a.Redis != nil {
+		if !highlight && a.SearchSvc != nil {
 			if data, err := json.Marshal(out); err == nil {
 				cacheKey := searchCacheKey(keyword, searchType, sort, page, pageSize)
-				if err := a.Redis.Set(c.Request.Context(), cacheKey, string(data), searchCacheTTL).Err(); err != nil {
+				if err := a.SearchSvc.CacheSet(c.Request.Context(), cacheKey, string(data), searchCacheTTL); err != nil {
 					a.Log.Warn("search cache write", zap.Error(err))
 				}
 			}
@@ -140,7 +140,7 @@ func (a *API) SearchAll(c *gin.Context) {
 
 	// ── Viewer enrichment (always run, even on cache hit) ──
 	if len(out.Result.BiliUser) > 0 {
-		out.Result.BiliUser = search.EnrichUserHits(a.DB, viewer, out.Result.BiliUser)
+		out.Result.BiliUser = a.SearchSvc.EnrichUserHits(c.Request.Context(), viewer, out.Result.BiliUser)
 	}
 	if len(out.Result.Video) > 0 && viewer > 0 {
 		ids := make([]uint64, 0, len(out.Result.Video))

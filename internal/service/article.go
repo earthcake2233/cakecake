@@ -14,6 +14,7 @@ import (
 
 	"cakecake/internal/pkg/dailyreward"
 	"cakecake/internal/pkg/usercoin"
+	"cakecake/internal/search"
 )
 
 // ArticleService handles article business logic.
@@ -22,6 +23,7 @@ type ArticleService struct {
 	rdb *redis.Client
 	log *zap.Logger
 	us  *UserService
+	es  *search.Client
 }
 
 // ArticleEngagement holds per-viewer engagement state for an article.
@@ -43,8 +45,13 @@ type ListArticlesCursorResult struct {
 	HasMore bool
 }
 
-func NewArticleService(db *gorm.DB, rdb *redis.Client, log *zap.Logger, us *UserService) *ArticleService {
-	return &ArticleService{db: db, rdb: rdb, log: log, us: us}
+func NewArticleService(db *gorm.DB, rdb *redis.Client, log *zap.Logger, us *UserService, es *search.Client) *ArticleService {
+	return &ArticleService{db: db, rdb: rdb, log: log, us: us, es: es}
+}
+
+// Publish marks an article published and re-indexes search (post-review or direct publish).
+func (s *ArticleService) Publish(ctx context.Context, articleID uint64, adminID *uint64) error {
+	return PublishArticle(ctx, s.db, s.es, s.log, articleID, adminID)
 }
 
 // CreateArticle inserts a new article.

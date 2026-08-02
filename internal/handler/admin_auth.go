@@ -10,7 +10,6 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/crypto/bcrypt"
 
-	"cakecake/internal/data"
 	"cakecake/internal/errcode"
 	"cakecake/internal/middleware"
 	"cakecake/internal/model/admin"
@@ -76,11 +75,11 @@ func (a *API) AdminRefresh(c *gin.Context) {
 		return
 	}
 	ctx := context.Background()
-	if a.Redis.Exists(ctx, data.AdminRefreshInvalidKey(tokenID)).Val() == 1 {
+	if a.AuthSvc.AdminRefreshTokenInvalid(ctx, tokenID) {
 		resp.Err(c, http.StatusUnauthorized, errcode.CodeUnauthorized)
 		return
 	}
-	_ = a.Redis.Set(ctx, data.AdminRefreshInvalidKey(tokenID), "1", data.RefreshInvalidTTL).Err()
+	_ = a.AuthSvc.MarkAdminRefreshTokenInvalid(ctx, tokenID)
 	access, refresh, _, err := a.JWT.IssueAdminPair(adm.ID)
 	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)

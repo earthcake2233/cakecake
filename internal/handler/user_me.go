@@ -14,7 +14,6 @@ import (
 	"cakecake/internal/errcode"
 	"cakecake/internal/middleware"
 	"cakecake/internal/pkg/coverval"
-	"cakecake/internal/pkg/dailyreward"
 	"cakecake/internal/pkg/resp"
 	"cakecake/internal/pkg/usercoin"
 	"cakecake/internal/pkg/userlevel"
@@ -62,7 +61,9 @@ func (a *API) GetMe(c *gin.Context) {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
-	_ = dailyreward.MarkLogin(a.DB, uid)
+	if a.DailyRewardSvc != nil {
+		_ = a.DailyRewardSvc.MarkLogin(uid)
+	}
 	g := normalizeGender(profile.Gender)
 	out := meResponse{
 		UserID:       profile.ID,

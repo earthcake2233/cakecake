@@ -16,7 +16,6 @@ import (
 	"cakecake/internal/errcode"
 	"cakecake/internal/middleware"
 	"cakecake/internal/pkg/resp"
-	"cakecake/internal/service"
 )
 
 func adminVideoStatusFilter(q string) []string {
@@ -184,7 +183,7 @@ func (a *API) AdminApproveVideo(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 20*time.Second)
 	defer cancel()
 	aid := adminID
-	if err := service.PublishVideo(ctx, a.DB, a.ES, a.Log, id, &aid); err != nil {
+	if err := a.VideoSvc.Publish(ctx, id, &aid); err != nil {
 		a.Log.Error("admin approve video", zap.Error(err), zap.Uint64("video_id", id))
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
@@ -232,9 +231,9 @@ func (a *API) AdminRejectVideo(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	if a.ES != nil && a.ES.Enabled() {
+	if a.SearchSvc != nil && a.SearchSvc.Enabled() {
 		ictx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
-		_ = a.ES.DeleteVideo(ictx, id)
+		_ = a.SearchSvc.DeleteVideo(ictx, id)
 		cancel()
 	}
 	v, _ = a.VideoSvc.GetVideoByID(c.Request.Context(), id)

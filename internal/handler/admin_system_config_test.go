@@ -80,18 +80,20 @@ func newTestAPIWithRuntimeCfg(t *testing.T) (*API, *gin.Engine, *jwttoken.Manage
 
 	api := &API{
 		Dependencies: &Dependencies{
-			Cfg:          cfg,
-			DB:           db,
-			Redis:        rdb,
-			Log:          log,
-			Hub:          hub,
-			JWT:          jm,
-			Sens:         sens,
-			OSS:          nil,
-			MQ:           noopMQ{},
-			Play:         pc,
-			DanmakuRelay: relay,
-			RuntimeCfg:   runtimeCfg,
+			Cfg:            cfg,
+			DB:             db,
+			Redis:          rdb,
+			Log:            log,
+			Hub:            hub,
+			JWT:            jm,
+			Sens:           sens,
+			OSS:            nil,
+			MQ:             noopMQ{},
+			Play:           pc,
+			DailyRewardSvc: service.NewDailyRewardService(db),
+			SearchSvc:      service.NewSearchService(nil, db, rdb, log),
+			DanmakuRelay:   relay,
+			RuntimeCfg:     runtimeCfg,
 		},
 	}
 	r := gin.New()
