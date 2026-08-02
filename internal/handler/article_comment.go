@@ -69,7 +69,7 @@ func (a *API) ListArticleComments(c *gin.Context) {
 			Level: item.Level, UserLevel: item.UserLevel, Content: item.Content,
 			LikeCount: item.LikeCount, CreatedAt: item.CreatedAt,
 			LikedByMe: item.LikedByMe, DislikedByMe: item.DislikedByMe,
-			Pinned: item.Pinned, IsByAuthor: item.IsByAuthor,
+			Pinned: item.Pinned, IsByAuthor: item.IsByUploader,
 			IPLocation: iplocate.DisplayLabel(item.IPLocation),
 		})
 	}

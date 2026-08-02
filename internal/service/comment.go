@@ -3,7 +3,6 @@ package service
 import (
 	"cakecake/internal/model/comment"
 	"context"
-	"unicode/utf8"
 
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
@@ -47,44 +46,8 @@ type CommentItem struct {
 	IPLocation                                    string
 }
 
-type ArticleCommentItem struct {
-	ID, UserID                                  uint64
-	Username, AvatarURL                         string
-	ParentID                                    uint64
-	Level, UserLevel                            int
-	Content                                     string
-	LikeCount                                   uint64
-	CreatedAt                                   string
-	LikedByMe, DislikedByMe, Pinned, IsByAuthor bool
-	IPLocation                                  string
-}
-
-type DynamicCommentItem struct {
-	ID, UserID                                    uint64
-	Username, AvatarURL                           string
-	ParentID                                      uint64
-	Level, UserLevel                              int
-	Content                                       string
-	LikeCount                                     uint64
-	CreatedAt                                     string
-	LikedByMe, DislikedByMe, Pinned, IsByUploader bool
-	IPLocation                                    string
-}
-
 type CommentListResult struct {
 	Items           []CommentItem
-	CommentsCurated bool
-	CommentsClosed  bool
-}
-
-type ArticleCommentListResult struct {
-	Items           []ArticleCommentItem
-	CommentsCurated bool
-	CommentsClosed  bool
-}
-
-type DynamicCommentListResult struct {
-	Items           []DynamicCommentItem
 	CommentsCurated bool
 	CommentsClosed  bool
 }
@@ -94,60 +57,35 @@ func (s *CommentService) ListComments(ctx context.Context, videoID, viewerID uin
 	if err != nil {
 		return nil, ErrNotFound
 	}
-	r := &CommentListResult{CommentsCurated: v.CommentsCurated, CommentsClosed: v.CommentsClosed}
-	if v.CommentsClosed {
-		r.Items = []CommentItem{}
-		return r, nil
-	}
-
-	q := s.db.WithContext(ctx).Where("video_id = ?", videoID)
-	if v.CommentsCurated {
-		q = q.Where("approved = ?", true)
-	}
-	var list []comment.Comment
-	if err := q.Order("id ASC").Find(&list).Error; err != nil {
-		return nil, ErrInternalError
-	}
-	if len(list) == 0 {
-		r.Items = []CommentItem{}
-		return r, nil
-	}
-
-	users, levels := s.loadUsersWithLevels(ctx, list)
-	liked := s.loadCommentLikes(ctx, viewerID, list)
-	disliked := s.loadCommentDislikes(ctx, viewerID, list)
-
-	out := make([]CommentItem, 0, len(list))
-	for _, cm := range list {
-		ulv := levels[cm.UserID]
-		if ulv < 1 {
-			ulv = 1
-		}
-		u := users[cm.UserID]
-		out = append(out, CommentItem{
-			ID: cm.ID, UserID: cm.UserID, Username: u.Nickname, AvatarURL: u.AvatarURL,
-			ParentID: cm.ParentID, Level: cm.Level, UserLevel: ulv, Content: cm.Content,
-			LikeCount: cm.LikeCount, CreatedAt: cm.CreatedAt.Format("2006-01-02 15:04:05"),
-			LikedByMe: liked[cm.ID], DislikedByMe: disliked[cm.ID], Pinned: cm.Pinned,
-			IsByUploader: cm.UserID == v.UserID, IPLocation: cm.IpLocation,
+	return s.buildCommentList(ctx, videoID, viewerID, v.UserID, v.CommentsCurated, v.CommentsClosed,
+		func(ctx context.Context, targetID uint64, curated bool) ([]commentListRow, error) {
+			q := s.db.WithContext(ctx).Where("video_id = ?", targetID)
+			if curated {
+				q = q.Where("approved = ?", true)
+			}
+			var list []comment.Comment
+			if err := q.Order("id ASC").Find(&list).Error; err != nil {
+				return nil, err
+			}
+			return toCommentRows(list), nil
+		},
+		func(ctx context.Context, viewerID uint64, ids []uint64) (map[uint64]bool, map[uint64]bool, error) {
+			liked, err := s.loadCommentLikesByIDs(ctx, viewerID, ids)
+			if err != nil {
+				return nil, nil, err
+			}
+			disliked, err := s.loadCommentDislikesByIDs(ctx, viewerID, ids)
+			if err != nil {
+				return nil, nil, err
+			}
+			return liked, disliked, nil
 		})
-	}
-	r.Items = out
-	return r, nil
 }
 
 func (s *CommentService) PostComment(ctx context.Context, userID, videoID uint64, req PostCommentReq, ipLocation string) (*comment.Comment, error) {
 	content := req.Content
-	if n := utf8.RuneCountInString(content); n < 1 || n > 1000 {
-		return nil, ErrParamError
-	}
-	if s.sens != nil {
-		if err := s.sens.Check(content); err != nil {
-			if _, ok := err.(sensitive.ErrBlocked); ok {
-				return nil, ErrCommentSensitive
-			}
-			return nil, ErrInternalError
-		}
+	if err := s.validateCommentContent(content); err != nil {
+		return nil, err
 	}
 	v, err := s.videos.GetPublishedVideo(ctx, videoID)
 	if err != nil {
@@ -157,21 +95,18 @@ func (s *CommentService) PostComment(ctx context.Context, userID, videoID uint64
 		return nil, ErrCommentsClosed
 	}
 
-	var parentID uint64
-	level := 1
-	if req.ParentID != 0 {
-		parentID = req.ParentID
+	parentID, level, err := s.resolveCommentParent(ctx, req.ParentID, videoID, func(ctx context.Context, parentID uint64) (int, bool, error) {
 		var parent comment.Comment
-		if err := s.db.WithContext(ctx).First(&parent, req.ParentID).Error; err != nil {
-			return nil, ErrNotFound
+		if err := s.db.WithContext(ctx).First(&parent, parentID).Error; err != nil {
+			return 0, false, err
 		}
 		if parent.VideoID != videoID {
-			return nil, ErrParamError
+			return 0, false, nil
 		}
-		level = parent.Level + 1
-		if level > 3 {
-			level = 3
-		}
+		return parent.Level + 1, true, nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	cm := comment.Comment{
@@ -201,7 +136,11 @@ func (s *CommentService) DeleteComment(ctx context.Context, userID, commentID ui
 		return ErrForbidden
 	}
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		descIDs := s.collectDescendantIDs(tx, commentID)
+		descIDs := s.collectCommentDescendants(tx, func(tx *gorm.DB, parentID uint64) ([]uint64, error) {
+			var ids []uint64
+			err := tx.Model(&comment.Comment{}).Where("parent_id = ?", parentID).Pluck("id", &ids).Error
+			return ids, err
+		}, commentID)
 		allIDs := append([]uint64{commentID}, descIDs...)
 		_ = tx.Where("comment_id IN ?", allIDs).Delete(&comment.CommentLike{}).Error
 		_ = tx.Where("comment_id IN ?", allIDs).Delete(&comment.CommentDislike{}).Error
@@ -306,64 +245,33 @@ func (s *CommentService) GetDynamicCommentByID(ctx context.Context, commentID ui
 
 // ─── Article Comments ───
 
-func (s *CommentService) ListArticleComments(ctx context.Context, articleID, viewerID uint64) (*ArticleCommentListResult, error) {
+func (s *CommentService) ListArticleComments(ctx context.Context, articleID, viewerID uint64) (*CommentListResult, error) {
 	a, err := s.articles.GetPublishedArticle(ctx, articleID)
 	if err != nil {
 		return nil, ErrNotFound
 	}
-	r := &ArticleCommentListResult{CommentsCurated: a.CommentsCurated, CommentsClosed: a.CommentsClosed}
-	if a.CommentsClosed {
-		r.Items = []ArticleCommentItem{}
-		return r, nil
-	}
-
-	q := s.db.WithContext(ctx).Where("article_id = ?", articleID)
-	if a.CommentsCurated {
-		q = q.Where("approved = ?", true)
-	}
-	var list []comment.ArticleComment
-	if err := q.Order("id ASC").Find(&list).Error; err != nil {
-		return nil, ErrInternalError
-	}
-	if len(list) == 0 {
-		r.Items = []ArticleCommentItem{}
-		return r, nil
-	}
-
-	users, levels := s.loadArticleUsers(ctx, list)
-	liked, disliked := s.loadArticleReactions(ctx, viewerID, list)
-	out := make([]ArticleCommentItem, 0, len(list))
-	for _, cm := range list {
-		ulv := levels[cm.UserID]
-		if ulv < 1 {
-			ulv = 1
-		}
-		u := users[cm.UserID]
-		out = append(out, ArticleCommentItem{
-			ID: cm.ID, UserID: cm.UserID, Username: u.Nickname, AvatarURL: u.AvatarURL,
-			ParentID: cm.ParentID, Level: cm.Level, UserLevel: ulv, Content: cm.Content,
-			LikeCount: cm.LikeCount, CreatedAt: cm.CreatedAt.Format("2006-01-02 15:04:05"),
-			LikedByMe: liked[cm.ID], DislikedByMe: disliked[cm.ID], Pinned: cm.Pinned,
-			IsByAuthor: cm.UserID == a.UserID, IPLocation: cm.IpLocation,
+	return s.buildCommentList(ctx, articleID, viewerID, a.UserID, a.CommentsCurated, a.CommentsClosed,
+		func(ctx context.Context, targetID uint64, curated bool) ([]commentListRow, error) {
+			q := s.db.WithContext(ctx).Where("article_id = ?", targetID)
+			if curated {
+				q = q.Where("approved = ?", true)
+			}
+			var list []comment.ArticleComment
+			if err := q.Order("id ASC").Find(&list).Error; err != nil {
+				return nil, err
+			}
+			return toArticleCommentRows(list), nil
+		},
+		func(ctx context.Context, viewerID uint64, ids []uint64) (map[uint64]bool, map[uint64]bool, error) {
+			return s.loadArticleReactionsByIDs(ctx, viewerID, ids)
 		})
-	}
-	r.Items = out
-	return r, nil
 }
 
 func (s *CommentService) PostArticleComment(ctx context.Context, userID, articleID uint64, req PostCommentReq, ipLocation string) (*comment.ArticleComment, error) {
 	_ = s.articles.IncrCommentCount(ctx, articleID, 1)
 	content := req.Content
-	if n := utf8.RuneCountInString(content); n < 1 || n > 1000 {
-		return nil, ErrParamError
-	}
-	if s.sens != nil {
-		if err := s.sens.Check(content); err != nil {
-			if _, ok := err.(sensitive.ErrBlocked); ok {
-				return nil, ErrCommentSensitive
-			}
-			return nil, ErrInternalError
-		}
+	if err := s.validateCommentContent(content); err != nil {
+		return nil, err
 	}
 	a, err := s.articles.GetPublishedArticle(ctx, articleID)
 	if err != nil {
@@ -373,21 +281,18 @@ func (s *CommentService) PostArticleComment(ctx context.Context, userID, article
 		return nil, ErrCommentsClosed
 	}
 
-	var parentID uint64
-	level := 1
-	if req.ParentID != 0 {
-		parentID = req.ParentID
+	parentID, level, err := s.resolveCommentParent(ctx, req.ParentID, articleID, func(ctx context.Context, parentID uint64) (int, bool, error) {
 		var parent comment.ArticleComment
-		if err := s.db.WithContext(ctx).First(&parent, req.ParentID).Error; err != nil {
-			return nil, ErrNotFound
+		if err := s.db.WithContext(ctx).First(&parent, parentID).Error; err != nil {
+			return 0, false, err
 		}
 		if parent.ArticleID != articleID {
-			return nil, ErrParamError
+			return 0, false, nil
 		}
-		level = parent.Level + 1
-		if level > 3 {
-			level = 3
-		}
+		return parent.Level + 1, true, nil
+	})
+	if err != nil {
+		return nil, err
 	}
 	cm := comment.ArticleComment{
 		UserID: userID, ArticleID: articleID, ParentID: parentID, Content: content,
@@ -415,7 +320,11 @@ func (s *CommentService) DeleteArticleComment(ctx context.Context, userID, comme
 		return ErrForbidden
 	}
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		descIDs := s.collectArticleDescendantIDs(tx, commentID)
+		descIDs := s.collectCommentDescendants(tx, func(tx *gorm.DB, parentID uint64) ([]uint64, error) {
+			var ids []uint64
+			err := tx.Model(&comment.ArticleComment{}).Where("parent_id = ?", parentID).Pluck("id", &ids).Error
+			return ids, err
+		}, commentID)
 		allIDs := append([]uint64{commentID}, descIDs...)
 		_ = tx.Where("comment_id IN ?", allIDs).Delete(&comment.ArticleCommentLike{}).Error
 		_ = tx.Where("comment_id IN ?", allIDs).Delete(&comment.ArticleCommentDislike{}).Error
@@ -508,62 +417,31 @@ func (s *CommentService) GetArticleComment(ctx context.Context, commentID uint64
 
 // ─── Dynamic Comments ───
 
-func (s *CommentService) ListDynamicComments(ctx context.Context, dynamicID, viewerID uint64) (*DynamicCommentListResult, error) {
+func (s *CommentService) ListDynamicComments(ctx context.Context, dynamicID, viewerID uint64) (*CommentListResult, error) {
 	d, err := s.dynamics.GetPublishedDynamic(ctx, dynamicID)
 	if err != nil {
 		return nil, ErrNotFound
 	}
-	r := &DynamicCommentListResult{CommentsCurated: d.CommentsCurated, CommentsClosed: d.CommentsClosed}
-	if d.CommentsClosed {
-		r.Items = []DynamicCommentItem{}
-		return r, nil
-	}
-
-	q := s.db.WithContext(ctx).Where("dynamic_id = ?", dynamicID)
-	if d.CommentsCurated {
-		q = q.Where("approved = ?", true)
-	}
-	var list []comment.DynamicComment
-	if err := q.Order("id ASC").Find(&list).Error; err != nil {
-		return nil, ErrInternalError
-	}
-	if len(list) == 0 {
-		r.Items = []DynamicCommentItem{}
-		return r, nil
-	}
-
-	users, levels := s.loadDynamicUsers(ctx, list)
-	out := make([]DynamicCommentItem, 0, len(list))
-	for _, cm := range list {
-		ulv := levels[cm.UserID]
-		if ulv < 1 {
-			ulv = 1
-		}
-		u := users[cm.UserID]
-		out = append(out, DynamicCommentItem{
-			ID: cm.ID, UserID: cm.UserID, Username: u.Nickname, AvatarURL: u.AvatarURL,
-			ParentID: cm.ParentID, Level: cm.Level, UserLevel: ulv, Content: cm.Content,
-			LikeCount: cm.LikeCount, CreatedAt: cm.CreatedAt.Format("2006-01-02 15:04:05"),
-			IPLocation: cm.IpLocation, IsByUploader: cm.UserID == d.UserID,
-		})
-	}
-	r.Items = out
-	return r, nil
+	return s.buildCommentList(ctx, dynamicID, viewerID, d.UserID, d.CommentsCurated, d.CommentsClosed,
+		func(ctx context.Context, targetID uint64, curated bool) ([]commentListRow, error) {
+			q := s.db.WithContext(ctx).Where("dynamic_id = ?", targetID)
+			if curated {
+				q = q.Where("approved = ?", true)
+			}
+			var list []comment.DynamicComment
+			if err := q.Order("id ASC").Find(&list).Error; err != nil {
+				return nil, err
+			}
+			return toDynamicCommentRows(list), nil
+		},
+		nil)
 }
 
 func (s *CommentService) PostDynamicComment(ctx context.Context, userID, dynamicID uint64, req PostCommentReq, ipLocation string) (*comment.DynamicComment, error) {
 	_ = s.dynamics.IncrCommentCount(ctx, dynamicID, 1)
 	content := req.Content
-	if n := utf8.RuneCountInString(content); n < 1 || n > 1000 {
-		return nil, ErrParamError
-	}
-	if s.sens != nil {
-		if err := s.sens.Check(content); err != nil {
-			if _, ok := err.(sensitive.ErrBlocked); ok {
-				return nil, ErrCommentSensitive
-			}
-			return nil, ErrInternalError
-		}
+	if err := s.validateCommentContent(content); err != nil {
+		return nil, err
 	}
 	d, err := s.dynamics.GetPublishedDynamic(ctx, dynamicID)
 	if err != nil {
@@ -573,21 +451,18 @@ func (s *CommentService) PostDynamicComment(ctx context.Context, userID, dynamic
 		return nil, ErrCommentsClosed
 	}
 
-	var parentID uint64
-	level := 1
-	if req.ParentID != 0 {
-		parentID = req.ParentID
+	parentID, level, err := s.resolveCommentParent(ctx, req.ParentID, dynamicID, func(ctx context.Context, parentID uint64) (int, bool, error) {
 		var parent comment.DynamicComment
-		if err := s.db.WithContext(ctx).First(&parent, req.ParentID).Error; err != nil {
-			return nil, ErrNotFound
+		if err := s.db.WithContext(ctx).First(&parent, parentID).Error; err != nil {
+			return 0, false, err
 		}
 		if parent.DynamicID != dynamicID {
-			return nil, ErrParamError
+			return 0, false, nil
 		}
-		level = parent.Level + 1
-		if level > 3 {
-			level = 3
-		}
+		return parent.Level + 1, true, nil
+	})
+	if err != nil {
+		return nil, err
 	}
 	cm := comment.DynamicComment{
 		UserID: userID, DynamicID: dynamicID, ParentID: parentID, Content: content,
@@ -660,144 +535,3 @@ func (s *CommentService) IgnoreDynComment(ctx context.Context, commentID uint64)
 }
 
 // ─── Internal helpers ───
-
-func (s *CommentService) loadUsersWithLevels(ctx context.Context, comments []comment.Comment) (map[uint64]UserInfo, map[uint64]int) {
-	if len(comments) == 0 {
-		return nil, nil
-	}
-	uids := uniqueUint64(extractCommentUIDs(comments))
-	users, _ := s.users.GetUsersByIDs(ctx, uids)
-	levels, _ := s.users.BatchCurrentLevels(ctx, uids)
-	return users, levels
-}
-
-func (s *CommentService) loadArticleUsers(ctx context.Context, comments []comment.ArticleComment) (map[uint64]UserInfo, map[uint64]int) {
-	if len(comments) == 0 {
-		return nil, nil
-	}
-	uids := uniqueUint64(extractArticleUIDs(comments))
-	users, _ := s.users.GetUsersByIDs(ctx, uids)
-	levels, _ := s.users.BatchCurrentLevels(ctx, uids)
-	return users, levels
-}
-
-func (s *CommentService) loadDynamicUsers(ctx context.Context, comments []comment.DynamicComment) (map[uint64]UserInfo, map[uint64]int) {
-	if len(comments) == 0 {
-		return nil, nil
-	}
-	uids := uniqueUint64(extractDynamicUIDs(comments))
-	users, _ := s.users.GetUsersByIDs(ctx, uids)
-	levels, _ := s.users.BatchCurrentLevels(ctx, uids)
-	return users, levels
-}
-
-func extractCommentUIDs(comments []comment.Comment) []uint64 {
-	ids := make([]uint64, len(comments))
-	for i, cm := range comments {
-		ids[i] = cm.UserID
-	}
-	return ids
-}
-
-func extractArticleUIDs(comments []comment.ArticleComment) []uint64 {
-	ids := make([]uint64, len(comments))
-	for i, cm := range comments {
-		ids[i] = cm.UserID
-	}
-	return ids
-}
-
-func extractDynamicUIDs(comments []comment.DynamicComment) []uint64 {
-	ids := make([]uint64, len(comments))
-	for i, cm := range comments {
-		ids[i] = cm.UserID
-	}
-	return ids
-}
-
-func uniqueUint64(ids []uint64) []uint64 {
-	seen := make(map[uint64]struct{}, len(ids))
-	out := make([]uint64, 0, len(ids))
-	for _, id := range ids {
-		if _, ok := seen[id]; !ok {
-			seen[id] = struct{}{}
-			out = append(out, id)
-		}
-	}
-	return out
-}
-
-func (s *CommentService) loadCommentLikes(ctx context.Context, viewerID uint64, comments []comment.Comment) map[uint64]bool {
-	result := make(map[uint64]bool)
-	if viewerID == 0 || len(comments) == 0 {
-		return result
-	}
-	ids := make([]uint64, len(comments))
-	for i := range comments {
-		ids[i] = comments[i].ID
-	}
-	var likes []comment.CommentLike
-	_ = s.db.WithContext(ctx).Where("user_id = ? AND comment_id IN ?", viewerID, ids).Find(&likes).Error
-	for _, lk := range likes {
-		result[lk.CommentID] = true
-	}
-	return result
-}
-
-func (s *CommentService) loadCommentDislikes(ctx context.Context, viewerID uint64, comments []comment.Comment) map[uint64]bool {
-	result := make(map[uint64]bool)
-	if viewerID == 0 || len(comments) == 0 {
-		return result
-	}
-	ids := make([]uint64, len(comments))
-	for i := range comments {
-		ids[i] = comments[i].ID
-	}
-	var dislikes []comment.CommentDislike
-	_ = s.db.WithContext(ctx).Where("user_id = ? AND comment_id IN ?", viewerID, ids).Find(&dislikes).Error
-	for _, dk := range dislikes {
-		result[dk.CommentID] = true
-	}
-	return result
-}
-
-func (s *CommentService) loadArticleReactions(ctx context.Context, viewerID uint64, comments []comment.ArticleComment) (map[uint64]bool, map[uint64]bool) {
-	liked := make(map[uint64]bool)
-	disliked := make(map[uint64]bool)
-	if viewerID == 0 || len(comments) == 0 {
-		return liked, disliked
-	}
-	ids := make([]uint64, len(comments))
-	for i := range comments {
-		ids[i] = comments[i].ID
-	}
-	var likes []comment.ArticleCommentLike
-	_ = s.db.WithContext(ctx).Where("user_id = ? AND comment_id IN ?", viewerID, ids).Find(&likes).Error
-	for _, lk := range likes {
-		liked[lk.CommentID] = true
-	}
-	var dis []comment.ArticleCommentDislike
-	_ = s.db.WithContext(ctx).Where("user_id = ? AND comment_id IN ?", viewerID, ids).Find(&dis).Error
-	for _, dk := range dis {
-		disliked[dk.CommentID] = true
-	}
-	return liked, disliked
-}
-
-func (s *CommentService) collectDescendantIDs(tx *gorm.DB, root uint64) []uint64 {
-	var ids []uint64
-	tx.Model(&comment.Comment{}).Where("parent_id = ?", root).Pluck("id", &ids)
-	for _, id := range ids {
-		ids = append(ids, s.collectDescendantIDs(tx, id)...)
-	}
-	return ids
-}
-
-func (s *CommentService) collectArticleDescendantIDs(tx *gorm.DB, root uint64) []uint64 {
-	var ids []uint64
-	tx.Model(&comment.ArticleComment{}).Where("parent_id = ?", root).Pluck("id", &ids)
-	for _, id := range ids {
-		ids = append(ids, s.collectArticleDescendantIDs(tx, id)...)
-	}
-	return ids
-}
