@@ -5,6 +5,8 @@ import (
 	"context"
 
 	"gorm.io/gorm"
+
+	"cakecake/internal/pkg/usercoin"
 )
 
 // UserProviderImpl implements UserProvider using *gorm.DB (Phase 1 monolith).
@@ -79,6 +81,7 @@ func toUserInfo(u *user.User) UserInfo {
 }
 
 func (p *UserProviderImpl) DecrementCoins(ctx context.Context, userID uint64, amount int) error {
-	return p.db.WithContext(ctx).Model(&user.User{}).Where("id = ? AND coins >= ?", userID, amount).
-		UpdateColumn("coins", gorm.Expr("coins - ?", amount)).Error
+	cost := usercoin.CostTenths(amount)
+	return p.db.WithContext(ctx).Model(&user.User{}).Where("id = ? AND coin_balance_tenths >= ?", userID, cost).
+		UpdateColumn("coin_balance_tenths", gorm.Expr("coin_balance_tenths - ?", cost)).Error
 }

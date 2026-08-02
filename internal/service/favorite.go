@@ -120,7 +120,7 @@ func (s *FavoriteService) BatchFavorited(ctx context.Context, userID uint64, vid
 // SearchFolders searches folders by name for autocomplete.
 func (s *FavoriteService) SearchFolders(ctx context.Context, userID uint64, keyword string, limit int) ([]video.FavoriteFolder, error) {
 	var folders []video.FavoriteFolder
-	if err := s.db.WithContext(ctx).Where("user_id = ? AND name LIKE ?", userID, "%"+keyword+"%").
+	if err := s.db.WithContext(ctx).Where("user_id = ? AND title LIKE ?", userID, "%"+keyword+"%").
 		Limit(limit).Find(&folders).Error; err != nil {
 		return nil, err
 	}

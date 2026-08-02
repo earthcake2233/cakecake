@@ -49,8 +49,9 @@ func (s *EngagementService) GetUserCoinBalance(ctx context.Context, userID uint6
 // DecrementUserCoins subtracts coins from user balance.
 func (s *EngagementService) DecrementUserCoins(ctx context.Context, userID uint64, amount int) error {
 	if s.users == nil {
-		return s.db.WithContext(ctx).Model(&user.User{}).Where("id = ? AND coins >= ?", userID, amount).
-			UpdateColumn("coins", gorm.Expr("coins - ?", amount)).Error
+		cost := usercoin.CostTenths(amount)
+		return s.db.WithContext(ctx).Model(&user.User{}).Where("id = ? AND coin_balance_tenths >= ?", userID, cost).
+			UpdateColumn("coin_balance_tenths", gorm.Expr("coin_balance_tenths - ?", cost)).Error
 	}
 	return s.users.DecrementCoins(ctx, userID, amount)
 }

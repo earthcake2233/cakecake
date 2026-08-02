@@ -173,7 +173,7 @@ func (s *ViewHistoryService) ListArticleViewHistory(ctx context.Context, userID 
 	if keyword != "" {
 		sub := s.db.WithContext(ctx).Model(&article.Article{}).
 			Select("id").
-			Where("title LIKE ? OR content LIKE ?", "%"+keyword+"%", "%"+keyword+"%")
+			Where("title LIKE ? OR body_md LIKE ?", "%"+keyword+"%", "%"+keyword+"%")
 		q = q.Where("article_id IN (?)", sub)
 	}
 	var list []extra.ArticleViewHistory

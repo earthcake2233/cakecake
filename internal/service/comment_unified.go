@@ -427,7 +427,7 @@ func (s *CommentService) videoReactionAdapter() commentReactionAdapter {
 		updateCount: func(ctx context.Context, commentID uint64, delta int) error {
 			if delta < 0 {
 				return s.db.WithContext(ctx).Model(&comment.Comment{}).Where("id = ?", commentID).
-					UpdateColumn("like_count", gorm.Expr("GREATEST(like_count - ?)", -delta)).Error
+					UpdateColumn("like_count", gorm.Expr("CASE WHEN like_count - ? < 0 THEN 0 ELSE like_count - ? END", -delta, -delta)).Error
 			}
 			return s.db.WithContext(ctx).Model(&comment.Comment{}).Where("id = ?", commentID).
 				UpdateColumn("like_count", gorm.Expr("like_count + ?", delta)).Error
@@ -488,7 +488,7 @@ func (s *CommentService) articleReactionAdapter() commentReactionAdapter {
 		updateCount: func(ctx context.Context, commentID uint64, delta int) error {
 			if delta < 0 {
 				return s.db.WithContext(ctx).Model(&comment.ArticleComment{}).Where("id = ?", commentID).
-					UpdateColumn("like_count", gorm.Expr("GREATEST(like_count - ?)", -delta)).Error
+					UpdateColumn("like_count", gorm.Expr("CASE WHEN like_count - ? < 0 THEN 0 ELSE like_count - ? END", -delta, -delta)).Error
 			}
 			return s.db.WithContext(ctx).Model(&comment.ArticleComment{}).Where("id = ?", commentID).
 				UpdateColumn("like_count", gorm.Expr("like_count + ?", delta)).Error
@@ -540,7 +540,7 @@ func (s *CommentService) dynamicReactionAdapter() commentReactionAdapter {
 		updateCount: func(ctx context.Context, commentID uint64, delta int) error {
 			if delta < 0 {
 				return s.db.WithContext(ctx).Model(&comment.DynamicComment{}).Where("id = ?", commentID).
-					UpdateColumn("like_count", gorm.Expr("GREATEST(like_count - ?)", -delta)).Error
+					UpdateColumn("like_count", gorm.Expr("CASE WHEN like_count - ? < 0 THEN 0 ELSE like_count - ? END", -delta, -delta)).Error
 			}
 			return s.db.WithContext(ctx).Model(&comment.DynamicComment{}).Where("id = ?", commentID).
 				UpdateColumn("like_count", gorm.Expr("like_count + ?", delta)).Error

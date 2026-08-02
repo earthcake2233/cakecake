@@ -304,7 +304,8 @@ func (s *FollowService) GetFolloweeGroupIDs(ctx context.Context, userID, followe
 
 // AddGroupMember adds a followee to a follow group.
 func (s *FollowService) AddGroupMember(ctx context.Context, groupID, followeeID uint64) error {
-	_, err := s.GetGroup(ctx, 0, groupID) // ownership check done by caller
+	var g user.UserFollowGroup
+	err := s.db.WithContext(ctx).First(&g, groupID).Error // ownership check done by caller
 	if err != nil {
 		return err
 	}
@@ -363,6 +364,10 @@ func (s *FollowService) BlockUser(ctx context.Context, uid, targetID uint64) err
 // UnblockUser removes block and unfollows both ways.
 func (s *FollowService) UnblockUser(ctx context.Context, uid, targetID uint64) error {
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("blocker_id = ? AND blocked_id = ?", uid, targetID).
+			Delete(&user.UserBlock{}).Error; err != nil {
+			return err
+		}
 		return unfollowBothWays(tx, uid, targetID)
 	})
 }

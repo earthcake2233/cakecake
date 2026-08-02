@@ -89,7 +89,7 @@ func (s *DynamicService) ToggleDynamicLike(ctx context.Context, userID, dynamicI
 			return false, err
 		}
 		_ = s.db.WithContext(ctx).Model(&dynamic.UserDynamic{}).Where("id = ?", dynamicID).
-			UpdateColumn("like_count", gorm.Expr("GREATEST(like_count - 1, 0)"))
+			UpdateColumn("like_count", gorm.Expr("CASE WHEN like_count - 1 < 0 THEN 0 ELSE like_count - 1 END"))
 		return false, nil
 	}
 	if err := s.db.WithContext(ctx).Create(&comment.UserDynamicLike{UserID: userID, DynamicID: dynamicID}).Error; err != nil {
