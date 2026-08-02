@@ -45,6 +45,21 @@ type AgentService struct {
 	ToolExec toolkit.Executor
 }
 
+// MaxProfiles returns the maximum number of agent profiles allowed.
+func (s *AgentService) MaxProfiles() int {
+	return data.MaxAgentProfilesLimit()
+}
+
+// UnmarshalWelcomeList parses welcome messages from JSON, falling back when needed.
+func (s *AgentService) UnmarshalWelcomeList(raw json.RawMessage, fallback []string) ([]string, error) {
+	return data.UnmarshalWelcomeList(raw, fallback)
+}
+
+// NormalizeSlug normalizes an agent profile slug.
+func (s *AgentService) NormalizeSlug(slug string) (string, error) {
+	return data.NormalizeAgentSlug(slug)
+}
+
 func (s *AgentService) gatewayReady() bool {
 	enabled := false
 	if s.RC != nil {

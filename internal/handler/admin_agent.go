@@ -14,7 +14,6 @@ import (
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 
-	"cakecake/internal/data"
 	"cakecake/internal/errcode"
 	"cakecake/internal/pkg/coverval"
 	"cakecake/internal/pkg/resp"
@@ -66,7 +65,7 @@ type adminAgentSettingsResponse struct {
 func (a *API) adminAgentMeta() adminAgentMetaResponse {
 	return adminAgentMetaResponse{
 		DeepseekConfigured: a.Cfg != nil && strings.TrimSpace(a.Cfg.DeepSeekAPIKey) != "",
-		MaxProfiles:        data.MaxAgentProfilesLimit(),
+		MaxProfiles:        a.Agent.MaxProfiles(),
 	}
 }
 
@@ -105,7 +104,7 @@ func (a *API) AdminListAgentProfiles(c *gin.Context) {
 	}
 	resp.OK(c, adminAgentProfileListResponse{
 		DeepseekConfigured: a.Cfg != nil && strings.TrimSpace(a.Cfg.DeepSeekAPIKey) != "",
-		MaxProfiles:        data.MaxAgentProfilesLimit(),
+		MaxProfiles:        a.Agent.MaxProfiles(),
 		Items:              items,
 	})
 }
@@ -139,7 +138,7 @@ func (a *API) validateAgentProfileWrite(req *adminAgentProfileWriteReq, isCreate
 	if utf8.RuneCountInString(strings.TrimSpace(req.AvatarURL)) > 1024 {
 		return "", "", errcode.CodeParamError
 	}
-	welcomeList, err := data.UnmarshalWelcomeList(req.WelcomeMessages, nil)
+	welcomeList, err := a.Agent.UnmarshalWelcomeList(req.WelcomeMessages, nil)
 	if err != nil || len(welcomeList) == 0 {
 		return "", "", errcode.CodeParamError
 	}
@@ -151,12 +150,12 @@ func (a *API) validateAgentProfileWrite(req *adminAgentProfileWriteReq, isCreate
 	welcomeJSON = agent.EncodeWelcomeMessages(welcomeList)
 	slug = strings.TrimSpace(req.Slug)
 	if isCreate {
-		slug, err = data.NormalizeAgentSlug(slug)
+		slug, err = a.Agent.NormalizeSlug(slug)
 		if err != nil {
 			return "", "", errcode.CodeParamError
 		}
 	} else if slug != "" {
-		slug, err = data.NormalizeAgentSlug(slug)
+		slug, err = a.Agent.NormalizeSlug(slug)
 		if err != nil {
 			return "", "", errcode.CodeParamError
 		}
@@ -168,7 +167,7 @@ func (a *API) validateAgentProfileWrite(req *adminAgentProfileWriteReq, isCreate
 func (a *API) AdminCreateAgentProfile(c *gin.Context) {
 	ctx := c.Request.Context()
 	cnt, _ := a.Agent.ProfileCount(ctx)
-	if cnt >= int64(data.MaxAgentProfilesLimit()) {
+	if cnt >= int64(a.Agent.MaxProfiles()) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
