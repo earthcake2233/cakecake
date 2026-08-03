@@ -3,6 +3,7 @@
 package handler
 
 import (
+	"context"
 	"testing"
 )
 
@@ -27,7 +28,7 @@ func Test_WatchLaterByViewer_Zero(t *testing.T) {
 func Test_DmUnreadTotal_Zero(t *testing.T) {
 	api, _, _ := newTestAPI(t)
 	u := seedUser(t, api, "dut1", "DUT1", 10)
-	cnt := api.dmUnreadTotal(u.ID)
+	cnt := api.dmUnreadTotal(context.Background(), u.ID)
 	if cnt != 0 {
 		t.Errorf("expected 0 unread, got %d", cnt)
 	}
