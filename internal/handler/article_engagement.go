@@ -73,7 +73,7 @@ func (a *API) PostArticleCoin(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	art, ok := loadPublishedArticle(a, aid)
+	art, ok := loadPublishedArticle(c.Request.Context(), a, aid)
 	if !ok {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return

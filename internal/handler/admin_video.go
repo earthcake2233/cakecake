@@ -272,7 +272,7 @@ func (a *API) AdminDeleteVideo(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	purgeVideoOSSObjects(a.Cfg, a.OSS, a.Log, *v)
+	a.StorageSvc.PurgeVideo(*v)
 	a.esDeleteVideo(id)
 	a.Log.Info("admin deleted video",
 		zap.Uint64("video_id", id),

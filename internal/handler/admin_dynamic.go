@@ -154,7 +154,7 @@ func (a *API) AdminDeleteDynamic(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	purgeDynamicOSSObjects(a.Cfg, a.OSS, a.Log, *dyn)
+	a.StorageSvc.PurgeDynamic(*dyn)
 	a.Log.Info("admin deleted dynamic",
 		zap.Uint64("dynamic_id", id),
 		zap.Uint64("admin_id", adminID),

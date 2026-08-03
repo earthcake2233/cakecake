@@ -4,6 +4,7 @@ import (
 	"cakecake/internal/model/admin"
 	"cakecake/internal/model/video"
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"cakecake/internal/ffmpeg"
 	"cakecake/internal/pkg/cursor"
 	"cakecake/internal/queue"
 	"cakecake/internal/search"
@@ -40,6 +42,36 @@ func (s *VideoService) PublishTranscode(ctx context.Context, body []byte) error 
 		return fmt.Errorf("transcode queue not configured")
 	}
 	return s.mq.PublishTranscode(ctx, body)
+}
+
+// EnqueueTranscode builds the transcode job and publishes it to the queue.
+func (s *VideoService) EnqueueTranscode(ctx context.Context, videoID uint64, rawPath, coverPath string) error {
+	job := queue.TranscodeJob{VideoID: videoID, RawPath: rawPath, CoverPath: coverPath, RetryCount: 0}
+	body, err := json.Marshal(job)
+	if err != nil {
+		return err
+	}
+	return s.PublishTranscode(ctx, body)
+}
+
+// ProbeDurationSeconds probes a raw media file's duration via ffprobe.
+func (s *VideoService) ProbeDurationSeconds(path string) (float64, error) {
+	return ffmpeg.ProbeDurationSeconds(path)
+}
+
+// FFprobeExe returns the ffprobe executable path used by the probe helpers.
+func (s *VideoService) FFprobeExe() string {
+	return ffmpeg.FFprobeExe()
+}
+
+// HumanizeFailReason maps a stored failure code to a user-facing reason.
+func (s *VideoService) HumanizeFailReason(reason string) string {
+	return ffmpeg.HumanizeFailReason(reason)
+}
+
+// HumanizeFailReason maps a stored failure code to a user-facing reason.
+func HumanizeFailReason(reason string) string {
+	return ffmpeg.HumanizeFailReason(reason)
 }
 
 // CreateVideoRecord inserts a new video record into the database.

@@ -82,11 +82,10 @@ func finalizeUserAnonymization(tx *gorm.DB, uid uint64) ([]video.Video, error) {
 }
 
 // maybeFinalizeAccountDeletion runs final anonymization when the cooling period has ended.
-func maybeFinalizeAccountDeletion(a *API, uid uint64) error {
+func maybeFinalizeAccountDeletion(ctx context.Context, a *API, uid uint64) error {
 	if a == nil {
 		return nil
 	}
-	ctx := context.Background()
 	u, err := a.UserSvc.GetUserByID(ctx, uid)
 	if err != nil {
 		return nil
@@ -107,7 +106,7 @@ func maybeFinalizeAccountDeletion(a *API, uid uint64) error {
 		return err
 	}
 	for _, v := range removedVideos {
-		purgeVideoOSSObjects(a.Cfg, a.OSS, a.Log, v)
+		a.StorageSvc.PurgeVideo(v)
 		a.esDeleteVideo(v.ID)
 	}
 	return nil
@@ -131,7 +130,7 @@ func (a *API) RequestAccountDeletion(c *gin.Context) {
 		resp.Err(c, http.StatusUnauthorized, errcode.CodeUnauthorized)
 		return
 	}
-	_ = maybeFinalizeAccountDeletion(a, uid)
+	_ = maybeFinalizeAccountDeletion(c.Request.Context(), a, uid)
 	var req deletionPasswordReq
 	if err := c.ShouldBindJSON(&req); err != nil {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
@@ -185,7 +184,7 @@ func (a *API) RevokeAccountDeletion(c *gin.Context) {
 		resp.Err(c, http.StatusUnauthorized, errcode.CodeUnauthorized)
 		return
 	}
-	_ = maybeFinalizeAccountDeletion(a, uid)
+	_ = maybeFinalizeAccountDeletion(c.Request.Context(), a, uid)
 	u, err := a.UserSvc.GetUserByID(c.Request.Context(), uid)
 	if err != nil {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)

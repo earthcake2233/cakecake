@@ -4,7 +4,6 @@ import (
 	"cakecake/internal/model/comment"
 	"cakecake/internal/model/dynamic"
 	"cakecake/internal/model/user"
-	"context"
 	"encoding/json"
 	"fmt"
 	"mime/multipart"
@@ -131,7 +130,7 @@ func (a *API) GetUserDynamic(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	dyn, ok := loadUserDynamic(a, id)
+	dyn, ok := loadUserDynamic(c.Request.Context(), a, id)
 	if !ok {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
@@ -187,7 +186,7 @@ func (a *API) PatchUserDynamicPlayback(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	dyn, err := a.DynamicSvc.GetDynamicByID(context.Background(), id)
+	dyn, err := a.DynamicSvc.GetDynamicByID(c.Request.Context(), id)
 	if err != nil {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
@@ -212,11 +211,11 @@ func (a *API) PatchUserDynamicPlayback(c *gin.Context) {
 	if req.CommentsCurated != nil {
 		updates["comments_curated"] = *req.CommentsCurated
 	}
-	if err := a.DynamicSvc.UpdateDynamic(context.Background(), id, updates); err != nil {
+	if err := a.DynamicSvc.UpdateDynamic(c.Request.Context(), id, updates); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	d, e := a.DynamicSvc.GetDynamicByID(context.Background(), id)
+	d, e := a.DynamicSvc.GetDynamicByID(c.Request.Context(), id)
 	if e != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
@@ -235,7 +234,7 @@ func (a *API) uploadDynamicImage(uid uint64, fh *multipart.FileHeader) (string, 
 	if code := coverval.ValidateCoverHeader(fh); code != 0 {
 		return "", code
 	}
-	if a.OSS == nil {
+	if !a.StorageSvc.Enabled() {
 		return "", errcode.CodeInternalError
 	}
 	if err := os.MkdirAll(a.Cfg.TempUploadDir, 0o755); err != nil {
@@ -254,7 +253,7 @@ func (a *API) uploadDynamicImage(uid uint64, fh *multipart.FileHeader) (string, 
 		ext = "jpg"
 	}
 	key := fmt.Sprintf("dynamics/%d/%s.%s", uid, uuid.NewString(), ext)
-	if err := a.OSS.UploadFile(key, tmp); err != nil {
+	if err := a.StorageSvc.UploadFile(key, tmp); err != nil {
 		a.Log.Error("oss dynamic image upload", zap.Error(err))
 		return "", errcode.CodeInternalError
 	}
@@ -313,7 +312,7 @@ func (a *API) PostUserDynamic(c *gin.Context) {
 		Content:    content,
 		ImagesJSON: string(imgsJSON),
 	}
-	if err := a.DynamicSvc.CreateDynamic(context.Background(), &dyn); err != nil {
+	if err := a.DynamicSvc.CreateDynamic(c.Request.Context(), &dyn); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
@@ -351,7 +350,7 @@ func (a *API) PutMyUserDynamic(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	dyn, err := a.DynamicSvc.GetDynamicByID(context.Background(), id)
+	dyn, err := a.DynamicSvc.GetDynamicByID(c.Request.Context(), id)
 	if err != nil {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
@@ -412,11 +411,11 @@ func (a *API) PutMyUserDynamic(c *gin.Context) {
 		"content":     content,
 		"images_json": string(imgsJSON),
 	}
-	if err := a.DynamicSvc.UpdateDynamic(context.Background(), id, updates); err != nil {
+	if err := a.DynamicSvc.UpdateDynamic(c.Request.Context(), id, updates); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	purgeRemovedDynamicImageURLs(a.Cfg, a.OSS, a.Log, oldURLs, imageURLs)
+	a.StorageSvc.PurgeRemovedDynamicImageURLs(oldURLs, imageURLs)
 	resp.OK(c, userDynamicPayload(dyn, false))
 }
 
@@ -432,7 +431,7 @@ func (a *API) ToggleDynamicLike(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	liked, err := a.DynamicSvc.ToggleDynamicLike(context.Background(), uid, did)
+	liked, err := a.DynamicSvc.ToggleDynamicLike(c.Request.Context(), uid, did)
 	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
@@ -476,7 +475,7 @@ func (a *API) DeleteMyDynamic(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	dyn, err := a.DynamicSvc.GetDynamicByID(context.Background(), id)
+	dyn, err := a.DynamicSvc.GetDynamicByID(c.Request.Context(), id)
 	if err != nil {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
@@ -485,11 +484,11 @@ func (a *API) DeleteMyDynamic(c *gin.Context) {
 		resp.Err(c, http.StatusForbidden, errcode.CodeForbidden)
 		return
 	}
-	if err := a.DynamicSvc.DeleteDynamic(context.Background(), id); err != nil {
+	if err := a.DynamicSvc.DeleteDynamic(c.Request.Context(), id); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	purgeDynamicOSSObjects(a.Cfg, a.OSS, a.Log, *dyn)
+	a.StorageSvc.PurgeDynamic(*dyn)
 	resp.OK(c, okResponse{OK: true})
 }
 

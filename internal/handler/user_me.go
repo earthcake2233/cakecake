@@ -58,7 +58,7 @@ func (a *API) GetMe(c *gin.Context) {
 		resp.Err(c, http.StatusUnauthorized, errcode.CodeUnauthorized)
 		return
 	}
-	_ = maybeFinalizeAccountDeletion(a, uid)
+	_ = maybeFinalizeAccountDeletion(c.Request.Context(), a, uid)
 	profile, err := a.UserSvc.GetMe(c.Request.Context(), uid)
 	if err != nil {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
@@ -234,7 +234,7 @@ func (a *API) UpdateMeAvatar(c *gin.Context) {
 		return
 	}
 	defer f.Close()
-	if err := a.OSS.UploadReader(objectKey, f); err != nil {
+	if err := a.StorageSvc.UploadReader(objectKey, f); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}

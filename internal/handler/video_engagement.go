@@ -17,19 +17,19 @@ import (
 	"cakecake/internal/service"
 )
 
-func (a *API) userVideoFavoriteCount(uid, vid uint64) (int64, error) {
-	return a.EngagementSvc.UserFavoriteCount(context.Background(), uid, vid)
+func (a *API) userVideoFavoriteCount(ctx context.Context, uid, vid uint64) (int64, error) {
+	return a.EngagementSvc.UserFavoriteCount(ctx, uid, vid)
 }
 
-func (a *API) engagementByViewer(viewer uint64, ids []uint64) map[uint64]videoEngagement {
+func (a *API) engagementByViewer(ctx context.Context, viewer uint64, ids []uint64) map[uint64]videoEngagement {
 	out := make(map[uint64]videoEngagement, len(ids))
 	if viewer == 0 || len(ids) == 0 {
 		return out
 	}
-	liked := a.EngagementSvc.BatchVideoLikes(context.Background(), viewer, ids)
-	faved := a.EngagementSvc.BatchFavoritedByUser(context.Background(), viewer, ids)
-	coined := a.EngagementSvc.BatchCoinedByUser(context.Background(), viewer, ids)
-	later := a.EngagementSvc.BatchWatchLater(context.Background(), viewer, ids)
+	liked := a.EngagementSvc.BatchVideoLikes(ctx, viewer, ids)
+	faved := a.EngagementSvc.BatchFavoritedByUser(ctx, viewer, ids)
+	coined := a.EngagementSvc.BatchCoinedByUser(ctx, viewer, ids)
+	later := a.EngagementSvc.BatchWatchLater(ctx, viewer, ids)
 	for _, id := range ids {
 		coinAmt := coined[id]
 		out[id] = videoEngagement{
@@ -43,8 +43,8 @@ func (a *API) engagementByViewer(viewer uint64, ids []uint64) map[uint64]videoEn
 	return out
 }
 
-func loadPublishedVideo(a *API, vid uint64) (*video.Video, bool) {
-	v, err := a.VideoSvc.GetPublishedVideo(context.Background(), vid)
+func loadPublishedVideo(ctx context.Context, a *API, vid uint64) (*video.Video, bool) {
+	v, err := a.VideoSvc.GetPublishedVideo(ctx, vid)
 	if err != nil {
 		return nil, false
 	}
@@ -71,16 +71,16 @@ func (a *API) ToggleVideoFavorite(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	if _, ok := loadPublishedVideo(a, vid); !ok {
+	if _, ok := loadPublishedVideo(c.Request.Context(), a, vid); !ok {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
-	def, err := a.ensureDefaultFavoriteFolder(uid)
+	def, err := a.ensureDefaultFavoriteFolder(c.Request.Context(), uid)
 	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	favorited, favCount, err := a.EngagementSvc.ToggleVideoFavoriteWithFolder(context.Background(), uid, vid, def.ID)
+	favorited, favCount, err := a.EngagementSvc.ToggleVideoFavoriteWithFolder(c.Request.Context(), uid, vid, def.ID)
 	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
@@ -211,11 +211,11 @@ func (a *API) GetVideoFavoritePicker(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	if _, ok := loadPublishedVideo(a, vid); !ok {
+	if _, ok := loadPublishedVideo(c.Request.Context(), a, vid); !ok {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
-	folderRows, err := a.folderListPayload(uid, false)
+	folderRows, err := a.folderListPayload(c.Request.Context(), uid, false)
 	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
@@ -227,7 +227,7 @@ func (a *API) GetVideoFavoritePicker(c *gin.Context) {
 		if !row.IsDefault {
 			countLabel = strconv.FormatInt(row.VideoCount, 10) + "/" + strconv.Itoa(favoriteFolderCapacity)
 		}
-		inFolder, _ := a.FavoriteSvc.CheckFavoriteExists(context.Background(), uid, row.ID, vid)
+		inFolder, _ := a.FavoriteSvc.CheckFavoriteExists(c.Request.Context(), uid, row.ID, vid)
 		if inFolder {
 			selected[row.ID] = true
 		}
@@ -237,7 +237,7 @@ func (a *API) GetVideoFavoritePicker(c *gin.Context) {
 			CountLabel: countLabel, Selected: selected[row.ID],
 		})
 	}
-	v, _ := a.VideoSvc.GetPublishedVideo(context.Background(), vid)
+	v, _ := a.VideoSvc.GetPublishedVideo(c.Request.Context(), vid)
 	var favCount uint64
 	if v != nil {
 		favCount = v.FavCount
@@ -276,7 +276,7 @@ func (a *API) SetVideoFavoriteFolders(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	if _, ok := loadPublishedVideo(a, vid); !ok {
+	if _, ok := loadPublishedVideo(c.Request.Context(), a, vid); !ok {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
@@ -285,11 +285,11 @@ func (a *API) SetVideoFavoriteFolders(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	if _, err := a.ensureDefaultFavoriteFolder(uid); err != nil {
+	if _, err := a.ensureDefaultFavoriteFolder(c.Request.Context(), uid); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	result, err := a.FavoriteSvc.SetVideoFavoriteFolders(context.Background(), uid, vid, body.FolderIDs)
+	result, err := a.FavoriteSvc.SetVideoFavoriteFolders(c.Request.Context(), uid, vid, body.FolderIDs)
 	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
@@ -301,16 +301,16 @@ func (a *API) SetVideoFavoriteFolders(c *gin.Context) {
 	resp.OK(c, videoFavSetResponse{Favorited: result.Favorited, FavCount: result.FavCount, FolderIDs: result.FolderIDs})
 }
 
-func (a *API) syncVideoFavCountAfterUserChange(vid uint64, before, after int64) {
+func (a *API) syncVideoFavCountAfterUserChange(ctx context.Context, vid uint64, before, after int64) {
 	if before == 0 && after > 0 {
-		_ = a.EngagementSvc.AdjustVideoFavCount(context.Background(), vid, 1)
+		_ = a.EngagementSvc.AdjustVideoFavCount(ctx, vid, 1)
 	} else if before > 0 && after == 0 {
-		_ = a.EngagementSvc.AdjustVideoFavCount(context.Background(), vid, -1)
+		_ = a.EngagementSvc.AdjustVideoFavCount(ctx, vid, -1)
 	}
 }
 
-func (a *API) validateFolderOwned(uid, folderID uint64) bool {
-	f, err := a.FavoriteSvc.GetFolderByID(context.Background(), folderID)
+func (a *API) validateFolderOwned(ctx context.Context, uid, folderID uint64) bool {
+	f, err := a.FavoriteSvc.GetFolderByID(ctx, folderID)
 	return err == nil && f.UserID == uid
 }
 
@@ -334,25 +334,25 @@ func (a *API) RemoveVideoFromFavoriteFolder(c *gin.Context) {
 	if !ok {
 		return
 	}
-	if _, ok := loadPublishedVideo(a, vid); !ok {
+	if _, ok := loadPublishedVideo(c.Request.Context(), a, vid); !ok {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
-	if !a.validateFolderOwned(uid, folderID) {
+	if !a.validateFolderOwned(c.Request.Context(), uid, folderID) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	before, err := a.userVideoFavoriteCount(uid, vid)
+	before, err := a.userVideoFavoriteCount(c.Request.Context(), uid, vid)
 	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	if err := a.FavoriteSvc.RemoveFavorite(context.Background(), folderID, vid); err != nil {
+	if err := a.FavoriteSvc.RemoveFavorite(c.Request.Context(), folderID, vid); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	after, _ := a.userVideoFavoriteCount(uid, vid)
-	a.syncVideoFavCountAfterUserChange(vid, before, after)
+	after, _ := a.userVideoFavoriteCount(c.Request.Context(), uid, vid)
+	a.syncVideoFavCountAfterUserChange(c.Request.Context(), vid, before, after)
 	resp.OK(c, videoFavRemoveResponse{OK: true, Removed: after < before})
 }
 
@@ -376,15 +376,15 @@ func (a *API) AddVideoToFavoriteFolder(c *gin.Context) {
 	if !ok {
 		return
 	}
-	if _, ok := loadPublishedVideo(a, vid); !ok {
+	if _, ok := loadPublishedVideo(c.Request.Context(), a, vid); !ok {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
-	if !a.validateFolderOwned(uid, folderID) {
+	if !a.validateFolderOwned(c.Request.Context(), uid, folderID) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	exists, err := a.FavoriteSvc.CheckFavoriteExists(context.Background(), uid, folderID, vid)
+	exists, err := a.FavoriteSvc.CheckFavoriteExists(c.Request.Context(), uid, folderID, vid)
 	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
@@ -393,7 +393,7 @@ func (a *API) AddVideoToFavoriteFolder(c *gin.Context) {
 		resp.OK(c, videoFavCopyResponse{OK: true, Copied: false})
 		return
 	}
-	cnt, err := a.FavoriteSvc.CountFavoritesInFolder(context.Background(), folderID)
+	cnt, err := a.FavoriteSvc.CountFavoritesInFolder(c.Request.Context(), folderID)
 	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
@@ -402,17 +402,17 @@ func (a *API) AddVideoToFavoriteFolder(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	before, err := a.userVideoFavoriteCount(uid, vid)
+	before, err := a.userVideoFavoriteCount(c.Request.Context(), uid, vid)
 	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	if err := a.FavoriteSvc.AddFavorite(context.Background(), folderID, vid, uid); err != nil {
+	if err := a.FavoriteSvc.AddFavorite(c.Request.Context(), folderID, vid, uid); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	after, _ := a.userVideoFavoriteCount(uid, vid)
-	a.syncVideoFavCountAfterUserChange(vid, before, after)
+	after, _ := a.userVideoFavoriteCount(c.Request.Context(), uid, vid)
+	a.syncVideoFavCountAfterUserChange(c.Request.Context(), vid, before, after)
 	resp.OK(c, videoFavCopyResponse{OK: true, Copied: true})
 }
 
@@ -450,15 +450,15 @@ func (a *API) MoveVideoFavoriteFolder(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	if _, ok := loadPublishedVideo(a, vid); !ok {
+	if _, ok := loadPublishedVideo(c.Request.Context(), a, vid); !ok {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
-	if !a.validateFolderOwned(uid, body.FromFolderID) || !a.validateFolderOwned(uid, body.ToFolderID) {
+	if !a.validateFolderOwned(c.Request.Context(), uid, body.FromFolderID) || !a.validateFolderOwned(c.Request.Context(), uid, body.ToFolderID) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	inFrom, err := a.FavoriteSvc.CheckFavoriteExists(context.Background(), uid, body.FromFolderID, vid)
+	inFrom, err := a.FavoriteSvc.CheckFavoriteExists(c.Request.Context(), uid, body.FromFolderID, vid)
 	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
@@ -467,16 +467,16 @@ func (a *API) MoveVideoFavoriteFolder(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	inTo, _ := a.FavoriteSvc.CheckFavoriteExists(context.Background(), uid, body.ToFolderID, vid)
+	inTo, _ := a.FavoriteSvc.CheckFavoriteExists(c.Request.Context(), uid, body.ToFolderID, vid)
 	if inTo {
-		if err := a.FavoriteSvc.DeleteFavoriteByVideo(context.Background(), uid, body.FromFolderID, vid); err != nil {
+		if err := a.FavoriteSvc.DeleteFavoriteByVideo(c.Request.Context(), uid, body.FromFolderID, vid); err != nil {
 			resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 			return
 		}
 		resp.OK(c, videoFavMoveResponse{OK: true, Moved: true})
 		return
 	}
-	cnt, err := a.FavoriteSvc.CountFavoritesInFolder(context.Background(), body.ToFolderID)
+	cnt, err := a.FavoriteSvc.CountFavoritesInFolder(c.Request.Context(), body.ToFolderID)
 	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
@@ -485,11 +485,11 @@ func (a *API) MoveVideoFavoriteFolder(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	if err := a.FavoriteSvc.DeleteFavoriteByVideo(context.Background(), uid, body.FromFolderID, vid); err != nil {
+	if err := a.FavoriteSvc.DeleteFavoriteByVideo(c.Request.Context(), uid, body.FromFolderID, vid); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	if err := a.FavoriteSvc.AddFavorite(context.Background(), body.ToFolderID, vid, uid); err != nil {
+	if err := a.FavoriteSvc.AddFavorite(c.Request.Context(), body.ToFolderID, vid, uid); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
@@ -535,7 +535,7 @@ func (a *API) PostVideoCoin(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	v, ok := loadPublishedVideo(a, vid)
+	v, ok := loadPublishedVideo(c.Request.Context(), a, vid)
 	if !ok {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
@@ -550,7 +550,7 @@ func (a *API) PostVideoCoin(c *gin.Context) {
 	if amount != 1 && amount != 2 {
 		amount = 1
 	}
-	result, err := a.EngagementSvc.PostVideoCoin(context.Background(), uid, vid, v.UserID, amount)
+	result, err := a.EngagementSvc.PostVideoCoin(c.Request.Context(), uid, vid, v.UserID, amount)
 	if err != nil {
 		if errors.Is(err, usercoin.ErrInsufficientCoins) {
 			resp.Err(c, http.StatusBadRequest, errcode.CodeInsufficientCoins)
@@ -596,11 +596,11 @@ func (a *API) ToggleWatchLater(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	if _, ok := loadPublishedVideo(a, vid); !ok {
+	if _, ok := loadPublishedVideo(c.Request.Context(), a, vid); !ok {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
-	added, err := a.EngagementSvc.ToggleWatchLater(context.Background(), uid, vid)
+	added, err := a.EngagementSvc.ToggleWatchLater(c.Request.Context(), uid, vid)
 	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
@@ -627,7 +627,7 @@ func (a *API) ListMyWatchLater(c *gin.Context) {
 		return
 	}
 	page, pageSize := parsePagination(c, 20)
-	items, total, err := a.EngagementSvc.ListWatchLaterWithVideos(context.Background(), uid, page, pageSize)
+	items, total, err := a.EngagementSvc.ListWatchLaterWithVideos(c.Request.Context(), uid, page, pageSize)
 	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
@@ -649,7 +649,7 @@ func (a *API) ClearMyWatchLater(c *gin.Context) {
 		resp.Err(c, http.StatusUnauthorized, errcode.CodeUnauthorized)
 		return
 	}
-	if err := a.EngagementSvc.ClearWatchLater(context.Background(), uid); err != nil {
+	if err := a.EngagementSvc.ClearWatchLater(c.Request.Context(), uid); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
@@ -670,7 +670,7 @@ func (a *API) ClearWatchedWatchLater(c *gin.Context) {
 		resp.Err(c, http.StatusUnauthorized, errcode.CodeUnauthorized)
 		return
 	}
-	if err := a.EngagementSvc.ClearWatchedWatchLater(context.Background(), uid); err != nil {
+	if err := a.EngagementSvc.ClearWatchedWatchLater(c.Request.Context(), uid); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
@@ -697,7 +697,7 @@ func (a *API) MarkWatchLaterWatched(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	if err := a.EngagementSvc.MarkWatchLaterWatched(context.Background(), uid, vid); err != nil {
+	if err := a.EngagementSvc.MarkWatchLaterWatched(c.Request.Context(), uid, vid); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
@@ -705,7 +705,7 @@ func (a *API) MarkWatchLaterWatched(c *gin.Context) {
 }
 
 func (a *API) favoriteListItems(ctx context.Context, ownerID uint64, limit int, folderID uint64, filterFolder bool) ([]favoriteVideoItemDTO, int64, error) {
-	if _, err := a.ensureDefaultFavoriteFolder(ownerID); err != nil {
+	if _, err := a.ensureDefaultFavoriteFolder(ctx, ownerID); err != nil {
 		return nil, 0, err
 	}
 	result, err := a.FavoriteSvc.ListUserFavoriteVideos(ctx, ownerID, limit, folderID, filterFolder)
@@ -754,7 +754,7 @@ func (a *API) ListUserFavorites(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	up, err := a.UserSvc.GetUserPublic(context.Background(), ownerID)
+	up, err := a.UserSvc.GetUserPublic(c.Request.Context(), ownerID)
 	if err != nil {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
@@ -771,7 +771,7 @@ func (a *API) ListUserFavorites(c *gin.Context) {
 		return
 	}
 	if filterFolder {
-		f, err := a.FavoriteSvc.GetFolderByID(context.Background(), folderID)
+		f, err := a.FavoriteSvc.GetFolderByID(c.Request.Context(), folderID)
 		if err != nil || f.UserID != ownerID {
 			resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 			return
@@ -781,7 +781,7 @@ func (a *API) ListUserFavorites(c *gin.Context) {
 			return
 		}
 	}
-	items, total, err := a.favoriteListItems(context.Background(), ownerID, limit, folderID, filterFolder)
+	items, total, err := a.favoriteListItems(c.Request.Context(), ownerID, limit, folderID, filterFolder)
 	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
@@ -814,7 +814,7 @@ func (a *API) ListUserRecentCoinVideos(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	up, err := a.UserSvc.GetUserPublic(context.Background(), ownerID)
+	up, err := a.UserSvc.GetUserPublic(c.Request.Context(), ownerID)
 	if err != nil {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return

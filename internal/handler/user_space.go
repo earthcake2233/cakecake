@@ -2,7 +2,6 @@ package handler
 
 import (
 	"cakecake/internal/model/user"
-	"context"
 	"net/http"
 	"strconv"
 	"strings"
@@ -155,7 +154,7 @@ func (a *API) ListUserPublishedVideos(c *gin.Context) {
 		list = list[:limit]
 	}
 	up := user.DisplayUsername(u)
-	ctx := context.Background()
+	ctx := c.Request.Context()
 	var viewer uint64
 	if uid, ok := middleware.UserID(c); ok {
 		viewer = uid
@@ -164,7 +163,7 @@ func (a *API) ListUserPublishedVideos(c *gin.Context) {
 	for _, v := range list {
 		ids = append(ids, v.ID)
 	}
-	eng := a.engagementByViewer(viewer, ids)
+	eng := a.engagementByViewer(c.Request.Context(), viewer, ids)
 	items := make([]videoCardDTO, 0, len(list))
 	for _, v := range list {
 		pc, _ := a.Play.Display(ctx, &v)

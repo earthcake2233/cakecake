@@ -40,7 +40,7 @@ func (a *API) BlockUser(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	if _, ok := loadSpaceUserForFollow(a, blockedID); !ok {
+	if _, ok := loadSpaceUserForFollow(c.Request.Context(), a, blockedID); !ok {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}

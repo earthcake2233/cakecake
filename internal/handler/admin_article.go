@@ -269,7 +269,7 @@ func (a *API) AdminDeleteArticle(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	purgeArticleOSSObjects(a.Cfg, a.OSS, a.Log, *art)
+	a.StorageSvc.PurgeArticle(*art)
 	a.esDeleteArticle(id)
 	a.Log.Info("admin deleted article",
 		zap.Uint64("article_id", id),

@@ -73,7 +73,7 @@ func (a *API) Login(c *gin.Context) {
 		resp.Err(c, http.StatusUnauthorized, errcode.CodeInvalidLogin)
 		return
 	}
-	_ = maybeFinalizeAccountDeletion(a, brief.ID)
+	_ = maybeFinalizeAccountDeletion(c.Request.Context(), a, brief.ID)
 	result, svcErr := a.AuthSvc.Authenticate(c.Request.Context(), brief.ID, req.Password)
 	if svcErr != nil {
 		code := errCodeFromSvc(svcErr)
@@ -96,7 +96,7 @@ func (a *API) Refresh(c *gin.Context) {
 	}
 	uid, _, parseErr := a.JWT.ParseRefresh(strings.TrimSpace(req.RefreshToken))
 	if parseErr == nil {
-		_ = maybeFinalizeAccountDeletion(a, uid)
+		_ = maybeFinalizeAccountDeletion(c.Request.Context(), a, uid)
 	}
 	result, svcErr := a.AuthSvc.Refresh(c.Request.Context(), req.RefreshToken)
 	if svcErr != nil {

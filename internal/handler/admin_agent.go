@@ -342,7 +342,7 @@ func (a *API) AdminUploadAgentProfileAvatar(c *gin.Context) {
 	p2, _ := a.Agent.GetAgentProfile(ctx, id)
 	_ = a.Agent.SyncAgentProfile(ctx, p2)
 	if agentAvatarURLChanged(oldAvatar, url) {
-		purgeAgentAvatarOSS(a.Cfg, a.OSS, a.Log, oldAvatar)
+		a.StorageSvc.PurgeAgentAvatar(oldAvatar)
 	}
 	gp := a.Agent.GetGlobalSystemPrompt(ctx)
 	resp.OK(c, adminAgentAvatarResponse{AvatarURL: url, Profile: adminAgentProfilePayload(p2, gp)})
@@ -355,11 +355,15 @@ func (a *API) uploadAgentProfileAvatarToOSS(fh *multipart.FileHeader, slug strin
 	if code := coverval.ValidateCoverHeader(fh); code != 0 {
 		return "", code
 	}
-	if a.OSS == nil {
+	if !a.StorageSvc.Enabled() {
 		return "", errcode.CodeInternalError
 	}
 	key := fmt.Sprintf("agent/%s/avatar-%s.%s", slug, uuid.NewString(), bannerImageExt(fh))
 	return a.uploadBannerImageToOSS(fh, key)
+}
+
+func agentAvatarURLChanged(oldURL, newURL string) bool {
+	return strings.TrimSpace(oldURL) != strings.TrimSpace(newURL)
 }
 
 // Legacy singleton endpoints (compat): map to first profile.

@@ -198,8 +198,8 @@ func (a *API) IgnoreCuratedDynamicComment(c *gin.Context) {
 	}
 	resp.OK(c, okResponse{OK: true})
 }
-func loadUserDynamic(a *API, id uint64) (*dynamic.UserDynamic, bool) {
-	dyn, err := a.DynamicSvc.GetDynamicByID(context.Background(), id)
+func loadUserDynamic(ctx context.Context, a *API, id uint64) (*dynamic.UserDynamic, bool) {
+	dyn, err := a.DynamicSvc.GetDynamicByID(ctx, id)
 	if err != nil {
 		return nil, false
 	}

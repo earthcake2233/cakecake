@@ -38,6 +38,7 @@ type followToggleResponse struct {
 
 // buildFollowUserRows converts follow rows to typed items for API response.
 func (a *API) buildFollowUserRows(
+	ctx context.Context,
 	ownerID uint64,
 	rows []user.UserFollow,
 	followerField bool,
@@ -57,14 +58,14 @@ func (a *API) buildFollowUserRows(
 		ids = append(ids, uid)
 		created[uid] = rows[i].CreatedAt
 	}
-	users := a.UserSvc.BatchGetUsers(context.Background(), ids)
+	users := a.UserSvc.BatchGetUsers(ctx, ids)
 	umap := make(map[uint64]user.User, len(users))
 	for id, u := range users {
 		umap[id] = *u
 	}
 	mutual := make(map[uint64]bool)
 	if followerField && len(ids) > 0 {
-		following, _ := a.FollowSvc.GetFollowingIDs(context.Background(), ownerID, ids)
+		following, _ := a.FollowSvc.GetFollowingIDs(ctx, ownerID, ids)
 		for fid := range following {
 			mutual[fid] = true
 		}
@@ -105,8 +106,8 @@ func (a *API) buildFollowUserRows(
 	return items, nil
 }
 
-func loadSpaceUserForFollow(a *API, userID uint64) (user.User, bool) {
-	u, err := a.UserSvc.GetUserByID(context.Background(), userID)
+func loadSpaceUserForFollow(ctx context.Context, a *API, userID uint64) (user.User, bool) {
+	u, err := a.UserSvc.GetUserByID(ctx, userID)
 	if err != nil || u == nil {
 		return user.User{}, false
 	}
@@ -131,7 +132,7 @@ func (a *API) ListUserFollowing(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	u, ok := loadSpaceUserForFollow(a, ownerID)
+	u, ok := loadSpaceUserForFollow(c.Request.Context(), a, ownerID)
 	if !ok {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
@@ -148,7 +149,7 @@ func (a *API) ListUserFollowing(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	items, err := a.buildFollowUserRows(ownerID, rows, true)
+	items, err := a.buildFollowUserRows(c.Request.Context(), ownerID, rows, true)
 	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
@@ -166,7 +167,7 @@ func (a *API) ListUserFollowers(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	u, ok := loadSpaceUserForFollow(a, ownerID)
+	u, ok := loadSpaceUserForFollow(c.Request.Context(), a, ownerID)
 	if !ok {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
@@ -182,7 +183,7 @@ func (a *API) ListUserFollowers(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	items, err := a.buildFollowUserRows(ownerID, rows, false)
+	items, err := a.buildFollowUserRows(c.Request.Context(), ownerID, rows, false)
 	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
@@ -207,11 +208,11 @@ func (a *API) ToggleFollowUser(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	if _, ok := loadSpaceUserForFollow(a, followeeID); !ok {
+	if _, ok := loadSpaceUserForFollow(c.Request.Context(), a, followeeID); !ok {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
-	if a.isDMUsersBlocked(uid, followeeID) {
+	if a.isDMUsersBlocked(c.Request.Context(), uid, followeeID) {
 		resp.Err(c, http.StatusForbidden, errcode.CodeUserBlocked)
 		return
 	}

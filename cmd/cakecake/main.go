@@ -273,7 +273,7 @@ func main() {
 
 	deps := &handler.Dependencies{
 		Cfg: cfg, DB: db, Redis: rdb, Log: log, Hub: hub, ChatHub: chatHub,
-		JWT: jm, Sens: sens, OSS: ossc, MQ: mq, ES: esc, Play: pc,
+		JWT: jm, Sens: sens, StorageSvc: service.NewStorageService(cfg, ossc, log), Play: pc,
 		SearchHot: searchHot, DanmakuRelay: relay, IPLocate: ipLoc, Agent: agentSvc,
 		RateLimiter: rl, RuntimeCfg: runtimeCfg,
 		SearchSvc:         searchSvc,

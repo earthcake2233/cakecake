@@ -5,7 +5,6 @@ import (
 	"cakecake/internal/model/dynamic"
 	"cakecake/internal/model/user"
 	"cakecake/internal/model/video"
-	"context"
 	"math"
 	"net/http"
 	"strconv"
@@ -153,7 +152,7 @@ func (a *API) ListCreatorComments(c *gin.Context) {
 		filterVideoID = n
 	}
 	viewerID, _ := middleware.UserID(c)
-	result, err := a.CreatorCommentSvc.ListCreatorVideoComments(context.Background(), service.CreatorVideoCommentQuery{
+	result, err := a.CreatorCommentSvc.ListCreatorVideoComments(c.Request.Context(), service.CreatorVideoCommentQuery{
 		UserID: uid, Page: page, PageSize: pageSize, SortKey: sortKey,
 		Pending: pending, PendingStatus: pendingStatus, PendingScope: pendingScope,
 		Keyword: keyword, FilterVideoID: filterVideoID, ViewerID: viewerID,
@@ -169,7 +168,7 @@ func (a *API) ListCreatorComments(c *gin.Context) {
 	}
 	videos := map[uint64]video.Video{}
 	if len(result.VideoIDs) > 0 {
-		vmap, err := a.CreatorCommentSvc.BatchFetchVideos(context.Background(), result.VideoIDs)
+		vmap, err := a.CreatorCommentSvc.BatchFetchVideos(c.Request.Context(), result.VideoIDs)
 		if err == nil {
 			videos = vmap
 		}
@@ -177,7 +176,7 @@ func (a *API) ListCreatorComments(c *gin.Context) {
 	names := map[uint64]string{}
 	avatars := map[uint64]string{}
 	if len(result.UserIDs) > 0 {
-		umap, err := a.CreatorCommentSvc.BatchFetchUsers(context.Background(), result.UserIDs)
+		umap, err := a.CreatorCommentSvc.BatchFetchUsers(c.Request.Context(), result.UserIDs)
 		if err == nil {
 			for id, u := range umap {
 				names[id] = user.DisplayUsername(&u)
@@ -187,14 +186,14 @@ func (a *API) ListCreatorComments(c *gin.Context) {
 	}
 	parents := map[uint64]creatorCommentParentDTO{}
 	if len(result.ParentIDs) > 0 {
-		pmap, err := a.CreatorCommentSvc.BatchFetchComments(context.Background(), result.ParentIDs)
+		pmap, err := a.CreatorCommentSvc.BatchFetchComments(c.Request.Context(), result.ParentIDs)
 		if err == nil {
 			var parentUserIDs []uint64
 			for _, p := range pmap {
 				parentUserIDs = append(parentUserIDs, p.UserID)
 			}
 			if len(parentUserIDs) > 0 {
-				pumap, _ := a.CreatorCommentSvc.BatchFetchUsers(context.Background(), parentUserIDs)
+				pumap, _ := a.CreatorCommentSvc.BatchFetchUsers(c.Request.Context(), parentUserIDs)
 				for id, p := range pmap {
 					if p.UserID > 0 {
 						pname := ""
@@ -212,7 +211,7 @@ func (a *API) ListCreatorComments(c *gin.Context) {
 			}
 		}
 	}
-	replyCounts := a.CreatorCommentSvc.CommentReplyCounts(context.Background(), result.CommentIDs)
+	replyCounts := a.CreatorCommentSvc.CommentReplyCounts(c.Request.Context(), result.CommentIDs)
 	likedByViewer := result.LikedByViewer
 	if likedByViewer == nil {
 		likedByViewer = map[uint64]bool{}
@@ -300,7 +299,7 @@ func (a *API) listCreatorArticleComments(c *gin.Context, uid uint64) {
 		filterArticleID = n
 	}
 	viewerID, _ := middleware.UserID(c)
-	result, err := a.CreatorCommentSvc.ListCreatorArticleComments(context.Background(), service.CreatorArticleCommentQuery{
+	result, err := a.CreatorCommentSvc.ListCreatorArticleComments(c.Request.Context(), service.CreatorArticleCommentQuery{
 		UserID: uid, Page: page, PageSize: pageSize, SortKey: sortKey,
 		Pending: pending, PendingStatus: pendingStatus, PendingScope: pendingScope,
 		Keyword: keyword, FilterArticleID: filterArticleID, ViewerID: viewerID,
@@ -316,7 +315,7 @@ func (a *API) listCreatorArticleComments(c *gin.Context, uid uint64) {
 	}
 	articles := map[uint64]article.Article{}
 	if len(result.ArticleIDs) > 0 {
-		amap, err := a.CreatorCommentSvc.BatchFetchArticles(context.Background(), result.ArticleIDs)
+		amap, err := a.CreatorCommentSvc.BatchFetchArticles(c.Request.Context(), result.ArticleIDs)
 		if err == nil {
 			articles = amap
 		}
@@ -324,7 +323,7 @@ func (a *API) listCreatorArticleComments(c *gin.Context, uid uint64) {
 	names := map[uint64]string{}
 	avatars := map[uint64]string{}
 	if len(result.UserIDs) > 0 {
-		umap, err := a.CreatorCommentSvc.BatchFetchUsers(context.Background(), result.UserIDs)
+		umap, err := a.CreatorCommentSvc.BatchFetchUsers(c.Request.Context(), result.UserIDs)
 		if err == nil {
 			for id, u := range umap {
 				names[id] = user.DisplayUsername(&u)
@@ -334,14 +333,14 @@ func (a *API) listCreatorArticleComments(c *gin.Context, uid uint64) {
 	}
 	parents := map[uint64]creatorCommentParentDTO{}
 	if len(result.ParentIDs) > 0 {
-		pmap, err := a.CreatorCommentSvc.BatchFetchArticleComments(context.Background(), result.ParentIDs)
+		pmap, err := a.CreatorCommentSvc.BatchFetchArticleComments(c.Request.Context(), result.ParentIDs)
 		if err == nil {
 			var parentUserIDs []uint64
 			for _, p := range pmap {
 				parentUserIDs = append(parentUserIDs, p.UserID)
 			}
 			if len(parentUserIDs) > 0 {
-				pumap, _ := a.CreatorCommentSvc.BatchFetchUsers(context.Background(), parentUserIDs)
+				pumap, _ := a.CreatorCommentSvc.BatchFetchUsers(c.Request.Context(), parentUserIDs)
 				for id, p := range pmap {
 					if p.UserID > 0 {
 						pname := ""
@@ -359,7 +358,7 @@ func (a *API) listCreatorArticleComments(c *gin.Context, uid uint64) {
 			}
 		}
 	}
-	replyCounts := a.CreatorCommentSvc.ArticleCommentReplyCounts(context.Background(), result.CommentIDs)
+	replyCounts := a.CreatorCommentSvc.ArticleCommentReplyCounts(c.Request.Context(), result.CommentIDs)
 	likedByViewer := result.LikedByViewer
 	if likedByViewer == nil {
 		likedByViewer = map[uint64]bool{}
@@ -446,7 +445,7 @@ func (a *API) listCreatorDynamicComments(c *gin.Context, uid uint64) {
 		filterDynamicID = n
 	}
 	viewerID, _ := middleware.UserID(c)
-	result, err := a.CreatorCommentSvc.ListCreatorDynamicComments(context.Background(), service.CreatorDynamicCommentQuery{
+	result, err := a.CreatorCommentSvc.ListCreatorDynamicComments(c.Request.Context(), service.CreatorDynamicCommentQuery{
 		UserID: uid, Page: page, PageSize: pageSize, SortKey: sortKey,
 		Pending: pending, PendingStatus: pendingStatus, PendingScope: pendingScope,
 		Keyword: keyword, FilterDynamicID: filterDynamicID, ViewerID: viewerID,
@@ -462,7 +461,7 @@ func (a *API) listCreatorDynamicComments(c *gin.Context, uid uint64) {
 	}
 	dynamics := map[uint64]dynamic.UserDynamic{}
 	if len(result.DynamicIDs) > 0 {
-		dmap, err := a.CreatorCommentSvc.BatchFetchDynamics(context.Background(), result.DynamicIDs)
+		dmap, err := a.CreatorCommentSvc.BatchFetchDynamics(c.Request.Context(), result.DynamicIDs)
 		if err == nil {
 			dynamics = dmap
 		}
@@ -470,7 +469,7 @@ func (a *API) listCreatorDynamicComments(c *gin.Context, uid uint64) {
 	names := map[uint64]string{}
 	avatars := map[uint64]string{}
 	if len(result.UserIDs) > 0 {
-		umap, err := a.CreatorCommentSvc.BatchFetchUsers(context.Background(), result.UserIDs)
+		umap, err := a.CreatorCommentSvc.BatchFetchUsers(c.Request.Context(), result.UserIDs)
 		if err == nil {
 			for id, u := range umap {
 				names[id] = user.DisplayUsername(&u)
@@ -480,14 +479,14 @@ func (a *API) listCreatorDynamicComments(c *gin.Context, uid uint64) {
 	}
 	parents := map[uint64]creatorCommentParentDTO{}
 	if len(result.ParentIDs) > 0 {
-		pmap, err := a.CreatorCommentSvc.BatchFetchDynamicComments(context.Background(), result.ParentIDs)
+		pmap, err := a.CreatorCommentSvc.BatchFetchDynamicComments(c.Request.Context(), result.ParentIDs)
 		if err == nil {
 			var parentUserIDs []uint64
 			for _, p := range pmap {
 				parentUserIDs = append(parentUserIDs, p.UserID)
 			}
 			if len(parentUserIDs) > 0 {
-				pumap, _ := a.CreatorCommentSvc.BatchFetchUsers(context.Background(), parentUserIDs)
+				pumap, _ := a.CreatorCommentSvc.BatchFetchUsers(c.Request.Context(), parentUserIDs)
 				for id, p := range pmap {
 					if p.UserID > 0 {
 						pname := ""
@@ -505,7 +504,7 @@ func (a *API) listCreatorDynamicComments(c *gin.Context, uid uint64) {
 			}
 		}
 	}
-	replyCounts := a.CreatorCommentSvc.DynamicCommentReplyCounts(context.Background(), result.CommentIDs)
+	replyCounts := a.CreatorCommentSvc.DynamicCommentReplyCounts(c.Request.Context(), result.CommentIDs)
 	likedByViewer := result.LikedByViewer
 	if likedByViewer == nil {
 		likedByViewer = map[uint64]bool{}

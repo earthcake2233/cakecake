@@ -24,14 +24,11 @@ import (
 	"gorm.io/gorm"
 
 	"cakecake/internal/errcode"
-	"cakecake/internal/ffmpeg"
 	"cakecake/internal/middleware"
 	"cakecake/internal/pkg/coverval"
 	"cakecake/internal/pkg/dailyreward"
 	"cakecake/internal/pkg/resp"
-	"cakecake/internal/queue"
 	"cakecake/internal/service"
-	"cakecake/internal/worker"
 )
 
 func uploaderAvatarForAPI(u *user.User) string {
@@ -182,12 +179,12 @@ func (a *API) UploadVideo(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	dur, err := ffmpeg.ProbeDurationSeconds(rawPath)
+	dur, err := a.VideoSvc.ProbeDurationSeconds(rawPath)
 	if err != nil {
 		_ = os.Remove(rawPath)
 		a.Log.Warn("ffprobe duration",
 			zap.Error(err),
-			zap.String("ffprobe", ffmpeg.FFprobeExe()),
+			zap.String("ffprobe", a.VideoSvc.FFprobeExe()),
 			zap.String("raw_path", rawPath),
 		)
 		resp.Err(c, http.StatusBadRequest, errcode.CodeVideoProbeFailed)
@@ -237,9 +234,7 @@ func (a *API) UploadVideo(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	job := worker.TranscodeJob{VideoID: v.ID, RawPath: rawPath, CoverPath: coverPath, RetryCount: 0}
-	body, _ := json.Marshal(job)
-	if err := a.VideoSvc.PublishTranscode(context.Background(), body); err != nil {
+	if err := a.VideoSvc.EnqueueTranscode(c.Request.Context(), v.ID, rawPath, coverPath); err != nil {
 		_ = a.VideoSvc.DeleteVideoByID(c.Request.Context(), v.ID)
 		_ = os.Remove(rawPath)
 		if coverPath != "" {
@@ -251,7 +246,6 @@ func (a *API) UploadVideo(c *gin.Context) {
 	}
 	a.Log.Info("transcode job queued",
 		zap.Uint64("video_id", v.ID),
-		zap.String("queue", queue.TranscodeQueue),
 	)
 	resp.JSON(c, http.StatusCreated, errcode.CodeSuccess, createVideoResponse{
 		ID:        v.ID,
@@ -329,7 +323,7 @@ func (a *API) ListPublishedVideos(c *gin.Context) {
 	}
 	items := make([]videoCardDTO, 0, len(res.Videos))
 	for _, v := range res.Videos {
-		pc, _ := a.Play.Display(context.Background(), &v)
+		pc, _ := a.Play.Display(c.Request.Context(), &v)
 		items = append(items, videoCard(v, user.DisplayUsername(&user.User{Username: ""}), pc, videoEngagement{}))
 	}
 	resp.OK(c, zoneVideoListResponse{
@@ -425,7 +419,7 @@ func (a *API) ListMyVideos(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	ctx := context.Background()
+	ctx := c.Request.Context()
 	items := make([]myVideoItem, 0, len(res.Videos))
 	for _, v := range res.Videos {
 		pc, _ := a.Play.Display(ctx, &v)
@@ -433,7 +427,7 @@ func (a *API) ListMyVideos(c *gin.Context) {
 			ID:           v.ID,
 			Title:        v.Title,
 			Status:       v.Status,
-			FailReason:   ffmpeg.HumanizeFailReason(v.FailReason),
+			FailReason:   a.VideoSvc.HumanizeFailReason(v.FailReason),
 			CoverURL:     v.CoverURL,
 			Duration:     v.DurationSec,
 			PlayCount:    pc,
@@ -485,9 +479,9 @@ func (a *API) GetVideo(c *gin.Context) {
 		return
 	}
 	if v.Status == video.StatusPublished {
-		_ = a.Play.Incr(context.Background(), v.ID)
+		_ = a.Play.Incr(c.Request.Context(), v.ID)
 	}
-	pc, _ := a.Play.Display(context.Background(), v)
+	pc, _ := a.Play.Display(c.Request.Context(), v)
 	var u user.User
 	uPub, _ := a.UserSvc.GetUserPublic(c.Request.Context(), v.UserID)
 	if uPub != nil {
@@ -497,17 +491,17 @@ func (a *API) GetVideo(c *gin.Context) {
 	if a.Hub != nil {
 		watching = a.Hub.RoomSize(id)
 	}
-	eng := a.getVideoEngagementFlags(viewer, v.ID)
+	eng := a.getVideoEngagementFlags(c.Request.Context(), viewer, v.ID)
 	detail := videoDetail(*v, u, pc, watching, eng)
 	if v.Status == videoStatusDraft && viewer == v.UserID {
 		draftHasSource := strings.TrimSpace(v.DraftRawPath) != ""
 		detail.DraftHasSource = &draftHasSource
 	}
-	_, followerCnt := a.getFollowCounts(v.UserID)
+	_, followerCnt := a.getFollowCounts(c.Request.Context(), v.UserID)
 	detail.UploaderFollowerCount = followerCnt
-	detail.UploaderPublishedCount = a.getUploaderPublishedCount(v.UserID)
+	detail.UploaderPublishedCount = a.getUploaderPublishedCount(c.Request.Context(), v.UserID)
 	if viewer > 0 && v.UserID != viewer {
-		detail.FollowedByMe = a.isFollowing(viewer, v.UserID)
+		detail.FollowedByMe = a.isFollowing(c.Request.Context(), viewer, v.UserID)
 		prog := 0
 		if a.DailyRewardSvc != nil {
 			prog = a.DailyRewardSvc.CoinProgress(viewer)
@@ -633,7 +627,7 @@ func (a *API) UpdateVideoCover(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, code)
 		return
 	}
-	if a.OSS == nil {
+	if !a.StorageSvc.Enabled() {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
@@ -652,7 +646,7 @@ func (a *API) UpdateVideoCover(c *gin.Context) {
 		ext = "jpg"
 	}
 	key := fmt.Sprintf("covers/%d.%s", v.ID, ext)
-	if err := a.OSS.UploadFile(key, tmp); err != nil {
+	if err := a.StorageSvc.UploadFile(key, tmp); err != nil {
 		a.Log.Error("oss cover upload", zap.Error(err))
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
@@ -749,12 +743,11 @@ type videoEngagement struct {
 	InWatchLater  bool
 }
 
-func (a *API) getVideoEngagementFlags(viewer, videoID uint64) videoEngagement {
+func (a *API) getVideoEngagementFlags(ctx context.Context, viewer, videoID uint64) videoEngagement {
 	var e videoEngagement
 	if viewer == 0 || videoID == 0 {
 		return e
 	}
-	ctx := context.Background()
 	liked := a.EngagementSvc.BatchVideoLikes(ctx, viewer, []uint64{videoID})
 	e.LikedByMe = liked[videoID]
 	fav := a.EngagementSvc.BatchFavoritedByUser(ctx, viewer, []uint64{videoID})
@@ -940,7 +933,7 @@ func videoDetail(v video.Video, u user.User, play uint64, watching int, eng vide
 		VideoURL:          v.VideoURL,
 		CoverURL:          v.CoverURL,
 		Status:            v.Status,
-		FailReason:        ffmpeg.HumanizeFailReason(v.FailReason),
+		FailReason:        service.HumanizeFailReason(v.FailReason),
 		Tags:              videoTagsForResponse(v.TagsJSON),
 		CommentsClosed:    v.CommentsClosed,
 		CommentsCurated:   v.CommentsCurated,
@@ -1024,7 +1017,7 @@ func (a *API) DeleteMyVideo(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	purgeVideoOSSObjects(a.Cfg, a.OSS, a.Log, *v)
+	a.StorageSvc.PurgeVideo(*v)
 	a.esDeleteVideo(id)
 	resp.OK(c, okResponse{OK: true})
 }

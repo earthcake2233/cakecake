@@ -31,8 +31,8 @@ type createFavoriteFolderJSON struct {
 	IsPublic    *bool  `json:"is_public"`
 }
 
-func (a *API) ensureDefaultFavoriteFolder(userID uint64) (video.FavoriteFolder, error) {
-	folders, err := a.FavoriteSvc.ListFoldersByUser(context.Background(), userID)
+func (a *API) ensureDefaultFavoriteFolder(ctx context.Context, userID uint64) (video.FavoriteFolder, error) {
+	folders, err := a.FavoriteSvc.ListFoldersByUser(ctx, userID)
 	if err != nil {
 		return video.FavoriteFolder{}, err
 	}
@@ -47,22 +47,22 @@ func (a *API) ensureDefaultFavoriteFolder(userID uint64) (video.FavoriteFolder, 
 		IsPublic:  true,
 		IsDefault: true,
 	}
-	if err := a.FavoriteSvc.CreateFolder(context.Background(), &f); err != nil {
+	if err := a.FavoriteSvc.CreateFolder(ctx, &f); err != nil {
 		return f, err
 	}
-	_ = a.FavoriteSvc.MigrateOrphanFavorites(context.Background(), userID, f.ID)
+	_ = a.FavoriteSvc.MigrateOrphanFavorites(ctx, userID, f.ID)
 	return f, nil
 }
 
-func (a *API) folderCoverFromVideos(folderID uint64) string {
-	return a.FavoriteSvc.FolderCoverFromVideos(context.Background(), folderID)
+func (a *API) folderCoverFromVideos(ctx context.Context, folderID uint64) string {
+	return a.FavoriteSvc.FolderCoverFromVideos(ctx, folderID)
 }
 
-func (a *API) resolveFolderCoverURL(f *video.FavoriteFolder) string {
+func (a *API) resolveFolderCoverURL(ctx context.Context, f *video.FavoriteFolder) string {
 	if u := strings.TrimSpace(f.CoverURL); u != "" {
 		return u
 	}
-	return a.folderCoverFromVideos(f.ID)
+	return a.folderCoverFromVideos(ctx, f.ID)
 }
 
 type folderItemDTO struct {
@@ -93,9 +93,9 @@ type removedResponse struct {
 	Removed int `json:"removed"`
 }
 
-func (a *API) folderRowPayload(f *video.FavoriteFolder) folderItemDTO {
-	vCnt, _ := a.FavoriteSvc.CountFavoritesInFolder(context.Background(), f.ID)
-	cover := a.resolveFolderCoverURL(f)
+func (a *API) folderRowPayload(ctx context.Context, f *video.FavoriteFolder) folderItemDTO {
+	vCnt, _ := a.FavoriteSvc.CountFavoritesInFolder(ctx, f.ID)
+	cover := a.resolveFolderCoverURL(ctx, f)
 	out := folderItemDTO{
 		ID:          f.ID,
 		Title:       f.Title,
@@ -110,11 +110,11 @@ func (a *API) folderRowPayload(f *video.FavoriteFolder) folderItemDTO {
 	return out
 }
 
-func (a *API) folderListPayload(userID uint64, publicOnly bool) ([]folderItemDTO, error) {
-	if _, err := a.ensureDefaultFavoriteFolder(userID); err != nil {
+func (a *API) folderListPayload(ctx context.Context, userID uint64, publicOnly bool) ([]folderItemDTO, error) {
+	if _, err := a.ensureDefaultFavoriteFolder(ctx, userID); err != nil {
 		return nil, err
 	}
-	folders, err := a.FavoriteSvc.ListFoldersByUser(context.Background(), userID)
+	folders, err := a.FavoriteSvc.ListFoldersByUser(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -123,7 +123,7 @@ func (a *API) folderListPayload(userID uint64, publicOnly bool) ([]folderItemDTO
 		if publicOnly && !folders[i].IsPublic {
 			continue
 		}
-		out = append(out, a.folderRowPayload(&folders[i]))
+		out = append(out, a.folderRowPayload(ctx, &folders[i]))
 	}
 	return out, nil
 }
@@ -143,7 +143,7 @@ func (a *API) uploadFavoriteFolderCover(uid, folderID uint64, fh *multipart.File
 	if code := coverval.ValidateCoverHeader(fh); code != 0 {
 		return "", code
 	}
-	if a.OSS == nil {
+	if !a.StorageSvc.Enabled() {
 		return "", errcode.CodeInternalError
 	}
 	if err := os.MkdirAll(a.Cfg.TempUploadDir, 0o755); err != nil {
@@ -159,7 +159,7 @@ func (a *API) uploadFavoriteFolderCover(uid, folderID uint64, fh *multipart.File
 		ext = "jpg"
 	}
 	key := fmt.Sprintf("favorite-folders/%d/%d.%s", uid, folderID, ext)
-	if err := a.OSS.UploadFile(key, tmp); err != nil {
+	if err := a.StorageSvc.UploadFile(key, tmp); err != nil {
 		a.Log.Error("oss favorite folder cover upload", zap.Error(err))
 		return "", errcode.CodeInternalError
 	}
@@ -180,7 +180,7 @@ func (a *API) ListMyFavoriteFolders(c *gin.Context) {
 		resp.Err(c, http.StatusUnauthorized, errcode.CodeUnauthorized)
 		return
 	}
-	items, err := a.folderListPayload(uid, false)
+	items, err := a.folderListPayload(c.Request.Context(), uid, false)
 	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
@@ -232,7 +232,7 @@ func (a *API) createFavoriteFolderJSON(c *gin.Context, uid uint64) {
 	if body.IsPublic != nil {
 		isPublic = *body.IsPublic
 	}
-	if _, err := a.ensureDefaultFavoriteFolder(uid); err != nil {
+	if _, err := a.ensureDefaultFavoriteFolder(c.Request.Context(), uid); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
@@ -243,11 +243,11 @@ func (a *API) createFavoriteFolderJSON(c *gin.Context, uid uint64) {
 		IsPublic:    isPublic,
 		IsDefault:   false,
 	}
-	if err := a.FavoriteSvc.CreateFolder(context.Background(), &row); err != nil {
+	if err := a.FavoriteSvc.CreateFolder(c.Request.Context(), &row); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	resp.OK(c, a.folderRowPayload(&row))
+	resp.OK(c, a.folderRowPayload(c.Request.Context(), &row))
 }
 
 func (a *API) createFavoriteFolderMultipart(c *gin.Context, uid uint64) {
@@ -266,7 +266,7 @@ func (a *API) createFavoriteFolderMultipart(c *gin.Context, uid uint64) {
 		return
 	}
 	isPublic := parseFolderIsPublicForm(c.PostForm("is_public"))
-	if _, err := a.ensureDefaultFavoriteFolder(uid); err != nil {
+	if _, err := a.ensureDefaultFavoriteFolder(c.Request.Context(), uid); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
@@ -277,28 +277,28 @@ func (a *API) createFavoriteFolderMultipart(c *gin.Context, uid uint64) {
 		IsPublic:    isPublic,
 		IsDefault:   false,
 	}
-	if err := a.FavoriteSvc.CreateFolder(context.Background(), &row); err != nil {
+	if err := a.FavoriteSvc.CreateFolder(c.Request.Context(), &row); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
 	if fh, err := c.FormFile("cover"); err == nil && fh != nil {
 		url, code := a.uploadFavoriteFolderCover(uid, row.ID, fh)
 		if code != 0 {
-			_ = a.FavoriteSvc.DeleteFolder(context.Background(), row.ID)
+			_ = a.FavoriteSvc.DeleteFolder(c.Request.Context(), row.ID)
 			resp.Err(c, http.StatusBadRequest, code)
 			return
 		}
 		if url != "" {
-			if err := a.FavoriteSvc.UpdateFolderCover(context.Background(), row.ID, url); err != nil {
-				purgeFavoriteFolderCoverURL(a.Cfg, a.OSS, a.Log, url, uid, row.ID)
-				_ = a.FavoriteSvc.DeleteFolder(context.Background(), row.ID)
+			if err := a.FavoriteSvc.UpdateFolderCover(c.Request.Context(), row.ID, url); err != nil {
+				a.StorageSvc.PurgeFavoriteFolderCoverURL(url, uid, row.ID)
+				_ = a.FavoriteSvc.DeleteFolder(c.Request.Context(), row.ID)
 				resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 				return
 			}
 			row.CoverURL = url
 		}
 	}
-	resp.OK(c, a.folderRowPayload(&row))
+	resp.OK(c, a.folderRowPayload(c.Request.Context(), &row))
 }
 
 // ListUserFavoriteFolders returns favorite folders for a user's space (public, or all if viewer is owner).
@@ -308,7 +308,7 @@ func (a *API) ListUserFavoriteFolders(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	u, err := a.UserSvc.GetUserPublic(context.Background(), ownerID)
+	u, err := a.UserSvc.GetUserPublic(c.Request.Context(), ownerID)
 	if err != nil {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
@@ -320,16 +320,16 @@ func (a *API) ListUserFavoriteFolders(c *gin.Context) {
 		return
 	}
 	publicOnly := !isOwner
-	items, err := a.folderListPayload(ownerID, publicOnly)
+	items, err := a.folderListPayload(c.Request.Context(), ownerID, publicOnly)
 	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
 	var total int64
-	total, _ = a.FavoriteSvc.CountFoldersByUser(context.Background(), ownerID)
+	total, _ = a.FavoriteSvc.CountFoldersByUser(c.Request.Context(), ownerID)
 	hiddenCount := int64(0)
 	if viewerOK && viewer == ownerID {
-		publicCnt, _ := a.FavoriteSvc.CountPublicFoldersByUser(context.Background(), ownerID)
+		publicCnt, _ := a.FavoriteSvc.CountPublicFoldersByUser(c.Request.Context(), ownerID)
 		hiddenCount = total - publicCnt
 		if hiddenCount < 0 {
 			hiddenCount = 0
@@ -366,8 +366,8 @@ func parseFolderIDParam(c *gin.Context) (uint64, bool) {
 	return id, true
 }
 
-func (a *API) loadUserFavoriteFolder(uid, folderID uint64) (video.FavoriteFolder, int) {
-	f, err := a.FavoriteSvc.GetFolderByID(context.Background(), folderID)
+func (a *API) loadUserFavoriteFolder(ctx context.Context, uid, folderID uint64) (video.FavoriteFolder, int) {
+	f, err := a.FavoriteSvc.GetFolderByID(ctx, folderID)
 	if err != nil || f.UserID != uid {
 		return video.FavoriteFolder{}, errcode.CodeNotFound
 	}
@@ -409,7 +409,7 @@ func (a *API) updateFavoriteFolderJSON(c *gin.Context, uid, folderID uint64) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	row, code := a.loadUserFavoriteFolder(uid, folderID)
+	row, code := a.loadUserFavoriteFolder(c.Request.Context(), uid, folderID)
 	if code != 0 {
 		resp.Err(c, http.StatusNotFound, code)
 		return
@@ -433,15 +433,15 @@ func (a *API) updateFavoriteFolderJSON(c *gin.Context, uid, folderID uint64) {
 		"description": desc,
 		"is_public":   isPublic,
 	}
-	if err := a.FavoriteSvc.UpdateFolder(context.Background(), row.ID, updates); err != nil {
+	if err := a.FavoriteSvc.UpdateFolder(c.Request.Context(), row.ID, updates); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	ptr, _ := a.FavoriteSvc.GetFolderByID(context.Background(), row.ID)
+	ptr, _ := a.FavoriteSvc.GetFolderByID(c.Request.Context(), row.ID)
 	if ptr != nil {
 		row = *ptr
 	}
-	resp.OK(c, a.folderRowPayload(&row))
+	resp.OK(c, a.folderRowPayload(c.Request.Context(), &row))
 }
 
 func (a *API) updateFavoriteFolderMultipart(c *gin.Context, uid, folderID uint64) {
@@ -449,7 +449,7 @@ func (a *API) updateFavoriteFolderMultipart(c *gin.Context, uid, folderID uint64
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	row, code := a.loadUserFavoriteFolder(uid, folderID)
+	row, code := a.loadUserFavoriteFolder(c.Request.Context(), uid, folderID)
 	if code != 0 {
 		resp.Err(c, http.StatusNotFound, code)
 		return
@@ -482,18 +482,18 @@ func (a *API) updateFavoriteFolderMultipart(c *gin.Context, uid, folderID uint64
 			updates["cover_url"] = url
 		}
 	}
-	if err := a.FavoriteSvc.UpdateFolder(context.Background(), row.ID, updates); err != nil {
+	if err := a.FavoriteSvc.UpdateFolder(c.Request.Context(), row.ID, updates); err != nil {
 		if uploadedCoverURL != "" {
-			purgeFavoriteFolderCoverURL(a.Cfg, a.OSS, a.Log, uploadedCoverURL, uid, row.ID)
+			a.StorageSvc.PurgeFavoriteFolderCoverURL(uploadedCoverURL, uid, row.ID)
 		}
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	ptr, _ := a.FavoriteSvc.GetFolderByID(context.Background(), row.ID)
+	ptr, _ := a.FavoriteSvc.GetFolderByID(c.Request.Context(), row.ID)
 	if ptr != nil {
 		row = *ptr
 	}
-	resp.OK(c, a.folderRowPayload(&row))
+	resp.OK(c, a.folderRowPayload(c.Request.Context(), &row))
 }
 
 // DeleteFavoriteFolder removes a non-default folder and its favorites.
@@ -516,7 +516,7 @@ func (a *API) DeleteFavoriteFolder(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	row, code := a.loadUserFavoriteFolder(uid, folderID)
+	row, code := a.loadUserFavoriteFolder(c.Request.Context(), uid, folderID)
 	if code != 0 {
 		resp.Err(c, http.StatusNotFound, code)
 		return
@@ -525,17 +525,17 @@ func (a *API) DeleteFavoriteFolder(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	err := a.FavoriteSvc.DeleteFolderCascade(context.Background(), folderID, uid)
+	err := a.FavoriteSvc.DeleteFolderCascade(c.Request.Context(), folderID, uid)
 	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	purgeFavoriteFolderOSSObjects(a.Cfg, a.OSS, a.Log, row)
+	a.StorageSvc.PurgeFavoriteFolder(row)
 	resp.OK(c, deletedResponse{Deleted: true})
 }
 
-func (a *API) validateFolderOwnedByUser(uid, folderID uint64) bool {
-	f, err := a.FavoriteSvc.GetFolderByID(context.Background(), folderID)
+func (a *API) validateFolderOwnedByUser(ctx context.Context, uid, folderID uint64) bool {
+	f, err := a.FavoriteSvc.GetFolderByID(ctx, folderID)
 	return err == nil && f.UserID == uid
 }
 
@@ -557,11 +557,11 @@ func (a *API) ClearInvalidFavoritesInFolder(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	if !a.validateFolderOwnedByUser(uid, folderID) {
+	if !a.validateFolderOwnedByUser(c.Request.Context(), uid, folderID) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	favs, _, err := a.FavoriteSvc.ListFavoritesByFolder(context.Background(), folderID, 0, 0)
+	favs, _, err := a.FavoriteSvc.ListFavoritesByFolder(c.Request.Context(), folderID, 0, 0)
 	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
@@ -574,7 +574,7 @@ func (a *API) ClearInvalidFavoritesInFolder(c *gin.Context) {
 	for i := range favs {
 		vids = append(vids, favs[i].VideoID)
 	}
-	publishedIDs, err := a.FavoriteSvc.FilterPublishedVideoIDs(context.Background(), vids)
+	publishedIDs, err := a.FavoriteSvc.FilterPublishedVideoIDs(c.Request.Context(), vids)
 	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
@@ -594,17 +594,17 @@ func (a *API) ClearInvalidFavoritesInFolder(c *gin.Context) {
 		return
 	}
 	for _, vid := range invalidVids {
-		before, err := a.userVideoFavoriteCount(uid, vid)
+		before, err := a.userVideoFavoriteCount(c.Request.Context(), uid, vid)
 		if err != nil {
 			resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 			return
 		}
-		if err := a.FavoriteSvc.DeleteFavoriteByVideo(context.Background(), uid, folderID, vid); err != nil {
+		if err := a.FavoriteSvc.DeleteFavoriteByVideo(c.Request.Context(), uid, folderID, vid); err != nil {
 			resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 			return
 		}
-		after, _ := a.userVideoFavoriteCount(uid, vid)
-		a.syncVideoFavCountAfterUserChange(vid, before, after)
+		after, _ := a.userVideoFavoriteCount(c.Request.Context(), uid, vid)
+		a.syncVideoFavCountAfterUserChange(c.Request.Context(), vid, before, after)
 	}
 	resp.OK(c, clearedResponse{Cleared: len(invalidVids)})
 }
@@ -634,7 +634,7 @@ func (a *API) BatchRemoveVideosFromFavoriteFolder(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	if !a.validateFolderOwnedByUser(uid, folderID) {
+	if !a.validateFolderOwnedByUser(c.Request.Context(), uid, folderID) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
@@ -661,12 +661,12 @@ func (a *API) BatchRemoveVideosFromFavoriteFolder(c *gin.Context) {
 	}
 	removed := 0
 	for _, vid := range ids {
-		before, err := a.userVideoFavoriteCount(uid, vid)
+		before, err := a.userVideoFavoriteCount(c.Request.Context(), uid, vid)
 		if err != nil {
 			resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 			return
 		}
-		err = a.FavoriteSvc.DeleteFavoriteByVideo(context.Background(), uid, folderID, vid)
+		err = a.FavoriteSvc.DeleteFavoriteByVideo(c.Request.Context(), uid, folderID, vid)
 		if err != nil {
 			resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 			return
@@ -674,8 +674,8 @@ func (a *API) BatchRemoveVideosFromFavoriteFolder(c *gin.Context) {
 		if err == nil {
 			removed++
 		}
-		after, _ := a.userVideoFavoriteCount(uid, vid)
-		a.syncVideoFavCountAfterUserChange(vid, before, after)
+		after, _ := a.userVideoFavoriteCount(c.Request.Context(), uid, vid)
+		a.syncVideoFavCountAfterUserChange(c.Request.Context(), vid, before, after)
 	}
 	resp.OK(c, removedResponse{Removed: removed})
 }

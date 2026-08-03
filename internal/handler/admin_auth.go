@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"context"
 	"net/http"
 	"strings"
 	"time"
@@ -74,7 +73,7 @@ func (a *API) AdminRefresh(c *gin.Context) {
 		resp.Err(c, http.StatusUnauthorized, errcode.CodeUnauthorized)
 		return
 	}
-	ctx := context.Background()
+	ctx := c.Request.Context()
 	if a.AuthSvc.AdminRefreshTokenInvalid(ctx, tokenID) {
 		resp.Err(c, http.StatusUnauthorized, errcode.CodeUnauthorized)
 		return

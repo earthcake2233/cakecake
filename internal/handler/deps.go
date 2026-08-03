@@ -10,10 +10,7 @@ import (
 	"cakecake/internal/pkg/iplocate"
 	"cakecake/internal/pkg/jwttoken"
 	"cakecake/internal/pkg/sensitive"
-	"cakecake/internal/queue"
-	"cakecake/internal/search"
 	"cakecake/internal/service"
-	"cakecake/internal/storage"
 	"cakecake/internal/ws"
 )
 
@@ -27,12 +24,10 @@ type Dependencies struct {
 	ChatHub        *ws.ChatHub
 	JWT            *jwttoken.Manager
 	Sens           *sensitive.Filter
-	OSS            *storage.OSS
-	MQ             queue.TranscodePublisher
-	ES             *search.Client
 	Play           *service.PlayCounter
 	SearchHot      *service.SearchHotRecorder
 	SearchSvc      *service.SearchService
+	StorageSvc     *service.StorageService
 	DailyRewardSvc *service.DailyRewardService
 	DanmakuRelay   *service.DanmakuRelay
 	IPLocate       *iplocate.Searcher

@@ -3,12 +3,14 @@ package service
 import (
 	"cakecake/internal/model/video"
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"cakecake/internal/ffmpeg"
 	"cakecake/internal/queue"
 )
 
@@ -30,6 +32,26 @@ func (s *VideoDraftService) PublishTranscode(ctx context.Context, body []byte) e
 		return fmt.Errorf("transcode queue not configured")
 	}
 	return s.mq.PublishTranscode(ctx, body)
+}
+
+// EnqueueTranscode builds the transcode job and publishes it to the queue.
+func (s *VideoDraftService) EnqueueTranscode(ctx context.Context, videoID uint64, rawPath, coverPath string) error {
+	job := queue.TranscodeJob{VideoID: videoID, RawPath: rawPath, CoverPath: coverPath, RetryCount: 0}
+	body, err := json.Marshal(job)
+	if err != nil {
+		return err
+	}
+	return s.PublishTranscode(ctx, body)
+}
+
+// ProbeDurationSeconds probes a raw media file's duration via ffprobe.
+func (s *VideoDraftService) ProbeDurationSeconds(path string) (float64, error) {
+	return ffmpeg.ProbeDurationSeconds(path)
+}
+
+// FFprobeExe returns the ffprobe executable path used by the probe helpers.
+func (s *VideoDraftService) FFprobeExe() string {
+	return ffmpeg.FFprobeExe()
 }
 
 // CreateDraft inserts a new draft video record.

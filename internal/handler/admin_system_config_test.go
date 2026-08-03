@@ -87,8 +87,6 @@ func newTestAPIWithRuntimeCfg(t *testing.T) (*API, *gin.Engine, *jwttoken.Manage
 			Hub:            hub,
 			JWT:            jm,
 			Sens:           sens,
-			OSS:            nil,
-			MQ:             noopMQ{},
 			Play:           pc,
 			DailyRewardSvc: service.NewDailyRewardService(db),
 			SearchSvc:      service.NewSearchService(nil, db, rdb, log),

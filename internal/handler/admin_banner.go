@@ -164,7 +164,7 @@ func (a *API) AdminUpdateBanner(c *gin.Context) {
 	}
 	b, _ = a.VideoSvc.GetBanner(c.Request.Context(), id)
 	if u := strings.TrimSpace(req.ImageURL); u != "" && u != oldURL {
-		purgeBannerImageURL(a.Cfg, a.OSS, a.Log, oldURL)
+		a.StorageSvc.PurgeBannerImageURL(oldURL)
 	}
 	resp.OK(c, bannerToJSON(b))
 }
@@ -185,6 +185,6 @@ func (a *API) AdminDeleteBanner(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	purgeBannerOSSObjects(a.Cfg, a.OSS, a.Log, *b)
+	a.StorageSvc.PurgeBanner(*b)
 	resp.OK(c, deletedResponse{Deleted: true})
 }

@@ -16,7 +16,7 @@ import (
 	"cakecake/internal/errcode"
 	"cakecake/internal/middleware"
 	"cakecake/internal/pkg/resp"
-	"cakecake/internal/search"
+	"cakecake/internal/service"
 )
 
 // hotRecordReq is a fire-and-forget hot search record request.
@@ -56,7 +56,7 @@ func searchCacheKey(keyword, searchType, sort string, page, pageSize int) string
 // SearchAll implements GET /api/v1/search with Redis caching.
 func (a *API) SearchAll(c *gin.Context) {
 	keyword := strings.TrimSpace(c.Query("keyword"))
-	if err := search.ValidateKeyword(keyword); err != nil {
+	if err := service.ValidateKeyword(keyword); err != nil {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
@@ -89,14 +89,14 @@ func (a *API) SearchAll(c *gin.Context) {
 	page, pageSize := parsePagination(c, 20)
 	searchType := strings.TrimSpace(c.DefaultQuery("type", "all"))
 	sort := strings.TrimSpace(c.Query("sort"))
-	videoFilter := search.ParseVideoFilter(
+	videoFilter := service.ParseVideoFilter(
 		c.DefaultQuery("order", c.Query("video_order")),
 		c.DefaultQuery("duration", ""),
 		c.DefaultQuery("zone", ""),
 	)
 
 	// ── Redis cache lookup (skip for highlighted queries) ──
-	var out *search.AllResult
+	var out *service.AllResult
 	cacheHit := false
 	if !highlight && a.SearchSvc != nil {
 		cacheKey := searchCacheKey(keyword, searchType, sort, page, pageSize)
@@ -112,7 +112,7 @@ func (a *API) SearchAll(c *gin.Context) {
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
 		var err error
-		out, err = a.SearchSvc.SearchAll(ctx, search.SearchParams{
+		out, err = a.SearchSvc.SearchAll(ctx, service.SearchParams{
 			Keyword:   keyword,
 			Highlight: highlight,
 			Page:      page,
@@ -149,7 +149,7 @@ func (a *API) SearchAll(c *gin.Context) {
 				ids = append(ids, v.Aid)
 			}
 		}
-		later := a.EngagementSvc.BatchWatchLater(context.Background(), viewer, ids)
+		later := a.EngagementSvc.BatchWatchLater(c.Request.Context(), viewer, ids)
 		for i := range out.Result.Video {
 			out.Result.Video[i].InWatchLater = later[out.Result.Video[i].Aid]
 		}
@@ -168,7 +168,7 @@ func (a *API) SearchAll(c *gin.Context) {
 	resp.OK(c, out)
 }
 
-func searchResultEmpty(out *search.AllResult) bool {
+func searchResultEmpty(out *service.AllResult) bool {
 	if out == nil {
 		return true
 	}
@@ -183,19 +183,19 @@ func searchResultEmpty(out *search.AllResult) bool {
 		len(r.Photo) == 0
 }
 
-func emptySearchResult() *search.AllResult {
-	return &search.AllResult{
-		Result: search.SearchResultBuckets{
-			Video:        []search.VideoHit{},
-			Article:      []search.ArticleHit{},
-			BiliUser:     []search.UserHit{},
+func emptySearchResult() *service.AllResult {
+	return &service.AllResult{
+		Result: service.SearchResultBuckets{
+			Video:        []service.VideoHit{},
+			Article:      []service.ArticleHit{},
+			BiliUser:     []service.UserHit{},
 			MediaBangumi: []any{},
 			MediaFt:      []any{},
 			Live:         []any{},
 			Topic:        []any{},
 			Photo:        []any{},
 		},
-		TopTlist:     search.TopTlist{},
+		TopTlist:     service.TopTlist{},
 		SearchStatus: "empty",
 	}
 }

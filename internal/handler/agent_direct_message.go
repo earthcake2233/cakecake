@@ -29,7 +29,7 @@ func (a *API) runAgentReply(humanID uint64, conv *dm.DmConversation, userText st
 	go func() {
 		ctx := context.Background()
 		if !a.Agent.CheckQuota(ctx, humanID) {
-			a.pushAgentFallback(humanID, conv, "今日 AI 对话次数已达上限，请明天再试。")
+			a.pushAgentFallback(ctx, humanID, conv, "今日 AI 对话次数已达上限，请明天再试。")
 			return
 		}
 		result, err := a.Agent.GenerateReply(ctx, conv, userText)
@@ -45,7 +45,7 @@ func (a *API) runAgentReply(humanID uint64, conv *dm.DmConversation, userText st
 			if strings.Contains(err.Error(), "disabled") {
 				msg = "AI 助手已暂停服务，请稍后再试。"
 			}
-			a.pushAgentFallback(humanID, conv, msg)
+			a.pushAgentFallback(ctx, humanID, conv, msg)
 			return
 		}
 		a.Agent.IncrQuota(ctx, humanID)
@@ -54,27 +54,27 @@ func (a *API) runAgentReply(humanID uint64, conv *dm.DmConversation, userText st
 			a.Log.Error("agent persist reply", zap.Error(err))
 			return
 		}
-		a.dmPushAgentMessage(humanID, conv, msg)
+		a.dmPushAgentMessage(ctx, humanID, conv, msg)
 	}()
 }
 
-func (a *API) pushAgentFallback(humanID uint64, conv *dm.DmConversation, text string) {
+func (a *API) pushAgentFallback(ctx context.Context, humanID uint64, conv *dm.DmConversation, text string) {
 	msg, err := a.Agent.PostAssistantMessage(conv, humanID, text)
 	if err != nil {
 		a.Log.Error("agent fallback message", zap.Error(err))
 		return
 	}
-	a.dmPushAgentMessage(humanID, conv, msg)
+	a.dmPushAgentMessage(ctx, humanID, conv, msg)
 }
 
-func (a *API) dmPushAgentMessage(humanID uint64, conv *dm.DmConversation, msg *dm.DmMessage) {
+func (a *API) dmPushAgentMessage(ctx context.Context, humanID uint64, conv *dm.DmConversation, msg *dm.DmMessage) {
 	if msg == nil || conv == nil {
 		return
 	}
-	senderName, senderAvatar := a.dmUserBrief(context.Background(), msg.SenderID)
+	senderName, senderAvatar := a.dmUserBrief(ctx, msg.SenderID)
 	out := a.dmFormatMessage(msg, senderName, senderAvatar)
-	part, _ := a.DmSvc.GetParticipant(context.Background(), conv.ID, humanID)
-	convPayload := a.dmFormatConversation(conv, humanID, part)
+	part, _ := a.DmSvc.GetParticipant(ctx, conv.ID, humanID)
+	convPayload := a.dmFormatConversation(ctx, conv, humanID, part)
 	event := dmMessageEvent{Type: "dm_message", Message: out}
 	if part == nil || !part.Muted {
 		a.dmPushEvent(humanID, event)

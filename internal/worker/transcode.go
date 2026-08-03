@@ -24,12 +24,7 @@ import (
 )
 
 // TranscodeJob is the JSON payload on the transcode queue.
-type TranscodeJob struct {
-	VideoID    uint64 `json:"video_id"`
-	RawPath    string `json:"raw_path"`
-	CoverPath  string `json:"cover_path,omitempty"`
-	RetryCount int    `json:"retry_count"`
-}
+type TranscodeJob = queue.TranscodeJob
 
 // StartTranscodeConsumer runs a blocking AMQP consumer loop.
 func StartTranscodeConsumer(ctx context.Context, cfg *config.C, db *gorm.DB, mq *queue.Client, ossClient *storage.OSS, esc *search.Client) {

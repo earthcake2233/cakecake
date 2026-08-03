@@ -13,7 +13,7 @@ import (
 	"cakecake/internal/middleware"
 	"cakecake/internal/pkg/resp"
 	"cakecake/internal/pkg/searchhist"
-	"cakecake/internal/search"
+	"cakecake/internal/service"
 )
 
 const maxUserSearchHistory = 20
@@ -29,7 +29,7 @@ func normalizeSearchHistoryKeywords(raw []string) []string {
 		if utf8.RuneCountInString(k) > 50 {
 			continue
 		}
-		if err := search.ValidateKeyword(k); err != nil {
+		if err := service.ValidateKeyword(k); err != nil {
 			continue
 		}
 		norm := searchhist.Norm(k)
@@ -137,7 +137,7 @@ func (a *API) PostMySearchHistory(c *gin.Context) {
 		return
 	}
 	kw := strings.TrimSpace(req.Keyword)
-	if err := search.ValidateKeyword(kw); err != nil {
+	if err := service.ValidateKeyword(kw); err != nil {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}

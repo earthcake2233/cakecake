@@ -25,7 +25,7 @@ func (a *API) uploadBannerImageToOSS(fh *multipart.FileHeader, objectKey string)
 	if code := coverval.ValidateCoverHeader(fh); code != 0 {
 		return "", code
 	}
-	if a.OSS == nil {
+	if !a.StorageSvc.Enabled() {
 		return "", errcode.CodeInternalError
 	}
 	if err := os.MkdirAll(a.Cfg.TempUploadDir, 0o755); err != nil {
@@ -36,7 +36,7 @@ func (a *API) uploadBannerImageToOSS(fh *multipart.FileHeader, objectKey string)
 		return "", errcode.CodeInternalError
 	}
 	defer os.Remove(tmp)
-	if err := a.OSS.UploadFile(objectKey, tmp); err != nil {
+	if err := a.StorageSvc.UploadFile(objectKey, tmp); err != nil {
 		a.Log.Error("oss banner image upload", zap.String("key", objectKey), zap.Error(err))
 		return "", errcode.CodeInternalError
 	}
@@ -107,7 +107,7 @@ func (a *API) AdminUploadBannerImageByID(c *gin.Context) {
 		return
 	}
 	if oldURL != "" && oldURL != url {
-		purgeBannerImageURL(a.Cfg, a.OSS, a.Log, oldURL)
+		a.StorageSvc.PurgeBannerImageURL(oldURL)
 	}
 	resp.OK(c, imageURLResponse{ImageURL: url})
 }

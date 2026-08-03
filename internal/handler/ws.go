@@ -102,10 +102,10 @@ func (a *API) ServeDanmaku(c *gin.Context) {
 	cl := a.Hub.Join(videoID, conn)
 	defer func() {
 		a.Hub.Leave(videoID, cl)
-		a.pushWatchingCount(videoID)
+		a.pushWatchingCount(c.Request.Context(), videoID)
 		_ = conn.Close()
 	}()
-	a.pushWatchingCount(videoID)
+	a.pushWatchingCount(c.Request.Context(), videoID)
 
 	// ---- history: N+1 fix + current_time support ----
 	hist, _ := a.DanmakuSvc.ListHistory(c.Request.Context(), videoID, currentTime, 200)
@@ -155,14 +155,14 @@ func (a *API) ServeDanmaku(c *gin.Context) {
 	}
 }
 
-func (a *API) pushWatchingCount(videoID uint64) {
+func (a *API) pushWatchingCount(ctx context.Context, videoID uint64) {
 	if a.Hub == nil {
 		return
 	}
 	n := a.Hub.RoomSize(videoID)
 	payload := wsWatchingFrame{Type: "watching", Count: n}
 	if a.DanmakuRelay != nil {
-		if err := a.DanmakuRelay.Publish(context.Background(), videoID, payload); err != nil {
+		if err := a.DanmakuRelay.Publish(ctx, videoID, payload); err != nil {
 			a.Log.Error("danmaku relay publish watching", zap.Error(err))
 		}
 		return

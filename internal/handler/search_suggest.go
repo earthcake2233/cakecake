@@ -11,7 +11,6 @@ import (
 	"cakecake/internal/errcode"
 	"cakecake/internal/middleware"
 	"cakecake/internal/pkg/resp"
-	"cakecake/internal/search"
 	"cakecake/internal/service"
 )
 
@@ -33,7 +32,7 @@ func (a *API) SearchSuggest(c *gin.Context) {
 		term = strings.TrimSpace(c.Query("q"))
 	}
 	if term != "" {
-		if err := search.ValidateKeyword(term); err != nil {
+		if err := service.ValidateKeyword(term); err != nil {
 			resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 			return
 		}

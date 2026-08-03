@@ -1,14 +1,10 @@
 package handler
 
 import (
-	"cakecake/internal/model/admin"
 	"cakecake/internal/model/danmaku"
 	"cakecake/internal/model/user"
-	"cakecake/internal/model/video"
 	"path/filepath"
 	"testing"
-
-	"cakecake/internal/config"
 )
 
 func TestNormalizeDanmakuFontSize(t *testing.T) {
@@ -340,37 +336,6 @@ func TestFormatDanmakuPlayTime(t *testing.T) {
 		if got != tc.want {
 			t.Errorf("formatDanmakuPlayTime(%v) = %q, want %q", tc.sec, got, tc.want)
 		}
-	}
-}
-
-func TestBannerOSSObjectKeysExtended(t *testing.T) {
-	cfg := &config.C{
-		OSSBucket:          "bucket",
-		OSSEndpoint:        "https://oss-cn-beijing.aliyuncs.com",
-		OSSPublicURLPrefix: "https://bucket.oss-cn-beijing.aliyuncs.com",
-	}
-	b := admin.HomeBanner{
-		ID:       3,
-		ImageURL: "https://bucket.oss-cn-beijing.aliyuncs.com/home-banners/abc.jpg",
-	}
-	keys := bannerOSSObjectKeys(cfg, b)
-	if len(keys) < 2 {
-		t.Fatalf("expected at least 2 keys, got %v", keys)
-	}
-}
-
-func TestVideoOSSObjectKeysExtended(t *testing.T) {
-	cfg := &config.C{
-		OSSPublicURLPrefix: "https://bucket.oss.aliyuncs.com",
-	}
-	v := video.Video{
-		ID:       7,
-		VideoURL: "https://bucket.oss.aliyuncs.com/videos/7.mp4",
-		CoverURL: "https://bucket.oss.aliyuncs.com/covers/7.png",
-	}
-	keys := videoOSSObjectKeys(cfg, v)
-	if len(keys) < 3 {
-		t.Fatalf("expected at least 3 keys, got %v", keys)
 	}
 }
 

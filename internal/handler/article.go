@@ -78,8 +78,8 @@ func toArticleEngagement(eng *service.ArticleEngagement) articleEngagement {
 	}
 }
 
-func loadPublishedArticle(a *API, id uint64) (article.Article, bool) {
-	artInfo, err := a.ArticleSvc.GetPublishedArticle(context.Background(), id)
+func loadPublishedArticle(ctx context.Context, a *API, id uint64) (article.Article, bool) {
+	artInfo, err := a.ArticleSvc.GetPublishedArticle(ctx, id)
 	if err != nil {
 		return article.Article{}, false
 	}
@@ -589,13 +589,13 @@ func (a *API) PostArticleView(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	if _, ok := loadPublishedArticle(a, id); !ok {
+	if _, ok := loadPublishedArticle(c.Request.Context(), a, id); !ok {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
 	_ = a.ArticleSvc.IncrementArticleView(c.Request.Context(), id)
 	if uid, ok := middleware.UserID(c); ok {
-		a.RecordArticleViewHistory(uid, id, "web")
+		a.RecordArticleViewHistory(c.Request.Context(), uid, id, "web")
 	}
 	var art article.Article
 	art2, _ := a.ArticleSvc.GetArticleByID(c.Request.Context(), id)
@@ -635,13 +635,13 @@ func orderClauseForMyArticles(sort string) string {
 	}
 }
 
-func (a *API) countMyArticlesByStatus(uid uint64) map[string]int64 {
+func (a *API) countMyArticlesByStatus(ctx context.Context, uid uint64) map[string]int64 {
 	type row struct {
 		Status string
 		N      int64
 	}
 	var rows []row
-	_ = a.ArticleSvc.CountArticlesByStatus(context.Background(), uid)
+	_ = a.ArticleSvc.CountArticlesByStatus(ctx, uid)
 	out := map[string]int64{
 		"draft":      0,
 		"processing": 0,
@@ -660,7 +660,7 @@ func (a *API) countMyArticlesByStatus(uid uint64) map[string]int64 {
 			out["rejected"] = r.N
 		}
 	}
-	dynN, _ := a.DynamicSvc.CountUserDynamics(context.Background(), uid)
+	dynN, _ := a.DynamicSvc.CountUserDynamics(ctx, uid)
 	out["dynamics"] = dynN
 	return out
 }
@@ -702,7 +702,7 @@ func (a *API) ListMyArticles(c *gin.Context) {
 		PageSize:   pageSize,
 		Total:      total,
 		TotalPages: totalPages,
-		Counts:     a.countMyArticlesByStatus(uid),
+		Counts:     a.countMyArticlesByStatus(c.Request.Context(), uid),
 	})
 }
 
@@ -815,7 +815,7 @@ func (a *API) DeleteMyArticle(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	purgeArticleOSSObjects(a.Cfg, a.OSS, a.Log, *art)
+	a.StorageSvc.PurgeArticle(*art)
 	a.esDeleteArticle(id)
 	resp.OK(c, okResponse{OK: true})
 }
@@ -850,7 +850,7 @@ func (a *API) UpdateArticleCover(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, code)
 		return
 	}
-	if a.OSS == nil {
+	if !a.StorageSvc.Enabled() {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
@@ -869,7 +869,7 @@ func (a *API) UpdateArticleCover(c *gin.Context) {
 		ext = "jpg"
 	}
 	key := fmt.Sprintf("article-covers/%d.%s", art.ID, ext)
-	if err := a.OSS.UploadFile(key, tmp); err != nil {
+	if err := a.StorageSvc.UploadFile(key, tmp); err != nil {
 		a.Log.Error("oss article cover upload", zap.Error(err), zap.Uint64("article_id", art.ID))
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return

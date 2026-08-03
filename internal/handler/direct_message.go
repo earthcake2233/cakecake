@@ -69,8 +69,8 @@ func dmTrimPreview(s string) string {
 	return string(r[:80]) + "…"
 }
 
-func (a *API) dmUnreadTotal(uid uint64) int64 {
-	return a.DmSvc.UnreadTotal(context.Background(), uid)
+func (a *API) dmUnreadTotal(ctx context.Context, uid uint64) int64 {
+	return a.DmSvc.UnreadTotal(ctx, uid)
 }
 
 func (a *API) dmUserBrief(ctx context.Context, uid uint64) (name, avatar string) {
@@ -150,9 +150,9 @@ func (a *API) dmFormatMessage(m *dm.DmMessage, senderName, senderAvatar string) 
 	}
 }
 
-func (a *API) dmFormatConversation(conv *dm.DmConversation, self uint64, part *dm.DmParticipant) dmConversationDTO {
+func (a *API) dmFormatConversation(ctx context.Context, conv *dm.DmConversation, self uint64, part *dm.DmParticipant) dmConversationDTO {
 	peer := dmPeerID(conv, self)
-	name, avatar := a.dmUserBrief(context.Background(), peer)
+	name, avatar := a.dmUserBrief(ctx, peer)
 	unread := uint32(0)
 	pinned := false
 	muted := false
@@ -203,7 +203,7 @@ func (a *API) ListDmConversations(c *gin.Context) {
 		return
 	}
 	a.ensureAgentConversationFor(uid)
-	convs, parts, err := a.DmSvc.ListConversations(context.Background(), uid)
+	convs, parts, err := a.DmSvc.ListConversations(c.Request.Context(), uid)
 	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
@@ -232,7 +232,7 @@ func (a *API) ListDmConversations(c *gin.Context) {
 		if part != nil && part.HiddenAt != nil {
 			continue
 		}
-		items = append(items, a.dmFormatConversation(conv, uid, part))
+		items = append(items, a.dmFormatConversation(c.Request.Context(), conv, uid, part))
 	}
 	resp.OK(c, dmConversationListResponse{Items: items})
 }
@@ -263,21 +263,21 @@ func (a *API) CreateDmConversation(c *gin.Context) {
 	}
 	if a.Agent != nil && a.Agent.IsBotUser(req.PeerID) {
 		a.ensureAgentConversationFor(uid)
-		conv, err := a.DmSvc.FindConversationByUserIDs(context.Background(), uid, req.PeerID)
+		conv, err := a.DmSvc.FindConversationByUserIDs(c.Request.Context(), uid, req.PeerID)
 		if err != nil {
 			resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 			return
 		}
-		part, _ := a.DmSvc.GetParticipant(context.Background(), conv.ID, uid)
-		resp.OK(c, a.dmFormatConversation(conv, uid, part))
+		part, _ := a.DmSvc.GetParticipant(c.Request.Context(), conv.ID, uid)
+		resp.OK(c, a.dmFormatConversation(c.Request.Context(), conv, uid, part))
 		return
 	}
 	// Verify peer exists and is not anonymized
-	if _, _, err := a.UserSvc.GetUserBrief(context.Background(), req.PeerID); err != nil {
+	if _, _, err := a.UserSvc.GetUserBrief(c.Request.Context(), req.PeerID); err != nil {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
-	blocked, err := a.FollowSvc.UsersBlocked(context.Background(), uid, req.PeerID)
+	blocked, err := a.FollowSvc.UsersBlocked(c.Request.Context(), uid, req.PeerID)
 	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
@@ -286,12 +286,12 @@ func (a *API) CreateDmConversation(c *gin.Context) {
 		resp.Err(c, http.StatusForbidden, errcode.CodeUserBlocked)
 		return
 	}
-	conv, part, err := a.DmSvc.GetOrCreateConversation(context.Background(), uid, req.PeerID)
+	conv, part, err := a.DmSvc.GetOrCreateConversation(c.Request.Context(), uid, req.PeerID)
 	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	resp.OK(c, a.dmFormatConversation(conv, uid, part))
+	resp.OK(c, a.dmFormatConversation(c.Request.Context(), conv, uid, part))
 }
 
 // DeleteDmConversation hides the thread for the current user (does not delete peer's copy).
@@ -314,7 +314,7 @@ func (a *API) DeleteDmConversation(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	if err := a.DmSvc.DeleteConversation(context.Background(), convID, uid); err != nil {
+	if err := a.DmSvc.DeleteConversation(c.Request.Context(), convID, uid); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
@@ -341,7 +341,7 @@ func (a *API) ResetDmAgentConversation(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	if err := a.DmSvc.ResetConversationForAgent(context.Background(), convID); err != nil {
+	if err := a.DmSvc.ResetConversationForAgent(c.Request.Context(), convID); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
@@ -384,7 +384,7 @@ func (a *API) PatchDmConversationSettings(c *gin.Context) {
 	if body.Unhidden != nil {
 		updates["hidden_at"] = nil
 	}
-	if err := a.DmSvc.UpdateConversationSettings(context.Background(), convID, uid, updates); err != nil {
+	if err := a.DmSvc.UpdateConversationSettings(c.Request.Context(), convID, uid, updates); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
@@ -413,7 +413,7 @@ func (a *API) ListDmMessages(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	conv, err := a.DmSvc.GetConversationByID(context.Background(), convID)
+	conv, err := a.DmSvc.GetConversationByID(c.Request.Context(), convID)
 	if err != nil {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
@@ -424,7 +424,7 @@ func (a *API) ListDmMessages(c *gin.Context) {
 	}
 	peer := dmPeerID(conv, uid)
 	if !a.dmIsAgentConv(conv) {
-		blocked, err := a.FollowSvc.UsersBlocked(context.Background(), uid, peer)
+		blocked, err := a.FollowSvc.UsersBlocked(c.Request.Context(), uid, peer)
 		if err != nil {
 			resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 			return
@@ -436,7 +436,7 @@ func (a *API) ListDmMessages(c *gin.Context) {
 	}
 	limit := parseLimit(c, 50, 100)
 	curID, _ := strconv.ParseUint(c.Query("cursor"), 10, 64)
-	list, err := a.DmSvc.ListMessages(context.Background(), convID, curID, limit+1)
+	list, err := a.DmSvc.ListMessages(c.Request.Context(), convID, curID, limit+1)
 	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
@@ -458,7 +458,7 @@ func (a *API) ListDmMessages(c *gin.Context) {
 		m := &list[i]
 		sc, ok := senderCache[m.SenderID]
 		if !ok {
-			sc.name, sc.avatar, _ = a.UserSvc.GetUserBrief(context.Background(), m.SenderID)
+			sc.name, sc.avatar, _ = a.UserSvc.GetUserBrief(c.Request.Context(), m.SenderID)
 			senderCache[m.SenderID] = sc
 		}
 		items = append(items, a.dmFormatMessage(m, sc.name, sc.avatar))
@@ -467,8 +467,8 @@ func (a *API) ListDmMessages(c *gin.Context) {
 	if hasMore && len(list) > 0 {
 		next = strconv.FormatUint(list[0].ID, 10)
 	}
-	_ = a.DmSvc.MarkConversationRead(context.Background(), convID, uid)
-	peerName, peerAvatar := a.dmUserBrief(context.Background(), peer)
+	_ = a.DmSvc.MarkConversationRead(c.Request.Context(), convID, uid)
+	peerName, peerAvatar := a.dmUserBrief(c.Request.Context(), peer)
 	resp.OK(c, dmMessageListResponse{
 		Items:      items,
 		NextCursor: next,
@@ -509,7 +509,7 @@ func (a *API) PostDmMessage(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	conv, err := a.DmSvc.GetConversationByID(context.Background(), convID)
+	conv, err := a.DmSvc.GetConversationByID(c.Request.Context(), convID)
 	if err != nil {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
@@ -521,7 +521,7 @@ func (a *API) PostDmMessage(c *gin.Context) {
 	peer := dmPeerID(conv, uid)
 	isAgent := a.dmIsAgentConv(conv)
 	if !isAgent {
-		blocked, err := a.FollowSvc.UsersBlocked(context.Background(), uid, peer)
+		blocked, err := a.FollowSvc.UsersBlocked(c.Request.Context(), uid, peer)
 		if err != nil {
 			resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 			return
@@ -531,17 +531,17 @@ func (a *API) PostDmMessage(c *gin.Context) {
 			return
 		}
 	}
-	result, err := a.DmSvc.PostMessage(context.Background(), convID, uid, peer, content, dmTrimPreview(content), isAgent)
+	result, err := a.DmSvc.PostMessage(c.Request.Context(), convID, uid, peer, content, dmTrimPreview(content), isAgent)
 	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	senderName, senderAvatar := a.dmUserBrief(context.Background(), uid)
+	senderName, senderAvatar := a.dmUserBrief(c.Request.Context(), uid)
 	out := a.dmFormatMessage(result.Message, senderName, senderAvatar)
-	convPayload := a.dmFormatConversation(result.Conversation, uid, result.SelfPart)
+	convPayload := a.dmFormatConversation(c.Request.Context(), result.Conversation, uid, result.SelfPart)
 	var peerConv *dmConversationDTO
 	if !isAgent && result.PeerPart != nil {
-		pc := a.dmFormatConversation(result.Conversation, peer, result.PeerPart)
+		pc := a.dmFormatConversation(c.Request.Context(), result.Conversation, peer, result.PeerPart)
 		peerConv = &pc
 	}
 	event := dmMessageEvent{Type: "dm_message", Message: out}

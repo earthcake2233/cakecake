@@ -74,7 +74,7 @@ func (a *API) PostVideoViewHistory(c *gin.Context) {
 		resp.Err(c, http.StatusUnauthorized, errcode.CodeUnauthorized)
 		return
 	}
-	paused, err := a.ViewHistorySvc.GetUserViewHistoryPaused(context.Background(), uid)
+	paused, err := a.ViewHistorySvc.GetUserViewHistoryPaused(c.Request.Context(), uid)
 	if err != nil {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
@@ -88,7 +88,7 @@ func (a *API) PostVideoViewHistory(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	v, ok := loadPublishedVideo(a, vid)
+	v, ok := loadPublishedVideo(c.Request.Context(), a, vid)
 	if !ok {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
@@ -110,18 +110,18 @@ func (a *API) PostVideoViewHistory(c *gin.Context) {
 	if dur > 0 && prog > dur {
 		prog = dur
 	}
-	if err := a.ViewHistorySvc.RecordVideoViewHistoryWithProgress(context.Background(), uid, vid, prog, dur, device, time.Now()); err != nil {
+	if err := a.ViewHistorySvc.RecordVideoViewHistoryWithProgress(c.Request.Context(), uid, vid, prog, dur, device, time.Now()); err != nil {
 		a.Log.Error("record view history", zap.Error(err))
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	a.ViewHistorySvc.TrimViewHistoryCombined(context.Background(), uid, viewHistoryMaxItems)
+	a.ViewHistorySvc.TrimViewHistoryCombined(c.Request.Context(), uid, viewHistoryMaxItems)
 	resp.OK(c, viewHistoryRecordResponse{Recorded: true})
 }
 
 // RecordArticleViewHistory upserts read history for a published article.
-func (a *API) RecordArticleViewHistory(uid, articleID uint64, device string) {
-	a.ViewHistorySvc.RecordArticleViewHistory(context.Background(), uid, articleID, device)
+func (a *API) RecordArticleViewHistory(ctx context.Context, uid, articleID uint64, device string) {
+	a.ViewHistorySvc.RecordArticleViewHistory(ctx, uid, articleID, device)
 }
 
 // ListMyViewHistory returns watch history for the personal-center page.
@@ -139,26 +139,26 @@ func (a *API) ListMyViewHistory(c *gin.Context) {
 		resp.Err(c, http.StatusUnauthorized, errcode.CodeUnauthorized)
 		return
 	}
-	paused, err := a.ViewHistorySvc.GetViewHistorySettings(context.Background(), uid)
+	paused, err := a.ViewHistorySvc.GetViewHistorySettings(c.Request.Context(), uid)
 	if err != nil {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
 	keyword := strings.TrimSpace(c.Query("q"))
 
-	vrows, err := a.ViewHistorySvc.ListVideoViewHistory(context.Background(), uid, keyword)
+	vrows, err := a.ViewHistorySvc.ListVideoViewHistory(c.Request.Context(), uid, keyword)
 	if err != nil {
 		a.Log.Error("list video view history", zap.Error(err))
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	arows, err := a.ViewHistorySvc.ListArticleViewHistory(context.Background(), uid, keyword)
+	arows, err := a.ViewHistorySvc.ListArticleViewHistory(c.Request.Context(), uid, keyword)
 	if err != nil {
 		a.Log.Error("list article view history", zap.Error(err))
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	items := append(a.viewHistoryVideoItems(vrows), a.viewHistoryArticleItems(arows)...)
+	items := append(a.viewHistoryVideoItems(c.Request.Context(), vrows), a.viewHistoryArticleItems(c.Request.Context(), arows)...)
 	sort.Slice(items, func(i, j int) bool {
 		ti := items[i].ViewedAt
 		tj := items[j].ViewedAt
@@ -171,7 +171,7 @@ func (a *API) ListMyViewHistory(c *gin.Context) {
 	resp.OK(c, viewHistoryListResponse{Items: items, Paused: paused})
 }
 
-func (a *API) viewHistoryVideoItems(rows []extra.VideoViewHistory) []viewHistoryItemDTO {
+func (a *API) viewHistoryVideoItems(ctx context.Context, rows []extra.VideoViewHistory) []viewHistoryItemDTO {
 	if len(rows) == 0 {
 		return []viewHistoryItemDTO{}
 	}
@@ -179,7 +179,7 @@ func (a *API) viewHistoryVideoItems(rows []extra.VideoViewHistory) []viewHistory
 	for i := range rows {
 		vids = append(vids, rows[i].VideoID)
 	}
-	videos, err := a.ViewHistorySvc.BatchFetchVideosByIDs(context.Background(), vids)
+	videos, err := a.ViewHistorySvc.BatchFetchVideosByIDs(ctx, vids)
 	if err != nil {
 		return []viewHistoryItemDTO{}
 	}
@@ -187,7 +187,7 @@ func (a *API) viewHistoryVideoItems(rows []extra.VideoViewHistory) []viewHistory
 	for _, v := range videos {
 		uids = append(uids, v.UserID)
 	}
-	users, _ := a.ViewHistorySvc.BatchFetchUsersByIDs(context.Background(), uids)
+	users, _ := a.ViewHistorySvc.BatchFetchUsersByIDs(ctx, uids)
 	items := make([]viewHistoryItemDTO, 0, len(rows))
 	for i := range rows {
 		h := rows[i]
@@ -223,7 +223,7 @@ func (a *API) formatVideoHistoryItem(h extra.VideoViewHistory, video vmodel.Vide
 	return item
 }
 
-func (a *API) viewHistoryArticleItems(rows []extra.ArticleViewHistory) []viewHistoryItemDTO {
+func (a *API) viewHistoryArticleItems(ctx context.Context, rows []extra.ArticleViewHistory) []viewHistoryItemDTO {
 	if len(rows) == 0 {
 		return []viewHistoryItemDTO{}
 	}
@@ -231,7 +231,7 @@ func (a *API) viewHistoryArticleItems(rows []extra.ArticleViewHistory) []viewHis
 	for i := range rows {
 		aids = append(aids, rows[i].ArticleID)
 	}
-	articles, err := a.ViewHistorySvc.BatchFetchArticlesByIDs(context.Background(), aids)
+	articles, err := a.ViewHistorySvc.BatchFetchArticlesByIDs(ctx, aids)
 	if err != nil {
 		return []viewHistoryItemDTO{}
 	}
@@ -239,7 +239,7 @@ func (a *API) viewHistoryArticleItems(rows []extra.ArticleViewHistory) []viewHis
 	for _, art := range articles {
 		uids = append(uids, art.UserID)
 	}
-	users, _ := a.ViewHistorySvc.BatchFetchUsersByIDs(context.Background(), uids)
+	users, _ := a.ViewHistorySvc.BatchFetchUsersByIDs(ctx, uids)
 	items := make([]viewHistoryItemDTO, 0, len(rows))
 	for i := range rows {
 		h := rows[i]
@@ -280,7 +280,7 @@ func (a *API) DeleteMyViewHistoryEntry(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	if err := a.ViewHistorySvc.DeleteVideoHistoryByVideo(context.Background(), uid, vid); err != nil {
+	if err := a.ViewHistorySvc.DeleteVideoHistoryByVideo(c.Request.Context(), uid, vid); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
@@ -299,7 +299,7 @@ func (a *API) DeleteMyArticleViewHistoryEntry(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	if err := a.ViewHistorySvc.DeleteArticleHistoryByArticle(context.Background(), uid, aid); err != nil {
+	if err := a.ViewHistorySvc.DeleteArticleHistoryByArticle(c.Request.Context(), uid, aid); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
@@ -313,11 +313,11 @@ func (a *API) ClearMyViewHistory(c *gin.Context) {
 		resp.Err(c, http.StatusUnauthorized, errcode.CodeUnauthorized)
 		return
 	}
-	if err := a.ViewHistorySvc.ClearViewHistory(context.Background(), uid); err != nil {
+	if err := a.ViewHistorySvc.ClearViewHistory(c.Request.Context(), uid); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	if err := a.ViewHistorySvc.ClearArticleViewHistory(context.Background(), uid); err != nil {
+	if err := a.ViewHistorySvc.ClearArticleViewHistory(c.Request.Context(), uid); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
@@ -338,7 +338,7 @@ func (a *API) GetMyViewHistorySettings(c *gin.Context) {
 		resp.Err(c, http.StatusUnauthorized, errcode.CodeUnauthorized)
 		return
 	}
-	paused, err := a.ViewHistorySvc.GetViewHistorySettings(context.Background(), uid)
+	paused, err := a.ViewHistorySvc.GetViewHistorySettings(c.Request.Context(), uid)
 	if err != nil {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
@@ -358,7 +358,7 @@ func (a *API) PutMyViewHistorySettings(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	if err := a.ViewHistorySvc.UpdateViewHistorySettings(context.Background(), uid, body.Paused); err != nil {
+	if err := a.ViewHistorySvc.UpdateViewHistorySettings(c.Request.Context(), uid, body.Paused); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
