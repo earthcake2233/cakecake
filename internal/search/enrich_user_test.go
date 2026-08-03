@@ -39,6 +39,48 @@ func TestRecentArchivesForUser_NegativeLimit(t *testing.T) {
 	assert.Nil(t, items)
 }
 
+func TestEnrichUserHits_Normal(t *testing.T) {
+	db := setupEnrichDB(t)
+	now := time.Now()
+	require.NoError(t, db.Create(&user.User{ID: 1, Username: "alice", Nickname: "Alice", Sign: "hello", Experience: 100}).Error)
+	require.NoError(t, db.Create(&video.Video{ID: 10, UserID: 1, Title: "v1", Status: video.StatusPublished, CoverURL: "c", CreatedAt: now}).Error)
+	require.NoError(t, db.Create(&article.Article{ID: 20, UserID: 1, Title: "a1", BodyMD: "b", Status: article.StatusPublished}).Error)
+	require.NoError(t, db.Create(&user.UserFollow{FollowerID: 2, FolloweeID: 1}).Error)
+
+	hits := EnrichUserHits(db, 2, []UserHit{{Mid: 1, Uname: "alice"}})
+	require.Len(t, hits, 1)
+	require.Equal(t, "alice", hits[0].Uname) // uname comes from the ES hit, untouched
+	require.Equal(t, "hello", hits[0].Usign)
+	require.Positive(t, hits[0].Level)
+	require.Equal(t, 2, hits[0].Archives)
+	require.Equal(t, 1, hits[0].Fans)
+	require.True(t, hits[0].FollowedByMe)
+	require.Len(t, hits[0].Recent, 2)
+}
+
+func TestEnrichUserHits_NotFollowedAndMissing(t *testing.T) {
+	db := setupEnrichDB(t)
+	require.NoError(t, db.Create(&user.User{ID: 1, Username: "alice", Sign: "sign"}).Error)
+
+	hits := EnrichUserHits(db, 1, []UserHit{{Mid: 1, Uname: "alice"}, {Mid: 999}})
+	require.Len(t, hits, 2)
+	require.False(t, hits[0].FollowedByMe)
+	require.Equal(t, "alice", hits[0].Uname)
+	// Missing user: hit left unchanged.
+	require.Equal(t, uint64(999), hits[1].Mid)
+}
+
+func TestEnrichUserHits_Anonymized(t *testing.T) {
+	db := setupEnrichDB(t)
+	now := time.Now()
+	require.NoError(t, db.Create(&user.User{ID: 1, Username: "gone", AnonymizedAt: &now}).Error)
+	hits := EnrichUserHits(db, 0, []UserHit{{Mid: 1, Uname: "old"}})
+	require.Len(t, hits, 1)
+	require.Equal(t, "已注销用户", hits[0].Uname)
+	require.Empty(t, hits[0].Usign)
+	require.Nil(t, hits[0].Recent)
+}
+
 func TestRecentArchivesForUser_OnlyVideos(t *testing.T) {
 	db := setupEnrichDB(t)
 	now := time.Now()

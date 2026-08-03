@@ -123,6 +123,17 @@ func TestDynamicService_AdvancedAndAdmin(t *testing.T) {
 	require.Equal(t, int64(3), res.Total)
 	require.Equal(t, 2, res.TotalPages)
 	require.Len(t, res.Dynamics, 2)
+	// Reply and default sort orders.
+	res, err = s.ListMyDynamicsAdvanced(ctx, MyDynamicFilter{UserID: 1, Page: 1, PageSize: 10, SortKey: "reply"})
+	require.NoError(t, err)
+	require.Equal(t, int64(3), res.Total)
+	res, err = s.ListMyDynamicsAdvanced(ctx, MyDynamicFilter{UserID: 1, Page: 1, PageSize: 10})
+	require.NoError(t, err)
+	require.Equal(t, int64(3), res.Total)
+	// Page beyond last page clamps to last page.
+	res, err = s.ListMyDynamicsAdvanced(ctx, MyDynamicFilter{UserID: 1, Page: 99, PageSize: 2})
+	require.NoError(t, err)
+	require.Equal(t, 2, res.TotalPages)
 
 	adminRes, err := s.AdminListDynamics(ctx, "c", 1, 10)
 	require.NoError(t, err)
