@@ -20,124 +20,170 @@ type SearchSuggestTag struct {
 
 // SearchSuggest builds keyword suggestions from hot-search Redis, ops rules, and optional user history.
 func SearchSuggest(ctx context.Context, db *gorm.DB, rec *SearchHotRecorder, userID uint64, term string, limit int) []SearchSuggestTag {
+	limit = clampSuggestLimit(limit)
+	term = strings.TrimSpace(term)
+	coll := newSuggestCollector(NormalizeSearchKeyword(term))
+	collectUserHistorySuggestions(ctx, db, userID, coll)
+	collectOpsRuleSuggestions(ctx, db, time.Now(), coll)
+	collectHotRankSuggestions(ctx, rec, coll)
+	if len(coll.cands) == 0 {
+		fallbackSuggestions(ctx, db, rec, limit, coll)
+	}
+	return finalizeSuggestions(coll, term, limit)
+}
+
+func clampSuggestLimit(limit int) int {
 	if limit <= 0 {
-		limit = 10
+		return 10
 	}
 	if limit > 20 {
-		limit = 20
+		return 20
 	}
-	term = strings.TrimSpace(term)
-	termNorm := NormalizeSearchKeyword(term)
+	return limit
+}
 
-	type cand struct {
-		display string
-		score   int
+type suggestCandidate struct {
+	display string
+	score   int
+}
+
+type suggestCollector struct {
+	termNorm string
+	seen     map[string]struct{}
+	cands    []suggestCandidate
+}
+
+func newSuggestCollector(termNorm string) *suggestCollector {
+	return &suggestCollector{termNorm: termNorm, seen: make(map[string]struct{})}
+}
+
+// add appends a candidate when it matches the term and has not been seen.
+func (c *suggestCollector) add(display string, score int) {
+	d := strings.TrimSpace(display)
+	if d == "" {
+		return
 	}
-	seen := make(map[string]struct{})
-	var cands []cand
-	add := func(display string, score int) {
-		d := strings.TrimSpace(display)
-		if d == "" {
-			return
+	norm := NormalizeSearchKeyword(d)
+	if norm == "" {
+		return
+	}
+	if c.seenNorm(norm) {
+		return
+	}
+	if c.termNorm != "" && !keywordMatchesSuggest(c.termNorm, norm, d) {
+		return
+	}
+	c.markNorm(norm)
+	c.cands = append(c.cands, suggestCandidate{display: d, score: score})
+}
+
+// addUnchecked appends a candidate without term matching (fallback path).
+func (c *suggestCollector) addUnchecked(display string, score int) {
+	c.cands = append(c.cands, suggestCandidate{display: display, score: score})
+}
+
+func (c *suggestCollector) seenNorm(norm string) bool {
+	_, ok := c.seen[norm]
+	return ok
+}
+
+func (c *suggestCollector) markNorm(norm string) {
+	c.seen[norm] = struct{}{}
+}
+
+func collectUserHistorySuggestions(ctx context.Context, db *gorm.DB, userID uint64, coll *suggestCollector) {
+	if userID == 0 || db == nil {
+		return
+	}
+	var rows []extra.UserSearchHistory
+	_ = db.Where("user_id = ?", userID).
+		Order("updated_at DESC, id DESC").
+		Limit(40).
+		Find(&rows).Error
+	for i, r := range rows {
+		coll.add(r.Keyword, 1000-i)
+	}
+}
+
+func collectOpsRuleSuggestions(ctx context.Context, db *gorm.DB, now time.Time, coll *suggestCollector) {
+	if db == nil {
+		return
+	}
+	var ops []admin.HotSearchOp
+	_ = db.Where("enabled = ?", true).Find(&ops).Error
+	for i := range ops {
+		op := ops[i]
+		if !hotSearchOpActive(now, op.StartAt, op.EndAt) {
+			continue
 		}
-		norm := NormalizeSearchKeyword(d)
+		if op.OpType == "block" {
+			continue
+		}
+		coll.add(hotSearchDisplayTitle(&op), 500-i)
+	}
+}
+
+func collectHotRankSuggestions(ctx context.Context, rec *SearchHotRecorder, coll *suggestCollector) {
+	if rec == nil || rec.Rdb == nil {
+		return
+	}
+	zs, err := rec.Rdb.ZRevRangeWithScores(ctx, keyHotSearchRank, 0, 299).Result()
+	if err != nil || len(zs) == 0 {
+		return
+	}
+	norms := make([]string, 0, len(zs))
+	for _, z := range zs {
+		norms = append(norms, z.Member.(string))
+	}
+	labels, _ := rec.Rdb.HMGet(ctx, keyHotSearchLabel, norms...).Result()
+	for i, z := range zs {
+		norm, _ := z.Member.(string)
+		title := norm
+		if i < len(labels) && labels[i] != nil {
+			if s, ok := labels[i].(string); ok && strings.TrimSpace(s) != "" {
+				title = strings.TrimSpace(s)
+			}
+		}
+		score := int(z.Score)
+		if coll.termNorm != "" && strings.HasPrefix(NormalizeSearchKeyword(title), coll.termNorm) {
+			score += 10000
+		}
+		coll.add(title, score)
+	}
+}
+
+// fallbackSuggestions shows the top merged hot-search items when nothing matched.
+func fallbackSuggestions(ctx context.Context, db *gorm.DB, rec *SearchHotRecorder, limit int, coll *suggestCollector) {
+	items, _ := ListHotSearchMerged(ctx, db, rec, limit)
+	for i, it := range items {
+		title := strings.TrimSpace(it.Title)
+		if title == "" {
+			continue
+		}
+		norm := NormalizeSearchKeyword(title)
 		if norm == "" {
-			return
+			continue
 		}
-		if _, ok := seen[norm]; ok {
-			return
+		if coll.seenNorm(norm) {
+			continue
 		}
-		if termNorm != "" && !keywordMatchesSuggest(termNorm, norm, d) {
-			return
-		}
-		seen[norm] = struct{}{}
-		cands = append(cands, cand{display: d, score: score})
+		coll.markNorm(norm)
+		coll.addUnchecked(title, 100-i)
 	}
+}
 
-	if userID > 0 && db != nil {
-		var rows []extra.UserSearchHistory
-		_ = db.Where("user_id = ?", userID).
-			Order("updated_at DESC, id DESC").
-			Limit(40).
-			Find(&rows).Error
-		for i, r := range rows {
-			add(r.Keyword, 1000-i)
+func finalizeSuggestions(coll *suggestCollector, term string, limit int) []SearchSuggestTag {
+	sort.Slice(coll.cands, func(i, j int) bool {
+		if coll.cands[i].score != coll.cands[j].score {
+			return coll.cands[i].score > coll.cands[j].score
 		}
-	}
-
-	if db != nil {
-		now := time.Now()
-		var ops []admin.HotSearchOp
-		_ = db.Where("enabled = ?", true).Find(&ops).Error
-		for i := range ops {
-			op := ops[i]
-			if !hotSearchOpActive(now, op.StartAt, op.EndAt) {
-				continue
-			}
-			if op.OpType == "block" {
-				continue
-			}
-			add(hotSearchDisplayTitle(&op), 500-i)
-		}
-	}
-
-	if rec != nil && rec.Rdb != nil {
-		zs, err := rec.Rdb.ZRevRangeWithScores(ctx, keyHotSearchRank, 0, 299).Result()
-		if err == nil && len(zs) > 0 {
-			norms := make([]string, 0, len(zs))
-			for _, z := range zs {
-				norms = append(norms, z.Member.(string))
-			}
-			labels, _ := rec.Rdb.HMGet(ctx, keyHotSearchLabel, norms...).Result()
-			for i, z := range zs {
-				norm, _ := z.Member.(string)
-				title := norm
-				if i < len(labels) && labels[i] != nil {
-					if s, ok := labels[i].(string); ok && strings.TrimSpace(s) != "" {
-						title = strings.TrimSpace(s)
-					}
-				}
-				score := int(z.Score)
-				if termNorm != "" && strings.HasPrefix(NormalizeSearchKeyword(title), termNorm) {
-					score += 10000
-				}
-				add(title, score)
-			}
-		}
-	}
-
-	// When there are no matches (or no entries in the database yet), fall back to showing the top N merged hot search items.
-	if len(cands) == 0 {
-		items, _ := ListHotSearchMerged(ctx, db, rec, limit)
-		for i, it := range items {
-			title := strings.TrimSpace(it.Title)
-			if title == "" {
-				continue
-			}
-			norm := NormalizeSearchKeyword(title)
-			if norm == "" {
-				continue
-			}
-			if _, ok := seen[norm]; ok {
-				continue
-			}
-			seen[norm] = struct{}{}
-			cands = append(cands, cand{display: title, score: 100 - i})
-		}
-	}
-
-	sort.Slice(cands, func(i, j int) bool {
-		if cands[i].score != cands[j].score {
-			return cands[i].score > cands[j].score
-		}
-		return cands[i].display < cands[j].display
+		return coll.cands[i].display < coll.cands[j].display
 	})
-
-	if len(cands) > limit {
-		cands = cands[:limit]
+	if len(coll.cands) > limit {
+		coll.cands = coll.cands[:limit]
 	}
-	out := make([]SearchSuggestTag, 0, len(cands))
-	for _, c := range cands {
+	out := make([]SearchSuggestTag, 0, len(coll.cands))
+	for _, c := range coll.cands {
 		out = append(out, SearchSuggestTag{
 			Name:  HighlightSuggestKeyword(c.display, term),
 			Value: c.display,

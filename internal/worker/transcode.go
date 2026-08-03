@@ -26,6 +26,40 @@ import (
 // TranscodeJob is the JSON payload on the transcode queue.
 type TranscodeJob = queue.TranscodeJob
 
+// ffmpegOps isolates external ffmpeg calls so the pipeline is unit-testable.
+type ffmpegOps interface {
+	TranscodeToH264MP4(rawPath, outMP4 string) (stderr string, err error)
+	ScreenshotJPEG(inPath, outPath string, second float64) (stderr string, err error)
+	IsPermanentTranscodeFailure(stderr string) bool
+}
+
+type realFFmpegOps struct{}
+
+func (realFFmpegOps) TranscodeToH264MP4(rawPath, outMP4 string) (string, error) {
+	return ffmpeg.TranscodeToH264MP4(rawPath, outMP4)
+}
+
+func (realFFmpegOps) ScreenshotJPEG(inPath, outPath string, second float64) (string, error) {
+	return ffmpeg.ScreenshotJPEG(inPath, outPath, second)
+}
+
+func (realFFmpegOps) IsPermanentTranscodeFailure(stderr string) bool {
+	return ffmpeg.IsPermanentTranscodeFailure(stderr)
+}
+
+// transcodePublisher is the minimal channel surface needed to republish a job.
+type transcodePublisher interface {
+	PublishWithContext(ctx context.Context, exchange, key string, mandatory, immediate bool, msg amqp.Publishing) error
+}
+
+// objectStore is the minimal object-storage surface the pipeline needs.
+type objectStore interface {
+	UploadFile(objectKey, localPath string) error
+}
+
+// transcodeRetryBaseDelay is the base retry backoff; variable for tests.
+var transcodeRetryBaseDelay = 30 * time.Second
+
 // StartTranscodeConsumer runs a blocking AMQP consumer loop.
 func StartTranscodeConsumer(ctx context.Context, cfg *config.C, db *gorm.DB, mq *queue.Client, ossClient *storage.OSS, esc *search.Client) {
 	ch, err := mq.NewConsumerChannel()
@@ -60,7 +94,14 @@ func StartTranscodeConsumer(ctx context.Context, cfg *config.C, db *gorm.DB, mq 
 }
 
 func handleDelivery(ctx context.Context, cfg *config.C, db *gorm.DB, ch, pubCh *amqp.Channel, ossClient *storage.OSS, esc *search.Client, d amqp.Delivery) {
-	lg := logger.L
+	var store objectStore
+	if ossClient != nil {
+		store = ossClient
+	}
+	handleDeliveryWith(ctx, cfg, db, pubCh, store, esc, d, realFFmpegOps{}, logger.L)
+}
+
+func handleDeliveryWith(ctx context.Context, cfg *config.C, db *gorm.DB, pubCh transcodePublisher, ossClient objectStore, esc *search.Client, d amqp.Delivery, ff ffmpegOps, lg *zap.Logger) {
 	var job TranscodeJob
 	if err := json.Unmarshal(d.Body, &job); err != nil {
 		lg.Error("transcode bad json", zap.Error(err))
@@ -82,10 +123,10 @@ func handleDelivery(ctx context.Context, cfg *config.C, db *gorm.DB, ch, pubCh *
 	_ = os.Remove(coverOut)
 
 	lg.Info("transcode ffmpeg start", zap.Uint64("video_id", job.VideoID))
-	stderr, err := ffmpeg.TranscodeToH264MP4(job.RawPath, outMP4)
+	stderr, err := ff.TranscodeToH264MP4(job.RawPath, outMP4)
 	if err != nil {
 		lg.Warn("ffmpeg transcode failed", zap.Uint64("video_id", job.VideoID), zap.Error(err), zap.String("stderr", stderr))
-		if ffmpeg.IsPermanentTranscodeFailure(stderr) {
+		if ff.IsPermanentTranscodeFailure(stderr) {
 			failVideo(db, job.VideoID, strings.TrimSpace(stderr))
 			cleanupPaths(job.RawPath, job.CoverPath, outMP4, coverOut, "")
 			_ = d.Ack(false)
@@ -107,10 +148,10 @@ func handleDelivery(ctx context.Context, cfg *config.C, db *gorm.DB, ch, pubCh *
 		}
 	} else {
 		// Default cover: captures a frame from the transcoded H.264 MP4 (more reliable than capturing from the source container).
-		se, err := ffmpeg.ScreenshotJPEG(outMP4, coverOut, 1)
+		se, err := ff.ScreenshotJPEG(outMP4, coverOut, 1)
 		if err != nil {
 			lg.Warn("ffmpeg screenshot failed", zap.Error(err), zap.String("stderr", se))
-			if ffmpeg.IsPermanentTranscodeFailure(se) {
+			if ff.IsPermanentTranscodeFailure(se) {
 				failVideo(db, job.VideoID, strings.TrimSpace(se))
 				cleanupPaths(job.RawPath, job.CoverPath, outMP4, coverOut, "")
 				_ = d.Ack(false)
@@ -200,14 +241,14 @@ func truncate(s string, n int) string {
 
 // requeueOrFail re-enqueues on retryable failure and returns true (caller must preserve RawPath / user cover).
 // On terminal failure returns false, and has already deleted RawPath, CoverPath and local files in terminalLocalExtras.
-func requeueOrFail(ctx context.Context, cfg *config.C, db *gorm.DB, pubCh *amqp.Channel, lg *zap.Logger, job TranscodeJob, reason string, terminalLocalExtras ...string) bool {
+func requeueOrFail(ctx context.Context, cfg *config.C, db *gorm.DB, pubCh transcodePublisher, lg *zap.Logger, job TranscodeJob, reason string, terminalLocalExtras ...string) bool {
 	if job.RetryCount >= 3 {
 		failVideo(db, job.VideoID, reason)
 		cleanupPaths(append([]string{job.RawPath, job.CoverPath}, terminalLocalExtras...)...)
 		lg.Error("transcode exhausted retries", zap.Uint64("video_id", job.VideoID))
 		return false
 	}
-	wait := time.Duration(30*(job.RetryCount+1)) * time.Second
+	wait := time.Duration(transcodeRetryBaseDelay.Nanoseconds() * int64(job.RetryCount+1))
 	lg.Info("transcode retry scheduled", zap.Uint64("video_id", job.VideoID), zap.Duration("wait", wait), zap.Int("retry", job.RetryCount+1))
 	time.Sleep(wait)
 	job.RetryCount++

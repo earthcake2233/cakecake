@@ -27,6 +27,11 @@ type VideoService struct {
 	mq  queue.TranscodePublisher
 }
 
+// VideoProbe is the media-duration probe used by the video services. It is a
+// variable so tests can substitute a deterministic probe without invoking
+// the external ffprobe binary.
+var VideoProbe = ffmpeg.ProbeDurationSeconds
+
 func NewVideoService(db *gorm.DB, rdb *redis.Client, log *zap.Logger, es *search.Client, mq queue.TranscodePublisher) *VideoService {
 	return &VideoService{db: db, rdb: rdb, log: log, es: es, mq: mq}
 }
@@ -56,7 +61,7 @@ func (s *VideoService) EnqueueTranscode(ctx context.Context, videoID uint64, raw
 
 // ProbeDurationSeconds probes a raw media file's duration via ffprobe.
 func (s *VideoService) ProbeDurationSeconds(path string) (float64, error) {
-	return ffmpeg.ProbeDurationSeconds(path)
+	return VideoProbe(path)
 }
 
 // FFprobeExe returns the ffprobe executable path used by the probe helpers.

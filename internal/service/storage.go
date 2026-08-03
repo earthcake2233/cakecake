@@ -26,41 +26,63 @@ type StorageService struct {
 	log *zap.Logger
 }
 
+// StorageBackend is the minimal object-storage surface StorageService needs.
+type StorageBackend interface {
+	UploadFile(objectKey, localPath string) error
+	UploadReader(objectKey string, r io.Reader) error
+	DeleteObject(objectKey string) error
+	DeleteObjects(objectKeys []string) error
+}
+
+// OSSBackendOverride lets tests substitute a fake object-storage backend
+// without exercising the real OSS SDK.
+var OSSBackendOverride StorageBackend
+
+func (s *StorageService) backend() StorageBackend {
+	if OSSBackendOverride != nil {
+		return OSSBackendOverride
+	}
+	if s == nil {
+		return nil
+	}
+	return s.oss
+}
+
 func NewStorageService(cfg *config.C, oss *storage.OSS, log *zap.Logger) *StorageService {
 	return &StorageService{cfg: cfg, oss: oss, log: log}
 }
 
 // Enabled reports whether OSS is configured.
 func (s *StorageService) Enabled() bool {
-	return s != nil && s.oss != nil
+	return s.backend() != nil
 }
 
 // UploadFile stores a local file at the given object key.
 func (s *StorageService) UploadFile(objectKey, localPath string) error {
-	if s == nil || s.oss == nil {
+	if s.backend() == nil {
 		return fmt.Errorf("oss not configured")
 	}
-	return s.oss.UploadFile(objectKey, localPath)
+	return s.backend().UploadFile(objectKey, localPath)
 }
 
 // UploadReader stores a reader's content at the given object key.
 func (s *StorageService) UploadReader(objectKey string, r io.Reader) error {
-	if s == nil || s.oss == nil {
+	if s.backend() == nil {
 		return fmt.Errorf("oss not configured")
 	}
-	return s.oss.UploadReader(objectKey, r)
+	return s.backend().UploadReader(objectKey, r)
 }
 
 // PurgeAgentAvatar removes a replaced agent avatar object.
 func (s *StorageService) PurgeAgentAvatar(avatarURL string) {
-	if s == nil || s.cfg == nil || s.oss == nil {
+	if s == nil || s.cfg == nil || s.backend() == nil {
 		return
 	}
 	key := strings.TrimPrefix(strings.TrimSpace(s.cfg.OSSObjectKeyFromURL(avatarURL)), "/")
 	if key == "" || !strings.HasPrefix(key, "agent/") {
 		return
 	}
-	if err := s.oss.DeleteObject(key); err != nil {
+	if err := s.backend().DeleteObject(key); err != nil {
 		if s.log != nil {
 			s.log.Warn("oss delete agent avatar", zap.String("key", key), zap.Error(err))
 		}
@@ -114,7 +136,7 @@ func dynamicOSSObjectKeys(cfg *config.C, dyn dynamic.UserDynamic) []string {
 }
 
 func (s *StorageService) purgeDynamicImageURLs(urls []string) {
-	if s == nil || s.cfg == nil || s.oss == nil || len(urls) == 0 {
+	if s == nil || s.cfg == nil || s.backend() == nil || len(urls) == 0 {
 		return
 	}
 	seen := make(map[string]struct{})
@@ -133,7 +155,7 @@ func (s *StorageService) purgeDynamicImageURLs(urls []string) {
 	if len(keys) == 0 {
 		return
 	}
-	if err := s.oss.DeleteObjects(keys); err != nil {
+	if err := s.backend().DeleteObjects(keys); err != nil {
 		if s.log != nil {
 			s.log.Warn("oss delete dynamic image urls", zap.Strings("keys", keys), zap.Error(err))
 		}
@@ -167,14 +189,14 @@ func (s *StorageService) PurgeRemovedDynamicImageURLs(oldURLs, newURLs []string)
 
 // PurgeDynamic deletes all OSS objects referenced by a dynamic post.
 func (s *StorageService) PurgeDynamic(dyn dynamic.UserDynamic) {
-	if s == nil || s.oss == nil {
+	if s == nil || s.backend() == nil {
 		return
 	}
 	keys := dynamicOSSObjectKeys(s.cfg, dyn)
 	if len(keys) == 0 {
 		return
 	}
-	if err := s.oss.DeleteObjects(keys); err != nil {
+	if err := s.backend().DeleteObjects(keys); err != nil {
 		if s.log != nil {
 			s.log.Warn("oss delete dynamic objects",
 				zap.Uint64("dynamic_id", dyn.ID),
@@ -221,14 +243,14 @@ func videoOSSObjectKeys(cfg *config.C, v video.Video) []string {
 
 // PurgeVideo deletes all OSS objects referenced by a video.
 func (s *StorageService) PurgeVideo(v video.Video) {
-	if s == nil || s.oss == nil {
+	if s == nil || s.backend() == nil {
 		return
 	}
 	keys := videoOSSObjectKeys(s.cfg, v)
 	if len(keys) == 0 {
 		return
 	}
-	if err := s.oss.DeleteObjects(keys); err != nil {
+	if err := s.backend().DeleteObjects(keys); err != nil {
 		if s.log != nil {
 			s.log.Error("oss delete video objects",
 				zap.Uint64("video_id", v.ID),
@@ -273,14 +295,14 @@ func bannerOSSObjectKeys(cfg *config.C, b admin.HomeBanner) []string {
 
 // PurgeBanner deletes all OSS objects referenced by a home banner.
 func (s *StorageService) PurgeBanner(b admin.HomeBanner) {
-	if s == nil || s.oss == nil {
+	if s == nil || s.backend() == nil {
 		return
 	}
 	keys := bannerOSSObjectKeys(s.cfg, b)
 	if len(keys) == 0 {
 		return
 	}
-	if err := s.oss.DeleteObjects(keys); err != nil {
+	if err := s.backend().DeleteObjects(keys); err != nil {
 		if s.log != nil {
 			s.log.Warn("oss delete banner objects",
 				zap.Uint64("banner_id", b.ID),
@@ -300,14 +322,14 @@ func (s *StorageService) PurgeBanner(b admin.HomeBanner) {
 
 // PurgeBannerImageURL deletes a single banner image object.
 func (s *StorageService) PurgeBannerImageURL(imageURL string) {
-	if s == nil || s.cfg == nil || s.oss == nil {
+	if s == nil || s.cfg == nil || s.backend() == nil {
 		return
 	}
 	key := s.cfg.OSSObjectKeyFromURL(imageURL)
 	if key == "" {
 		return
 	}
-	if err := s.oss.DeleteObject(key); err != nil && s.log != nil {
+	if err := s.backend().DeleteObject(key); err != nil && s.log != nil {
 		s.log.Warn("oss delete banner image", zap.String("key", key), zap.Error(err))
 	}
 }
@@ -348,14 +370,14 @@ func articleOSSObjectKeys(cfg *config.C, art article.Article) []string {
 
 // PurgeArticle deletes all OSS objects referenced by an article (cover + markdown images).
 func (s *StorageService) PurgeArticle(art article.Article) {
-	if s == nil || s.oss == nil {
+	if s == nil || s.backend() == nil {
 		return
 	}
 	keys := articleOSSObjectKeys(s.cfg, art)
 	if len(keys) == 0 {
 		return
 	}
-	if err := s.oss.DeleteObjects(keys); err != nil {
+	if err := s.backend().DeleteObjects(keys); err != nil {
 		if s.log != nil {
 			s.log.Warn("oss delete article objects",
 				zap.Uint64("article_id", art.ID),
@@ -400,14 +422,14 @@ func favoriteFolderOSSObjectKeys(cfg *config.C, f video.FavoriteFolder) []string
 
 // PurgeFavoriteFolder deletes all OSS objects referenced by a favorite folder.
 func (s *StorageService) PurgeFavoriteFolder(f video.FavoriteFolder) {
-	if s == nil || s.oss == nil {
+	if s == nil || s.backend() == nil {
 		return
 	}
 	keys := favoriteFolderOSSObjectKeys(s.cfg, f)
 	if len(keys) == 0 {
 		return
 	}
-	if err := s.oss.DeleteObjects(keys); err != nil {
+	if err := s.backend().DeleteObjects(keys); err != nil {
 		if s.log != nil {
 			s.log.Warn("oss delete favorite folder cover",
 				zap.Uint64("folder_id", f.ID),

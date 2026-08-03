@@ -4,6 +4,7 @@ import (
 	"cakecake/internal/model/video"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/redis/go-redis/v9"
@@ -21,6 +22,10 @@ type VideoDraftService struct {
 	log *zap.Logger
 	mq  queue.TranscodePublisher
 }
+
+// ErrReplaceMediaUpdate marks a failure at the first (field-update) stage of
+// ReplaceMedia, where the caller should clean up newly saved temp files.
+var ErrReplaceMediaUpdate = errors.New("replace media: draft field update failed")
 
 func NewVideoDraftService(db *gorm.DB, rdb *redis.Client, log *zap.Logger, mq queue.TranscodePublisher) *VideoDraftService {
 	return &VideoDraftService{db: db, rdb: rdb, log: log, mq: mq}
@@ -46,12 +51,52 @@ func (s *VideoDraftService) EnqueueTranscode(ctx context.Context, videoID uint64
 
 // ProbeDurationSeconds probes a raw media file's duration via ffprobe.
 func (s *VideoDraftService) ProbeDurationSeconds(path string) (float64, error) {
-	return ffmpeg.ProbeDurationSeconds(path)
+	return VideoProbe(path)
 }
 
 // FFprobeExe returns the ffprobe executable path used by the probe helpers.
 func (s *VideoDraftService) FFprobeExe() string {
 	return ffmpeg.FFprobeExe()
+}
+
+// ReplaceMediaOpts carries the validated media-replacement fields.
+type ReplaceMediaOpts struct {
+	Title       string
+	Description string
+	TagsJSON    string
+	Zone        string
+	RawPath     string
+	CoverPath   string
+	DurationSec float64
+}
+
+// ReplaceMedia swaps a draft's media, marks it processing, and queues transcoding.
+func (s *VideoDraftService) ReplaceMedia(ctx context.Context, v *video.Video, opts ReplaceMediaOpts) error {
+	updates := map[string]interface{}{
+		"title":            opts.Title,
+		"description":      opts.Description,
+		"tags_json":        opts.TagsJSON,
+		"status":           video.StatusProcessing,
+		"fail_reason":      "",
+		"video_url":        "",
+		"cover_url":        "",
+		"duration_sec":     opts.DurationSec,
+		"draft_raw_path":   opts.RawPath,
+		"draft_cover_path": opts.CoverPath,
+	}
+	if opts.Zone != "" {
+		updates["zone"] = opts.Zone
+	}
+	if err := s.UpdateDraft(ctx, v, updates); err != nil {
+		return fmt.Errorf("%w: %v", ErrReplaceMediaUpdate, err)
+	}
+	if err := s.EnqueueTranscode(ctx, v.ID, opts.RawPath, opts.CoverPath); err != nil {
+		return err
+	}
+	return s.UpdateDraft(ctx, v, map[string]interface{}{
+		"draft_raw_path":   "",
+		"draft_cover_path": "",
+	})
 }
 
 // CreateDraft inserts a new draft video record.

@@ -312,84 +312,22 @@ func (s *AgentService) GenerateReply(ctx context.Context, conv *dm.DmConversatio
 			return nil, fmt.Errorf("message contains sensitive words")
 		}
 	}
-	profilePrompt := strings.TrimSpace(profile.SystemPrompt)
-	if profilePrompt == "" {
+	if strings.TrimSpace(profile.SystemPrompt) == "" {
 		return nil, fmt.Errorf("empty system prompt")
 	}
-	globalPrompt := data.GetGlobalSystemPrompt(s.DB)
-	prev := s.Gateway.SystemPrompt
-	s.Gateway.SystemPrompt = globalPrompt + "\n\n" + profilePrompt
-	defer func() { s.Gateway.SystemPrompt = prev }()
+	restore := s.agentSystemPrompt(profile)
+	defer restore()
 
-	timeout := 90 * time.Second
-	if s.Cfg != nil && s.Cfg.AgentRequestTimeout > 0 {
-		timeout = s.Cfg.AgentRequestTimeout
-	}
-	if s.RC != nil {
-		if v := s.RC.Get("agent_request_timeout", ""); v != "" {
-			if d, err := time.ParseDuration(v); err == nil && d > 0 {
-				timeout = d
-			}
-		}
-	}
-	ctx, cancel := context.WithTimeout(ctx, timeout)
+	ctx, cancel := context.WithTimeout(ctx, s.agentReplyTimeout())
 	defer cancel()
 
-	// Decide whether to use tools
-	useTools := s.ToolExec != nil && len(toolkit.DefineTools(s.enabledTools())) > 0
-
+	var coll *toolActivityCollector
 	var reply string
-	// Collect tool data for persistence
-	var toolActs []map[string]interface{}
-	var toolResults = make(map[string]json.RawMessage)
-	var mu sync.Mutex
-
-	if useTools {
+	if s.ToolExec != nil && len(toolkit.DefineTools(s.enabledTools())) > 0 {
 		traceID := generateTraceID()
 		s.setupToolCallbacks(traceID, conv.UserLow)
 		defer s.clearToolCallbacks()
-
-		// Wrap callbacks to also collect data for persistence
-		if s.Gateway.OnToolCallStart != nil {
-			orig := s.Gateway.OnToolCallStart
-			s.Gateway.OnToolCallStart = func(tid, spanID, parentSpanID, toolName string, argsJSON json.RawMessage) {
-				orig(tid, spanID, parentSpanID, toolName, argsJSON)
-				mu.Lock()
-				toolActs = append(toolActs, map[string]interface{}{
-					"trace_id":  tid,
-					"span_id":   spanID,
-					"tool_name": toolName,
-					"status":    "running",
-				})
-				mu.Unlock()
-			}
-		}
-		if s.Gateway.OnToolCallEnd != nil {
-			orig := s.Gateway.OnToolCallEnd
-			s.Gateway.OnToolCallEnd = func(tid, spanID, toolName string, durationMs int64, resultSummary string) {
-				orig(tid, spanID, toolName, durationMs, resultSummary)
-				mu.Lock()
-				for i := range toolActs {
-					if toolActs[i]["span_id"] == spanID {
-						toolActs[i]["status"] = "done"
-						toolActs[i]["duration_ms"] = durationMs
-						toolActs[i]["result_summary"] = resultSummary
-						break
-					}
-				}
-				mu.Unlock()
-			}
-		}
-		if s.Gateway.OnToolResultData != nil {
-			orig := s.Gateway.OnToolResultData
-			s.Gateway.OnToolResultData = func(tid, spanID, toolName string, items json.RawMessage) {
-				orig(tid, spanID, toolName, items)
-				mu.Lock()
-				toolResults[spanID] = items
-				mu.Unlock()
-			}
-		}
-
+		coll = installToolCollectors(s.Gateway)
 		tools := toolkit.DefineTools(s.enabledTools())
 		s.Gateway.ToolExec = s.ToolExec
 		reply, err = s.Gateway.CompleteUserTurnWithTools(ctx, conv.ID, userText, tools, traceID)
@@ -404,16 +342,99 @@ func (s *AgentService) GenerateReply(ctx context.Context, conv *dm.DmConversatio
 			return &GenerateReplyResult{Content: "抱歉，AI 助手暂时无法回复，请稍后再试。"}, nil
 		}
 	}
+	return buildReplyResult(reply, coll)
+}
 
+// agentReplyTimeout resolves the effective LLM request timeout (runtime config first).
+func (s *AgentService) agentReplyTimeout() time.Duration {
+	timeout := 90 * time.Second
+	if s.Cfg != nil && s.Cfg.AgentRequestTimeout > 0 {
+		timeout = s.Cfg.AgentRequestTimeout
+	}
+	if s.RC != nil {
+		if v := s.RC.Get("agent_request_timeout", ""); v != "" {
+			if d, err := time.ParseDuration(v); err == nil && d > 0 {
+				timeout = d
+			}
+		}
+	}
+	return timeout
+}
+
+// agentSystemPrompt swaps in the effective system prompt, returning a restore func.
+func (s *AgentService) agentSystemPrompt(profile *agent.AgentProfile) func() {
+	globalPrompt := data.GetGlobalSystemPrompt(s.DB)
+	prev := s.Gateway.SystemPrompt
+	s.Gateway.SystemPrompt = globalPrompt + "\n\n" + strings.TrimSpace(profile.SystemPrompt)
+	return func() { s.Gateway.SystemPrompt = prev }
+}
+
+// toolActivityCollector captures tool calls/results so they can be persisted.
+type toolActivityCollector struct {
+	mu      sync.Mutex
+	acts    []map[string]interface{}
+	results map[string]json.RawMessage
+}
+
+// installToolCollectors wraps gateway callbacks to record tool activity.
+func installToolCollectors(g *aigateway.Gateway) *toolActivityCollector {
+	c := &toolActivityCollector{results: make(map[string]json.RawMessage)}
+	if g.OnToolCallStart != nil {
+		orig := g.OnToolCallStart
+		g.OnToolCallStart = func(tid, spanID, parentSpanID, toolName string, argsJSON json.RawMessage) {
+			orig(tid, spanID, parentSpanID, toolName, argsJSON)
+			c.mu.Lock()
+			c.acts = append(c.acts, map[string]interface{}{
+				"trace_id":  tid,
+				"span_id":   spanID,
+				"tool_name": toolName,
+				"status":    "running",
+			})
+			c.mu.Unlock()
+		}
+	}
+	if g.OnToolCallEnd != nil {
+		orig := g.OnToolCallEnd
+		g.OnToolCallEnd = func(tid, spanID, toolName string, durationMs int64, resultSummary string) {
+			orig(tid, spanID, toolName, durationMs, resultSummary)
+			c.mu.Lock()
+			for i := range c.acts {
+				if c.acts[i]["span_id"] == spanID {
+					c.acts[i]["status"] = "done"
+					c.acts[i]["duration_ms"] = durationMs
+					c.acts[i]["result_summary"] = resultSummary
+					break
+				}
+			}
+			c.mu.Unlock()
+		}
+	}
+	if g.OnToolResultData != nil {
+		orig := g.OnToolResultData
+		g.OnToolResultData = func(tid, spanID, toolName string, items json.RawMessage) {
+			orig(tid, spanID, toolName, items)
+			c.mu.Lock()
+			c.results[spanID] = items
+			c.mu.Unlock()
+		}
+	}
+	return c
+}
+
+// buildReplyResult attaches persisted tool data to the final reply.
+func buildReplyResult(reply string, coll *toolActivityCollector) (*GenerateReplyResult, error) {
 	result := &GenerateReplyResult{Content: reply}
-	if len(toolActs) > 0 {
-		if b, e := json.Marshal(toolActs); e == nil {
+	if coll == nil {
+		return result, nil
+	}
+	if len(coll.acts) > 0 {
+		if b, e := json.Marshal(coll.acts); e == nil {
 			result.ToolActivities = b
 		}
 	}
-	if len(toolResults) > 0 {
-		rm := make(map[string]json.RawMessage)
-		for k, v := range toolResults {
+	if len(coll.results) > 0 {
+		rm := make(map[string]json.RawMessage, len(coll.results))
+		for k, v := range coll.results {
 			rm[k] = v
 		}
 		if b, e := json.Marshal(rm); e == nil {
