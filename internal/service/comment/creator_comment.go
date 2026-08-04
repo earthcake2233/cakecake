@@ -7,6 +7,7 @@ import (
 	"cakecake/internal/model/user"
 	"cakecake/internal/model/video"
 	"context"
+	"fmt"
 
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
@@ -82,41 +83,86 @@ type CreatorVideoCommentResult struct {
 	LikedByViewer map[uint64]bool
 }
 
-// ListCreatorVideoComments lists comments on the creator's videos with filters.
-func (p *CreatorCommentProviderImpl) ListCreatorVideoComments(ctx context.Context, q CreatorVideoCommentQuery) (*CreatorVideoCommentResult, error) {
-	base := p.db.WithContext(ctx).Model(&comment.Comment{}).
-		Joins("INNER JOIN videos ON videos.id = comments.video_id AND videos.user_id = ?", q.UserID)
+// creatorCommentListQuery is the shared filter surface for creator-panel comment lists.
+type creatorCommentListQuery struct {
+	UserID        uint64
+	Page          int
+	PageSize      int
+	SortKey       string
+	Pending       bool
+	PendingStatus string
+	PendingScope  string
+	Keyword       string
+	FilterMediaID uint64
+	ViewerID      uint64
+}
+
+// creatorCommentListResult is the row-level query result before per-domain projection.
+type creatorCommentListResult[R any] struct {
+	Comments      []R
+	Total         int64
+	MediaIDs      []uint64
+	UserIDs       []uint64
+	ParentIDs     []uint64
+	CommentIDs    []uint64
+	LikedByViewer map[uint64]bool
+}
+
+// creatorCommentListSpec parameterizes the shared creator list query for one comment domain.
+type creatorCommentListSpec[R any, L any] struct {
+	rowModel        R
+	table           string // comments / article_comments / dynamic_comments
+	mediaFK         string // owner media FK column, e.g. comments.video_id
+	mediaJoin       string // join to owner media; must contain one ? for the creator user id
+	curatedColumn   string // media table comments_curated column, e.g. videos.comments_curated
+	keywordWhere    string // content/title LIKE expression with ? placeholders
+	keywordArgCount int
+	idOf            func(R) uint64
+	mediaIDOf       func(R) uint64
+	userIDOf        func(R) uint64
+	parentIDOf      func(R) uint64
+	likeIDOf        func(L) uint64
+}
+
+// listCreatorComments runs the shared creator-panel comment query (ownership join, pending
+// filter, keyword, sort, pagination, viewer-like annotation) for one comment domain.
+func listCreatorComments[R any, L any](ctx context.Context, db *gorm.DB, q creatorCommentListQuery, spec creatorCommentListSpec[R, L]) (*creatorCommentListResult[R], error) {
+	base := db.WithContext(ctx).Model(&spec.rowModel).Joins(spec.mediaJoin, q.UserID)
 
 	if q.Pending {
 		switch q.PendingStatus {
 		case "ignored":
-			base = base.Where("comments.curated_ignored = ?", true).
-				Where("comments.approved = ?", false)
+			base = base.Where(spec.table+".curated_ignored = ?", true).
+				Where(spec.table+".approved = ?", false)
 		default:
-			base = base.Where("videos.comments_curated = ?", true).
-				Where("comments.approved = ?", false)
+			base = base.Where(spec.curatedColumn+" = ?", true).
+				Where(spec.table+".approved = ?", false)
 			switch q.PendingStatus {
 			case "all":
 			default: // unprocessed
-				base = base.Where("comments.curated_ignored = ?", false)
+				base = base.Where(spec.table+".curated_ignored = ?", false)
 			}
 		}
 		switch q.PendingScope {
 		case "root":
-			base = base.Where("comments.parent_id = ?", 0)
+			base = base.Where(spec.table+".parent_id = ?", 0)
 		case "reply":
-			base = base.Where("comments.parent_id > ?", 0)
+			base = base.Where(spec.table+".parent_id > ?", 0)
 		}
 	} else {
-		base = base.Where("comments.approved = ?", true)
+		base = base.Where(spec.table+".approved = ?", true)
 	}
 
-	if q.FilterVideoID > 0 {
-		base = base.Where("comments.video_id = ?", q.FilterVideoID)
+	if q.FilterMediaID > 0 {
+		base = base.Where(spec.mediaFK+" = ?", q.FilterMediaID)
 	}
 	if q.Keyword != "" {
 		like := "%" + q.Keyword + "%"
-		base = base.Where("comments.content LIKE ? OR videos.title LIKE ?", like, like)
+		args := make([]any, spec.keywordArgCount)
+		for i := range args {
+			args[i] = like
+		}
+		base = base.Where(spec.keywordWhere, args...)
 	}
 
 	var total int64
@@ -124,47 +170,76 @@ func (p *CreatorCommentProviderImpl) ListCreatorVideoComments(ctx context.Contex
 		return nil, err
 	}
 
-	order := "comments.created_at DESC, comments.id DESC"
+	order := spec.table + ".created_at DESC, " + spec.table + ".id DESC"
 	switch q.SortKey {
 	case "earliest":
-		order = "comments.created_at ASC, comments.id ASC"
+		order = spec.table + ".created_at ASC, " + spec.table + ".id ASC"
 	case "likes":
-		order = "comments.like_count DESC, comments.id DESC"
+		order = spec.table + ".like_count DESC, " + spec.table + ".id DESC"
 	case "replies":
-		order = "(SELECT COUNT(*) FROM comments AS r WHERE r.parent_id = comments.id) DESC, comments.id DESC"
+		order = fmt.Sprintf("(SELECT COUNT(*) FROM %s AS r WHERE r.parent_id = %s.id) DESC, %s.id DESC", spec.table, spec.table, spec.table)
 	}
 
 	offset := (q.Page - 1) * q.PageSize
-	var list []comment.Comment
+	var list []R
 	if err := base.Order(order).Offset(offset).Limit(q.PageSize).Find(&list).Error; err != nil {
 		return nil, err
 	}
 
-	result := &CreatorVideoCommentResult{
+	result := &creatorCommentListResult[R]{
 		Comments:      list,
 		Total:         total,
-		VideoIDs:      make([]uint64, 0, len(list)),
+		MediaIDs:      make([]uint64, 0, len(list)),
 		UserIDs:       make([]uint64, 0, len(list)),
 		ParentIDs:     make([]uint64, 0),
 		CommentIDs:    make([]uint64, len(list)),
 		LikedByViewer: make(map[uint64]bool),
 	}
-	for i, cm := range list {
-		result.CommentIDs[i] = cm.ID
-		result.VideoIDs = append(result.VideoIDs, cm.VideoID)
-		result.UserIDs = append(result.UserIDs, cm.UserID)
-		if cm.ParentID > 0 {
-			result.ParentIDs = append(result.ParentIDs, cm.ParentID)
+	for i := range list {
+		result.CommentIDs[i] = spec.idOf(list[i])
+		result.MediaIDs = append(result.MediaIDs, spec.mediaIDOf(list[i]))
+		result.UserIDs = append(result.UserIDs, spec.userIDOf(list[i]))
+		if pid := spec.parentIDOf(list[i]); pid > 0 {
+			result.ParentIDs = append(result.ParentIDs, pid)
 		}
 	}
 	if q.ViewerID > 0 && len(list) > 0 {
-		var likes []comment.CommentLike
-		_ = p.db.WithContext(ctx).Where("user_id = ? AND comment_id IN ?", q.ViewerID, result.CommentIDs).Find(&likes).Error
+		var likes []L
+		_ = db.WithContext(ctx).Where("user_id = ? AND comment_id IN ?", q.ViewerID, result.CommentIDs).Find(&likes).Error
 		for _, lk := range likes {
-			result.LikedByViewer[lk.CommentID] = true
+			result.LikedByViewer[spec.likeIDOf(lk)] = true
 		}
 	}
 	return result, nil
+}
+
+// ListCreatorVideoComments lists comments on the creator's videos with filters.
+func (p *CreatorCommentProviderImpl) ListCreatorVideoComments(ctx context.Context, q CreatorVideoCommentQuery) (*CreatorVideoCommentResult, error) {
+	res, err := listCreatorComments(ctx, p.db, creatorCommentListQuery{
+		UserID: q.UserID, Page: q.Page, PageSize: q.PageSize, SortKey: q.SortKey,
+		Pending: q.Pending, PendingStatus: q.PendingStatus, PendingScope: q.PendingScope,
+		Keyword: q.Keyword, FilterMediaID: q.FilterVideoID, ViewerID: q.ViewerID,
+	}, creatorCommentListSpec[comment.Comment, comment.CommentLike]{
+		rowModel: comment.Comment{},
+		table:    "comments", mediaFK: "comments.video_id",
+		mediaJoin:       "INNER JOIN videos ON videos.id = comments.video_id AND videos.user_id = ?",
+		curatedColumn:   "videos.comments_curated",
+		keywordWhere:    "comments.content LIKE ? OR videos.title LIKE ?",
+		keywordArgCount: 2,
+		idOf:            func(cm comment.Comment) uint64 { return cm.ID },
+		mediaIDOf:       func(cm comment.Comment) uint64 { return cm.VideoID },
+		userIDOf:        func(cm comment.Comment) uint64 { return cm.UserID },
+		parentIDOf:      func(cm comment.Comment) uint64 { return cm.ParentID },
+		likeIDOf:        func(lk comment.CommentLike) uint64 { return lk.CommentID },
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &CreatorVideoCommentResult{
+		Comments: res.Comments, Total: res.Total, VideoIDs: res.MediaIDs,
+		UserIDs: res.UserIDs, ParentIDs: res.ParentIDs, CommentIDs: res.CommentIDs,
+		LikedByViewer: res.LikedByViewer,
+	}, nil
 }
 
 // BatchFetchVideos returns a map of video id to Video for the given ids.
@@ -433,87 +508,31 @@ type CreatorArticleCommentResult struct {
 
 // ListCreatorArticleComments lists comments on the creator's articles with filters.
 func (p *CreatorCommentProviderImpl) ListCreatorArticleComments(ctx context.Context, q CreatorArticleCommentQuery) (*CreatorArticleCommentResult, error) {
-	base := p.db.WithContext(ctx).Model(&comment.ArticleComment{}).
-		Joins("INNER JOIN articles ON articles.id = article_comments.article_id AND articles.user_id = ?", q.UserID)
-
-	if q.Pending {
-		switch q.PendingStatus {
-		case "ignored":
-			base = base.Where("article_comments.curated_ignored = ?", true).
-				Where("article_comments.approved = ?", false)
-		default:
-			base = base.Where("articles.comments_curated = ?", true).
-				Where("article_comments.approved = ?", false)
-			switch q.PendingStatus {
-			case "all":
-			default:
-				base = base.Where("article_comments.curated_ignored = ?", false)
-			}
-		}
-		switch q.PendingScope {
-		case "root":
-			base = base.Where("article_comments.parent_id = ?", 0)
-		case "reply":
-			base = base.Where("article_comments.parent_id > ?", 0)
-		}
-	} else {
-		base = base.Where("article_comments.approved = ?", true)
-	}
-
-	if q.FilterArticleID > 0 {
-		base = base.Where("article_comments.article_id = ?", q.FilterArticleID)
-	}
-	if q.Keyword != "" {
-		like := "%" + q.Keyword + "%"
-		base = base.Where("article_comments.content LIKE ? OR articles.title LIKE ?", like, like)
-	}
-
-	var total int64
-	if err := base.Session(&gorm.Session{}).Count(&total).Error; err != nil {
+	res, err := listCreatorComments(ctx, p.db, creatorCommentListQuery{
+		UserID: q.UserID, Page: q.Page, PageSize: q.PageSize, SortKey: q.SortKey,
+		Pending: q.Pending, PendingStatus: q.PendingStatus, PendingScope: q.PendingScope,
+		Keyword: q.Keyword, FilterMediaID: q.FilterArticleID, ViewerID: q.ViewerID,
+	}, creatorCommentListSpec[comment.ArticleComment, comment.ArticleCommentLike]{
+		rowModel: comment.ArticleComment{},
+		table:    "article_comments", mediaFK: "article_comments.article_id",
+		mediaJoin:       "INNER JOIN articles ON articles.id = article_comments.article_id AND articles.user_id = ?",
+		curatedColumn:   "articles.comments_curated",
+		keywordWhere:    "article_comments.content LIKE ? OR articles.title LIKE ?",
+		keywordArgCount: 2,
+		idOf:            func(cm comment.ArticleComment) uint64 { return cm.ID },
+		mediaIDOf:       func(cm comment.ArticleComment) uint64 { return cm.ArticleID },
+		userIDOf:        func(cm comment.ArticleComment) uint64 { return cm.UserID },
+		parentIDOf:      func(cm comment.ArticleComment) uint64 { return cm.ParentID },
+		likeIDOf:        func(lk comment.ArticleCommentLike) uint64 { return lk.CommentID },
+	})
+	if err != nil {
 		return nil, err
 	}
-
-	order := "article_comments.created_at DESC, article_comments.id DESC"
-	switch q.SortKey {
-	case "earliest":
-		order = "article_comments.created_at ASC, article_comments.id ASC"
-	case "likes":
-		order = "article_comments.like_count DESC, article_comments.id DESC"
-	case "replies":
-		order = "(SELECT COUNT(*) FROM article_comments AS r WHERE r.parent_id = article_comments.id) DESC, article_comments.id DESC"
-	}
-
-	offset := (q.Page - 1) * q.PageSize
-	var list []comment.ArticleComment
-	if err := base.Order(order).Offset(offset).Limit(q.PageSize).Find(&list).Error; err != nil {
-		return nil, err
-	}
-
-	result := &CreatorArticleCommentResult{
-		Comments:   list,
-		Total:      total,
-		ArticleIDs: make([]uint64, 0, len(list)),
-		UserIDs:    make([]uint64, 0, len(list)),
-		ParentIDs:  make([]uint64, 0),
-		CommentIDs: make([]uint64, len(list)),
-	}
-	for i, cm := range list {
-		result.CommentIDs[i] = cm.ID
-		result.ArticleIDs = append(result.ArticleIDs, cm.ArticleID)
-		result.UserIDs = append(result.UserIDs, cm.UserID)
-		if cm.ParentID > 0 {
-			result.ParentIDs = append(result.ParentIDs, cm.ParentID)
-		}
-	}
-
-	if q.ViewerID > 0 && len(list) > 0 {
-		var likes []comment.ArticleCommentLike
-		_ = p.db.WithContext(ctx).Where("user_id = ? AND comment_id IN ?", q.ViewerID, result.CommentIDs).Find(&likes).Error
-		for _, lk := range likes {
-			result.LikedByViewer[lk.CommentID] = true
-		}
-	}
-	return result, nil
+	return &CreatorArticleCommentResult{
+		Comments: res.Comments, Total: res.Total, ArticleIDs: res.MediaIDs,
+		UserIDs: res.UserIDs, ParentIDs: res.ParentIDs, CommentIDs: res.CommentIDs,
+		LikedByViewer: res.LikedByViewer,
+	}, nil
 }
 
 // BatchFetchArticles returns a map of article id to Article for the given ids.
@@ -560,87 +579,31 @@ type CreatorDynamicCommentResult struct {
 
 // ListCreatorDynamicComments lists comments on the creator's dynamics with filters.
 func (p *CreatorCommentProviderImpl) ListCreatorDynamicComments(ctx context.Context, q CreatorDynamicCommentQuery) (*CreatorDynamicCommentResult, error) {
-	base := p.db.WithContext(ctx).Model(&comment.DynamicComment{}).
-		Joins("INNER JOIN user_dynamics ON user_dynamics.id = dynamic_comments.dynamic_id AND user_dynamics.user_id = ?", q.UserID)
-
-	if q.Pending {
-		switch q.PendingStatus {
-		case "ignored":
-			base = base.Where("dynamic_comments.curated_ignored = ?", true).
-				Where("dynamic_comments.approved = ?", false)
-		default:
-			base = base.Where("user_dynamics.comments_curated = ?", true).
-				Where("dynamic_comments.approved = ?", false)
-			switch q.PendingStatus {
-			case "all":
-			default:
-				base = base.Where("dynamic_comments.curated_ignored = ?", false)
-			}
-		}
-		switch q.PendingScope {
-		case "root":
-			base = base.Where("dynamic_comments.parent_id = ?", 0)
-		case "reply":
-			base = base.Where("dynamic_comments.parent_id > ?", 0)
-		}
-	} else {
-		base = base.Where("dynamic_comments.approved = ?", true)
-	}
-
-	if q.FilterDynamicID > 0 {
-		base = base.Where("dynamic_comments.dynamic_id = ?", q.FilterDynamicID)
-	}
-	if q.Keyword != "" {
-		like := "%" + q.Keyword + "%"
-		base = base.Where("dynamic_comments.content LIKE ? OR user_dynamics.title LIKE ? OR user_dynamics.content LIKE ?", like, like, like)
-	}
-
-	var total int64
-	if err := base.Session(&gorm.Session{}).Count(&total).Error; err != nil {
+	res, err := listCreatorComments(ctx, p.db, creatorCommentListQuery{
+		UserID: q.UserID, Page: q.Page, PageSize: q.PageSize, SortKey: q.SortKey,
+		Pending: q.Pending, PendingStatus: q.PendingStatus, PendingScope: q.PendingScope,
+		Keyword: q.Keyword, FilterMediaID: q.FilterDynamicID, ViewerID: q.ViewerID,
+	}, creatorCommentListSpec[comment.DynamicComment, comment.DynamicCommentLike]{
+		rowModel: comment.DynamicComment{},
+		table:    "dynamic_comments", mediaFK: "dynamic_comments.dynamic_id",
+		mediaJoin:       "INNER JOIN user_dynamics ON user_dynamics.id = dynamic_comments.dynamic_id AND user_dynamics.user_id = ?",
+		curatedColumn:   "user_dynamics.comments_curated",
+		keywordWhere:    "dynamic_comments.content LIKE ? OR user_dynamics.title LIKE ? OR user_dynamics.content LIKE ?",
+		keywordArgCount: 3,
+		idOf:            func(cm comment.DynamicComment) uint64 { return cm.ID },
+		mediaIDOf:       func(cm comment.DynamicComment) uint64 { return cm.DynamicID },
+		userIDOf:        func(cm comment.DynamicComment) uint64 { return cm.UserID },
+		parentIDOf:      func(cm comment.DynamicComment) uint64 { return cm.ParentID },
+		likeIDOf:        func(lk comment.DynamicCommentLike) uint64 { return lk.CommentID },
+	})
+	if err != nil {
 		return nil, err
 	}
-
-	order := "dynamic_comments.created_at DESC, dynamic_comments.id DESC"
-	switch q.SortKey {
-	case "earliest":
-		order = "dynamic_comments.created_at ASC, dynamic_comments.id ASC"
-	case "likes":
-		order = "dynamic_comments.like_count DESC, dynamic_comments.id DESC"
-	case "replies":
-		order = "(SELECT COUNT(*) FROM dynamic_comments AS r WHERE r.parent_id = dynamic_comments.id) DESC, dynamic_comments.id DESC"
-	}
-
-	offset := (q.Page - 1) * q.PageSize
-	var list []comment.DynamicComment
-	if err := base.Order(order).Offset(offset).Limit(q.PageSize).Find(&list).Error; err != nil {
-		return nil, err
-	}
-
-	result := &CreatorDynamicCommentResult{
-		Comments:   list,
-		Total:      total,
-		DynamicIDs: make([]uint64, 0, len(list)),
-		UserIDs:    make([]uint64, 0, len(list)),
-		ParentIDs:  make([]uint64, 0),
-		CommentIDs: make([]uint64, len(list)),
-	}
-	for i, cm := range list {
-		result.CommentIDs[i] = cm.ID
-		result.DynamicIDs = append(result.DynamicIDs, cm.DynamicID)
-		result.UserIDs = append(result.UserIDs, cm.UserID)
-		if cm.ParentID > 0 {
-			result.ParentIDs = append(result.ParentIDs, cm.ParentID)
-		}
-	}
-
-	if q.ViewerID > 0 && len(list) > 0 {
-		var likes []comment.DynamicCommentLike
-		_ = p.db.WithContext(ctx).Where("user_id = ? AND comment_id IN ?", q.ViewerID, result.CommentIDs).Find(&likes).Error
-		for _, lk := range likes {
-			result.LikedByViewer[lk.CommentID] = true
-		}
-	}
-	return result, nil
+	return &CreatorDynamicCommentResult{
+		Comments: res.Comments, Total: res.Total, DynamicIDs: res.MediaIDs,
+		UserIDs: res.UserIDs, ParentIDs: res.ParentIDs, CommentIDs: res.CommentIDs,
+		LikedByViewer: res.LikedByViewer,
+	}, nil
 }
 
 // BatchFetchDynamics returns a map of dynamic id to UserDynamic for the given ids.

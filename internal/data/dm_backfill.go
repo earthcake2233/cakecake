@@ -26,9 +26,11 @@ func ensureDmParticipantHiddenAt(db *gorm.DB, lg *zap.Logger) error {
 // Keeps the newest pin (pinned_at, then id); clears pinned_at when pinned=false.
 func backfillDmParticipantPins(db *gorm.DB, lg *zap.Logger) error {
 	// Unpinned conversations should not have a pinned_at (including historically written 0000-00-00).
-	_ = db.Model(&dm.DmParticipant{}).
+	if err := db.Model(&dm.DmParticipant{}).
 		Where("pinned = ?", false).
-		Update("pinned_at", nil).Error
+		Update("pinned_at", nil).Error; err != nil && lg != nil {
+		lg.Warn("backfill dm participant pins: clear unpinned pinned_at failed", zap.Error(err))
+	}
 
 	type userPinCount struct {
 		UserID uint64

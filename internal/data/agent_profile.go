@@ -134,7 +134,9 @@ func backfillDmAgentProfileIDs(db *gorm.DB, lg *zap.Logger) error {
 		byBot[profiles[i].BotUserID] = profiles[i].ID
 	}
 	var convs []dm.DmConversation
-	_ = db.Where("kind = ?", dm.DmKindAgent).Find(&convs).Error
+	if err := db.Where("kind = ?", dm.DmKindAgent).Find(&convs).Error; err != nil && lg != nil {
+		lg.Warn("backfill dm agent profile ids: list agent conversations failed", zap.Error(err))
+	}
 	for i := range convs {
 		c := &convs[i]
 		if c.AgentProfileID > 0 {
@@ -145,7 +147,9 @@ func backfillDmAgentProfileIDs(db *gorm.DB, lg *zap.Logger) error {
 			pid = byBot[c.UserHigh]
 		}
 		if pid > 0 {
-			_ = db.Model(c).Update("agent_profile_id", pid).Error
+			if err := db.Model(c).Update("agent_profile_id", pid).Error; err != nil && lg != nil {
+				lg.Warn("backfill dm agent profile ids: update conversation failed", zap.Uint64("conversation_id", c.ID), zap.Uint64("profile_id", pid), zap.Error(err))
+			}
 		}
 	}
 	return nil

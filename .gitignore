@@ -3,6 +3,7 @@ Minibili.md
 Minibili_EN.md
 README_REFLECT.md
 README_REFLECT_EN.md
+docs/service-refactor-*.md
 
 # ── Secrets & local env（切勿提交）──
 .env

@@ -301,7 +301,7 @@ func EnsureHotSearchLayoutFromMerged(ctx context.Context, db *gorm.DB, rec *Sear
 	if db == nil || HasHotSearchDisplayLayout(db) {
 		return nil
 	}
-	items, err := listHotSearchMergedDetailLegacy(ctx, db, rec, limit)
+	items, err := listHotSearchMergedDetailFromOps(ctx, db, rec, limit)
 	if err != nil {
 		return err
 	}

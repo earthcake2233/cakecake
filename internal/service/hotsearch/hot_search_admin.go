@@ -21,10 +21,14 @@ func ListHotSearchMergedDetail(ctx context.Context, db *gorm.DB, rec *SearchHotR
 	if out, ok := mergeHotSearchFromLayout(ctx, db, rec, limit); ok {
 		return out, nil
 	}
-	return listHotSearchMergedDetailLegacy(ctx, db, rec, limit)
+	return listHotSearchMergedDetailFromOps(ctx, db, rec, limit)
 }
 
-func listHotSearchMergedDetailLegacy(ctx context.Context, db *gorm.DB, rec *SearchHotRecorder, limit int) ([]HotSearchMergedDetail, error) {
+// listHotSearchMergedDetailFromOps merges DB ops (pin/block/manual) with the Redis auto rank
+// into merged details. It is the current production default path (used as the fallback by
+// ListHotSearchMergedDetail and as the seed source by EnsureHotSearchLayoutFromMerged) —
+// not dead legacy code.
+func listHotSearchMergedDetailFromOps(ctx context.Context, db *gorm.DB, rec *SearchHotRecorder, limit int) ([]HotSearchMergedDetail, error) {
 	if limit <= 0 {
 		limit = 10
 	}

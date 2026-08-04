@@ -37,8 +37,8 @@ func TestListHotSearchMerged(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, details)
 
-	// Legacy path directly.
-	legacy, err := listHotSearchMergedLegacy(ctx, db, rec, 0)
+	// Ops+Redis merge path directly.
+	legacy, err := listHotSearchMergedDetailFromOps(ctx, db, rec, 0)
 	require.NoError(t, err)
 	require.NotEmpty(t, legacy)
 

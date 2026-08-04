@@ -87,7 +87,9 @@ func CleanupUserSearchHistory(db *gorm.DB, lg *zap.Logger) error {
 			continue
 		}
 		if r.KeywordNorm != norm {
-			_ = db.Model(&r).Update("keyword_norm", norm).Error
+			if err := db.Model(&r).Update("keyword_norm", norm).Error; err != nil && lg != nil {
+				lg.Warn("backfill search history keyword_norm failed", zap.Uint64("id", r.ID), zap.String("keyword", r.Keyword), zap.Error(err))
+			}
 		}
 		key := fmt.Sprintf("%d:%s", r.UserID, norm)
 		if _, dup := seen[key]; dup {

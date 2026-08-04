@@ -65,7 +65,7 @@ func TestHS_RemoveKeyword(t *testing.T) {
 	require.NoError(t, (*SearchHotRecorder)(nil).RemoveKeyword(ctx, "x"))
 }
 
-func TestHS_ListHotSearchMergedLegacy(t *testing.T) {
+func TestHS_ListHotSearchMerged(t *testing.T) {
 	mr, err := miniredis.Run()
 	require.NoError(t, err)
 	defer mr.Close()
@@ -74,14 +74,14 @@ func TestHS_ListHotSearchMergedLegacy(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
 	require.NoError(t, db.AutoMigrate(&admin.HotSearchOp{}))
-	items, err := listHotSearchMergedLegacy(context.Background(), nil, rec, 10)
+	items, err := ListHotSearchMerged(context.Background(), nil, rec, 10)
 	require.NoError(t, err)
 	require.NotNil(t, items)
 	now := time.Now()
 	end := now.Add(24 * time.Hour)
 	op := admin.HotSearchOp{Keyword: "news", OpType: "pin", PinRank: 1, Enabled: true, StartAt: &now, EndAt: &end}
 	require.NoError(t, db.Create(&op).Error)
-	items, err = listHotSearchMergedLegacy(context.Background(), db, rec, 10)
+	items, err = ListHotSearchMerged(context.Background(), db, rec, 10)
 	require.NoError(t, err)
 	require.NotNil(t, items)
 }

@@ -105,7 +105,7 @@ func handleDeliveryWith(ctx context.Context, cfg *config.C, db *gorm.DB, pubCh t
 	var job TranscodeJob
 	if err := json.Unmarshal(d.Body, &job); err != nil {
 		lg.Error("transcode bad json", zap.Error(err))
-		_ = d.Ack(false)
+		ackDelivery(lg, d)
 		return
 	}
 	lg.Info("transcode job received", zap.Uint64("video_id", job.VideoID), zap.String("raw", job.RawPath))
@@ -113,7 +113,7 @@ func handleDeliveryWith(ctx context.Context, cfg *config.C, db *gorm.DB, pubCh t
 		lg.Error("oss not configured, failing job", zap.Uint64("video_id", job.VideoID))
 		failVideo(db, job.VideoID, "OSS 未配置")
 		cleanupPaths(job.RawPath, job.CoverPath, "", "", "")
-		_ = d.Ack(false)
+		ackDelivery(lg, d)
 		return
 	}
 
@@ -129,11 +129,11 @@ func handleDeliveryWith(ctx context.Context, cfg *config.C, db *gorm.DB, pubCh t
 		if ff.IsPermanentTranscodeFailure(stderr) {
 			failVideo(db, job.VideoID, strings.TrimSpace(stderr))
 			cleanupPaths(job.RawPath, job.CoverPath, outMP4, coverOut, "")
-			_ = d.Ack(false)
+			ackDelivery(lg, d)
 			return
 		}
 		requeueOrFail(ctx, cfg, db, pubCh, lg, job, stderr, outMP4, coverOut)
-		_ = d.Ack(false)
+		ackDelivery(lg, d)
 		return
 	}
 	lg.Info("transcode ffmpeg done", zap.Uint64("video_id", job.VideoID))
@@ -154,11 +154,11 @@ func handleDeliveryWith(ctx context.Context, cfg *config.C, db *gorm.DB, pubCh t
 			if ff.IsPermanentTranscodeFailure(se) {
 				failVideo(db, job.VideoID, strings.TrimSpace(se))
 				cleanupPaths(job.RawPath, job.CoverPath, outMP4, coverOut, "")
-				_ = d.Ack(false)
+				ackDelivery(lg, d)
 				return
 			}
 			requeueOrFail(ctx, cfg, db, pubCh, lg, job, se, outMP4, coverOut)
-			_ = d.Ack(false)
+			ackDelivery(lg, d)
 			return
 		}
 		finalCoverPath = coverOut
@@ -175,7 +175,7 @@ func handleDeliveryWith(ctx context.Context, cfg *config.C, db *gorm.DB, pubCh t
 			// Retries still depend on RawPath / user cover: only delete regenerable intermediate artifacts (next round will re-transcode / re-capture).
 			cleanupPaths(outMP4, coverOut)
 		}
-		_ = d.Ack(false)
+		ackDelivery(lg, d)
 		return
 	}
 	if err := ossClient.UploadFile(coverKey, finalCoverPath); err != nil {
@@ -183,7 +183,7 @@ func handleDeliveryWith(ctx context.Context, cfg *config.C, db *gorm.DB, pubCh t
 		if requeueOrFail(ctx, cfg, db, pubCh, lg, job, err.Error(), outMP4, coverOut, finalCoverPath) {
 			cleanupPaths(outMP4, coverOut)
 		}
-		_ = d.Ack(false)
+		ackDelivery(lg, d)
 		return
 	}
 
@@ -206,7 +206,14 @@ func handleDeliveryWith(ctx context.Context, cfg *config.C, db *gorm.DB, pubCh t
 	}
 	cleanupPaths(job.RawPath, job.CoverPath, outMP4, coverOut, "")
 	lg.Info("transcode completed", zap.Uint64("video_id", job.VideoID))
-	_ = d.Ack(false)
+	ackDelivery(lg, d)
+}
+
+// ackDelivery acknowledges a consumed message and logs (rather than swallows) Ack failures.
+func ackDelivery(lg *zap.Logger, d amqp.Delivery) {
+	if err := d.Ack(false); err != nil {
+		lg.Error("transcode ack failed", zap.Error(err), zap.Uint64("delivery_tag", d.DeliveryTag))
+	}
 }
 
 func cleanupPaths(paths ...string) {

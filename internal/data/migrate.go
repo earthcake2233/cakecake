@@ -394,7 +394,9 @@ func backfillFavoriteFolders(db *gorm.DB, lg *zap.Logger) error {
 	}
 	for _, uid := range userIDs {
 		var cnt int64
-		_ = db.Model(&video.FavoriteFolder{}).Where("user_id = ?", uid).Count(&cnt).Error
+		if err := db.Model(&video.FavoriteFolder{}).Where("user_id = ?", uid).Count(&cnt).Error; err != nil && lg != nil {
+			lg.Warn("backfill favorite folders: count existing failed", zap.Uint64("user_id", uid), zap.Error(err))
+		}
 		if cnt > 0 {
 			continue
 		}
@@ -407,9 +409,11 @@ func backfillFavoriteFolders(db *gorm.DB, lg *zap.Logger) error {
 		if err := db.Create(&f).Error; err != nil {
 			return err
 		}
-		_ = db.Model(&video.VideoFavorite{}).
+		if err := db.Model(&video.VideoFavorite{}).
 			Where("user_id = ? AND folder_id = ?", uid, 0).
-			Update("folder_id", f.ID).Error
+			Update("folder_id", f.ID).Error; err != nil && lg != nil {
+			lg.Warn("backfill favorite folders: reassign legacy favorites failed", zap.Uint64("user_id", uid), zap.Uint64("folder_id", f.ID), zap.Error(err))
+		}
 		if lg != nil {
 			lg.Info("backfill default favorite folder", zap.Uint64("user_id", uid))
 		}
@@ -628,7 +632,9 @@ func ensurePlaybackAndCommentColumns(db *gorm.DB, lg *zap.Logger) error {
 		if err := m.AddColumn(&danmaku.Danmaku{}, "FontSize"); err != nil {
 			return err
 		}
-		_ = db.Model(&danmaku.Danmaku{}).Where("font_size = '' OR font_size IS NULL").Update("font_size", "md").Error
+		if err := db.Model(&danmaku.Danmaku{}).Where("font_size = '' OR font_size IS NULL").Update("font_size", "md").Error; err != nil && lg != nil {
+			lg.Warn("backfill danmaku font_size failed", zap.Error(err))
+		}
 	}
 	return nil
 }
