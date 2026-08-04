@@ -6,6 +6,7 @@ import (
 	"cakecake/internal/model/admin"
 	"cakecake/internal/model/agent"
 	"cakecake/internal/model/dm"
+	"cakecake/internal/service/hotsearch"
 	"context"
 	"testing"
 

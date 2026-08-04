@@ -33,19 +33,18 @@ import (
 	"cakecake/internal/data"
 	"cakecake/internal/pkg/jwttoken"
 	"cakecake/internal/service"
-	"cakecake/internal/service/agent"
-	"cakecake/internal/service/article"
+	artsvc "cakecake/internal/service/article"
 	"cakecake/internal/service/banner"
-	"cakecake/internal/service/comment"
-	"cakecake/internal/service/dynamic"
+	cs "cakecake/internal/service/comment"
+	dsvc "cakecake/internal/service/dynamic"
 	"cakecake/internal/service/engagement"
 	"cakecake/internal/service/favorite"
 	"cakecake/internal/service/follow"
 	"cakecake/internal/service/hotsearch"
 	"cakecake/internal/service/notification"
 	searchsvc "cakecake/internal/service/search"
-	"cakecake/internal/service/user"
-	"cakecake/internal/service/video"
+	usvc "cakecake/internal/service/user"
+	vsvc "cakecake/internal/service/video"
 	"cakecake/internal/service/viewhistory"
 	"cakecake/internal/ws"
 )
@@ -83,24 +82,24 @@ func setupHandlerIntegrationDB(t *testing.T) (*API, *gin.Engine, string) {
 			Play:           &playcount.PlayCounter{Rdb: rdb, Store: playcount.NewPlayCountStore(db)},
 			DailyRewardSvc: dailyreward.NewDailyRewardService(db),
 			SearchSvc:      searchsvc.NewSearchService(nil, db, rdb, zap.NewNop()),
-			AuthSvc:        user.NewAuthService(db, rdb, zap.NewNop(), jm, user.AuthConfig{}),
-			UserSvc:        user.NewUserService(db, zap.NewNop()),
+			AuthSvc:        usvc.NewAuthService(db, rdb, zap.NewNop(), jm, usvc.AuthConfig{}),
+			UserSvc:        usvc.NewUserService(db, zap.NewNop()),
 			FollowSvc:      follow.NewFollowService(db, zap.NewNop()),
 			DanmakuSvc:     danmaku.NewDanmakuService(db, rdb, zap.NewNop(), nil),
-			CommentSvc: comment.NewCommentService(db, rdb, zap.NewNop(), nil, nil,
-				service.NewUserProvider(db), video.NewVideoProvider(db),
+			CommentSvc: cs.NewCommentService(db, rdb, zap.NewNop(), nil, nil,
+				service.NewUserProvider(db), vsvc.NewVideoProvider(db),
 				service.NewArticleProvider(db), service.NewDynamicProvider(db)),
 			NotifSvc:          notification.NewNotificationService(db, rdb, zap.NewNop(), nil),
-			VideoSvc:          video.NewVideoService(db, rdb, zap.NewNop(), nil, nil),
+			VideoSvc:          vsvc.NewVideoService(db, rdb, zap.NewNop(), nil, nil),
 			BannerSvc:         banner.NewBannerService(db),
 			DmSvc:             dm.NewDmService(db, rdb, zap.NewNop()),
 			FavoriteSvc:       favorite.NewFavoriteService(db, rdb, zap.NewNop(), nil, nil),
-			ArticleSvc:        article.NewArticleService(db, rdb, zap.NewNop(), nil, nil),
-			DynamicSvc:        dynamic.NewDynamicService(db, rdb, zap.NewNop()),
+			ArticleSvc:        artsvc.NewArticleService(db, rdb, zap.NewNop(), nil),
+			DynamicSvc:        dsvc.NewDynamicService(db, rdb, zap.NewNop()),
 			EngagementSvc:     engagement.NewEngagementService(db, rdb, zap.NewNop(), nil, nil),
 			ViewHistorySvc:    viewhistory.NewViewHistoryService(db, rdb, zap.NewNop()),
-			VideoDraftSvc:     video.NewVideoDraftService(db, rdb, zap.NewNop(), nil),
-			CreatorCommentSvc: comment.NewCreatorCommentService(db, rdb, zap.NewNop()),
+			VideoDraftSvc:     vsvc.NewVideoDraftService(db, rdb, zap.NewNop(), nil),
+			CreatorCommentSvc: cs.NewCreatorCommentService(db, rdb, zap.NewNop()),
 			SearchHistorySvc:  searchsvc.NewSearchHistoryService(db, zap.NewNop()),
 			SearchHot:         &hotsearch.SearchHotRecorder{Rdb: rdb, Sens: nil},
 			HotSearchSvc:      hotsearch.NewHotSearchService(db, &hotsearch.SearchHotRecorder{Rdb: rdb, Sens: nil}),
