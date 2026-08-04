@@ -18,6 +18,7 @@ import (
 	"cakecake/internal/pkg/netutil"
 	"cakecake/internal/pkg/resp"
 	"cakecake/internal/service"
+	"cakecake/internal/service/comment"
 )
 
 type commentPost struct {
@@ -193,7 +194,7 @@ func (a *API) PostComment(c *gin.Context) {
 	content := strings.TrimSpace(req.Content)
 	ipLoc := a.resolveCommentIPLocation(c)
 	cm, svcErr := a.CommentSvc.PostComment(c.Request.Context(), uid, vid,
-		service.PostCommentReq{Content: content, ParentID: req.ParentID}, ipLoc)
+		comment.PostCommentReq{Content: content, ParentID: req.ParentID}, ipLoc)
 	if svcErr != nil {
 		resp.Err(c, httpStatusFromSvc(errCodeFromSvc(svcErr)), errCodeFromSvc(svcErr))
 		return

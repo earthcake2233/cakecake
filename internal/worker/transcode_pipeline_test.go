@@ -249,14 +249,14 @@ func TestHandleDelivery_SuccessScreenshotPublish(t *testing.T) {
 	// handleDelivery update
 	mock.ExpectExec("UPDATE .*videos.* SET .*").
 		WillReturnResult(sqlmock.NewResult(1, 1))
-	// service.PublishVideo: SELECT video
+	// video.PublishVideo: SELECT video
 	mock.ExpectQuery("SELECT \\* FROM `videos`").
 		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id", "status", "created_at"}).
 			AddRow(13, 1, "processing", time.Now()))
-	// service.PublishVideo: UPDATE status
+	// video.PublishVideo: UPDATE status
 	mock.ExpectExec("UPDATE `videos` SET .* WHERE `id` = .*").
 		WillReturnResult(sqlmock.NewResult(1, 1))
-	// service.PublishVideo: first_published_at backfill
+	// video.PublishVideo: first_published_at backfill
 	mock.ExpectExec("UPDATE `users` SET .*first_published_at.* WHERE .*").
 		WillReturnResult(sqlmock.NewResult(1, 1))
 

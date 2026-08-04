@@ -22,6 +22,8 @@
 package main
 
 import (
+	"cakecake/internal/service/danmaku"
+	"cakecake/internal/service/dm"
 	"context"
 	"net/http"
 	"os"
@@ -49,6 +51,23 @@ import (
 	"cakecake/internal/queue"
 	"cakecake/internal/search"
 	"cakecake/internal/service"
+	"cakecake/internal/service/agent"
+	"cakecake/internal/service/article"
+	"cakecake/internal/service/banner"
+	"cakecake/internal/service/comment"
+	"cakecake/internal/service/dailyreward"
+	"cakecake/internal/service/dynamic"
+	"cakecake/internal/service/engagement"
+	"cakecake/internal/service/favorite"
+	"cakecake/internal/service/follow"
+	"cakecake/internal/service/hotsearch"
+	"cakecake/internal/service/notification"
+	"cakecake/internal/service/playcount"
+	searchsvc "cakecake/internal/service/search"
+	storesvc "cakecake/internal/service/storage"
+	"cakecake/internal/service/user"
+	"cakecake/internal/service/video"
+	"cakecake/internal/service/viewhistory"
 	"cakecake/internal/storage"
 	"cakecake/internal/worker"
 	"cakecake/internal/ws"
@@ -171,7 +190,7 @@ func main() {
 		worker.StartTranscodeConsumer(ctx, cfg, db, mq, ossc, esc)
 	}()
 
-	pc := &service.PlayCounter{Rdb: rdb, DB: db}
+	pc := &playcount.PlayCounter{Rdb: rdb, Store: playcount.NewPlayCountStore(db)}
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -197,7 +216,7 @@ func main() {
 
 	hub := ws.NewHub()
 	chatHub := ws.NewChatHub()
-	relay := service.NewDanmakuRelay(rdb, hub, log)
+	relay := danmaku.NewDanmakuRelay(rdb, hub, log)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -212,7 +231,7 @@ func main() {
 		log.Info("ip2region enabled", zap.String("path", cfg.IP2RegionV4XDB))
 	}
 
-	searchHot := &service.SearchHotRecorder{Rdb: rdb, Sens: sens}
+	searchHot := &hotsearch.SearchHotRecorder{Rdb: rdb, Sens: sens}
 
 	var agentGW *aigateway.Gateway
 	if cfg.DeepSeekAPIKey != "" {
@@ -240,40 +259,41 @@ func main() {
 		zap.Float64("default_rate", cfg.RateLimitRate),
 		zap.Int("default_burst", cfg.RateLimitBurst),
 	)
-	agentSvc := &service.AgentService{
-		Cfg: cfg, DB: db, Redis: rdb, Gateway: agentGW, Sens: sens,
+	agentSvc := &agent.AgentService{
+		Cfg: cfg, Store: agent.NewAgentStore(db), Redis: rdb, Gateway: agentGW, Sens: sens,
 		ChatHub: chatHub, Log: log, RC: runtimeCfg,
 		ToolExec: &toolkit.PlatformExecutor{DB: db, ES: esc, Sens: sens},
 	}
 
 	userProv := service.NewUserProvider(db)
-	videoProv := service.NewVideoProvider(db)
+	videoProv := video.NewVideoProvider(db)
 	articleProv := service.NewArticleProvider(db)
 	dynamicProv := service.NewDynamicProvider(db)
 
-	notifSvc := service.NewNotificationService(db, rdb, log, userProv)
-	commentSvc := service.NewCommentService(db, rdb, log, sens, notifSvc, userProv, videoProv, articleProv, dynamicProv)
-	authSvc := service.NewAuthService(db, rdb, log, jm, service.AuthConfig{AgentBotUsername: cfg.AgentBotUsername})
-	followSvc := service.NewFollowService(db, log)
-	danmakuSvc := service.NewDanmakuService(db, rdb, log, sens)
-	userSvc := service.NewUserService(db, log)
-	searchSvc := service.NewSearchService(esc, db, rdb, log)
-	dailyRewardSvc := service.NewDailyRewardService(db)
-	videoSvc := service.NewVideoService(db, rdb, log, esc, mq)
-	dmSvc := service.NewDmService(db, rdb, log)
-	favoriteSvc := service.NewFavoriteService(db, rdb, log, userProv, videoProv)
-	articleSvc := service.NewArticleService(db, rdb, log, userSvc, esc)
-	dynamicSvc := service.NewDynamicService(db, rdb, log)
-	engagementSvc := service.NewEngagementService(db, rdb, log, userProv, videoProv)
-	viewHistorySvc := service.NewViewHistoryService(db, rdb, log)
-	videoDraftSvc := service.NewVideoDraftService(db, rdb, log, mq)
-	creatorCommentSvc := service.NewCreatorCommentService(db, rdb, log)
-	searchHistorySvc := service.NewSearchHistoryService(db, log)
-	hotSearchSvc := service.NewHotSearchService(db, searchHot)
+	notifSvc := notification.NewNotificationService(db, rdb, log, userProv)
+	commentSvc := comment.NewCommentService(db, rdb, log, sens, notifSvc, userProv, videoProv, articleProv, dynamicProv)
+	authSvc := user.NewAuthService(db, rdb, log, jm, user.AuthConfig{AgentBotUsername: cfg.AgentBotUsername})
+	followSvc := follow.NewFollowService(db, log)
+	danmakuSvc := danmaku.NewDanmakuService(db, rdb, log, sens)
+	userSvc := user.NewUserService(db, log)
+	searchSvc := searchsvc.NewSearchService(esc, db, rdb, log)
+	dailyRewardSvc := dailyreward.NewDailyRewardService(db)
+	videoSvc := video.NewVideoService(db, rdb, log, esc, mq)
+	bannerSvc := banner.NewBannerService(db)
+	dmSvc := dm.NewDmService(db, rdb, log)
+	favoriteSvc := favorite.NewFavoriteService(db, rdb, log, userProv, videoProv)
+	articleSvc := article.NewArticleService(db, rdb, log, esc)
+	dynamicSvc := dynamic.NewDynamicService(db, rdb, log)
+	engagementSvc := engagement.NewEngagementService(db, rdb, log, userProv, videoProv)
+	viewHistorySvc := viewhistory.NewViewHistoryService(db, rdb, log)
+	videoDraftSvc := video.NewVideoDraftService(db, rdb, log, mq)
+	creatorCommentSvc := comment.NewCreatorCommentService(db, rdb, log)
+	searchHistorySvc := searchsvc.NewSearchHistoryService(db, log)
+	hotSearchSvc := hotsearch.NewHotSearchService(db, searchHot)
 
 	deps := &handler.Dependencies{
 		Cfg: cfg, DB: db, Redis: rdb, Log: log, Hub: hub, ChatHub: chatHub,
-		JWT: jm, Sens: sens, StorageSvc: service.NewStorageService(cfg, ossc, log), Play: pc,
+		JWT: jm, Sens: sens, StorageSvc: storesvc.NewStorageService(cfg, ossc, log), Play: pc,
 		SearchHot: searchHot, DanmakuRelay: relay, IPLocate: ipLoc, Agent: agentSvc,
 		RateLimiter: rl, RuntimeCfg: runtimeCfg,
 		SearchSvc:         searchSvc,
@@ -287,6 +307,7 @@ func main() {
 		CommentSvc:        commentSvc,
 		NotifSvc:          notifSvc,
 		VideoSvc:          videoSvc,
+		BannerSvc:         bannerSvc,
 		DmSvc:             dmSvc,
 		FavoriteSvc:       favoriteSvc,
 		ArticleSvc:        articleSvc,

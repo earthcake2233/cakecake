@@ -19,6 +19,7 @@ ROOT = Path(__file__).resolve().parent.parent
 # These are gitignored and do not need EN counterparts
 SKIP_PATTERNS = [
     "incident-*.md",
+    "service-refactor-*.md",
 ]
 
 def extract_heading_levels(text):

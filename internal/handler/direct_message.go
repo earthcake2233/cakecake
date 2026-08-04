@@ -2,6 +2,7 @@ package handler
 
 import (
 	"cakecake/internal/model/dm"
+	dmsvc "cakecake/internal/service/dm"
 	"net/http"
 	"sort"
 	"strconv"
@@ -31,20 +32,6 @@ type dmPostMessageReq struct {
 type dmSettingsReq struct {
 	Pinned *bool `json:"pinned"`
 	Muted  *bool `json:"muted"`
-}
-
-func dmPairIDs(a, b uint64) (low, high uint64) {
-	if a < b {
-		return a, b
-	}
-	return b, a
-}
-
-func dmPeerID(conv *dm.DmConversation, self uint64) uint64 {
-	if conv.UserLow == self {
-		return conv.UserHigh
-	}
-	return conv.UserLow
 }
 
 func dmPinnedAtAfter(a, b *time.Time) bool {
@@ -151,7 +138,7 @@ func (a *API) dmFormatMessage(m *dm.DmMessage, senderName, senderAvatar string) 
 }
 
 func (a *API) dmFormatConversation(ctx context.Context, conv *dm.DmConversation, self uint64, part *dm.DmParticipant) dmConversationDTO {
-	peer := dmPeerID(conv, self)
+	peer := dmsvc.DmPeerID(conv, self)
 	name, avatar := a.dmUserBrief(ctx, peer)
 	unread := uint32(0)
 	pinned := false
@@ -422,7 +409,7 @@ func (a *API) ListDmMessages(c *gin.Context) {
 		resp.Err(c, http.StatusForbidden, errcode.CodeForbidden)
 		return
 	}
-	peer := dmPeerID(conv, uid)
+	peer := dmsvc.DmPeerID(conv, uid)
 	if !a.dmIsAgentConv(conv) {
 		blocked, err := a.FollowSvc.UsersBlocked(c.Request.Context(), uid, peer)
 		if err != nil {
@@ -518,7 +505,7 @@ func (a *API) PostDmMessage(c *gin.Context) {
 		resp.Err(c, http.StatusForbidden, errcode.CodeForbidden)
 		return
 	}
-	peer := dmPeerID(conv, uid)
+	peer := dmsvc.DmPeerID(conv, uid)
 	isAgent := a.dmIsAgentConv(conv)
 	if !isAgent {
 		blocked, err := a.FollowSvc.UsersBlocked(c.Request.Context(), uid, peer)

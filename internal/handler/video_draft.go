@@ -20,7 +20,7 @@ import (
 	"cakecake/internal/middleware"
 	"cakecake/internal/pkg/coverval"
 	"cakecake/internal/pkg/resp"
-	"cakecake/internal/service"
+	vsvc "cakecake/internal/service/video"
 )
 
 const videoStatusDraft = video.StatusDraft
@@ -724,7 +724,7 @@ func (a *API) ReplaceVideoMedia(c *gin.Context) {
 		}
 	}
 
-	if err := a.VideoDraftSvc.ReplaceMedia(c.Request.Context(), v, service.ReplaceMediaOpts{
+	if err := a.VideoDraftSvc.ReplaceMedia(c.Request.Context(), v, vsvc.ReplaceMediaOpts{
 		Title:       in.title,
 		Description: in.desc,
 		TagsJSON:    in.tagsJSON,
@@ -733,7 +733,7 @@ func (a *API) ReplaceVideoMedia(c *gin.Context) {
 		CoverPath:   coverPath,
 		DurationSec: dur,
 	}); err != nil {
-		if errors.Is(err, service.ErrReplaceMediaUpdate) {
+		if errors.Is(err, vsvc.ErrReplaceMediaUpdate) {
 			removeVideoDraftFiles(video.Video{DraftRawPath: rawPath, DraftCoverPath: coverPath})
 		}
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)

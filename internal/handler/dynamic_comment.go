@@ -13,7 +13,7 @@ import (
 	"cakecake/internal/middleware"
 	"cakecake/internal/pkg/iplocate"
 	"cakecake/internal/pkg/resp"
-	"cakecake/internal/service"
+	"cakecake/internal/service/comment"
 )
 
 type dynamicCommentItemDTO struct {
@@ -95,7 +95,7 @@ func (a *API) PostDynamicComment(c *gin.Context) {
 	content := strings.TrimSpace(req.Content)
 	ipLoc := a.resolveCommentIPLocation(c)
 	cm, svcErr := a.CommentSvc.PostDynamicComment(c.Request.Context(), uid, did,
-		service.PostCommentReq{Content: content, ParentID: req.ParentID}, ipLoc)
+		comment.PostCommentReq{Content: content, ParentID: req.ParentID}, ipLoc)
 	if svcErr != nil {
 		resp.Err(c, httpStatusFromSvc(errCodeFromSvc(svcErr)), errCodeFromSvc(svcErr))
 		return

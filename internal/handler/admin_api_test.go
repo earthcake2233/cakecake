@@ -7,7 +7,7 @@ import (
 	"cakecake/internal/model/article"
 	"cakecake/internal/model/dynamic"
 	"cakecake/internal/model/video"
-	"cakecake/internal/service"
+	"cakecake/internal/service/storage"
 	"encoding/json"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/bcrypt"
@@ -20,11 +20,11 @@ import (
 func TestAdminEndpoints(t *testing.T) {
 	api, r, _ := newTestAPI(t)
 	api.RuntimeCfg = config.NewRuntimeConfig(api.DB, nil)
-	api.StorageSvc = service.NewStorageService(api.Cfg, nil, api.Log)
-	oldBackend := service.OSSBackendOverride
+	api.StorageSvc = storage.NewStorageService(api.Cfg, nil, api.Log)
+	oldBackend := storage.OSSBackendOverride
 	fakeOSS := &fakeOSSBackend{}
-	service.OSSBackendOverride = fakeOSS
-	defer func() { service.OSSBackendOverride = oldBackend }()
+	storage.OSSBackendOverride = fakeOSS
+	defer func() { storage.OSSBackendOverride = oldBackend }()
 	hash, err := bcrypt.GenerateFromPassword([]byte("adminpass"), bcrypt.MinCost)
 	require.NoError(t, err)
 	adm := admin.Admin{Username: "rootadmin", PasswordHash: string(hash), DisplayName: "Root", Status: admin.StatusActive}

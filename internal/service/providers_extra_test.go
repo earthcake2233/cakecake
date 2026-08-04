@@ -5,6 +5,8 @@ import (
 	"cakecake/internal/model/dynamic"
 	"cakecake/internal/model/user"
 	"cakecake/internal/model/video"
+	"cakecake/internal/service/servicetest"
+	vsvc "cakecake/internal/service/video"
 	"context"
 	"testing"
 
@@ -13,9 +15,9 @@ import (
 )
 
 func TestProviders_AuthorsAndLookups(t *testing.T) {
-	db := newAgentTestDB(t)
+	db := servicetest.NewDB(t)
 	ctx := context.Background()
-	videoProv := NewVideoProvider(db)
+	videoProv := vsvc.NewVideoProvider(db)
 	articleProv := NewArticleProvider(db)
 	dynamicProv := NewDynamicProvider(db)
 
@@ -53,7 +55,7 @@ func TestProviders_AuthorsAndLookups(t *testing.T) {
 }
 
 func TestUserProvider_LevelsAndInfo(t *testing.T) {
-	db := newAgentTestDB(t)
+	db := servicetest.NewDB(t)
 	ctx := context.Background()
 	require.NoError(t, db.Create(&user.User{ID: 1, Username: "alice", PasswordHash: "x", Experience: 3000}).Error)
 

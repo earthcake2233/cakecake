@@ -19,7 +19,8 @@ import (
 	"cakecake/internal/config"
 	"cakecake/internal/data"
 	"cakecake/internal/pkg/jwttoken"
-	"cakecake/internal/service"
+	"cakecake/internal/service/banner"
+	vsvc "cakecake/internal/service/video"
 	"cakecake/internal/ws"
 )
 
@@ -36,7 +37,7 @@ func newAdminCRUDAPI(t *testing.T) (*API, *gin.Engine, *jwttoken.Manager) {
 	jm, err := jwttoken.NewManager("admin-crud-test-secret-32chars!!!!!")
 	require.NoError(t, err)
 	cfg := &config.C{RedisAddr: mr.Addr(), RedisPassword: "", RedisDB: 0, RedisDial: 5 * time.Second, RedisRead: 3 * time.Second, RedisWrite: 3 * time.Second, RedisPoolSize: 10}
-	api := &API{Dependencies: &Dependencies{Cfg: cfg, DB: db, Redis: rdb, JWT: jm, Hub: ws.NewHub(), Log: zap.NewNop(), Play: nil, VideoSvc: service.NewVideoService(db, rdb, zap.NewNop(), nil, nil)}}
+	api := &API{Dependencies: &Dependencies{Cfg: cfg, DB: db, Redis: rdb, JWT: jm, Hub: ws.NewHub(), Log: zap.NewNop(), Play: nil, VideoSvc: vsvc.NewVideoService(db, rdb, zap.NewNop(), nil, nil), BannerSvc: banner.NewBannerService(db)}}
 	r := gin.New()
 	RegisterRoutes(r, api, jm, "test")
 	return api, r, jm

@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"cakecake/internal/model/article"
 	"cakecake/internal/model/video"
-	"cakecake/internal/service"
+	"cakecake/internal/service/storage"
 	"github.com/stretchr/testify/require"
 	"mime/multipart"
 	"net/http"
@@ -14,11 +14,11 @@ import (
 
 func TestOSSUploadPaths(t *testing.T) {
 	api, r, _ := newTestAPI(t)
-	api.StorageSvc = service.NewStorageService(api.Cfg, nil, api.Log)
-	oldBackend := service.OSSBackendOverride
+	api.StorageSvc = storage.NewStorageService(api.Cfg, nil, api.Log)
+	oldBackend := storage.OSSBackendOverride
 	fakeOSS := &fakeOSSBackend{}
-	service.OSSBackendOverride = fakeOSS
-	defer func() { service.OSSBackendOverride = oldBackend }()
+	storage.OSSBackendOverride = fakeOSS
+	defer func() { storage.OSSBackendOverride = oldBackend }()
 
 	tokenA, uidA := covRegister(t, r, "covos", "password12")
 	vid := covSeedVideo(t, api, uidA, "oss video", video.StatusPublished)

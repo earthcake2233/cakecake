@@ -13,7 +13,7 @@ import (
 
 	"cakecake/internal/errcode"
 	"cakecake/internal/pkg/resp"
-	"cakecake/internal/service"
+	"cakecake/internal/service/hotsearch"
 )
 
 type hotSearchMergedItem struct {
@@ -259,9 +259,9 @@ func (a *API) AdminReorderHotSearch(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	items := make([]service.ReorderItem, 0, len(req.Items))
+	items := make([]hotsearch.ReorderItem, 0, len(req.Items))
 	for _, it := range req.Items {
-		items = append(items, service.ReorderItem{
+		items = append(items, hotsearch.ReorderItem{
 			Keyword: it.Keyword,
 			Title:   it.Title,
 			OpID:    it.OpID,

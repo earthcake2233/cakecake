@@ -68,7 +68,7 @@ func bannerToJSON(b *admin.HomeBanner) bannerItem {
 
 // AdminListBanners GET /api/v1/admin/home-banners
 func (a *API) AdminListBanners(c *gin.Context) {
-	rows, err := a.VideoSvc.ListBanners(c.Request.Context())
+	rows, err := a.BannerSvc.ListBanners(c.Request.Context())
 	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
@@ -112,7 +112,7 @@ func (a *API) AdminCreateBanner(c *gin.Context) {
 		StartAt:    parseOptionalUnix(req.StartAt),
 		EndAt:      parseOptionalUnix(req.EndAt),
 	}
-	if err := a.VideoSvc.CreateBanner(c.Request.Context(), &b); err != nil {
+	if err := a.BannerSvc.CreateBanner(c.Request.Context(), &b); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
@@ -126,7 +126,7 @@ func (a *API) AdminUpdateBanner(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	b, err := a.VideoSvc.GetBanner(c.Request.Context(), id)
+	b, err := a.BannerSvc.GetBanner(c.Request.Context(), id)
 	if err != nil {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
@@ -158,11 +158,11 @@ func (a *API) AdminUpdateBanner(c *gin.Context) {
 	if req.EndAt != nil {
 		updates["end_at"] = parseOptionalUnix(req.EndAt)
 	}
-	if err := a.VideoSvc.UpdateBanner(c.Request.Context(), id, updates); err != nil {
+	if err := a.BannerSvc.UpdateBanner(c.Request.Context(), id, updates); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	b, _ = a.VideoSvc.GetBanner(c.Request.Context(), id)
+	b, _ = a.BannerSvc.GetBanner(c.Request.Context(), id)
 	if u := strings.TrimSpace(req.ImageURL); u != "" && u != oldURL {
 		a.StorageSvc.PurgeBannerImageURL(oldURL)
 	}
@@ -176,12 +176,12 @@ func (a *API) AdminDeleteBanner(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	b, err := a.VideoSvc.GetBanner(c.Request.Context(), id)
+	b, err := a.BannerSvc.GetBanner(c.Request.Context(), id)
 	if err != nil {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
-	if err := a.VideoSvc.DeleteBanner(c.Request.Context(), id); err != nil {
+	if err := a.BannerSvc.DeleteBanner(c.Request.Context(), id); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}

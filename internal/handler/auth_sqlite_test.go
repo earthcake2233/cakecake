@@ -2,6 +2,10 @@ package handler
 
 import (
 	"bytes"
+	"cakecake/internal/service/dailyreward"
+	"cakecake/internal/service/danmaku"
+	"cakecake/internal/service/dm"
+	"cakecake/internal/service/playcount"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -23,6 +27,20 @@ import (
 	"cakecake/internal/pkg/jwttoken"
 	"cakecake/internal/pkg/sensitive"
 	"cakecake/internal/service"
+	"cakecake/internal/service/agent"
+	"cakecake/internal/service/article"
+	"cakecake/internal/service/banner"
+	"cakecake/internal/service/comment"
+	"cakecake/internal/service/dynamic"
+	"cakecake/internal/service/engagement"
+	"cakecake/internal/service/favorite"
+	"cakecake/internal/service/follow"
+	"cakecake/internal/service/hotsearch"
+	"cakecake/internal/service/notification"
+	searchsvc "cakecake/internal/service/search"
+	"cakecake/internal/service/user"
+	"cakecake/internal/service/video"
+	"cakecake/internal/service/viewhistory"
 	"cakecake/internal/ws"
 )
 
@@ -67,35 +85,35 @@ func newTestAPI(t *testing.T) (*API, *gin.Engine, *jwttoken.Manager) {
 	sens := sensitive.NewFilter(wordFile, log)
 	require.NoError(t, sens.Reload())
 
-	pc := &service.PlayCounter{Rdb: rdb, DB: db}
+	pc := &playcount.PlayCounter{Rdb: rdb, Store: playcount.NewPlayCountStore(db)}
 	hub := ws.NewHub()
-	relay := service.NewDanmakuRelay(rdb, hub, log)
+	relay := danmaku.NewDanmakuRelay(rdb, hub, log)
 	ctx, cancel := context.WithCancel(context.Background())
 	go relay.RunSubscriber(ctx)
 	t.Cleanup(cancel)
 
-	authSvc := service.NewAuthService(db, rdb, log, jm, service.AuthConfig{})
-	followSvc := service.NewFollowService(db, log)
-	danmakuSvc := service.NewDanmakuService(db, rdb, log, sens)
+	authSvc := user.NewAuthService(db, rdb, log, jm, user.AuthConfig{})
+	followSvc := follow.NewFollowService(db, log)
+	danmakuSvc := danmaku.NewDanmakuService(db, rdb, log, sens)
 	userProv := service.NewUserProvider(db)
-	videoProv := service.NewVideoProvider(db)
+	videoProv := video.NewVideoProvider(db)
 	articleProv := service.NewArticleProvider(db)
 	dynamicProv := service.NewDynamicProvider(db)
-	notifSvc := service.NewNotificationService(db, rdb, log, userProv)
-	commentSvc := service.NewCommentService(db, rdb, log, sens, notifSvc, userProv, videoProv, articleProv, dynamicProv)
-	userSvc := service.NewUserService(db, log)
-	videoSvc := service.NewVideoService(db, rdb, log, nil, nil)
-	dmSvc := service.NewDmService(db, rdb, log)
-	favoriteSvc := service.NewFavoriteService(db, rdb, log, userProv, videoProv)
-	articleSvc := service.NewArticleService(db, rdb, log, userSvc, nil)
-	dynamicSvc := service.NewDynamicService(db, rdb, log)
-	searchHot := &service.SearchHotRecorder{Rdb: rdb, Sens: sens}
-	hotSearchSvc := service.NewHotSearchService(db, searchHot)
-	engagementSvc := service.NewEngagementService(db, rdb, log, userProv, videoProv)
-	viewHistorySvc := service.NewViewHistoryService(db, rdb, log)
-	videoDraftSvc := service.NewVideoDraftService(db, rdb, log, noopMQ{})
-	creatorCommentSvc := service.NewCreatorCommentService(db, rdb, log)
-	searchHistorySvc := service.NewSearchHistoryService(db, log)
+	notifSvc := notification.NewNotificationService(db, rdb, log, userProv)
+	commentSvc := comment.NewCommentService(db, rdb, log, sens, notifSvc, userProv, videoProv, articleProv, dynamicProv)
+	userSvc := user.NewUserService(db, log)
+	videoSvc := video.NewVideoService(db, rdb, log, nil, nil)
+	dmSvc := dm.NewDmService(db, rdb, log)
+	favoriteSvc := favorite.NewFavoriteService(db, rdb, log, userProv, videoProv)
+	articleSvc := article.NewArticleService(db, rdb, log, nil)
+	dynamicSvc := dynamic.NewDynamicService(db, rdb, log)
+	searchHot := &hotsearch.SearchHotRecorder{Rdb: rdb, Sens: sens}
+	hotSearchSvc := hotsearch.NewHotSearchService(db, searchHot)
+	engagementSvc := engagement.NewEngagementService(db, rdb, log, userProv, videoProv)
+	viewHistorySvc := viewhistory.NewViewHistoryService(db, rdb, log)
+	videoDraftSvc := video.NewVideoDraftService(db, rdb, log, noopMQ{})
+	creatorCommentSvc := comment.NewCreatorCommentService(db, rdb, log)
+	searchHistorySvc := searchsvc.NewSearchHistoryService(db, log)
 	api := &API{
 		Dependencies: &Dependencies{
 			Cfg:               cfg,
@@ -106,8 +124,8 @@ func newTestAPI(t *testing.T) (*API, *gin.Engine, *jwttoken.Manager) {
 			JWT:               jm,
 			Sens:              sens,
 			Play:              pc,
-			DailyRewardSvc:    service.NewDailyRewardService(db),
-			SearchSvc:         service.NewSearchService(nil, db, rdb, log),
+			DailyRewardSvc:    dailyreward.NewDailyRewardService(db),
+			SearchSvc:         searchsvc.NewSearchService(nil, db, rdb, log),
 			DanmakuRelay:      relay,
 			AuthSvc:           authSvc,
 			FollowSvc:         followSvc,
@@ -116,13 +134,14 @@ func newTestAPI(t *testing.T) (*API, *gin.Engine, *jwttoken.Manager) {
 			NotifSvc:          notifSvc,
 			UserSvc:           userSvc,
 			VideoSvc:          videoSvc,
+			BannerSvc:         banner.NewBannerService(db),
 			DmSvc:             dmSvc,
 			FavoriteSvc:       favoriteSvc,
 			ArticleSvc:        articleSvc,
 			DynamicSvc:        dynamicSvc,
 			SearchHot:         searchHot,
 			HotSearchSvc:      hotSearchSvc,
-			Agent:             &service.AgentService{DB: db, Log: log},
+			Agent:             &agent.AgentService{Store: agent.NewAgentStore(db), Log: log},
 			EngagementSvc:     engagementSvc,
 			ViewHistorySvc:    viewHistorySvc,
 			VideoDraftSvc:     videoDraftSvc,

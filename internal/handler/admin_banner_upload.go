@@ -81,7 +81,7 @@ func (a *API) AdminUploadBannerImageByID(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	b, err := a.VideoSvc.GetBanner(c.Request.Context(), id)
+	b, err := a.BannerSvc.GetBanner(c.Request.Context(), id)
 	if err != nil {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
@@ -102,7 +102,7 @@ func (a *API) AdminUploadBannerImageByID(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, code)
 		return
 	}
-	if err := a.VideoSvc.UpdateBanner(c.Request.Context(), b.ID, map[string]interface{}{"image_url": url}); err != nil {
+	if err := a.BannerSvc.UpdateBanner(c.Request.Context(), b.ID, map[string]interface{}{"image_url": url}); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}

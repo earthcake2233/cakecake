@@ -86,21 +86,6 @@ func TestNotifUint64(t *testing.T) {
 	require.Equal(t, uint64(0), notifUint64(nil))
 }
 
-func TestDmPairIDs(t *testing.T) {
-	a, b := dmPairIDs(5, 10)
-	require.Equal(t, uint64(5), a)
-	require.Equal(t, uint64(10), b)
-	a, b = dmPairIDs(10, 5)
-	require.Equal(t, uint64(5), a)
-	require.Equal(t, uint64(10), b)
-}
-
-func TestDmPeerID(t *testing.T) {
-	conv := &dm.DmConversation{UserLow: 1, UserHigh: 2}
-	require.Equal(t, uint64(2), dmPeerID(conv, 1))
-	require.Equal(t, uint64(1), dmPeerID(conv, 2))
-}
-
 func TestDmTrimPreview(t *testing.T) {
 	require.Equal(t, "", dmTrimPreview(""))
 	require.Equal(t, "hello", dmTrimPreview("hello"))

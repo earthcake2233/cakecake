@@ -10,6 +10,10 @@ import (
 	"cakecake/internal/model/dynamic"
 	"cakecake/internal/model/user"
 	"cakecake/internal/model/video"
+	"cakecake/internal/service/dailyreward"
+	"cakecake/internal/service/danmaku"
+	"cakecake/internal/service/dm"
+	"cakecake/internal/service/playcount"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -29,6 +33,20 @@ import (
 	"cakecake/internal/data"
 	"cakecake/internal/pkg/jwttoken"
 	"cakecake/internal/service"
+	"cakecake/internal/service/agent"
+	"cakecake/internal/service/article"
+	"cakecake/internal/service/banner"
+	"cakecake/internal/service/comment"
+	"cakecake/internal/service/dynamic"
+	"cakecake/internal/service/engagement"
+	"cakecake/internal/service/favorite"
+	"cakecake/internal/service/follow"
+	"cakecake/internal/service/hotsearch"
+	"cakecake/internal/service/notification"
+	searchsvc "cakecake/internal/service/search"
+	"cakecake/internal/service/user"
+	"cakecake/internal/service/video"
+	"cakecake/internal/service/viewhistory"
 	"cakecake/internal/ws"
 )
 
@@ -62,29 +80,30 @@ func setupHandlerIntegrationDB(t *testing.T) (*API, *gin.Engine, string) {
 			JWT:            jm,
 			Hub:            ws.NewHub(),
 			Log:            zap.NewNop(),
-			Play:           &service.PlayCounter{Rdb: rdb, DB: db},
-			DailyRewardSvc: service.NewDailyRewardService(db),
-			SearchSvc:      service.NewSearchService(nil, db, rdb, zap.NewNop()),
-			AuthSvc:        service.NewAuthService(db, rdb, zap.NewNop(), jm, service.AuthConfig{}),
-			UserSvc:        service.NewUserService(db, zap.NewNop()),
-			FollowSvc:      service.NewFollowService(db, zap.NewNop()),
-			DanmakuSvc:     service.NewDanmakuService(db, rdb, zap.NewNop(), nil),
-			CommentSvc: service.NewCommentService(db, rdb, zap.NewNop(), nil, nil,
-				service.NewUserProvider(db), service.NewVideoProvider(db),
+			Play:           &playcount.PlayCounter{Rdb: rdb, Store: playcount.NewPlayCountStore(db)},
+			DailyRewardSvc: dailyreward.NewDailyRewardService(db),
+			SearchSvc:      searchsvc.NewSearchService(nil, db, rdb, zap.NewNop()),
+			AuthSvc:        user.NewAuthService(db, rdb, zap.NewNop(), jm, user.AuthConfig{}),
+			UserSvc:        user.NewUserService(db, zap.NewNop()),
+			FollowSvc:      follow.NewFollowService(db, zap.NewNop()),
+			DanmakuSvc:     danmaku.NewDanmakuService(db, rdb, zap.NewNop(), nil),
+			CommentSvc: comment.NewCommentService(db, rdb, zap.NewNop(), nil, nil,
+				service.NewUserProvider(db), video.NewVideoProvider(db),
 				service.NewArticleProvider(db), service.NewDynamicProvider(db)),
-			NotifSvc:          service.NewNotificationService(db, rdb, zap.NewNop(), nil),
-			VideoSvc:          service.NewVideoService(db, rdb, zap.NewNop(), nil, nil),
-			DmSvc:             service.NewDmService(db, rdb, zap.NewNop()),
-			FavoriteSvc:       service.NewFavoriteService(db, rdb, zap.NewNop(), nil, nil),
-			ArticleSvc:        service.NewArticleService(db, rdb, zap.NewNop(), nil, nil),
-			DynamicSvc:        service.NewDynamicService(db, rdb, zap.NewNop()),
-			EngagementSvc:     service.NewEngagementService(db, rdb, zap.NewNop(), nil, nil),
-			ViewHistorySvc:    service.NewViewHistoryService(db, rdb, zap.NewNop()),
-			VideoDraftSvc:     service.NewVideoDraftService(db, rdb, zap.NewNop(), nil),
-			CreatorCommentSvc: service.NewCreatorCommentService(db, rdb, zap.NewNop()),
-			SearchHistorySvc:  service.NewSearchHistoryService(db, zap.NewNop()),
-			SearchHot:         &service.SearchHotRecorder{Rdb: rdb, Sens: nil},
-			HotSearchSvc:      service.NewHotSearchService(db, &service.SearchHotRecorder{Rdb: rdb, Sens: nil}),
+			NotifSvc:          notification.NewNotificationService(db, rdb, zap.NewNop(), nil),
+			VideoSvc:          video.NewVideoService(db, rdb, zap.NewNop(), nil, nil),
+			BannerSvc:         banner.NewBannerService(db),
+			DmSvc:             dm.NewDmService(db, rdb, zap.NewNop()),
+			FavoriteSvc:       favorite.NewFavoriteService(db, rdb, zap.NewNop(), nil, nil),
+			ArticleSvc:        article.NewArticleService(db, rdb, zap.NewNop(), nil, nil),
+			DynamicSvc:        dynamic.NewDynamicService(db, rdb, zap.NewNop()),
+			EngagementSvc:     engagement.NewEngagementService(db, rdb, zap.NewNop(), nil, nil),
+			ViewHistorySvc:    viewhistory.NewViewHistoryService(db, rdb, zap.NewNop()),
+			VideoDraftSvc:     video.NewVideoDraftService(db, rdb, zap.NewNop(), nil),
+			CreatorCommentSvc: comment.NewCreatorCommentService(db, rdb, zap.NewNop()),
+			SearchHistorySvc:  searchsvc.NewSearchHistoryService(db, zap.NewNop()),
+			SearchHot:         &hotsearch.SearchHotRecorder{Rdb: rdb, Sens: nil},
+			HotSearchSvc:      hotsearch.NewHotSearchService(db, &hotsearch.SearchHotRecorder{Rdb: rdb, Sens: nil}),
 		},
 	}
 
@@ -205,7 +224,7 @@ func TestMore_VideoList(t *testing.T) {
 	api, r, _ := setupHandlerIntegrationDB(t)
 	api.DB.Create(&user.User{ID: 1, Username: "u1", Nickname: "u1"})
 	api.DB.Create(&video.Video{ID: 1, UserID: 1, Title: "V1", Status: "published", Zone: "Life-Daily"})
-	api.Play = &service.PlayCounter{Rdb: api.Dependencies.Redis, DB: api.DB}
+	api.Play = &playcount.PlayCounter{Rdb: api.Dependencies.Redis, Store: playcount.NewPlayCountStore(api.DB)}
 
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, httptest.NewRequest("GET", "/api/v1/videos?zone=Life-Daily", nil))
@@ -232,7 +251,7 @@ func TestMore_SpaceVideos(t *testing.T) {
 	api, r, _ := setupHandlerIntegrationDB(t)
 	api.DB.Create(&user.User{ID: 1, Username: "u1"})
 	api.DB.Create(&video.Video{ID: 1, UserID: 1, Title: "V", Status: "published", Zone: "Life"})
-	api.Play = &service.PlayCounter{Rdb: api.Dependencies.Redis, DB: api.DB}
+	api.Play = &playcount.PlayCounter{Rdb: api.Dependencies.Redis, Store: playcount.NewPlayCountStore(api.DB)}
 
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, httptest.NewRequest("GET", "/api/v1/space/1/videos", nil))
@@ -243,7 +262,7 @@ func TestMore_GetVideo(t *testing.T) {
 	api, r, _ := setupHandlerIntegrationDB(t)
 	api.DB.Create(&user.User{ID: 1, Username: "u1"})
 	api.DB.Create(&video.Video{ID: 1, UserID: 1, Title: "D", Status: "published", Zone: "Life"})
-	api.Play = &service.PlayCounter{Rdb: api.Dependencies.Redis, DB: api.DB}
+	api.Play = &playcount.PlayCounter{Rdb: api.Dependencies.Redis, Store: playcount.NewPlayCountStore(api.DB)}
 
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, httptest.NewRequest("GET", "/api/v1/videos/1", nil))

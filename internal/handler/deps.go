@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"cakecake/internal/service/danmaku"
+	"cakecake/internal/service/dm"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -10,7 +12,23 @@ import (
 	"cakecake/internal/pkg/iplocate"
 	"cakecake/internal/pkg/jwttoken"
 	"cakecake/internal/pkg/sensitive"
-	"cakecake/internal/service"
+	"cakecake/internal/service/agent"
+	"cakecake/internal/service/article"
+	"cakecake/internal/service/banner"
+	"cakecake/internal/service/comment"
+	"cakecake/internal/service/dailyreward"
+	"cakecake/internal/service/dynamic"
+	"cakecake/internal/service/engagement"
+	"cakecake/internal/service/favorite"
+	"cakecake/internal/service/follow"
+	"cakecake/internal/service/hotsearch"
+	"cakecake/internal/service/notification"
+	"cakecake/internal/service/playcount"
+	searchsvc "cakecake/internal/service/search"
+	"cakecake/internal/service/storage"
+	"cakecake/internal/service/user"
+	"cakecake/internal/service/video"
+	"cakecake/internal/service/viewhistory"
 	"cakecake/internal/ws"
 )
 
@@ -24,35 +42,36 @@ type Dependencies struct {
 	ChatHub        *ws.ChatHub
 	JWT            *jwttoken.Manager
 	Sens           *sensitive.Filter
-	Play           *service.PlayCounter
-	SearchHot      *service.SearchHotRecorder
-	SearchSvc      *service.SearchService
-	StorageSvc     *service.StorageService
-	DailyRewardSvc *service.DailyRewardService
-	DanmakuRelay   *service.DanmakuRelay
+	Play           *playcount.PlayCounter
+	SearchHot      *hotsearch.SearchHotRecorder
+	SearchSvc      *searchsvc.SearchService
+	StorageSvc     *storage.StorageService
+	DailyRewardSvc *dailyreward.DailyRewardService
+	DanmakuRelay   *danmaku.DanmakuRelay
 	IPLocate       *iplocate.Searcher
 	RuntimeCfg     *config.RuntimeConfig
 	RateLimiter    *middleware.RateLimiter
-	Agent          *service.AgentService
+	Agent          *agent.AgentService
 
 	// Phase 1 domain services (thin service layer over business logic).
-	VideoSvc          *service.VideoService
-	DmSvc             *service.DmService
-	FavoriteSvc       *service.FavoriteService
-	ArticleSvc        *service.ArticleService
-	DynamicSvc        *service.DynamicService
-	EngagementSvc     *service.EngagementService
-	ViewHistorySvc    *service.ViewHistoryService
-	VideoDraftSvc     *service.VideoDraftService
-	CreatorCommentSvc *service.CreatorCommentService
-	AuthSvc           *service.AuthService
-	FollowSvc         *service.FollowService
-	DanmakuSvc        *service.DanmakuService
-	CommentSvc        *service.CommentService
-	NotifSvc          *service.NotificationService
-	UserSvc           *service.UserService
-	SearchHistorySvc  *service.SearchHistoryService
-	HotSearchSvc      *service.HotSearchService
+	VideoSvc          *video.VideoService
+	BannerSvc         *banner.BannerService
+	DmSvc             *dm.DmService
+	FavoriteSvc       *favorite.FavoriteService
+	ArticleSvc        *article.ArticleService
+	DynamicSvc        *dynamic.DynamicService
+	EngagementSvc     *engagement.EngagementService
+	ViewHistorySvc    *viewhistory.ViewHistoryService
+	VideoDraftSvc     *video.VideoDraftService
+	CreatorCommentSvc *comment.CreatorCommentService
+	AuthSvc           *user.AuthService
+	FollowSvc         *follow.FollowService
+	DanmakuSvc        *danmaku.DanmakuService
+	CommentSvc        *comment.CommentService
+	NotifSvc          *notification.NotificationService
+	UserSvc           *user.UserService
+	SearchHistorySvc  *searchsvc.SearchHistoryService
+	HotSearchSvc      *hotsearch.HotSearchService
 
 	// hotRecCh buffers SearchHot.Record requests (async, best-effort).
 	hotRecCh chan<- hotRecordReq

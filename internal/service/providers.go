@@ -3,82 +3,10 @@ package service
 import (
 	"cakecake/internal/model/article"
 	"cakecake/internal/model/dynamic"
-	"cakecake/internal/model/video"
 	"context"
 
 	"gorm.io/gorm"
 )
-
-// VideoProviderImpl implements VideoProvider using *gorm.DB.
-type VideoProviderImpl struct {
-	db *gorm.DB
-}
-
-func NewVideoProvider(db *gorm.DB) *VideoProviderImpl {
-	return &VideoProviderImpl{db: db}
-}
-
-func (p *VideoProviderImpl) GetPublishedVideo(ctx context.Context, id uint64) (*VideoInfo, error) {
-	var v video.Video
-	if err := p.db.WithContext(ctx).First(&v, id).Error; err != nil {
-		return nil, err
-	}
-	if v.Status != video.StatusPublished {
-		return nil, gorm.ErrRecordNotFound
-	}
-	return &VideoInfo{
-		ID: v.ID, UserID: v.UserID, Title: v.Title, CoverURL: v.CoverURL,
-		PlayCount: v.PlayCount, DanmakuCount: v.DanmakuCount, CommentCount: v.CommentCount, DurationSec: v.DurationSec,
-		FavCount: v.FavCount, Status: v.Status,
-		CommentsClosed: v.CommentsClosed, CommentsCurated: v.CommentsCurated,
-		DanmakuClosed: v.DanmakuClosed, CreatedAt: v.CreatedAt,
-	}, nil
-}
-
-func (p *VideoProviderImpl) GetVideoAuthor(ctx context.Context, id uint64) (uint64, error) {
-	var v video.Video
-	if err := p.db.WithContext(ctx).Select("user_id").First(&v, id).Error; err != nil {
-		return 0, err
-	}
-	return v.UserID, nil
-}
-
-func (p *VideoProviderImpl) IncrCommentCount(ctx context.Context, id uint64, delta int) error {
-	return p.db.WithContext(ctx).Model(&video.Video{}).Where("id = ?", id).
-		UpdateColumn("comment_count", gorm.Expr("comment_count + ?", delta)).Error
-}
-
-func (p *VideoProviderImpl) IncrFavCount(ctx context.Context, id uint64, delta int) error {
-	q := p.db.WithContext(ctx).Model(&video.Video{}).Where("id = ?", id)
-	if delta < 0 {
-		abs := -delta
-		return q.UpdateColumn("fav_count",
-			gorm.Expr("CASE WHEN fav_count < ? THEN 0 ELSE fav_count - ? END", abs, abs)).Error
-	}
-	return q.UpdateColumn("fav_count", gorm.Expr("fav_count + ?", delta)).Error
-}
-
-func (p *VideoProviderImpl) BatchGetPublishedVideos(ctx context.Context, ids []uint64) (map[uint64]*VideoInfo, error) {
-	if len(ids) == 0 {
-		return nil, nil
-	}
-	var videos []video.Video
-	if err := p.db.WithContext(ctx).Where("id IN ? AND status = ?", ids, video.StatusPublished).Find(&videos).Error; err != nil {
-		return nil, err
-	}
-	result := make(map[uint64]*VideoInfo, len(videos))
-	for i := range videos {
-		v := &videos[i]
-		result[v.ID] = &VideoInfo{
-			ID: v.ID, UserID: v.UserID, Title: v.Title, CoverURL: v.CoverURL,
-			PlayCount: v.PlayCount, DanmakuCount: v.DanmakuCount, CommentCount: v.CommentCount, DurationSec: v.DurationSec,
-			FavCount: v.FavCount, Status: v.Status,
-			CommentsClosed: v.CommentsClosed, CommentsCurated: v.CommentsCurated,
-			DanmakuClosed: v.DanmakuClosed, CreatedAt: v.CreatedAt,
-		}
-	}
-	return result, nil
-}
 
 // ArticleProviderImpl implements ArticleProvider using *gorm.DB.
 type ArticleProviderImpl struct {

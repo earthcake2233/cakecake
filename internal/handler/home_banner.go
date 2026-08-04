@@ -46,7 +46,7 @@ func (a *API) ListHomeBanners(c *gin.Context) {
 	type homeBannerListResponse struct {
 		Items []homeBannerItem `json:"items"`
 	}
-	rows, err := a.VideoSvc.ListActiveBanners(c.Request.Context())
+	rows, err := a.BannerSvc.ListActiveBanners(c.Request.Context())
 	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return

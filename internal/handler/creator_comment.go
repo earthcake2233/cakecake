@@ -6,6 +6,7 @@ import (
 	"cakecake/internal/model/dynamic"
 	"cakecake/internal/model/user"
 	"cakecake/internal/model/video"
+	cs "cakecake/internal/service/comment"
 	"context"
 	"math"
 	"net/http"
@@ -17,7 +18,6 @@ import (
 	"cakecake/internal/errcode"
 	"cakecake/internal/middleware"
 	"cakecake/internal/pkg/resp"
-	"cakecake/internal/service"
 )
 
 const creatorCommentsMaxTotal = 50000
@@ -134,7 +134,7 @@ func (a *API) ListCreatorComments(c *gin.Context) {
 		return
 	}
 	viewerID, _ := middleware.UserID(c)
-	result, err := a.CreatorCommentSvc.ListCreatorVideoComments(c.Request.Context(), service.CreatorVideoCommentQuery{
+	result, err := a.CreatorCommentSvc.ListCreatorVideoComments(c.Request.Context(), cs.CreatorVideoCommentQuery{
 		UserID: uid, Page: q.page, PageSize: q.pageSize, SortKey: q.sortKey,
 		Pending: q.pending, PendingStatus: q.pendingStatus, PendingScope: q.pendingScope,
 		Keyword: q.keyword, FilterVideoID: q.filterVideoID, ViewerID: viewerID,
@@ -204,7 +204,7 @@ type creatorCommentContext struct {
 }
 
 // loadCreatorCommentContext batch-fetches videos/users/parents/reply counts.
-func (a *API) loadCreatorCommentContext(ctx context.Context, result *service.CreatorVideoCommentResult) *creatorCommentContext {
+func (a *API) loadCreatorCommentContext(ctx context.Context, result *cs.CreatorVideoCommentResult) *creatorCommentContext {
 	cc := &creatorCommentContext{
 		videos:        map[uint64]video.Video{},
 		names:         map[uint64]string{},
@@ -352,7 +352,7 @@ func (a *API) listCreatorArticleComments(c *gin.Context, uid uint64) {
 		filterArticleID = n
 	}
 	viewerID, _ := middleware.UserID(c)
-	result, err := a.CreatorCommentSvc.ListCreatorArticleComments(c.Request.Context(), service.CreatorArticleCommentQuery{
+	result, err := a.CreatorCommentSvc.ListCreatorArticleComments(c.Request.Context(), cs.CreatorArticleCommentQuery{
 		UserID: uid, Page: page, PageSize: pageSize, SortKey: sortKey,
 		Pending: pending, PendingStatus: pendingStatus, PendingScope: pendingScope,
 		Keyword: keyword, FilterArticleID: filterArticleID, ViewerID: viewerID,
@@ -498,7 +498,7 @@ func (a *API) listCreatorDynamicComments(c *gin.Context, uid uint64) {
 		filterDynamicID = n
 	}
 	viewerID, _ := middleware.UserID(c)
-	result, err := a.CreatorCommentSvc.ListCreatorDynamicComments(c.Request.Context(), service.CreatorDynamicCommentQuery{
+	result, err := a.CreatorCommentSvc.ListCreatorDynamicComments(c.Request.Context(), cs.CreatorDynamicCommentQuery{
 		UserID: uid, Page: page, PageSize: pageSize, SortKey: sortKey,
 		Pending: pending, PendingStatus: pendingStatus, PendingScope: pendingScope,
 		Keyword: keyword, FilterDynamicID: filterDynamicID, ViewerID: viewerID,

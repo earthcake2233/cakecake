@@ -5,6 +5,7 @@ import (
 	"cakecake/internal/model/comment"
 	"cakecake/internal/model/extra"
 	"cakecake/internal/model/user"
+	artsvc "cakecake/internal/service/article"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -27,7 +28,6 @@ import (
 	"cakecake/internal/pkg/markdown"
 	"cakecake/internal/pkg/resp"
 	"cakecake/internal/pkg/sensitive"
-	"cakecake/internal/service"
 )
 
 const (
@@ -67,7 +67,7 @@ type articleEngagement struct {
 	MyCoinAmount  int
 }
 
-func toArticleEngagement(eng *service.ArticleEngagement) articleEngagement {
+func toArticleEngagement(eng *artsvc.ArticleEngagement) articleEngagement {
 	if eng == nil {
 		return articleEngagement{}
 	}

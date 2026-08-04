@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"cakecake/internal/model/article"
 	"cakecake/internal/model/dynamic"
-	"cakecake/internal/service"
+	"cakecake/internal/service/storage"
 	"encoding/json"
 	"github.com/stretchr/testify/require"
 	"mime/multipart"
@@ -103,10 +103,10 @@ func TestArticleAndDynamicFlows(t *testing.T) {
 
 func TestCommentAndFolderFlows(t *testing.T) {
 	api, r, _ := newTestAPI(t)
-	api.StorageSvc = service.NewStorageService(api.Cfg, nil, api.Log)
-	oldBackend := service.OSSBackendOverride
-	service.OSSBackendOverride = &fakeOSSBackend{}
-	defer func() { service.OSSBackendOverride = oldBackend }()
+	api.StorageSvc = storage.NewStorageService(api.Cfg, nil, api.Log)
+	oldBackend := storage.OSSBackendOverride
+	storage.OSSBackendOverride = &fakeOSSBackend{}
+	defer func() { storage.OSSBackendOverride = oldBackend }()
 
 	tokenA, uidA := covRegister(t, r, "covmc", "password12")
 	tokenB, _ := covRegister(t, r, "covmd", "password12")

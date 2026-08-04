@@ -19,7 +19,7 @@ import (
 	"cakecake/internal/logger"
 	"cakecake/internal/queue"
 	"cakecake/internal/search"
-	"cakecake/internal/service"
+	vsvc "cakecake/internal/service/video"
 	"cakecake/internal/storage"
 )
 
@@ -200,7 +200,7 @@ func handleDeliveryWith(ctx context.Context, cfg *config.C, db *gorm.DB, pubCh t
 	if err := db.Model(&video.Video{}).Where("id = ?", job.VideoID).Updates(updates).Error; err != nil {
 		lg.Error("db update after transcode", zap.Error(err))
 	} else if !cfg.VideoReviewRequired {
-		if err := service.PublishVideo(ctx, db, esc, lg, job.VideoID, nil); err != nil {
+		if err := vsvc.PublishVideo(ctx, db, esc, lg, job.VideoID, nil); err != nil {
 			lg.Error("publish video after transcode", zap.Error(err))
 		}
 	}

@@ -12,6 +12,7 @@ import (
 	"cakecake/internal/middleware"
 	"cakecake/internal/pkg/resp"
 	"cakecake/internal/service"
+	"cakecake/internal/service/hotsearch"
 )
 
 // SearchSuggest GET /api/v1/search/suggest?term=xxx&limit=10
@@ -25,7 +26,7 @@ import (
 // @Router       /search/suggest [get]
 func (a *API) SearchSuggest(c *gin.Context) {
 	type searchSuggestResponse struct {
-		Tag []service.SearchSuggestTag `json:"tag"`
+		Tag []hotsearch.SearchSuggestTag `json:"tag"`
 	}
 	term := strings.TrimSpace(c.Query("term"))
 	if term == "" {

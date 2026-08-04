@@ -3,7 +3,7 @@ package handler
 import (
 	"bytes"
 	"cakecake/internal/model/video"
-	"cakecake/internal/service"
+	vsvc "cakecake/internal/service/video"
 	"encoding/json"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -102,10 +102,10 @@ func TestVideoUploadFlows(t *testing.T) {
 	api, r, _ := newTestAPI(t)
 	// Replace the video service with one wired to a no-op transcode publisher
 	// and stub the media probe so the upload pipeline runs without ffmpeg.
-	api.VideoSvc = service.NewVideoService(api.DB, api.Redis, zap.NewNop(), nil, noopMQ{})
-	oldProbe := service.VideoProbe
-	service.VideoProbe = func(string) (float64, error) { return 12.5, nil }
-	defer func() { service.VideoProbe = oldProbe }()
+	api.VideoSvc = vsvc.NewVideoService(api.DB, api.Redis, zap.NewNop(), nil, noopMQ{})
+	oldProbe := vsvc.VideoProbe
+	vsvc.VideoProbe = func(string) (float64, error) { return 12.5, nil }
+	defer func() { vsvc.VideoProbe = oldProbe }()
 
 	tokenA, uidA := covRegister(t, r, "covup", "password12")
 	_ = uidA

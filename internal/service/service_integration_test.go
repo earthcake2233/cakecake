@@ -33,7 +33,7 @@ func setupSQLiteDB(t *testing.T) *gorm.DB {
 	return db
 }
 
-// ---------- SearchHotRecorder: TopWithScores, BoostKeyword, RemoveKeyword ----------
+// ---------- hotsearch.SearchHotRecorder: TopWithScores, BoostKeyword, RemoveKeyword ----------
 
 func TestSearchHotRecorder_TopWithScores(t *testing.T) {
 	mr, err := miniredis.Run()
@@ -41,7 +41,7 @@ func TestSearchHotRecorder_TopWithScores(t *testing.T) {
 		t.Fatal(err)
 	}
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	rec := &SearchHotRecorder{Rdb: rdb}
+	rec := &hotsearch.SearchHotRecorder{Rdb: rdb}
 	ctx := context.Background()
 
 	// empty initially
@@ -85,7 +85,7 @@ func TestSearchHotRecorder_TopWithScores(t *testing.T) {
 	}
 
 	// nil/zero receiver
-	rows, err = (*SearchHotRecorder)(nil).TopWithScores(ctx, 10)
+	rows, err = (*hotsearch.SearchHotRecorder)(nil).TopWithScores(ctx, 10)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,7 +109,7 @@ func TestSearchHotRecorder_BoostKeyword(t *testing.T) {
 		t.Fatal(err)
 	}
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	rec := &SearchHotRecorder{Rdb: rdb}
+	rec := &hotsearch.SearchHotRecorder{Rdb: rdb}
 	ctx := context.Background()
 
 	// boost a keyword
@@ -160,7 +160,7 @@ func TestSearchHotRecorder_BoostKeyword(t *testing.T) {
 	}
 
 	// nil receiver
-	if err := (*SearchHotRecorder)(nil).BoostKeyword(ctx, "x", 1); err != nil {
+	if err := (*hotsearch.SearchHotRecorder)(nil).BoostKeyword(ctx, "x", 1); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -171,7 +171,7 @@ func TestSearchHotRecorder_RemoveKeyword(t *testing.T) {
 		t.Fatal(err)
 	}
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	rec := &SearchHotRecorder{Rdb: rdb}
+	rec := &hotsearch.SearchHotRecorder{Rdb: rdb}
 	ctx := context.Background()
 
 	// seed
@@ -212,43 +212,13 @@ func TestSearchHotRecorder_RemoveKeyword(t *testing.T) {
 	}
 
 	// nil receiver
-	if err := (*SearchHotRecorder)(nil).RemoveKeyword(ctx, "x"); err != nil {
+	if err := (*hotsearch.SearchHotRecorder)(nil).RemoveKeyword(ctx, "x"); err != nil {
 		t.Fatal(err)
 	}
 }
 
-// ---------- PlayCounter (skipped) ----------
+// ---------- playcount.PlayCounter (skipped) ----------
 
 func TestPlayCounter_Skip(t *testing.T) {
 	t.Skip("requires Redis and DB for integration")
-}
-
-// ---------- DanmakuRelay (skipped) ----------
-
-func TestDanmakuRelay_Skip(t *testing.T) {
-	t.Skip("requires Redis and MQ for integration")
-}
-
-// ---------- AgentService: CheckQuota ----------
-
-func TestAgentService_IsAgentConversationIntegration(t *testing.T) {
-	s := &AgentService{}
-	tests := []struct {
-		name string
-		conv *dm.DmConversation
-		want bool
-	}{
-		{"nil conv", nil, false},
-		{"empty kind", &dm.DmConversation{}, false},
-		{"wrong kind", &dm.DmConversation{Kind: "human"}, false},
-		{"agent kind", &dm.DmConversation{Kind: dm.DmKindAgent}, true},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			got := s.IsAgentConversation(tc.conv)
-			if got != tc.want {
-				t.Errorf("IsAgentConversation(%+v) = %v, want %v", tc.conv, got, tc.want)
-			}
-		})
-	}
 }

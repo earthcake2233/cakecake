@@ -14,11 +14,11 @@ import (
 	"cakecake/internal/middleware"
 	"cakecake/internal/pkg/resp"
 	"cakecake/internal/pkg/usercoin"
-	"cakecake/internal/service"
+	"cakecake/internal/service/engagement"
 )
 
 func (a *API) userVideoFavoriteCount(ctx context.Context, uid, vid uint64) (int64, error) {
-	return a.EngagementSvc.UserFavoriteCount(ctx, uid, vid)
+	return a.FavoriteSvc.UserFavoriteCount(ctx, uid, vid)
 }
 
 func (a *API) engagementByViewer(ctx context.Context, viewer uint64, ids []uint64) map[uint64]videoEngagement {
@@ -27,7 +27,7 @@ func (a *API) engagementByViewer(ctx context.Context, viewer uint64, ids []uint6
 		return out
 	}
 	liked := a.EngagementSvc.BatchVideoLikes(ctx, viewer, ids)
-	faved := a.EngagementSvc.BatchFavoritedByUser(ctx, viewer, ids)
+	faved := a.FavoriteSvc.BatchFavorited(ctx, viewer, ids)
 	coined := a.EngagementSvc.BatchCoinedByUser(ctx, viewer, ids)
 	later := a.EngagementSvc.BatchWatchLater(ctx, viewer, ids)
 	for _, id := range ids {
@@ -80,7 +80,7 @@ func (a *API) ToggleVideoFavorite(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	favorited, favCount, err := a.EngagementSvc.ToggleVideoFavoriteWithFolder(c.Request.Context(), uid, vid, def.ID)
+	favorited, favCount, err := a.FavoriteSvc.ToggleVideoFavoriteWithFolder(c.Request.Context(), uid, vid, def.ID)
 	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
@@ -137,9 +137,9 @@ type watchLaterToggleResponse struct {
 }
 
 type watchLaterListResponse struct {
-	Items    []service.WatchLaterVideoItem `json:"items"`
-	Total    int64                         `json:"total"`
-	MaxLimit int                           `json:"max_limit"`
+	Items    []engagement.WatchLaterVideoItem `json:"items"`
+	Total    int64                            `json:"total"`
+	MaxLimit int                              `json:"max_limit"`
 }
 
 type favoriteVideoItemDTO struct {
@@ -303,9 +303,9 @@ func (a *API) SetVideoFavoriteFolders(c *gin.Context) {
 
 func (a *API) syncVideoFavCountAfterUserChange(ctx context.Context, vid uint64, before, after int64) {
 	if before == 0 && after > 0 {
-		_ = a.EngagementSvc.AdjustVideoFavCount(ctx, vid, 1)
+		_ = a.FavoriteSvc.AdjustVideoFavCount(ctx, vid, 1)
 	} else if before > 0 && after == 0 {
-		_ = a.EngagementSvc.AdjustVideoFavCount(ctx, vid, -1)
+		_ = a.FavoriteSvc.AdjustVideoFavCount(ctx, vid, -1)
 	}
 }
 

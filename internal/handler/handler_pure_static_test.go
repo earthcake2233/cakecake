@@ -2,7 +2,6 @@ package handler
 
 import (
 	"cakecake/internal/model/article"
-	"cakecake/internal/model/dm"
 	"cakecake/internal/model/dynamic"
 	"testing"
 	"time"
@@ -86,27 +85,6 @@ func TestArticleStatusAfterSubmit_All(t *testing.T) {
 	api := &API{Dependencies: &Dependencies{Cfg: &config.C{}}}
 	if got := api.articleStatusAfterSubmit(false); got != "draft" {
 		t.Errorf("draft: %s", got)
-	}
-}
-
-func TestDmPairIDs_All(t *testing.T) {
-	lo, hi := dmPairIDs(5, 10)
-	if lo != 5 || hi != 10 {
-		t.Errorf("(5,10)=>(%d,%d)", lo, hi)
-	}
-	lo, hi = dmPairIDs(10, 5)
-	if lo != 5 || hi != 10 {
-		t.Errorf("(10,5)=>(%d,%d)", lo, hi)
-	}
-}
-
-func TestDmPeerID_All(t *testing.T) {
-	conv := &dm.DmConversation{UserLow: 1, UserHigh: 2}
-	if got := dmPeerID(conv, 1); got != 2 {
-		t.Errorf("1=>%d", got)
-	}
-	if got := dmPeerID(conv, 2); got != 1 {
-		t.Errorf("2=>%d", got)
 	}
 }
 

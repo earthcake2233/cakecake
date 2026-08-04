@@ -28,7 +28,7 @@ import (
 	"cakecake/internal/pkg/coverval"
 	"cakecake/internal/pkg/dailyreward"
 	"cakecake/internal/pkg/resp"
-	"cakecake/internal/service"
+	vsvc "cakecake/internal/service/video"
 )
 
 func uploaderAvatarForAPI(u *user.User) string {
@@ -309,7 +309,7 @@ func (a *API) ListPublishedVideos(c *gin.Context) {
 		}
 	}
 	recentOnly := days > 0 && arcType == 1
-	res, err := a.VideoSvc.ListPublishedVideos(c.Request.Context(), service.VideoListOpts{
+	res, err := a.VideoSvc.ListPublishedVideos(c.Request.Context(), vsvc.VideoListOpts{
 		Limit:      limit,
 		SortKey:    sortKey,
 		ZoneParent: zoneParent,
@@ -406,7 +406,7 @@ func (a *API) ListMyVideos(c *gin.Context) {
 	statusQ := strings.TrimSpace(c.Query("status"))
 	titleQ := strings.TrimSpace(c.Query("q"))
 
-	f := service.MyVideoFilter{UserID: uid, TitleQ: titleQ, SortKey: sortKey, Page: page, PageSize: pageSize}
+	f := vsvc.MyVideoFilter{UserID: uid, TitleQ: titleQ, SortKey: sortKey, Page: page, PageSize: pageSize}
 	if statusQ != "" && statusQ != "all" {
 		if single, multi := manuscriptVideoStatusFilter(statusQ); single != "" {
 			f.Status = single
@@ -750,7 +750,7 @@ func (a *API) getVideoEngagementFlags(ctx context.Context, viewer, videoID uint6
 	}
 	liked := a.EngagementSvc.BatchVideoLikes(ctx, viewer, []uint64{videoID})
 	e.LikedByMe = liked[videoID]
-	fav := a.EngagementSvc.BatchFavoritedByUser(ctx, viewer, []uint64{videoID})
+	fav := a.FavoriteSvc.BatchFavorited(ctx, viewer, []uint64{videoID})
 	e.FavoritedByMe = fav[videoID]
 	coinMap := a.EngagementSvc.BatchCoinedByUser(ctx, viewer, []uint64{videoID})
 	if amt, ok := coinMap[videoID]; ok && amt > 0 {
@@ -933,7 +933,7 @@ func videoDetail(v video.Video, u user.User, play uint64, watching int, eng vide
 		VideoURL:          v.VideoURL,
 		CoverURL:          v.CoverURL,
 		Status:            v.Status,
-		FailReason:        service.HumanizeFailReason(v.FailReason),
+		FailReason:        vsvc.HumanizeFailReason(v.FailReason),
 		Tags:              videoTagsForResponse(v.TagsJSON),
 		CommentsClosed:    v.CommentsClosed,
 		CommentsCurated:   v.CommentsCurated,

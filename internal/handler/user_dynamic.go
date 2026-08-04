@@ -23,7 +23,7 @@ import (
 	"cakecake/internal/middleware"
 	"cakecake/internal/pkg/coverval"
 	"cakecake/internal/pkg/resp"
-	"cakecake/internal/service"
+	dsvc "cakecake/internal/service/dynamic"
 )
 
 const (
@@ -504,7 +504,7 @@ func (a *API) ListMyDynamics(c *gin.Context) {
 	sortKey := strings.TrimSpace(c.DefaultQuery("sort", "time"))
 	titleQ := strings.TrimSpace(c.Query("q"))
 
-	resDyn, err := a.DynamicSvc.ListMyDynamicsAdvanced(c.Request.Context(), service.MyDynamicFilter{
+	resDyn, err := a.DynamicSvc.ListMyDynamicsAdvanced(c.Request.Context(), dsvc.MyDynamicFilter{
 		UserID: uid, TitleQ: titleQ, SortKey: sortKey, Page: page, PageSize: pageSize,
 	})
 	if err != nil {

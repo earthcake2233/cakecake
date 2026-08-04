@@ -2,6 +2,9 @@ package handler
 
 import (
 	"bytes"
+	"cakecake/internal/service/dailyreward"
+	"cakecake/internal/service/danmaku"
+	"cakecake/internal/service/playcount"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -20,7 +23,7 @@ import (
 	"cakecake/internal/data"
 	"cakecake/internal/pkg/jwttoken"
 	"cakecake/internal/pkg/sensitive"
-	"cakecake/internal/service"
+	searchsvc "cakecake/internal/service/search"
 	"cakecake/internal/ws"
 )
 
@@ -62,9 +65,9 @@ func newTestAPIWithRuntimeCfg(t *testing.T) (*API, *gin.Engine, *jwttoken.Manage
 	log := zap.NewNop()
 	sens := sensitive.NewFilter(tmp, log)
 
-	pc := &service.PlayCounter{Rdb: rdb, DB: db}
+	pc := &playcount.PlayCounter{Rdb: rdb, Store: playcount.NewPlayCountStore(db)}
 	hub := ws.NewHub()
-	relay := service.NewDanmakuRelay(rdb, hub, log)
+	relay := danmaku.NewDanmakuRelay(rdb, hub, log)
 	ctx, cancel := context.WithCancel(context.Background())
 	go relay.RunSubscriber(ctx)
 	t.Cleanup(cancel)
@@ -88,8 +91,8 @@ func newTestAPIWithRuntimeCfg(t *testing.T) (*API, *gin.Engine, *jwttoken.Manage
 			JWT:            jm,
 			Sens:           sens,
 			Play:           pc,
-			DailyRewardSvc: service.NewDailyRewardService(db),
-			SearchSvc:      service.NewSearchService(nil, db, rdb, log),
+			DailyRewardSvc: dailyreward.NewDailyRewardService(db),
+			SearchSvc:      searchsvc.NewSearchService(nil, db, rdb, log),
 			DanmakuRelay:   relay,
 			RuntimeCfg:     runtimeCfg,
 		},

@@ -12,7 +12,14 @@ import (
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 
-	"cakecake/internal/service"
+	"cakecake/internal/service/article"
+	"cakecake/internal/service/banner"
+	"cakecake/internal/service/comment"
+	"cakecake/internal/service/dynamic"
+	"cakecake/internal/service/hotsearch"
+	"cakecake/internal/service/user"
+	"cakecake/internal/service/video"
+	"cakecake/internal/service/viewhistory"
 	"cakecake/internal/ws"
 )
 
@@ -29,13 +36,13 @@ func newMockGORM(t *testing.T) (*gorm.DB, sqlmock.Sqlmock) {
 
 func newMockAPISimple(t *testing.T, gormDB *gorm.DB) *API {
 	t.Helper()
-	commentSvc := service.NewCommentService(gormDB, nil, zap.NewNop(), nil, nil, nil, nil, nil, nil)
-	viewHistorySvc := service.NewViewHistoryService(gormDB, nil, zap.NewNop())
-	videoSvc := service.NewVideoService(gormDB, nil, zap.NewNop(), nil, nil)
-	hotSearchSvc := service.NewHotSearchService(gormDB, nil)
-	articleSvc := service.NewArticleService(gormDB, nil, zap.NewNop(), nil, nil)
-	userSvc := service.NewUserService(gormDB, zap.NewNop())
-	dynamicSvc := service.NewDynamicService(gormDB, nil, zap.NewNop())
+	commentSvc := comment.NewCommentService(gormDB, nil, zap.NewNop(), nil, nil, nil, nil, nil, nil)
+	viewHistorySvc := viewhistory.NewViewHistoryService(gormDB, nil, zap.NewNop())
+	videoSvc := video.NewVideoService(gormDB, nil, zap.NewNop(), nil, nil)
+	hotSearchSvc := hotsearch.NewHotSearchService(gormDB, nil)
+	articleSvc := article.NewArticleService(gormDB, nil, zap.NewNop(), nil)
+	userSvc := user.NewUserService(gormDB, zap.NewNop())
+	dynamicSvc := dynamic.NewDynamicService(gormDB, nil, zap.NewNop())
 	return &API{
 		Dependencies: &Dependencies{
 			DB:             gormDB,
@@ -44,6 +51,7 @@ func newMockAPISimple(t *testing.T, gormDB *gorm.DB) *API {
 			CommentSvc:     commentSvc,
 			ViewHistorySvc: viewHistorySvc,
 			VideoSvc:       videoSvc,
+			BannerSvc:      banner.NewBannerService(gormDB),
 			HotSearchSvc:   hotSearchSvc,
 			ArticleSvc:     articleSvc,
 			UserSvc:        userSvc,
