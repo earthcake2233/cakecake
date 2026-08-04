@@ -52,7 +52,7 @@
                 </tr>
               </thead>
               <tbody>
-                <tr v-if="ledgerLoading">
+                <tr v-if="ledgerLoading && !ledgerRows.length">
                   <td colspan="3" class="mb-pc-coin__loading">加载中…</td>
                 </tr>
                 <tr v-else-if="!ledgerRows.length">
@@ -185,7 +185,9 @@ export default {
       }
     },
     async loadHome() {
-      if (!this.isCakecakeMode) {
+      // Guard against concurrent triggers: mounted(), selectPrimaryNav's
+      // refresh() and the route query watcher can fire in the same tick.
+      if (!this.isCakecakeMode || this.homeLoading) {
         return;
       }
       this.homeLoading = true;
@@ -201,7 +203,7 @@ export default {
       }
     },
     async loadRecords() {
-      if (!this.isCakecakeMode) {
+      if (!this.isCakecakeMode || this.recordsLoading) {
         return;
       }
       this.recordsLoading = true;
