@@ -13,24 +13,25 @@ import (
 	"go.uber.org/zap"
 
 	"cakecake/internal/config"
+	svcagent "cakecake/internal/service/agent"
 	"cakecake/internal/ws"
 )
 
 func TestAdminAgentMeta_Configured(t *testing.T) {
-	api := &API{Dependencies: &Dependencies{Cfg: &config.C{DeepSeekAPIKey: "sk-xxx"}, Log: zap.NewNop(), Hub: ws.NewHub()}}
+	api := &API{Dependencies: &Dependencies{Cfg: &config.C{DeepSeekAPIKey: "sk-xxx"}, Log: zap.NewNop(), Hub: ws.NewHub(), Agent: &svcagent.AgentService{}}}
 	m := api.adminAgentMeta()
 	require.Equal(t, true, m.DeepseekConfigured)
 	require.Greater(t, m.MaxProfiles, 0)
 }
 
 func TestAdminAgentMeta_NotConfigured(t *testing.T) {
-	api := &API{Dependencies: &Dependencies{Cfg: &config.C{DeepSeekAPIKey: ""}, Log: zap.NewNop(), Hub: ws.NewHub()}}
+	api := &API{Dependencies: &Dependencies{Cfg: &config.C{DeepSeekAPIKey: ""}, Log: zap.NewNop(), Hub: ws.NewHub(), Agent: &svcagent.AgentService{}}}
 	m := api.adminAgentMeta()
 	require.Equal(t, false, m.DeepseekConfigured)
 }
 
 func TestAdminAgentMeta_NilCfg(t *testing.T) {
-	api := &API{Dependencies: &Dependencies{Log: zap.NewNop(), Hub: ws.NewHub()}}
+	api := &API{Dependencies: &Dependencies{Log: zap.NewNop(), Hub: ws.NewHub(), Agent: &svcagent.AgentService{}}}
 	m := api.adminAgentMeta()
 	require.Equal(t, false, m.DeepseekConfigured)
 }

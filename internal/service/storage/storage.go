@@ -42,7 +42,7 @@ func (s *StorageService) backend() StorageBackend {
 	if OSSBackendOverride != nil {
 		return OSSBackendOverride
 	}
-	if s == nil {
+	if s == nil || s.oss == nil {
 		return nil
 	}
 	return s.oss

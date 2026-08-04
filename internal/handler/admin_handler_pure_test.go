@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"cakecake/internal/config"
+	svcagent "cakecake/internal/service/agent"
 )
 
 // ---------- adminHotSearchLimit ----------
@@ -78,7 +79,7 @@ func TestHotSearchDisplayTitleHandler(t *testing.T) {
 
 func TestAdminAgentMeta(t *testing.T) {
 	t.Run("nil cfg", func(t *testing.T) {
-		api := &API{Dependencies: &Dependencies{Cfg: nil}}
+		api := &API{Dependencies: &Dependencies{Cfg: nil, Agent: &svcagent.AgentService{}}}
 		m := api.adminAgentMeta()
 		if m.DeepseekConfigured != false {
 			t.Errorf("nil cfg: deepseek_configured should be false, got %v", m.DeepseekConfigured)
@@ -89,7 +90,7 @@ func TestAdminAgentMeta(t *testing.T) {
 	})
 
 	t.Run("no api key", func(t *testing.T) {
-		api := &API{Dependencies: &Dependencies{Cfg: &config.C{DeepSeekAPIKey: ""}}}
+		api := &API{Dependencies: &Dependencies{Cfg: &config.C{DeepSeekAPIKey: ""}, Agent: &svcagent.AgentService{}}}
 		m := api.adminAgentMeta()
 		if m.DeepseekConfigured != false {
 			t.Error("empty key: deepseek_configured should be false")
@@ -97,7 +98,7 @@ func TestAdminAgentMeta(t *testing.T) {
 	})
 
 	t.Run("api key with spaces", func(t *testing.T) {
-		api := &API{Dependencies: &Dependencies{Cfg: &config.C{DeepSeekAPIKey: "  "}}}
+		api := &API{Dependencies: &Dependencies{Cfg: &config.C{DeepSeekAPIKey: "  "}, Agent: &svcagent.AgentService{}}}
 		m := api.adminAgentMeta()
 		if m.DeepseekConfigured != false {
 			t.Error("whitespace key: deepseek_configured should be false")
@@ -105,7 +106,7 @@ func TestAdminAgentMeta(t *testing.T) {
 	})
 
 	t.Run("configured", func(t *testing.T) {
-		api := &API{Dependencies: &Dependencies{Cfg: &config.C{DeepSeekAPIKey: "sk-abc123"}}}
+		api := &API{Dependencies: &Dependencies{Cfg: &config.C{DeepSeekAPIKey: "sk-abc123"}, Agent: &svcagent.AgentService{}}}
 		m := api.adminAgentMeta()
 		if m.DeepseekConfigured != true {
 			t.Error("valid key: deepseek_configured should be true")

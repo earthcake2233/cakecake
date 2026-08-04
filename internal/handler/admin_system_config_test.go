@@ -5,6 +5,7 @@ import (
 	"cakecake/internal/service/dailyreward"
 	"cakecake/internal/service/danmaku"
 	"cakecake/internal/service/playcount"
+	"cakecake/internal/service/storage"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -93,6 +94,7 @@ func newTestAPIWithRuntimeCfg(t *testing.T) (*API, *gin.Engine, *jwttoken.Manage
 			Play:           pc,
 			DailyRewardSvc: dailyreward.NewDailyRewardService(db),
 			SearchSvc:      searchsvc.NewSearchService(nil, db, rdb, log),
+			StorageSvc:     storage.NewStorageService(cfg, nil, log),
 			DanmakuRelay:   relay,
 			RuntimeCfg:     runtimeCfg,
 		},

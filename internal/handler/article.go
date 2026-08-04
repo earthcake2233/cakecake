@@ -89,41 +89,6 @@ func loadPublishedArticle(ctx context.Context, a *API, id uint64) (article.Artic
 	}, true
 }
 
-func articleEngagementByViewer(db *gorm.DB, viewer uint64, ids []uint64) map[uint64]articleEngagement {
-	out := make(map[uint64]articleEngagement, len(ids))
-	if viewer == 0 || len(ids) == 0 {
-		return out
-	}
-	faved := map[uint64]bool{}
-	var favRows []article.ArticleFavorite
-	_ = db.Where("user_id = ? AND article_id IN ?", viewer, ids).Find(&favRows).Error
-	for i := range favRows {
-		faved[favRows[i].ArticleID] = true
-	}
-	var coinRows []article.ArticleCoin
-	_ = db.Where("user_id = ? AND article_id IN ?", viewer, ids).Find(&coinRows).Error
-	coinAmt := map[uint64]int{}
-	for i := range coinRows {
-		amt := coinRows[i].Amount
-		if amt < 0 {
-			amt = 0
-		}
-		if amt > 2 {
-			amt = 2
-		}
-		coinAmt[coinRows[i].ArticleID] = amt
-	}
-	for _, id := range ids {
-		amt := coinAmt[id]
-		out[id] = articleEngagement{
-			FavoritedByMe: faved[id],
-			CoinedByMe:    amt > 0,
-			MyCoinAmount:  amt,
-		}
-	}
-	return out
-}
-
 func parseArticleTagsJSON(raw string) []string {
 	raw = strings.TrimSpace(raw)
 	if raw == "" || raw == "[]" {

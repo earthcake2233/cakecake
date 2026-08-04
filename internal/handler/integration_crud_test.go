@@ -14,6 +14,7 @@ import (
 	"cakecake/internal/service/danmaku"
 	"cakecake/internal/service/dm"
 	"cakecake/internal/service/playcount"
+	"cakecake/internal/service/storage"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -82,6 +83,7 @@ func setupHandlerIntegrationDB(t *testing.T) (*API, *gin.Engine, string) {
 			Play:           &playcount.PlayCounter{Rdb: rdb, Store: playcount.NewPlayCountStore(db)},
 			DailyRewardSvc: dailyreward.NewDailyRewardService(db),
 			SearchSvc:      searchsvc.NewSearchService(nil, db, rdb, zap.NewNop()),
+			StorageSvc:     storage.NewStorageService(cfg, nil, zap.NewNop()),
 			AuthSvc:        usvc.NewAuthService(db, rdb, zap.NewNop(), jm, usvc.AuthConfig{}),
 			UserSvc:        usvc.NewUserService(db, zap.NewNop()),
 			FollowSvc:      follow.NewFollowService(db, zap.NewNop()),

@@ -22,6 +22,7 @@ import (
 
 	"cakecake/internal/data"
 	"cakecake/internal/pkg/jwttoken"
+	"cakecake/internal/service/storage"
 	"cakecake/internal/service/user"
 	"cakecake/internal/ws"
 )
@@ -70,14 +71,15 @@ func newTestAdminAPI(t *testing.T) (*API, *gin.Engine, *jwttoken.Manager) {
 
 	api := &API{
 		Dependencies: &Dependencies{
-			Cfg:     cfg,
-			DB:      db,
-			Redis:   rdb,
-			JWT:     jm,
-			Hub:     ws.NewHub(),
-			Log:     zap.NewNop(),
-			Play:    nil,
-			AuthSvc: user.NewAuthService(db, rdb, zap.NewNop(), jm, user.AuthConfig{}),
+			Cfg:        cfg,
+			DB:         db,
+			Redis:      rdb,
+			JWT:        jm,
+			Hub:        ws.NewHub(),
+			Log:        zap.NewNop(),
+			Play:       nil,
+			AuthSvc:    user.NewAuthService(db, rdb, zap.NewNop(), jm, user.AuthConfig{}),
+			StorageSvc: storage.NewStorageService(cfg, nil, zap.NewNop()),
 		},
 	}
 	r := gin.New()

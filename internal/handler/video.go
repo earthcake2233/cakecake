@@ -46,21 +46,6 @@ func uploaderNameForAPI(u *user.User) string {
 	return user.DisplayUsername(u)
 }
 
-func videoLikesByViewer(db *gorm.DB, viewer uint64, ids []uint64) map[uint64]bool {
-	out := make(map[uint64]bool)
-	if viewer == 0 || len(ids) == 0 {
-		return out
-	}
-	var rows []video.VideoLike
-	if err := db.Where("user_id = ? AND video_id IN ?", viewer, ids).Find(&rows).Error; err != nil {
-		return out
-	}
-	for i := range rows {
-		out[rows[i].VideoID] = true
-	}
-	return out
-}
-
 const maxVideoBytes = 500 << 20
 const maxDurationSec = 30 * 60
 
