@@ -42,6 +42,21 @@
 
 ---
 
+## Docker Compose 快速启动
+
+前置要求：Docker Engine（含 Compose v2），建议内存 ≥ 4 GB（Elasticsearch 占用较高）。
+
+```bash
+cp .env.example .env
+docker compose up -d --build
+```
+
+启动完成后访问 **http://localhost:8888**。首次启动自动完成数据库迁移、Elasticsearch 索引与演示数据初始化，无需本地安装 Go / Node / MySQL / Redis / RabbitMQ / Elasticsearch / FFmpeg。
+
+端口映射、演示账号、AI 助手与 OSS 上传的开启方式及故障排查，见 [deploy/DEPLOY.md · 本地一键体验](./deploy/DEPLOY.md#〇本地一键体验docker-compose)。
+
+---
+
 ## 5 分钟本地联调
 
 **1. 后端**（仓库根目录）
@@ -53,7 +68,7 @@ go build -o ./bin/cakecake ./cmd/cakecake/
 ./bin/cakecake               # 默认 :8080；健康检查 GET /api/v1/health
 ```
 
-MySQL 需先建库（如 `minibili`）；开发环境由 GORM AutoMigrate 自动建表（V1-V19），生产环境（APP_ENV=production）走 goose SQL 迁移（V20+），支持回滚。
+MySQL 需先建库（如 `cakecake`）；开发环境由 GORM AutoMigrate 自动建表（V1-V19），生产环境（APP_ENV=production）走 goose SQL 迁移（V20+），支持回滚。
 
 **2. 前端**
 
@@ -124,6 +139,7 @@ npm run dev                   # http://localhost:8888
 | [docs/manual-video-ingest.md](./docs/manual-video-ingest.md)                 | 运维                   | 关闭网页上传时，本地 OSS + 手动写库发视频 |
 | [docs/ai-gateway.md](./docs/ai-gateway.md)                                   | 运维                   | AI 助手（DeepSeek）配置                   |
 | [.github/workflows/deploy.yml](./.github/workflows/deploy.yml)               | 运维                   | 可选：GitHub Actions 构建并 SSH 部署      |
+| [.github/workflows/compose-check.yml](./.github/workflows/compose-check.yml) | 运维                   | compose 环境变量漂移检查 + 语法校验 + 冒烟测试 |
 | [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)                               | 全栈 / 面试            | 系统架构、核心模块设计、关键决策          |
 | [docs/ARCHITECTURE_EN.md](./docs/ARCHITECTURE_EN.md)                         | Full-stack / Interview | Architecture (English)                    |
 | [SPEC.md](./SPEC.md)                                                         | 开发                   | 功能与验收规格                            |
@@ -136,13 +152,16 @@ npm run dev                   # http://localhost:8888
 
 ```
 cakecake/
+├── Dockerfile              # 后端镜像（含 FFmpeg）
+├── docker-compose.yml      # 一键启动：MySQL/Redis/RabbitMQ/ES + 前后端
 ├── cmd/cakecake/            # Go 入口
 ├── internal/                # handler / service / worker / ws 等
 ├── configs/                 # sensitive_words.txt、ip2region_v4.xdb
-├── deploy/                  # Nginx、systemd 模板
+├── deploy/                  # Nginx、systemd 模板、compose 内 Nginx 配置
 ├── go.mod                   # module cakecake
 └── cakecake-vue/
     └── cakecake-web/        # Vue 3 + Vite 前端
+        └── Dockerfile       # 前端镜像（Vite 构建 + Nginx）
 ```
 
 `cakecake-web/go.mod` 与根模块隔离，避免根目录 `go test ./...` 扫到 `node_modules` 内的 Go 文件。
@@ -155,6 +174,7 @@ cakecake/
 | ---------------------------------- | ------------------------------------------------------------------------------------- |
 | **Go** 1.22+（`go.mod` 当前 1.25） | 后端                                                                                  |
 | **Node.js** + **npm**              | 前端（请用 npm，勿与 yarn 混用锁文件）                                                |
+| **Docker**（可选）                 | 一条命令启动完整前后端（见上方 Compose 快速开始）                                     |
 | **MySQL**                          | 持久化                                                                                |
 | **Redis**                          | 播放计数、弹幕冷却、Refresh Token 等                                                  |
 | **RabbitMQ**                       | 转码队列（规格要求，不可用 Redis List 替代）                                          |

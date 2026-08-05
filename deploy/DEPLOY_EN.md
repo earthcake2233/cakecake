@@ -24,6 +24,52 @@ Targeted at **personal site / interview demo / low traffic**. Default architectu
 
 ---
 
+## 0. Local One-Command Experience (Docker Compose)
+
+To see the project running in 30 seconds, skip the full production setup for now: [docker-compose.yml](../docker-compose.yml) orchestrates **MySQL / Redis / RabbitMQ / ES + backend + frontend** and seeds demo videos and danmaku automatically.
+
+### Prerequisites
+
+- Docker with Compose v2 (`docker compose version` works)
+- Plan for ≥ 4GB RAM on the host (ES is memory-hungry; on low-RAM machines you can comment out the `elasticsearch` service — the search page shows "unavailable" and everything else keeps working)
+- On Linux, if ES reports a `vm.max_map_count` error, run `sudo sysctl -w vm.max_map_count=262144` first (compose pre-sets it via `sysctls`)
+
+### Startup
+
+```bash
+cd <repo root>
+cp .env.example .env          # optional; defaults work without it
+docker compose up -d --build
+```
+
+Open **http://localhost:8888**. On first boot: GORM AutoMigrate creates the schema → `SEED_DEMO_DATA=true` writes demo users / videos / danmaku → ES is fully reindexed.
+
+### Ports & Accounts
+
+| Service | Address | Notes |
+| --- | --- | --- |
+| Frontend | http://localhost:8888 | Nginx serves the SPA and proxies `/api` + WebSocket |
+| Backend API | http://localhost:8080 | Health check `GET /api/v1/health`; Swagger at `/swagger/` |
+| MySQL / Redis / RabbitMQ / ES | `3306` / `6379` / `5672`·`15672` / `9200` | Bound to `127.0.0.1` by default |
+
+Demo accounts use password `demo123456` (overridable via `DEMO_USER_PASSWORD`); the admin console is `admin` / `change-me-admin` (set via `ADMIN_SEED_PASSWORD`, effective only on first init; admins have no password-change endpoint). All ports bind to the loopback interface by default; if 8888/8080 are already taken, override `WEB_PORT` / `BACKEND_PORT` in `.env` and run `docker compose up -d` again. For public deployment change the port mappings, default passwords, and configure a firewall.
+
+### Optional Upgrades
+
+- **AI assistant (DeepSeek Function Calling)**: put `DEEPSEEK_API_KEY` in `.env`, then `docker compose up -d backend`;
+- **Web upload + async transcoding**: put `OSS_*` credentials in `.env`, set `VIDEO_UPLOAD_DISABLED=false` and `VITE_VIDEO_UPLOAD_DISABLED=false` (frontend build-time flag), then `docker compose up -d --build web backend`;
+- **Stop / reset**: `docker compose down`; full reset (removes volumes) with `docker compose down -v`.
+
+### Differences from Production
+
+Compose targets the **local one-command experience**: upload is disabled by default (matching the live demo), and secrets live only in the local `.env` (gitignored). The production deployment in the rest of this document does not use compose, and its secrets live only in `/opt/minibili/.env` on the server.
+
+### CI Guard
+
+`.github/workflows/compose-check.yml` triple-guards the stack: env-drift checks (`.env.example` ↔ compose), `docker compose config` validation, and a full-stack smoke test (real image builds, health checks, seed data). If code evolution breaks the one-command experience, CI fails loudly.
+
+---
+
 ## 1. Architecture Overview
 
 ```mermaid

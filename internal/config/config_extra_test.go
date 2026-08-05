@@ -155,6 +155,12 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.VideoUploadDisabled != false {
 		t.Error("VideoUploadDisabled defaults to false")
 	}
+	if cfg.SeedDemoData != false {
+		t.Error("SeedDemoData defaults to false")
+	}
+	if cfg.DemoUserPassword != "demo123456" {
+		t.Errorf("DemoUserPassword = %q; want demo123456", cfg.DemoUserPassword)
+	}
 	if cfg.DeepSeekModel != "deepseek-chat" {
 		t.Errorf("DeepSeekModel = %q; want deepseek-chat", cfg.DeepSeekModel)
 	}
@@ -220,9 +226,11 @@ func TestLoad_WithEnv(t *testing.T) {
 	setenv("IP2REGION_DEV_CLIENT_IP", "1.2.3.4")
 	setenv("ADMIN_SEED_USERNAME", "admin")
 	setenv("ADMIN_SEED_PASSWORD", "admin123")
+	setenv("DEMO_USER_PASSWORD", "demopass")
 	setenv("VIDEO_REVIEW_REQUIRED", "false")
 	setenv("ARTICLE_REVIEW_REQUIRED", "0")
 	setenv("VIDEO_UPLOAD_DISABLED", "true")
+	setenv("SEED_DEMO_DATA", "true")
 	setenv("DEEPSEEK_API_KEY", "dskey")
 	setenv("DEEPSEEK_BASE_URL", "https://custom.deepseek.com/")
 	setenv("DEEPSEEK_MODEL", "deepseek-reasoner")
@@ -247,8 +255,8 @@ func TestLoad_WithEnv(t *testing.T) {
 			"SENSITIVE_WORDS_FILE", "TEMP_UPLOAD_DIR",
 			"FFPROBE_PATH", "FFMPEG_PATH",
 			"IP2REGION_V4_XDB", "IP2REGION_DEV_CLIENT_IP",
-			"ADMIN_SEED_USERNAME", "ADMIN_SEED_PASSWORD",
-			"VIDEO_REVIEW_REQUIRED", "ARTICLE_REVIEW_REQUIRED", "VIDEO_UPLOAD_DISABLED",
+			"ADMIN_SEED_USERNAME", "ADMIN_SEED_PASSWORD", "DEMO_USER_PASSWORD",
+			"VIDEO_REVIEW_REQUIRED", "ARTICLE_REVIEW_REQUIRED", "VIDEO_UPLOAD_DISABLED", "SEED_DEMO_DATA",
 			"DEEPSEEK_API_KEY", "DEEPSEEK_BASE_URL", "DEEPSEEK_MODEL",
 			"AGENT_BOT_USERNAME", "AGENT_ENABLED", "AGENT_MAX_HISTORY", "AGENT_HISTORY_TTL", "AGENT_DAILY_QUOTA", "AGENT_REQUEST_TIMEOUT",
 			"RATE_LIMIT_ENABLED", "RATE_LIMIT_RATE", "RATE_LIMIT_BURST",
@@ -343,6 +351,9 @@ func TestLoad_WithEnv(t *testing.T) {
 	if cfg.AdminSeedPassword != "admin123" {
 		t.Errorf("AdminSeedPassword = %q", cfg.AdminSeedPassword)
 	}
+	if cfg.DemoUserPassword != "demopass" {
+		t.Errorf("DemoUserPassword = %q; want demopass", cfg.DemoUserPassword)
+	}
 	if cfg.VideoReviewRequired != false {
 		t.Error("VideoReviewRequired should be false")
 	}
@@ -351,6 +362,9 @@ func TestLoad_WithEnv(t *testing.T) {
 	}
 	if cfg.VideoUploadDisabled != true {
 		t.Error("VideoUploadDisabled should be true")
+	}
+	if cfg.SeedDemoData != true {
+		t.Error("SeedDemoData should be true")
 	}
 	if cfg.DeepSeekAPIKey != "dskey" {
 		t.Errorf("DeepSeekAPIKey = %q", cfg.DeepSeekAPIKey)

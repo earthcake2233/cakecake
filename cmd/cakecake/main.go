@@ -137,6 +137,9 @@ func main() {
 	if err := data.EnsureAgentProfiles(db, cfg, log); err != nil {
 		log.Warn("ensure agent profiles", zap.Error(err))
 	}
+	if err := data.SeedDemoData(db, cfg, log); err != nil {
+		log.Warn("seed demo data", zap.Error(err))
+	}
 
 	// Runtime config: seeded from env, periodically refreshed from DB.
 	runtimeCfg := config.NewRuntimeConfig(db, map[string]string{

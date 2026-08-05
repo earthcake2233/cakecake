@@ -1,0 +1,192 @@
+# cakecake Docker Compose (V1: one-command local experience)
+#
+# Usage:
+#   cp .env.example .env            # optional; defaults work without it
+#   docker compose up -d --build    # builds & starts MySQL/Redis/RabbitMQ/ES + backend + frontend
+#   open http://localhost:8888
+#
+# Maintenance contract (guarded by CI .github/workflows/compose-check.yml):
+#   1) new env vars must be added to .env.example too (check_compose_env.py fails otherwise);
+#   2) compose changes must pass `docker compose config` and the smoke test;
+#   3) demo seed data is written by the backend when SEED_DEMO_DATA=true (see internal/data/demo_seed.go).
+#
+# Security: real secrets (JWT_SECRET, OSS_*, DEEPSEEK_API_KEY, ...) live only in the local
+# .env (gitignored); this file keeps ${VAR:-default} placeholders only.
+
+name: cakecake
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: cakecake-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-cakecake_dev}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-cakecake}
+      TZ: Asia/Shanghai
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_general_ci
+    ports:
+      - "127.0.0.1:${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+      start_period: 30s
+
+  redis:
+    image: redis:7-alpine
+    container_name: cakecake-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: cakecake-rabbitmq
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${RABBITMQ_PORT:-5672}:5672"
+      - "127.0.0.1:${RABBITMQ_MGMT_PORT:-15672}:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD-SHELL", "rabbitmq-diagnostics -q ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 30s
+
+  elasticsearch:
+    image: elasticsearch:8.13.4
+    container_name: cakecake-elasticsearch
+    restart: unless-stopped
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+      TZ: Asia/Shanghai
+    sysctls:
+      vm.max_map_count: "262144"
+    ports:
+      - "127.0.0.1:${ES_PORT:-9200}:9200"
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS 'http://127.0.0.1:9200/_cluster/health?wait_for_status=yellow&timeout=5s' >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 24
+      start_period: 60s
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cakecake-backend
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    environment:
+      APP_ENV: development
+      DB_AUTO_MIGRATE: "1"
+      HTTP_ADDR: ":8080"
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      # Container-network DSN: do NOT reuse the local-dev MYSQL_DSN (127.0.0.1 points to the container itself).
+      # When customizing MYSQL_ROOT_PASSWORD / MYSQL_DATABASE, update COMPOSE_MYSQL_DSN accordingly.
+      MYSQL_DSN: ${COMPOSE_MYSQL_DSN:-root:cakecake_dev@tcp(mysql:3306)/cakecake?charset=utf8mb4&parseTime=True&loc=Local}
+      REDIS_ADDR: redis:6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REDIS_DB: ${REDIS_DB:-0}
+      REDIS_DIAL_TIMEOUT: ${REDIS_DIAL_TIMEOUT:-5s}
+      REDIS_READ_TIMEOUT: ${REDIS_READ_TIMEOUT:-3s}
+      REDIS_WRITE_TIMEOUT: ${REDIS_WRITE_TIMEOUT:-3s}
+      REDIS_POOL_SIZE: ${REDIS_POOL_SIZE:-20}
+      ELASTICSEARCH_URL: http://elasticsearch:9200
+      ELASTICSEARCH_USERNAME: ${ELASTICSEARCH_USERNAME:-}
+      ELASTICSEARCH_PASSWORD: ${ELASTICSEARCH_PASSWORD:-}
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      SENSITIVE_WORDS_FILE: ./configs/sensitive_words.txt
+      TEMP_UPLOAD_DIR: /data/tmp
+      FFPROBE_PATH: ${FFPROBE_PATH:-ffprobe}
+      FFMPEG_PATH: ${FFMPEG_PATH:-ffmpeg}
+      IP2REGION_V4_XDB: ${IP2REGION_V4_XDB:-./configs/ip2region_v4.xdb}
+      IP2REGION_DEV_CLIENT_IP: ${IP2REGION_DEV_CLIENT_IP:-}
+      ADMIN_SEED_USERNAME: ${ADMIN_SEED_USERNAME:-admin}
+      ADMIN_SEED_PASSWORD: ${ADMIN_SEED_PASSWORD:-change-me-admin}
+      VIDEO_REVIEW_REQUIRED: ${VIDEO_REVIEW_REQUIRED:-true}
+      ARTICLE_REVIEW_REQUIRED: ${ARTICLE_REVIEW_REQUIRED:-true}
+      VIDEO_UPLOAD_DISABLED: ${VIDEO_UPLOAD_DISABLED:-true}
+      SEED_DEMO_DATA: ${SEED_DEMO_DATA:-true}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      DEEPSEEK_BASE_URL: ${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
+      DEEPSEEK_MODEL: ${DEEPSEEK_MODEL:-deepseek-chat}
+      AGENT_BOT_USERNAME: ${AGENT_BOT_USERNAME:-minibili_ai}
+      AGENT_ENABLED: ${AGENT_ENABLED:-true}
+      AGENT_MAX_HISTORY: ${AGENT_MAX_HISTORY:-20}
+      AGENT_HISTORY_TTL: ${AGENT_HISTORY_TTL:-720h}
+      AGENT_DAILY_QUOTA: ${AGENT_DAILY_QUOTA:-80}
+      AGENT_REQUEST_TIMEOUT: ${AGENT_REQUEST_TIMEOUT:-90s}
+      SHUTDOWN_TIMEOUT: ${SHUTDOWN_TIMEOUT:-30s}
+      RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-false}
+      RATE_LIMIT_RATE: ${RATE_LIMIT_RATE:-20}
+      RATE_LIMIT_BURST: ${RATE_LIMIT_BURST:-50}
+      # OSS: left empty to keep upload/transcoding disabled; fill real credentials in .env and set
+      # VIDEO_UPLOAD_DISABLED=false to enable the full upload -> transcode pipeline.
+      OSS_ACCESS_KEY_ID: ${OSS_ACCESS_KEY_ID:-}
+      OSS_ACCESS_KEY_SECRET: ${OSS_ACCESS_KEY_SECRET:-}
+      OSS_BUCKET: ${OSS_BUCKET:-}
+      OSS_ENDPOINT: ${OSS_ENDPOINT:-}
+      OSS_PUBLIC_URL_PREFIX: ${OSS_PUBLIC_URL_PREFIX:-}
+    ports:
+      - "127.0.0.1:${BACKEND_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/api/v1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  web:
+    build:
+      context: .
+      dockerfile: cakecake-vue/cakecake-web/Dockerfile
+      args:
+        VITE_VIDEO_UPLOAD_DISABLED: ${VITE_VIDEO_UPLOAD_DISABLED:-true}
+    container_name: cakecake-web
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "127.0.0.1:${WEB_PORT:-8888}:80"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+volumes:
+  mysql_data:
+  redis_data:
+  rabbitmq_data:
+  es_data:

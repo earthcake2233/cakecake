@@ -1,0 +1,98 @@
+# Docker Compose guard: env-drift check + compose syntax validation + full-stack smoke test
+# Goal: compose evolves together with .env.example / code; drift fails CI instead of hitting readers.
+
+name: Compose check
+
+on:
+  pull_request:
+    paths:
+      - "docker-compose.yml"
+      - ".env.example"
+      - "deploy/env.production.example"
+      - "Dockerfile"
+      - "cakecake-vue/cakecake-web/Dockerfile"
+      - "deploy/nginx-compose.conf"
+      - ".dockerignore"
+      - "scripts/check_compose_env.py"
+      - "internal/data/demo_seed*.go"
+      - ".github/workflows/compose-check.yml"
+  push:
+    branches: [main, master]
+    paths:
+      - "docker-compose.yml"
+      - ".env.example"
+      - "deploy/env.production.example"
+      - "Dockerfile"
+      - "cakecake-vue/cakecake-web/Dockerfile"
+      - "deploy/nginx-compose.conf"
+      - ".dockerignore"
+      - "scripts/check_compose_env.py"
+      - "internal/data/demo_seed*.go"
+      - ".github/workflows/compose-check.yml"
+  workflow_dispatch:
+  schedule:
+    - cron: "0 3 * * 0" # weekly: verify image/dependency compatibility even without code changes
+
+concurrency:
+  group: compose-check-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  compose-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate compose file
+        run: docker compose config --quiet
+
+      - name: Env drift check (.env.example <-> compose)
+        run: python3 scripts/check_compose_env.py
+
+  compose-smoke:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build and start full stack
+        env:
+          WEB_PORT: 18080
+          BACKEND_PORT: 18081
+          MYSQL_PORT: 13306
+          REDIS_PORT: 16379
+          RABBITMQ_PORT: 15672
+          RABBITMQ_MGMT_PORT: 15673
+          ES_PORT: 19200
+        run: docker compose up -d --build
+
+      - name: Wait for frontend to serve
+        run: |
+          for i in $(seq 1 60); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18080/ || true)
+            if [ "$code" = "200" ]; then
+              echo "frontend ready after $((i * 5))s"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "frontend did not become ready in 300s"
+          exit 1
+
+      - name: Check backend health + seeded demo data
+        run: |
+          curl -fsS http://127.0.0.1:18080/api/v1/health | grep -Eq '"code"[^0-9]*0'
+          curl -fsS "http://127.0.0.1:18080/api/v1/videos?limit=3" | grep -Eq '"code"[^0-9]*0'
+          curl -fsS "http://127.0.0.1:18080/api/v1/videos?limit=3" | grep -q '"items"'
+          curl -fsS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:18080/ | grep -q '^200$'
+
+      - name: Show logs on failure
+        if: failure()
+        run: docker compose logs --tail=100
+
+      - name: Teardown
+        if: always()
+        run: docker compose down -v

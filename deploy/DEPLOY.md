@@ -24,6 +24,52 @@
 
 ---
 
+## 〇、本地一键体验（Docker Compose）
+
+想 30 秒看到效果，不必先走完整生产部署：仓库根的 [docker-compose.yml](../docker-compose.yml) 会把 **MySQL / Redis / RabbitMQ / ES + 后端 + 前端** 全部编排起来，并自动写入演示视频与弹幕。
+
+### 前置要求
+
+- Docker（含 Compose v2，`docker compose version` 可用）
+- 建议宿主机 ≥ 4GB 内存（ES 是资源大户；低配机器可注释掉 `elasticsearch` 服务，搜索页提示"未就绪"，其余功能不受影响）
+- Linux 主机若 ES 报 `vm.max_map_count` 错误，先执行 `sudo sysctl -w vm.max_map_count=262144`（compose 已通过 `sysctls` 预置）
+
+### 启动
+
+```bash
+cd <仓库根目录>
+cp .env.example .env          # 可选：不复制也能用默认值
+docker compose up -d --build
+```
+
+打开 **http://localhost:8888**。首次启动自动完成：GORM AutoMigrate 建表 → `SEED_DEMO_DATA=true` 写入演示用户 / 视频 / 弹幕 → ES 全量索引。
+
+### 端口与账号
+
+| 服务 | 地址 | 说明 |
+| --- | --- | --- |
+| 前端 | http://localhost:8888 | Nginx 托管 SPA，反代 `/api` 与 WebSocket |
+| 后端 API | http://localhost:8080 | 健康检查 `GET /api/v1/health`；Swagger `/swagger/` |
+| MySQL / Redis / RabbitMQ / ES | `3306` / `6379` / `5672`·`15672` / `9200` | 默认只绑定 `127.0.0.1` |
+
+演示账号密码 `demo123456`（演示用户，可用 `DEMO_USER_PASSWORD` 覆盖）；运营后台 `admin` / `change-me-admin`（由 `ADMIN_SEED_PASSWORD` 预设，仅首次建库时生效，管理员无改密接口）。所有端口默认只监听本机回环地址；若本机 8888/8080 已被占用，可在 `.env` 修改 `WEB_PORT` / `BACKEND_PORT` 后重新 `docker compose up -d`。公网部署请修改端口映射、默认密码并配置防火墙。
+
+### 可选增强
+
+- **AI 助手（DeepSeek Function Calling）**：`.env` 填入 `DEEPSEEK_API_KEY`，执行 `docker compose up -d backend` 重启后端；
+- **网页上传 + 异步转码**：`.env` 填入 `OSS_*` 凭证，并把 `VIDEO_UPLOAD_DISABLED=false`、`VITE_VIDEO_UPLOAD_DISABLED=false`（前端编译期开关），然后 `docker compose up -d --build web backend` 重建前端并重启后端；
+- **停止 / 重置**：`docker compose down`；彻底重置（删除数据卷）用 `docker compose down -v`。
+
+### 与生产部署的差异
+
+compose 面向**本地一键体验**：上传默认禁用（与线上 Demo 行为一致），密钥只存在于本地 `.env`（已被 gitignore）。本文档后续章节的生产部署不使用 compose，密钥只存在于服务器本地 `/opt/minibili/.env`。
+
+### CI 守护
+
+`.github/workflows/compose-check.yml` 对 compose 做三重守护：环境变量漂移检查（`.env.example` ↔ compose）、`docker compose config` 语法校验、全栈冒烟测试（真实构建镜像并验证健康检查与种子数据）。代码演进导致 compose 失效时，CI 会直接报红。
+
+---
+
 ## 一、架构示意
 
 ```mermaid

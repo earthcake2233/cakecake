@@ -1,4 +1,4 @@
-# MiniBili Makefile -- cross-platform build & test entry.
+# cakecake Makefile -- cross-platform build & test entry.
 #   Linux/macOS: make <target>
 #   Windows:     make <target>   (GNU Make required, uses cmd.exe)
 
@@ -7,7 +7,7 @@ SHELL := cmd.exe
 .SHELLFLAGS := /c
 endif
 
-.PHONY: all test test-backend test-frontend coverage coverage-backend coverage-frontend doc-check install-hooks clean help fmt fmt-check
+.PHONY: all test test-backend test-frontend coverage coverage-backend coverage-frontend doc-check compose-up compose-down compose-check install-hooks clean help fmt fmt-check
 
 GO = go
 NPM = npm
@@ -37,6 +37,18 @@ doc-check:
 	python scripts/check_en_sync.py --check-sync
 	python scripts/check_md_links.py
 	python scripts/validate_md_tables.py
+
+# -- Docker Compose (one-command local experience) ---------------
+
+compose-up:
+	docker compose up -d --build
+
+compose-down:
+	docker compose down
+
+compose-check:
+	python scripts/check_compose_env.py
+	docker compose config --quiet
 
 install-hooks:
 	cp scripts/pre-commit .git/hooks/pre-commit

@@ -75,6 +75,9 @@ type C struct {
 
 	AdminSeedPassword string `json:"-"`
 
+	// DemoUserPassword: login password for seeded demo users (SEED_DEMO_DATA=true).
+	DemoUserPassword string `json:"-"`
+
 	// VideoReviewRequired: transcode success → pending_review instead of published (default true).
 	VideoReviewRequired bool `json:"video_review_required"`
 
@@ -83,6 +86,10 @@ type C struct {
 
 	// VideoUploadDisabled: reject video file upload/transcode; metadata-only drafts still allowed.
 	VideoUploadDisabled bool `json:"video_upload_disabled"`
+
+	// SeedDemoData: when true and the videos table is empty, insert demo users/videos/danmaku
+	// pointing at public demo media URLs (Docker Compose one-command experience).
+	SeedDemoData bool `json:"seed_demo_data"`
 
 	// DBAutoMigrate enables automatic schema migration on startup (default true).
 	// Set DB_AUTO_MIGRATE=0 in production when using goose or another migration tool.
@@ -217,9 +224,11 @@ func Load() *C {
 		IP2RegionDevClientIP:  strings.TrimSpace(os.Getenv("IP2REGION_DEV_CLIENT_IP")),
 		AdminSeedUsername:     strings.TrimSpace(os.Getenv("ADMIN_SEED_USERNAME")),
 		AdminSeedPassword:     os.Getenv("ADMIN_SEED_PASSWORD"),
+		DemoUserPassword:      strings.TrimSpace(getenv("DEMO_USER_PASSWORD", "demo123456")),
 		VideoReviewRequired:   parseBoolEnv("VIDEO_REVIEW_REQUIRED", true),
 		ArticleReviewRequired: parseBoolEnv("ARTICLE_REVIEW_REQUIRED", true),
 		VideoUploadDisabled:   parseBoolEnv("VIDEO_UPLOAD_DISABLED", false),
+		SeedDemoData:          parseBoolEnv("SEED_DEMO_DATA", false),
 		DBAutoMigrate:         parseBoolEnv("DB_AUTO_MIGRATE", appEnv != "production"),
 
 		DeepSeekAPIKey:      strings.TrimSpace(os.Getenv("DEEPSEEK_API_KEY")),
@@ -260,9 +269,11 @@ func (c *C) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	enc.AddString("ip2region_v4_xdb", c.IP2RegionV4XDB)
 	enc.AddString("ip2region_dev_client_ip", c.IP2RegionDevClientIP)
 	enc.AddString("admin_seed_username", c.AdminSeedUsername)
+	enc.AddString("demo_user_password", c.DemoUserPassword)
 	enc.AddBool("video_review_required", c.VideoReviewRequired)
 	enc.AddBool("article_review_required", c.ArticleReviewRequired)
 	enc.AddBool("video_upload_disabled", c.VideoUploadDisabled)
+	enc.AddBool("seed_demo_data", c.SeedDemoData)
 	enc.AddBool("db_auto_migrate", c.DBAutoMigrate)
 	enc.AddString("deepseek_base_url", c.DeepSeekBaseURL)
 	enc.AddString("deepseek_model", c.DeepSeekModel)
