@@ -32,7 +32,7 @@
 
 - Docker（含 Compose v2，`docker compose version` 可用）
 - 建议宿主机 ≥ 4GB 内存（ES 是资源大户；低配机器可注释掉 `elasticsearch` 服务，搜索页提示"未就绪"，其余功能不受影响）
-- Linux 主机若 ES 报 `vm.max_map_count` 错误，先执行 `sudo sysctl -w vm.max_map_count=262144`（compose 已通过 `sysctls` 预置）
+- Linux 主机需满足 ES 内核参数：`sudo sysctl -w vm.max_map_count=262144`（建议写入 `/etc/sysctl.conf` 持久化；macOS / Windows 的 Docker Desktop 已自动满足）
 
 ### 启动
 

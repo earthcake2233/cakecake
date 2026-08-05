@@ -32,7 +32,7 @@ To see the project running in 30 seconds, skip the full production setup for now
 
 - Docker with Compose v2 (`docker compose version` works)
 - Plan for ≥ 4GB RAM on the host (ES is memory-hungry; on low-RAM machines you can comment out the `elasticsearch` service — the search page shows "unavailable" and everything else keeps working)
-- On Linux, if ES reports a `vm.max_map_count` error, run `sudo sysctl -w vm.max_map_count=262144` first (compose pre-sets it via `sysctls`)
+- On Linux, satisfy the ES kernel parameter first: `sudo sysctl -w vm.max_map_count=262144` (persist it in `/etc/sysctl.conf`; Docker Desktop on macOS/Windows already satisfies it)
 
 ### Startup
 

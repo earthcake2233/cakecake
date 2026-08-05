@@ -58,6 +58,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Raise vm.max_map_count for Elasticsearch (host kernel parameter)
+        run: sudo sysctl -w vm.max_map_count=262144
+
       - name: Build and start full stack
         env:
           WEB_PORT: 18080
