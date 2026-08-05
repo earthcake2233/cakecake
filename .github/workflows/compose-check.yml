@@ -92,6 +92,16 @@ jobs:
 
       - name: Check backend health + seeded demo data
         run: |
+          ok=0
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:18080/api/v1/health >/dev/null 2>&1; then
+              echo "backend ready after $((i * 3))s"
+              ok=1
+              break
+            fi
+            sleep 3
+          done
+          [ "$ok" = "1" ] || { echo "backend never became ready (502 from nginx proxy)"; exit 1; }
           curl -fsS http://127.0.0.1:18080/api/v1/health | grep -Eq '"code"[^0-9]*0'
           curl -fsS "http://127.0.0.1:18080/api/v1/videos?limit=3" | grep -Eq '"code"[^0-9]*0'
           curl -fsS "http://127.0.0.1:18080/api/v1/videos?limit=3" | grep -q '"items"'
@@ -117,11 +127,13 @@ jobs:
         uses: github/codeql-action/upload-sarif@c3400c2f38909e0dcf3c3a41f2030a8217be5d3e # v3
         with:
           sarif_file: trivy-backend.sarif
+          category: trivy-backend
 
       - name: Upload web SARIF to code scanning
         uses: github/codeql-action/upload-sarif@c3400c2f38909e0dcf3c3a41f2030a8217be5d3e # v3
         with:
           sarif_file: trivy-web.sarif
+          category: trivy-web
 
       - name: Show logs on failure
         if: failure()
