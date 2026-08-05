@@ -128,5 +128,10 @@
   "browserslist": [
     "> 1%",
     "last 2 versions"
-  ]
+  ],
+  "overrides": {
+    "js-beautify": {
+      "glob": "^11.1.0"
+    }
+  }
 }

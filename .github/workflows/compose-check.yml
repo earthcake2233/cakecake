@@ -98,7 +98,7 @@ jobs:
           curl -fsS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:18080/ | grep -q '^200$'
 
       - name: Scan backend image (Trivy)
-        uses: aquasecurity/trivy-action@915b19bbe73b92a6cf82a1bc12b087c9a19a5fe2 # v0.28.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: cakecake-backend:latest
           format: sarif
@@ -106,7 +106,7 @@ jobs:
           severity: HIGH,CRITICAL
 
       - name: Scan web image (Trivy)
-        uses: aquasecurity/trivy-action@915b19bbe73b92a6cf82a1bc12b087c9a19a5fe2 # v0.28.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: cakecake-web:latest
           format: sarif
