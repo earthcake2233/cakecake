@@ -45,7 +45,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Validate compose file
         run: docker compose config --quiet
@@ -61,7 +61,7 @@ jobs:
       contents: read
       security-events: write # upload Trivy SARIF reports to code scanning
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Raise vm.max_map_count for Elasticsearch (host kernel parameter)
         run: sudo sysctl -w vm.max_map_count=262144
@@ -124,13 +124,13 @@ jobs:
           severity: HIGH,CRITICAL
 
       - name: Upload backend SARIF to code scanning
-        uses: github/codeql-action/upload-sarif@c3400c2f38909e0dcf3c3a41f2030a8217be5d3e # v3
+        uses: github/codeql-action/upload-sarif@c4dd10e44af883a891fe31ced449bcb4a6728b9b # v3
         with:
           sarif_file: trivy-backend.sarif
           category: trivy-backend
 
       - name: Upload web SARIF to code scanning
-        uses: github/codeql-action/upload-sarif@c3400c2f38909e0dcf3c3a41f2030a8217be5d3e # v3
+        uses: github/codeql-action/upload-sarif@c4dd10e44af883a891fe31ced449bcb4a6728b9b # v3
         with:
           sarif_file: trivy-web.sarif
           category: trivy-web
