@@ -1,0 +1,26 @@
+# Gitleaks configuration for cakecake.
+# Uses the default rule set, with an allowlist for repo-known placeholders,
+# demo credentials and test fixtures (none of these are real secrets).
+title = "cakecake gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Repo-known placeholders, demo credentials and test fixtures"
+regexes = [
+  '''demo123456''',
+  '''change-me[-_a-z0-9]*''',
+  '''请替换''',
+  '''password12''',
+  '''password123''',
+  '''admin123''',
+  '''adminpass''',
+  '''covma''',
+  '''mysecret''',
+  '''dskey''',
+  '''espass''',
+  '''redispass''',
+  '''akid''',
+  '''aksecret''',
+]

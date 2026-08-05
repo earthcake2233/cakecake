@@ -43,8 +43,9 @@ permissions:
 jobs:
   compose-lint:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Validate compose file
         run: docker compose config --quiet
@@ -55,8 +56,12 @@ jobs:
   compose-smoke:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write # upload Trivy SARIF reports to code scanning
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Raise vm.max_map_count for Elasticsearch (host kernel parameter)
         run: sudo sysctl -w vm.max_map_count=262144
@@ -91,6 +96,32 @@ jobs:
           curl -fsS "http://127.0.0.1:18080/api/v1/videos?limit=3" | grep -Eq '"code"[^0-9]*0'
           curl -fsS "http://127.0.0.1:18080/api/v1/videos?limit=3" | grep -q '"items"'
           curl -fsS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:18080/ | grep -q '^200$'
+
+      - name: Scan backend image (Trivy)
+        uses: aquasecurity/trivy-action@915b19bbe73b92a6cf82a1bc12b087c9a19a5fe2 # v0.28.0
+        with:
+          image-ref: cakecake-backend:latest
+          format: sarif
+          output: trivy-backend.sarif
+          severity: HIGH,CRITICAL
+
+      - name: Scan web image (Trivy)
+        uses: aquasecurity/trivy-action@915b19bbe73b92a6cf82a1bc12b087c9a19a5fe2 # v0.28.0
+        with:
+          image-ref: cakecake-web:latest
+          format: sarif
+          output: trivy-web.sarif
+          severity: HIGH,CRITICAL
+
+      - name: Upload backend SARIF to code scanning
+        uses: github/codeql-action/upload-sarif@c3400c2f38909e0dcf3c3a41f2030a8217be5d3e # v3
+        with:
+          sarif_file: trivy-backend.sarif
+
+      - name: Upload web SARIF to code scanning
+        uses: github/codeql-action/upload-sarif@c3400c2f38909e0dcf3c3a41f2030a8217be5d3e # v3
+        with:
+          sarif_file: trivy-web.sarif
 
       - name: Show logs on failure
         if: failure()

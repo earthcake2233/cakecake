@@ -13,11 +13,12 @@ concurrency:
 jobs:
   test-frontend:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "22"
           cache: npm
@@ -27,12 +28,16 @@ jobs:
         working-directory: cakecake-vue/cakecake-web
         run: npm ci
 
+      - name: Audit npm dependencies (high+ advisories)
+        working-directory: cakecake-vue/cakecake-web
+        run: npm audit --audit-level=high
+
       - name: Run tests with coverage
         working-directory: cakecake-vue/cakecake-web
         run: npm run coverage
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5.5.5
+        uses: codecov/codecov-action@5975040f7f7d40edaff8d784b576fd65ae95c073 # v5.5.5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           directory: cakecake-vue/cakecake-web/coverage
@@ -43,16 +48,17 @@ jobs:
 
   test-backend:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     services:
       rabbitmq:
         image: rabbitmq:3-alpine
         ports:
           - 5672:5672
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version-file: go.mod
 
@@ -71,8 +77,11 @@ jobs:
         run: |
           go test -tags=integration ./... -count=1 -coverprofile=coverage.out -covermode=atomic
 
+      - name: Go vulnerability scan
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...
+
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5.5.5
+        uses: codecov/codecov-action@5975040f7f7d40edaff8d784b576fd65ae95c073 # v5.5.5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: coverage.out
@@ -80,3 +89,16 @@ jobs:
           name: backend-coverage
           fail_ci_if_error: true
           verbose: true
+
+  security-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 0
+
+      - name: Gitleaks secret scan
+        uses: gitleaks/gitleaks-action@1938557f6a58837331b99822ab17b8e536e7bef9 # v2.3.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
