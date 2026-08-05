@@ -52,7 +52,7 @@ docker compose up -d --build
 | 后端 API | http://localhost:8080 | 健康检查 `GET /api/v1/health`；Swagger `/swagger/` |
 | MySQL / Redis / RabbitMQ / ES | `3306` / `6379` / `5672`·`15672` / `9200` | 默认只绑定 `127.0.0.1` |
 
-演示账号密码 `demo123456`（演示用户，可用 `DEMO_USER_PASSWORD` 覆盖）；运营后台 `admin` / `change-me-admin`（由 `ADMIN_SEED_PASSWORD` 预设，仅首次建库时生效，管理员无改密接口）。所有端口默认只监听本机回环地址；若本机 8888/8080 已被占用，可在 `.env` 修改 `WEB_PORT` / `BACKEND_PORT` 后重新 `docker compose up -d`。公网部署请修改端口映射、默认密码并配置防火墙。
+内置 **7 个演示用户**（用户名即视频作者昵称）：`暗猫の祝福`、`加载超时请稍后`、`Baka恶魔`、`三栗lili`、`Yeuoly`、`科学超电磁炮F`、`泛式大大`，密码统一 `demo123456`（可用 `DEMO_USER_PASSWORD` 覆盖）；也可以直接注册自己的账号体验。运营后台 `admin` / `change-me-admin`（由 `ADMIN_SEED_PASSWORD` 预设，仅首次建库时生效，管理员无改密接口）。所有端口默认只监听本机回环地址；若本机 8888/8080 已被占用，可在 `.env` 修改 `WEB_PORT` / `BACKEND_PORT` 后重新 `docker compose up -d`。公网部署请修改端口映射、默认密码并配置防火墙。
 
 ### 可选增强
 

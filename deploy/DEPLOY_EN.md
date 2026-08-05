@@ -52,7 +52,7 @@ Open **http://localhost:8888**. On first boot: GORM AutoMigrate creates the sche
 | Backend API | http://localhost:8080 | Health check `GET /api/v1/health`; Swagger at `/swagger/` |
 | MySQL / Redis / RabbitMQ / ES | `3306` / `6379` / `5672`·`15672` / `9200` | Bound to `127.0.0.1` by default |
 
-Demo accounts use password `demo123456` (overridable via `DEMO_USER_PASSWORD`); the admin console is `admin` / `change-me-admin` (set via `ADMIN_SEED_PASSWORD`, effective only on first init; admins have no password-change endpoint). All ports bind to the loopback interface by default; if 8888/8080 are already taken, override `WEB_PORT` / `BACKEND_PORT` in `.env` and run `docker compose up -d` again. For public deployment change the port mappings, default passwords, and configure a firewall.
+**7 demo users are built in** (usernames are the video uploaders' nicknames): `暗猫の祝福`, `加载超时请稍后`, `Baka恶魔`, `三栗lili`, `Yeuoly`, `科学超电磁炮F`, `泛式大大` — all share password `demo123456` (overridable via `DEMO_USER_PASSWORD`); you can also register your own account. The admin console is `admin` / `change-me-admin` (set via `ADMIN_SEED_PASSWORD`, effective only on first init; admins have no password-change endpoint). All ports bind to the loopback interface by default; if 8888/8080 are already taken, override `WEB_PORT` / `BACKEND_PORT` in `.env` and run `docker compose up -d` again. For public deployment change the port mappings, default passwords, and configure a firewall.
 
 ### Optional Upgrades
 

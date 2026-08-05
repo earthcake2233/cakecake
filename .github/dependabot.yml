@@ -1,4 +1,6 @@
 # Dependency update automation (GitHub Actions, Go modules, npm).
+# Grouped so each ecosystem produces one PR per cycle instead of one per dependency;
+# high-risk major bumps for frontend tooling and the deploy scp action are ignored.
 version: 2
 updates:
   - package-ecosystem: github-actions
@@ -6,15 +8,36 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    groups:
+      actions:
+        patterns: ["*"]
+    ignore:
+      - dependency-name: "appleboy/scp-action"
+        versions: [">=1.0.0"]
 
   - package-ecosystem: gomod
     directory: /
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    groups:
+      go-modules:
+        patterns: ["*"]
 
   - package-ecosystem: npm
     directory: /cakecake-vue/cakecake-web
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    groups:
+      npm-dependencies:
+        patterns: ["*"]
+    ignore:
+      - dependency-name: "eslint"
+        versions: [">=9"]
+      - dependency-name: "eslint-plugin-vue"
+        versions: [">=10"]
+      - dependency-name: "vue-eslint-parser"
+        versions: [">=10"]
+      - dependency-name: "@vitejs/plugin-vue"
+        versions: [">=6"]
