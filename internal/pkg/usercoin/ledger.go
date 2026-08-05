@@ -7,6 +7,7 @@ import (
 	"gorm.io/gorm"
 )
 
+// ReasonLoginReward is the coin ledger reason for daily login rewards.
 const (
 	ReasonLoginReward      = "login_reward"
 	ReasonVideoTip         = "video_tip"

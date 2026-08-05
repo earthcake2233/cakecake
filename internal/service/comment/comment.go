@@ -14,6 +14,7 @@ import (
 	"cakecake/internal/pkg/sensitive"
 )
 
+// CommentService handles comment domain logic across videos, articles, and dynamics.
 type CommentService struct {
 	comments CommentProvider
 	rdb      *redis.Client
@@ -28,15 +29,19 @@ type CommentService struct {
 	dynamics service.DynamicProvider
 }
 
+// NewCommentService creates a CommentService with the given storage, cache,
+// content filter, notification callback, and cross-domain providers.
 func NewCommentService(db *gorm.DB, rdb *redis.Client, log *zap.Logger, sens *sensitive.Filter, notifSvc *notification.NotificationService, users service.UserProvider, videos vsvc.VideoProvider, articles service.ArticleProvider, dynamics service.DynamicProvider) *CommentService {
 	return &CommentService{comments: NewCommentProvider(db), rdb: rdb, log: log, sens: sens, notifSvc: notifSvc, users: users, videos: videos, articles: articles, dynamics: dynamics}
 }
 
+// PostCommentReq carries the fields for creating a comment.
 type PostCommentReq struct {
 	Content  string
 	ParentID uint64
 }
 
+// CommentItem is the unified comment DTO returned to clients.
 type CommentItem struct {
 	ID, UserID                                    uint64
 	Username, AvatarURL                           string
@@ -49,12 +54,14 @@ type CommentItem struct {
 	IPLocation                                    string
 }
 
+// CommentListResult is a comment list with media curation state.
 type CommentListResult struct {
 	Items           []CommentItem
 	CommentsCurated bool
 	CommentsClosed  bool
 }
 
+// ListComments lists comments on a video with viewer interaction flags.
 func (s *CommentService) ListComments(ctx context.Context, videoID, viewerID uint64) (*CommentListResult, error) {
 	v, err := s.videos.GetPublishedVideo(ctx, videoID)
 	if err != nil {
@@ -77,6 +84,8 @@ func (s *CommentService) ListComments(ctx context.Context, videoID, viewerID uin
 		})
 }
 
+// PostComment creates a video comment (or reply) with validation, curation,
+// count increments, and notifications.
 func (s *CommentService) PostComment(ctx context.Context, userID, videoID uint64, req PostCommentReq, ipLocation string) (*comment.Comment, error) {
 	content := req.Content
 	if err := s.validateCommentContent(content); err != nil {
@@ -122,6 +131,7 @@ func (s *CommentService) PostComment(ctx context.Context, userID, videoID uint64
 	return &cm, nil
 }
 
+// DeleteComment deletes a video comment (cascading replies) with ownership checks.
 func (s *CommentService) DeleteComment(ctx context.Context, userID, commentID uint64, isUploader bool) error {
 	return s.deleteCommentGeneric(ctx, userID, commentID, isUploader, commentDeleteAdapter{
 		fetch: func(ctx context.Context, id uint64) (uint64, uint64, error) {
@@ -167,18 +177,22 @@ func (s *CommentService) PinComment(ctx context.Context, videoID, commentID uint
 	})
 }
 
+// ToggleCommentLike toggles a video comment like (returning the new state and like count).
 func (s *CommentService) ToggleCommentLike(ctx context.Context, userID, commentID uint64) (bool, int, error) {
 	return s.toggleCommentLikeGeneric(ctx, userID, commentID, s.videoReactionAdapter())
 }
 
+// ToggleCommentDislike toggles a video comment dislike (returning the new state).
 func (s *CommentService) ToggleCommentDislike(ctx context.Context, userID, commentID uint64) (bool, error) {
 	return s.toggleCommentDislikeGeneric(ctx, userID, commentID, s.videoReactionAdapter())
 }
 
+// ApproveComment approves a video comment for public display.
 func (s *CommentService) ApproveComment(ctx context.Context, commentID uint64) error {
 	return s.comments.ApproveComment(ctx, CommentVideo, commentID)
 }
 
+// IgnoreCuratedComment marks a video comment as curated-ignored.
 func (s *CommentService) IgnoreCuratedComment(ctx context.Context, commentID uint64) error {
 	return s.comments.IgnoreComment(ctx, CommentVideo, commentID)
 }
@@ -195,6 +209,7 @@ func (s *CommentService) GetDynamicCommentByID(ctx context.Context, commentID ui
 
 // ─── Article Comments ───
 
+// ListArticleComments lists comments on an article with viewer interaction flags.
 func (s *CommentService) ListArticleComments(ctx context.Context, articleID, viewerID uint64) (*CommentListResult, error) {
 	a, err := s.articles.GetPublishedArticle(ctx, articleID)
 	if err != nil {
@@ -209,6 +224,7 @@ func (s *CommentService) ListArticleComments(ctx context.Context, articleID, vie
 		})
 }
 
+// PostArticleComment creates an article comment (or reply) with validation and notifications.
 func (s *CommentService) PostArticleComment(ctx context.Context, userID, articleID uint64, req PostCommentReq, ipLocation string) (*comment.ArticleComment, error) {
 	_ = s.articles.IncrCommentCount(ctx, articleID, 1)
 	content := req.Content
@@ -253,6 +269,7 @@ func (s *CommentService) PostArticleComment(ctx context.Context, userID, article
 	return &cm, nil
 }
 
+// DeleteArticleComment deletes an article comment (cascading replies) with ownership checks.
 func (s *CommentService) DeleteArticleComment(ctx context.Context, userID, commentID uint64, isAuthor bool) error {
 	return s.deleteCommentGeneric(ctx, userID, commentID, isAuthor, commentDeleteAdapter{
 		fetch: func(ctx context.Context, id uint64) (uint64, uint64, error) {
@@ -298,18 +315,22 @@ func (s *CommentService) PinArticleComment(ctx context.Context, articleID, comme
 	})
 }
 
+// ToggleArticleCommentLike toggles an article comment like (returning the new state and like count).
 func (s *CommentService) ToggleArticleCommentLike(ctx context.Context, userID, commentID uint64) (bool, int, error) {
 	return s.toggleCommentLikeGeneric(ctx, userID, commentID, s.articleReactionAdapter())
 }
 
+// ToggleArticleCommentDislike toggles an article comment dislike (returning the new state).
 func (s *CommentService) ToggleArticleCommentDislike(ctx context.Context, userID, commentID uint64) (bool, error) {
 	return s.toggleCommentDislikeGeneric(ctx, userID, commentID, s.articleReactionAdapter())
 }
 
+// ApproveArticleComment approves an article comment for public display.
 func (s *CommentService) ApproveArticleComment(ctx context.Context, commentID uint64) error {
 	return s.comments.ApproveComment(ctx, CommentArticle, commentID)
 }
 
+// IgnoreArticleComment marks an article comment as curated-ignored.
 func (s *CommentService) IgnoreArticleComment(ctx context.Context, commentID uint64) error {
 	return s.comments.IgnoreComment(ctx, CommentArticle, commentID)
 }
@@ -321,6 +342,7 @@ func (s *CommentService) GetArticleComment(ctx context.Context, commentID uint64
 
 // ─── Dynamic Comments ───
 
+// ListDynamicComments lists comments on a dynamic with viewer interaction flags.
 func (s *CommentService) ListDynamicComments(ctx context.Context, dynamicID, viewerID uint64) (*CommentListResult, error) {
 	d, err := s.dynamics.GetPublishedDynamic(ctx, dynamicID)
 	if err != nil {
@@ -333,6 +355,7 @@ func (s *CommentService) ListDynamicComments(ctx context.Context, dynamicID, vie
 		nil)
 }
 
+// PostDynamicComment creates a dynamic comment (or reply) with validation and notifications.
 func (s *CommentService) PostDynamicComment(ctx context.Context, userID, dynamicID uint64, req PostCommentReq, ipLocation string) (*comment.DynamicComment, error) {
 	_ = s.dynamics.IncrCommentCount(ctx, dynamicID, 1)
 	content := req.Content
@@ -370,6 +393,7 @@ func (s *CommentService) PostDynamicComment(ctx context.Context, userID, dynamic
 	return &cm, nil
 }
 
+// DeleteDynamicComment deletes a dynamic comment (cascading replies) with ownership checks.
 func (s *CommentService) DeleteDynamicComment(ctx context.Context, userID, commentID uint64, isUploader bool) error {
 	return s.deleteCommentGeneric(ctx, userID, commentID, isUploader, commentDeleteAdapter{
 		fetch: func(ctx context.Context, id uint64) (uint64, uint64, error) {
@@ -409,10 +433,12 @@ func (s *CommentService) ToggleDynamicCommentReaction(ctx context.Context, userI
 	return b, int(ad.count(ctx, commentID)), nil
 }
 
+// ApproveDynComment approves a dynamic comment for public display.
 func (s *CommentService) ApproveDynComment(ctx context.Context, commentID uint64) error {
 	return s.comments.ApproveComment(ctx, CommentDynamic, commentID)
 }
 
+// IgnoreDynComment marks a dynamic comment as curated-ignored.
 func (s *CommentService) IgnoreDynComment(ctx context.Context, commentID uint64) error {
 	return s.comments.IgnoreComment(ctx, CommentDynamic, commentID)
 }

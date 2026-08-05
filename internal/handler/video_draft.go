@@ -161,6 +161,7 @@ func (a *API) saveDraftCoverFile(coverFh *multipart.FileHeader, videoID uint64) 
 
 type errCoverValidation struct{ code int }
 
+// Error implements the error interface for cover validation failures.
 func (e errCoverValidation) Error() string { return "cover validation" }
 
 type draftCreateInput struct {

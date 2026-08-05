@@ -35,14 +35,17 @@ type ffmpegOps interface {
 
 type realFFmpegOps struct{}
 
+// TranscodeToH264MP4 runs the real ffmpeg transcode.
 func (realFFmpegOps) TranscodeToH264MP4(rawPath, outMP4 string) (string, error) {
 	return ffmpeg.TranscodeToH264MP4(rawPath, outMP4)
 }
 
+// ScreenshotJPEG captures a frame from a video via ffmpeg.
 func (realFFmpegOps) ScreenshotJPEG(inPath, outPath string, second float64) (string, error) {
 	return ffmpeg.ScreenshotJPEG(inPath, outPath, second)
 }
 
+// IsPermanentTranscodeFailure reports whether ffmpeg stderr indicates a permanent failure.
 func (realFFmpegOps) IsPermanentTranscodeFailure(stderr string) bool {
 	return ffmpeg.IsPermanentTranscodeFailure(stderr)
 }

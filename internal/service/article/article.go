@@ -38,11 +38,15 @@ type ListMyArticlesPageResult struct {
 	Items []article.Article
 	Total int64
 }
+
+// ListArticlesCursorResult is a cursor-paginated article list.
 type ListArticlesCursorResult struct {
 	Items   []article.Article
 	HasMore bool
 }
 
+// NewArticleService creates an ArticleService with storage, cache, logger,
+// and optional search client.
 func NewArticleService(db *gorm.DB, rdb *redis.Client, log *zap.Logger, es *search.Client) *ArticleService {
 	return &ArticleService{store: NewArticleStore(db), rdb: rdb, log: log, es: es}
 }

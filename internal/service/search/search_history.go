@@ -37,6 +37,7 @@ type SearchHistoryStoreImpl struct {
 	db *gorm.DB
 }
 
+// NewSearchHistoryStore creates a gorm-backed search-history store.
 func NewSearchHistoryStore(db *gorm.DB) *SearchHistoryStoreImpl {
 	return &SearchHistoryStoreImpl{db: db}
 }

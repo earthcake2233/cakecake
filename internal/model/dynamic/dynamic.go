@@ -2,6 +2,7 @@ package dynamic
 
 import "time"
 
+// UserDynamic is a user's image/text dynamic row.
 type UserDynamic struct {
 	ID           uint64 `gorm:"primaryKey"`
 	UserID       uint64 `gorm:"index:idx_dyn_user_created;not null"`

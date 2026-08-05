@@ -18,10 +18,12 @@ type UserService struct {
 	log   *zap.Logger
 }
 
+// NewUserService creates a UserService with storage and logger.
 func NewUserService(db *gorm.DB, log *zap.Logger) *UserService {
 	return &UserService{users: service.NewUserProvider(db), log: log}
 }
 
+// UserProfile is the full profile DTO returned for the caller's own account.
 type UserProfile struct {
 	ID                       uint64 `json:"id"`
 	Username                 string `json:"username"`
@@ -90,6 +92,7 @@ func (s *UserService) BatchGetUsers(ctx context.Context, userIDs []uint64) map[u
 	return out
 }
 
+// GetUserPublic returns the public profile view of a user.
 func (s *UserService) GetUserPublic(ctx context.Context, userID uint64) (*UserProfile, error) {
 	u, err := s.users.GetUserByID(ctx, userID)
 	if err != nil {

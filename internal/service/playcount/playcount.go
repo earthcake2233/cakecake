@@ -27,10 +27,12 @@ type PlayCountStoreImpl struct {
 	db *gorm.DB
 }
 
+// NewPlayCountStore creates a gorm-backed play-count store.
 func NewPlayCountStore(db *gorm.DB) *PlayCountStoreImpl {
 	return &PlayCountStoreImpl{db: db}
 }
 
+// AddPlayCount adjusts a video's play count by delta.
 func (p *PlayCountStoreImpl) AddPlayCount(ctx context.Context, videoID uint64, delta uint64) error {
 	return p.db.WithContext(ctx).Model(&video.Video{}).Where("id = ?", videoID).
 		UpdateColumn("play_count", gorm.Expr("play_count + ?", delta)).Error

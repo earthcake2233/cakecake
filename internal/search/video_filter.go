@@ -9,6 +9,7 @@ type VideoFilter struct {
 	Zone     string // UI label e.g. 动画、全部分区
 }
 
+// ParseVideoFilter parses list query params into a VideoFilter.
 func ParseVideoFilter(order, duration, zone string) VideoFilter {
 	return VideoFilter{
 		Order:    strings.TrimSpace(order),

@@ -32,6 +32,7 @@ type GenerateReplyResult struct {
 	ToolResultData json.RawMessage `json:"tool_result_data,omitempty"`
 }
 
+// AgentService runs AI assistant replies for agent DM threads.
 type AgentService struct {
 	Cfg      *config.C
 	Store    AgentStore
@@ -76,6 +77,7 @@ func (s *AgentService) quotaKey(userID uint64) string {
 	return fmt.Sprintf("mb:agent:quota:%d:%s", userID, day)
 }
 
+// CheckQuota reports whether the user still has daily agent quota (true when unconfigured).
 func (s *AgentService) CheckQuota(ctx context.Context, userID uint64) bool {
 	if s == nil || s.Redis == nil || s.Cfg == nil {
 		return true
@@ -94,6 +96,7 @@ func (s *AgentService) CheckQuota(ctx context.Context, userID uint64) bool {
 	return err != nil || n < quota
 }
 
+// IncrQuota increments the user's daily agent quota counter.
 func (s *AgentService) IncrQuota(ctx context.Context, userID uint64) {
 	if s == nil || s.Redis == nil {
 		return
@@ -105,6 +108,7 @@ func (s *AgentService) IncrQuota(ctx context.Context, userID uint64) {
 	_, _ = pipe.Exec(ctx)
 }
 
+// EnsureForUser ensures agent conversations exist for a human user.
 func (s *AgentService) EnsureForUser(humanID uint64) error {
 	if s == nil || s.Store == nil || humanID == 0 {
 		return nil
@@ -112,10 +116,12 @@ func (s *AgentService) EnsureForUser(humanID uint64) error {
 	return s.Store.EnsureAllAgentConversationsForUser(humanID)
 }
 
+// IsAgentConversation reports whether a conversation belongs to an agent.
 func (s *AgentService) IsAgentConversation(conv *dm.DmConversation) bool {
 	return conv != nil && conv.Kind == dm.DmKindAgent
 }
 
+// IsBotUser reports whether a user id belongs to an agent bot.
 func (s *AgentService) IsBotUser(uid uint64) bool {
 	if s == nil || s.Store == nil || uid == 0 {
 		return false
@@ -137,6 +143,7 @@ func (s *AgentService) profileForConversation(conv *dm.DmConversation) (*agent.A
 	return s.Store.GetAgentProfileByBotUserID(conv.UserHigh)
 }
 
+// PostAssistantMessage persists an assistant reply and updates the conversation.
 func (s *AgentService) PostAssistantMessage(conv *dm.DmConversation, humanID uint64, content string, extra ...string) (*dm.DmMessage, error) {
 	if s == nil || s.Store == nil || conv == nil {
 		return nil, fmt.Errorf("agent service not ready")
@@ -277,6 +284,7 @@ func (s *AgentService) clearToolCallbacks() {
 	}
 }
 
+// GenerateReply produces an AI reply (with tool calls) for a user message.
 func (s *AgentService) GenerateReply(ctx context.Context, conv *dm.DmConversation, userText string) (*GenerateReplyResult, error) {
 	if !s.gatewayReady() {
 		return nil, fmt.Errorf("ai assistant is not configured")
@@ -425,6 +433,8 @@ func buildReplyResult(reply string, coll *toolActivityCollector) (*GenerateReply
 	}
 	return result, nil
 }
+
+// ResetConversation clears an agent conversation and posts a fresh opening message.
 func (s *AgentService) ResetConversation(ctx context.Context, conv *dm.DmConversation, humanID uint64) (*dm.DmMessage, error) {
 	if s == nil || s.Store == nil || conv == nil || humanID == 0 {
 		return nil, fmt.Errorf("agent service not ready")

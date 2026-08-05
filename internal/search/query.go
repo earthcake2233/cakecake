@@ -28,6 +28,7 @@ type AllResult struct {
 	SearchStatus string              `json:"search_status,omitempty"` // ok | empty | unavailable
 }
 
+// SearchResultBuckets groups search hits by domain.
 type SearchResultBuckets struct {
 	Video        []VideoHit   `json:"video"`
 	MediaBangumi []any        `json:"media_bangumi"`
@@ -39,6 +40,7 @@ type SearchResultBuckets struct {
 	Photo        []any        `json:"photo"`
 }
 
+// TopTlist is a ranked list entry for hot/trending results.
 type TopTlist struct {
 	Video        int `json:"video"`
 	MediaBangumi int `json:"media_bangumi"`

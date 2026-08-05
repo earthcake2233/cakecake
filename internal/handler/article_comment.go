@@ -49,6 +49,7 @@ type postArticleCommentResponse struct {
 	LikeCount uint64  `json:"like_count"`
 }
 
+// ListArticleComments lists comments on an article.
 func (a *API) ListArticleComments(c *gin.Context) {
 	aid, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil || aid == 0 {
@@ -76,6 +77,7 @@ func (a *API) ListArticleComments(c *gin.Context) {
 	resp.OK(c, articleCommentListResponse{Items: out, CommentsCurated: result.CommentsCurated, CommentsClosed: result.CommentsClosed})
 }
 
+// PostArticleComment creates a comment on an article.
 func (a *API) PostArticleComment(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -135,6 +137,7 @@ func getClientIP(c *gin.Context) string {
 	return ip
 }
 
+// DeleteArticleComment deletes a comment on an article.
 func (a *API) DeleteArticleComment(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -166,6 +169,7 @@ func (a *API) DeleteArticleComment(c *gin.Context) {
 	resp.OK(c, okResponse{OK: true})
 }
 
+// PinArticleComment pins or unpins an article comment.
 func (a *API) PinArticleComment(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -195,6 +199,7 @@ func (a *API) PinArticleComment(c *gin.Context) {
 	resp.OK(c, pinnedResponse{Pinned: pinned})
 }
 
+// ToggleArticleCommentLike toggles the caller's like on an article comment.
 func (a *API) ToggleArticleCommentLike(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -214,6 +219,7 @@ func (a *API) ToggleArticleCommentLike(c *gin.Context) {
 	resp.OK(c, likeToggleResponse{Liked: liked, LikeCount: total})
 }
 
+// ToggleArticleCommentDislike toggles the caller's dislike on an article comment.
 func (a *API) ToggleArticleCommentDislike(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -233,6 +239,7 @@ func (a *API) ToggleArticleCommentDislike(c *gin.Context) {
 	resp.OK(c, dislikeToggleResponse{Disliked: disliked})
 }
 
+// ApproveArticleComment approves an article comment for public display.
 func (a *API) ApproveArticleComment(c *gin.Context) {
 	cid, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
@@ -246,6 +253,7 @@ func (a *API) ApproveArticleComment(c *gin.Context) {
 	resp.OK(c, okResponse{OK: true})
 }
 
+// IgnoreCuratedArticleComment marks an article comment as curated-ignored.
 func (a *API) IgnoreCuratedArticleComment(c *gin.Context) {
 	cid, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {

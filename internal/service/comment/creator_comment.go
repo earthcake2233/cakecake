@@ -23,6 +23,7 @@ type CreatorCommentService struct {
 	log   *zap.Logger
 }
 
+// NewCreatorCommentService creates a creator-panel comment service.
 func NewCreatorCommentService(db *gorm.DB, rdb *redis.Client, log *zap.Logger) *CreatorCommentService {
 	return &CreatorCommentService{store: NewCreatorCommentProvider(db), rdb: rdb, log: log}
 }
@@ -56,6 +57,7 @@ type CreatorCommentProviderImpl struct {
 	db *gorm.DB
 }
 
+// NewCreatorCommentProvider creates a gorm-backed creator comment store.
 func NewCreatorCommentProvider(db *gorm.DB) *CreatorCommentProviderImpl {
 	return &CreatorCommentProviderImpl{db: db}
 }

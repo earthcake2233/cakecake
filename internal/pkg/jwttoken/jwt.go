@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 )
 
+// PrincipalUser is the JWT principal kind for regular users.
 const (
 	claimTypeAccess  = "access"
 	claimTypeRefresh = "refresh"
@@ -29,6 +30,7 @@ type Manager struct {
 	secret []byte
 }
 
+// NewManager creates a JWT manager with the given signing secret.
 func NewManager(secret string) (*Manager, error) {
 	if secret == "" {
 		return nil, fmt.Errorf("JWT_SECRET is empty")

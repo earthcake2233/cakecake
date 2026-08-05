@@ -31,10 +31,12 @@ type DanmakuStoreImpl struct {
 	db *gorm.DB
 }
 
+// NewDanmakuStore creates a gorm-backed DanmakuStore implementation.
 func NewDanmakuStore(db *gorm.DB) *DanmakuStoreImpl {
 	return &DanmakuStoreImpl{db: db}
 }
 
+// GetVideoByID loads a video row by id.
 func (p *DanmakuStoreImpl) GetVideoByID(ctx context.Context, id uint64) (*video.Video, error) {
 	var v video.Video
 	if err := p.db.WithContext(ctx).First(&v, id).Error; err != nil {
@@ -43,6 +45,7 @@ func (p *DanmakuStoreImpl) GetVideoByID(ctx context.Context, id uint64) (*video.
 	return &v, nil
 }
 
+// GetUserByID loads a user row by id.
 func (p *DanmakuStoreImpl) GetUserByID(ctx context.Context, id uint64) (*user.User, error) {
 	var u user.User
 	if err := p.db.WithContext(ctx).First(&u, id).Error; err != nil {
@@ -51,6 +54,7 @@ func (p *DanmakuStoreImpl) GetUserByID(ctx context.Context, id uint64) (*user.Us
 	return &u, nil
 }
 
+// GetDanmakuByID loads a danmaku row by id.
 func (p *DanmakuStoreImpl) GetDanmakuByID(ctx context.Context, id uint64) (*danmaku.Danmaku, error) {
 	var d danmaku.Danmaku
 	if err := p.db.WithContext(ctx).First(&d, id).Error; err != nil {
@@ -59,29 +63,35 @@ func (p *DanmakuStoreImpl) GetDanmakuByID(ctx context.Context, id uint64) (*danm
 	return &d, nil
 }
 
+// CreateDanmaku inserts a danmaku row.
 func (p *DanmakuStoreImpl) CreateDanmaku(ctx context.Context, d *danmaku.Danmaku) error {
 	return p.db.WithContext(ctx).Create(d).Error
 }
 
+// IncrDanmakuCount increments a video's danmaku count.
 func (p *DanmakuStoreImpl) IncrDanmakuCount(ctx context.Context, videoID uint64) error {
 	return p.db.WithContext(ctx).Model(&video.Video{}).Where("id = ?", videoID).
 		UpdateColumn("danmaku_count", gorm.Expr("danmaku_count + ?", 1)).Error
 }
 
+// HasDanmakuLike reports whether the user liked the danmaku.
 func (p *DanmakuStoreImpl) HasDanmakuLike(ctx context.Context, userID, danmakuID uint64) (bool, error) {
 	var like danmaku.DanmakuLike
 	res := p.db.WithContext(ctx).Where("user_id = ? AND danmaku_id = ?", userID, danmakuID).Limit(1).Find(&like)
 	return res.RowsAffected > 0, res.Error
 }
 
+// CreateDanmakuLike records a danmaku like.
 func (p *DanmakuStoreImpl) CreateDanmakuLike(ctx context.Context, userID, danmakuID uint64) error {
 	return p.db.WithContext(ctx).Create(&danmaku.DanmakuLike{UserID: userID, DanmakuID: danmakuID}).Error
 }
 
+// DeleteDanmakuLike removes a danmaku like.
 func (p *DanmakuStoreImpl) DeleteDanmakuLike(ctx context.Context, userID, danmakuID uint64) error {
 	return p.db.WithContext(ctx).Where("user_id = ? AND danmaku_id = ?", userID, danmakuID).Delete(&danmaku.DanmakuLike{}).Error
 }
 
+// IncrDanmakuLikeCount adjusts a danmaku's like count by delta.
 func (p *DanmakuStoreImpl) IncrDanmakuLikeCount(ctx context.Context, danmakuID uint64, delta int) error {
 	if delta < 0 {
 		return p.db.WithContext(ctx).Model(&danmaku.Danmaku{}).Where("id = ?", danmakuID).
@@ -91,6 +101,7 @@ func (p *DanmakuStoreImpl) IncrDanmakuLikeCount(ctx context.Context, danmakuID u
 		UpdateColumn("like_count", gorm.Expr("like_count + ?", delta)).Error
 }
 
+// ListCreatorDanmakus lists a creator's danmakus with filters for the creator panel.
 func (p *DanmakuStoreImpl) ListCreatorDanmakus(ctx context.Context, uid uint64, limit int, keyword, typeFilter string, filterVideoID uint64, viewerID uint64) (*ListCreatorDanmakusResult, error) {
 	base := p.db.WithContext(ctx).Model(&danmaku.Danmaku{}).
 		Joins("INNER JOIN videos ON videos.id = danmakus.video_id AND videos.user_id = ?", uid)
@@ -178,6 +189,7 @@ func (p *DanmakuStoreImpl) ListCreatorDanmakus(ctx context.Context, uid uint64, 
 	return &ListCreatorDanmakusResult{Items: items, Total: total, Limit: limit}, nil
 }
 
+// DeleteDanmakuCascade deletes a danmaku and its likes atomically.
 func (p *DanmakuStoreImpl) DeleteDanmakuCascade(ctx context.Context, d *danmaku.Danmaku, videoID uint64) error {
 	return p.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.WithContext(ctx).Where("danmaku_id = ?", d.ID).Delete(&danmaku.DanmakuLike{}).Error; err != nil {
@@ -191,6 +203,7 @@ func (p *DanmakuStoreImpl) DeleteDanmakuCascade(ctx context.Context, d *danmaku.
 	})
 }
 
+// ListHistory lists danmakus for a video before a timestamp (history replay).
 func (p *DanmakuStoreImpl) ListHistory(ctx context.Context, videoID uint64, currentTime float64, limit int) ([]danmaku.Danmaku, error) {
 	query := p.db.WithContext(ctx).Where("video_id = ?", videoID)
 	if currentTime > 0 {

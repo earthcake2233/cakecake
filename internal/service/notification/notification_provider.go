@@ -35,14 +35,17 @@ type NotificationStoreImpl struct {
 	db *gorm.DB
 }
 
+// NewNotificationStore creates a gorm-backed NotificationStore implementation.
 func NewNotificationStore(db *gorm.DB) *NotificationStoreImpl {
 	return &NotificationStoreImpl{db: db}
 }
 
+// CreateNotification inserts a notification row.
 func (p *NotificationStoreImpl) CreateNotification(ctx context.Context, n *notification.Notification) error {
 	return p.db.WithContext(ctx).Create(n).Error
 }
 
+// GetCommentByID loads a video comment by id.
 func (p *NotificationStoreImpl) GetCommentByID(ctx context.Context, id uint64) (*comment.Comment, error) {
 	var cm comment.Comment
 	if err := p.db.WithContext(ctx).First(&cm, id).Error; err != nil {
@@ -51,6 +54,7 @@ func (p *NotificationStoreImpl) GetCommentByID(ctx context.Context, id uint64) (
 	return &cm, nil
 }
 
+// GetArticleCommentByID loads an article comment by id.
 func (p *NotificationStoreImpl) GetArticleCommentByID(ctx context.Context, id uint64) (*comment.ArticleComment, error) {
 	var cm comment.ArticleComment
 	if err := p.db.WithContext(ctx).First(&cm, id).Error; err != nil {
@@ -59,6 +63,7 @@ func (p *NotificationStoreImpl) GetArticleCommentByID(ctx context.Context, id ui
 	return &cm, nil
 }
 
+// GetUserByID loads a user row by id.
 func (p *NotificationStoreImpl) GetUserByID(ctx context.Context, id uint64) (*user.User, error) {
 	var u user.User
 	if err := p.db.WithContext(ctx).First(&u, id).Error; err != nil {
@@ -67,6 +72,7 @@ func (p *NotificationStoreImpl) GetUserByID(ctx context.Context, id uint64) (*us
 	return &u, nil
 }
 
+// CountLikeNotifMute counts mute rows for a recipient and comment.
 func (p *NotificationStoreImpl) CountLikeNotifMute(ctx context.Context, recipientID, commentID uint64) (int64, error) {
 	var muteCount int64
 	err := p.db.WithContext(ctx).Model(&notification.LikeNotifMute{}).
@@ -74,6 +80,7 @@ func (p *NotificationStoreImpl) CountLikeNotifMute(ctx context.Context, recipien
 	return muteCount, err
 }
 
+// FindLikeAggregation finds an existing like aggregation by related key.
 func (p *NotificationStoreImpl) FindLikeAggregation(ctx context.Context, recipientID uint64, relatedKey string) (*notification.Notification, error) {
 	var existing notification.Notification
 	err := p.db.WithContext(ctx).Where("recipient_id = ? AND type = ? AND payload_json LIKE ?",
@@ -84,10 +91,12 @@ func (p *NotificationStoreImpl) FindLikeAggregation(ctx context.Context, recipie
 	return &existing, nil
 }
 
+// UpdateNotification applies partial updates to a notification.
 func (p *NotificationStoreImpl) UpdateNotification(ctx context.Context, id uint64, fields map[string]interface{}) error {
 	return p.db.WithContext(ctx).Model(&notification.Notification{}).Where("id = ?", id).Updates(fields).Error
 }
 
+// UnreadSummary counts unread notifications per category.
 func (p *NotificationStoreImpl) UnreadSummary(ctx context.Context, userID uint64) map[string]int64 {
 	r := map[string]int64{"reply": 0, "at": 0, "like": 0, "system": 0, "dm": 0}
 	if userID == 0 {
@@ -118,6 +127,7 @@ func (p *NotificationStoreImpl) UnreadSummary(ctx context.Context, userID uint64
 	return r
 }
 
+// ListNotifications pages a user's notifications by category.
 func (p *NotificationStoreImpl) ListNotifications(ctx context.Context, userID uint64, cat string, page, pageSize int) ([]notification.Notification, int64, error) {
 	q := p.db.WithContext(ctx).Where("recipient_id = ?", userID)
 	switch cat {
@@ -145,11 +155,13 @@ func (p *NotificationStoreImpl) ListNotifications(ctx context.Context, userID ui
 	return list, total, nil
 }
 
+// MarkNotificationsRead marks specific notifications as read.
 func (p *NotificationStoreImpl) MarkNotificationsRead(ctx context.Context, userID uint64, ids []uint64) error {
 	return p.db.WithContext(ctx).Model(&notification.Notification{}).
 		Where("id IN ? AND recipient_id = ?", ids, userID).Update("is_read", true).Error
 }
 
+// MarkCategoryRead marks all notifications in a category as read.
 func (p *NotificationStoreImpl) MarkCategoryRead(ctx context.Context, userID uint64, cat string) error {
 	q := p.db.WithContext(ctx).Model(&notification.Notification{}).Where("recipient_id = ?", userID)
 	switch cat {
@@ -167,10 +179,12 @@ func (p *NotificationStoreImpl) MarkCategoryRead(ctx context.Context, userID uin
 	return q.Update("is_read", true).Error
 }
 
+// DeleteNotification removes one of the user's notifications.
 func (p *NotificationStoreImpl) DeleteNotification(ctx context.Context, userID, notifID uint64) error {
 	return p.db.WithContext(ctx).Where("id = ? AND recipient_id = ?", notifID, userID).Delete(&notification.Notification{}).Error
 }
 
+// GetNotification loads one of the user's notifications.
 func (p *NotificationStoreImpl) GetNotification(ctx context.Context, notifID, userID uint64) (*notification.Notification, error) {
 	var n notification.Notification
 	if err := p.db.WithContext(ctx).Where("id = ? AND recipient_id = ?", notifID, userID).First(&n).Error; err != nil {
@@ -179,12 +193,14 @@ func (p *NotificationStoreImpl) GetNotification(ctx context.Context, notifID, us
 	return &n, nil
 }
 
+// MuteCommentForRecipient records a like-notification mute for a comment.
 func (p *NotificationStoreImpl) MuteCommentForRecipient(ctx context.Context, recipientID, commentID uint64) error {
 	mute := notification.LikeNotifMute{RecipientID: recipientID, CommentID: commentID}
 	return p.db.WithContext(ctx).Where("recipient_id = ? AND comment_id = ?", recipientID, commentID).
 		FirstOrCreate(&mute).Error
 }
 
+// ListCommentLikers loads like rows for a comment.
 func (p *NotificationStoreImpl) ListCommentLikers(ctx context.Context, commentID uint64) ([]comment.CommentLike, error) {
 	var commentLikes []comment.CommentLike
 	if err := p.db.WithContext(ctx).Where("comment_id = ?", commentID).Find(&commentLikes).Error; err != nil {
@@ -193,6 +209,7 @@ func (p *NotificationStoreImpl) ListCommentLikers(ctx context.Context, commentID
 	return commentLikes, nil
 }
 
+// GetUsersByIDsRaw loads full user rows by ids.
 func (p *NotificationStoreImpl) GetUsersByIDsRaw(ctx context.Context, ids []uint64) ([]user.User, error) {
 	var dbUsers []user.User
 	if err := p.db.WithContext(ctx).Where("id IN ?", ids).Find(&dbUsers).Error; err != nil {

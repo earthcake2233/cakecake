@@ -24,6 +24,8 @@ type EngagementService struct {
 	videos vsvc.VideoProvider
 }
 
+// NewEngagementService creates an EngagementService with storage, cache, logger,
+// and cross-domain user/video providers.
 func NewEngagementService(db *gorm.DB, rdb *redis.Client, log *zap.Logger, users service.UserProvider, videos vsvc.VideoProvider) *EngagementService {
 	return &EngagementService{store: NewEngagementStore(db), rdb: rdb, log: log, users: users, videos: videos}
 }

@@ -2,6 +2,7 @@ package danmaku
 
 import "time"
 
+// Danmaku is a bullet-comment row.
 type Danmaku struct {
 	ID      uint64 `gorm:"primaryKey"`
 	VideoID uint64 `gorm:"index:idx_danmaku_video;not null"`
@@ -16,12 +17,15 @@ type Danmaku struct {
 	CreatedAt time.Time
 }
 
+// TableName returns the danmakus table name.
 func (Danmaku) TableName() string { return "danmakus" }
 
+// DanmakuLike records a user's like on a danmaku.
 type DanmakuLike struct {
 	ID        uint64 `gorm:"primaryKey"`
 	UserID    uint64 `gorm:"uniqueIndex:idx_danmaku_like_user_dm;not null"`
 	DanmakuID uint64 `gorm:"uniqueIndex:idx_danmaku_like_user_dm;not null"`
 }
 
+// TableName returns the danmaku_likes table name.
 func (DanmakuLike) TableName() string { return "danmaku_likes" }

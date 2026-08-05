@@ -33,6 +33,7 @@ type coinLedgerListResponse struct {
 	Items   []coinLedgerItem `json:"items"`
 }
 
+// ListMeCoinLedger returns the caller's coin ledger with pagination.
 func (a *API) ListMeCoinLedger(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {

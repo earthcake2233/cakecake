@@ -26,6 +26,8 @@ const maxToolIterations = 5
 
 // Progress callbacks for front-end tool call display.
 type ToolCallStartCB func(traceID, spanID, parentSpanID, toolName string, argsJSON json.RawMessage)
+
+// ToolCallEndCB is invoked when a tool call finishes.
 type ToolCallEndCB func(traceID, spanID, toolName string, durationMs int64, resultSummary string)
 
 // ToolResultDataCB is called after a tool executes successfully and the result JSON contains an "items" field.

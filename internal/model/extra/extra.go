@@ -2,6 +2,7 @@ package extra
 
 import "time"
 
+// VideoViewHistory records a user's video viewing history.
 type VideoViewHistory struct {
 	ID          uint64    `gorm:"primaryKey"`
 	UserID      uint64    `gorm:"uniqueIndex:uk_view_hist_user_video,priority:1;not null"`
@@ -12,6 +13,8 @@ type VideoViewHistory struct {
 	ViewedAt    time.Time `gorm:"index:idx_view_hist_user_viewed,priority:2"`
 	UpdatedAt   time.Time
 }
+
+// ArticleViewHistory records a user's article viewing history.
 type ArticleViewHistory struct {
 	ID        uint64    `gorm:"primaryKey"`
 	UserID    uint64    `gorm:"uniqueIndex:uk_view_hist_user_article,priority:1;not null"`
@@ -20,6 +23,8 @@ type ArticleViewHistory struct {
 	ViewedAt  time.Time `gorm:"index:idx_view_hist_art_user_viewed,priority:2"`
 	UpdatedAt time.Time
 }
+
+// UserSearchHistory records a user's search keyword history.
 type UserSearchHistory struct {
 	ID          uint64    `gorm:"primaryKey"`
 	UserID      uint64    `gorm:"not null;index:idx_user_search_user"`
@@ -27,6 +32,8 @@ type UserSearchHistory struct {
 	KeywordNorm string    `gorm:"size:100;not null"`
 	UpdatedAt   time.Time `gorm:"not null;index:idx_user_search_updated"`
 }
+
+// UserDailyTask tracks a user's daily reward task progress.
 type UserDailyTask struct {
 	ID        uint64 `gorm:"primaryKey"`
 	UserID    uint64 `gorm:"uniqueIndex:uk_user_daily_task,priority:1;not null"`

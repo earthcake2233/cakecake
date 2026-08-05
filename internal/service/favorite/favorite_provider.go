@@ -52,14 +52,17 @@ type FavoriteStoreImpl struct {
 	db *gorm.DB
 }
 
+// NewFavoriteStore creates a gorm-backed FavoriteStore implementation.
 func NewFavoriteStore(db *gorm.DB) *FavoriteStoreImpl {
 	return &FavoriteStoreImpl{db: db}
 }
 
+// CreateFolder inserts a favorite folder row.
 func (p *FavoriteStoreImpl) CreateFolder(ctx context.Context, folder *video.FavoriteFolder) error {
 	return p.db.WithContext(ctx).Create(folder).Error
 }
 
+// GetFolderByID loads a favorite folder by id.
 func (p *FavoriteStoreImpl) GetFolderByID(ctx context.Context, id uint64) (*video.FavoriteFolder, error) {
 	var f video.FavoriteFolder
 	if err := p.db.WithContext(ctx).First(&f, id).Error; err != nil {
@@ -68,6 +71,7 @@ func (p *FavoriteStoreImpl) GetFolderByID(ctx context.Context, id uint64) (*vide
 	return &f, nil
 }
 
+// ListFoldersByUser lists a user's favorite folders in creation order.
 func (p *FavoriteStoreImpl) ListFoldersByUser(ctx context.Context, userID uint64) ([]video.FavoriteFolder, error) {
 	var folders []video.FavoriteFolder
 	if err := p.db.WithContext(ctx).Where("user_id = ?", userID).Order("id ASC").Find(&folders).Error; err != nil {
@@ -76,10 +80,12 @@ func (p *FavoriteStoreImpl) ListFoldersByUser(ctx context.Context, userID uint64
 	return folders, nil
 }
 
+// UpdateFolder applies partial updates to a favorite folder.
 func (p *FavoriteStoreImpl) UpdateFolder(ctx context.Context, id uint64, updates map[string]interface{}) error {
 	return p.db.WithContext(ctx).Model(&video.FavoriteFolder{}).Where("id = ?", id).Updates(updates).Error
 }
 
+// DeleteFolder deletes a folder and its favorite entries atomically.
 func (p *FavoriteStoreImpl) DeleteFolder(ctx context.Context, id uint64) error {
 	return p.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		_ = tx.Where("folder_id = ?", id).Delete(&video.VideoFavorite{}).Error
@@ -87,17 +93,20 @@ func (p *FavoriteStoreImpl) DeleteFolder(ctx context.Context, id uint64) error {
 	})
 }
 
+// AddFavorite adds a video to a folder (idempotent first-or-create).
 func (p *FavoriteStoreImpl) AddFavorite(ctx context.Context, folderID, videoID, userID uint64) error {
 	fav := video.VideoFavorite{FolderID: folderID, VideoID: videoID, UserID: userID}
 	return p.db.WithContext(ctx).Where("folder_id = ? AND video_id = ?", folderID, videoID).
 		FirstOrCreate(&fav).Error
 }
 
+// RemoveFavorite removes a video from a folder.
 func (p *FavoriteStoreImpl) RemoveFavorite(ctx context.Context, folderID, videoID uint64) error {
 	return p.db.WithContext(ctx).Where("folder_id = ? AND video_id = ?", folderID, videoID).
 		Delete(&video.VideoFavorite{}).Error
 }
 
+// ListFavoritesByFolder pages the favorite entries of a folder (newest first).
 func (p *FavoriteStoreImpl) ListFavoritesByFolder(ctx context.Context, folderID uint64, page, pageSize int) ([]video.VideoFavorite, int64, error) {
 	var total int64
 	_ = p.db.WithContext(ctx).Model(&video.VideoFavorite{}).Where("folder_id = ?", folderID).Count(&total).Error
@@ -110,18 +119,21 @@ func (p *FavoriteStoreImpl) ListFavoritesByFolder(ctx context.Context, folderID 
 	return favs, total, nil
 }
 
+// IsFavorited reports whether the user favorited the video in any folder.
 func (p *FavoriteStoreImpl) IsFavorited(ctx context.Context, userID, videoID uint64) bool {
 	var cnt int64
 	p.db.WithContext(ctx).Model(&video.VideoFavorite{}).Where("user_id = ? AND video_id = ?", userID, videoID).Count(&cnt)
 	return cnt > 0
 }
 
+// CountByUser returns the total number of favorite entries for a user.
 func (p *FavoriteStoreImpl) CountByUser(ctx context.Context, userID uint64) int64 {
 	var cnt int64
 	_ = p.db.WithContext(ctx).Model(&video.VideoFavorite{}).Where("user_id = ?", userID).Count(&cnt).Error
 	return cnt
 }
 
+// BatchFavorited maps video ids to whether the user favorited them.
 func (p *FavoriteStoreImpl) BatchFavorited(ctx context.Context, userID uint64, videoIDs []uint64) map[uint64]bool {
 	result := make(map[uint64]bool)
 	if userID == 0 || len(videoIDs) == 0 {
@@ -135,6 +147,7 @@ func (p *FavoriteStoreImpl) BatchFavorited(ctx context.Context, userID uint64, v
 	return result
 }
 
+// SearchFolders searches a user's folders by title keyword.
 func (p *FavoriteStoreImpl) SearchFolders(ctx context.Context, userID uint64, keyword string, limit int) ([]video.FavoriteFolder, error) {
 	var folders []video.FavoriteFolder
 	if err := p.db.WithContext(ctx).Where("user_id = ? AND title LIKE ?", userID, "%"+keyword+"%").
@@ -144,26 +157,31 @@ func (p *FavoriteStoreImpl) SearchFolders(ctx context.Context, userID uint64, ke
 	return folders, nil
 }
 
+// MigrateOrphanFavorites moves legacy folder-less favorites into a target folder.
 func (p *FavoriteStoreImpl) MigrateOrphanFavorites(ctx context.Context, userID, targetFolderID uint64) error {
 	return p.db.WithContext(ctx).Model(&video.VideoFavorite{}).
 		Where("user_id = ? AND folder_id = ?", userID, 0).
 		Update("folder_id", targetFolderID).Error
 }
 
+// DeleteFavoriteEntry deletes a single favorite entry by id.
 func (p *FavoriteStoreImpl) DeleteFavoriteEntry(ctx context.Context, id uint64) error {
 	return p.db.WithContext(ctx).Delete(&video.VideoFavorite{}, id).Error
 }
 
+// UpdateFolderCover sets a folder's cover URL.
 func (p *FavoriteStoreImpl) UpdateFolderCover(ctx context.Context, folderID uint64, coverURL string) error {
 	return p.db.WithContext(ctx).Model(&video.FavoriteFolder{}).Where("id = ?", folderID).Update("cover_url", coverURL).Error
 }
 
+// CountFoldersByUser counts a user's favorite folders.
 func (p *FavoriteStoreImpl) CountFoldersByUser(ctx context.Context, userID uint64) (int64, error) {
 	var total int64
 	err := p.db.WithContext(ctx).Model(&video.FavoriteFolder{}).Where("user_id = ?", userID).Count(&total).Error
 	return total, err
 }
 
+// CheckFavoriteExists reports whether a specific favorite entry exists.
 func (p *FavoriteStoreImpl) CheckFavoriteExists(ctx context.Context, userID, folderID, videoID uint64) (bool, error) {
 	var cnt int64
 	err := p.db.WithContext(ctx).Model(&video.VideoFavorite{}).
@@ -172,22 +190,26 @@ func (p *FavoriteStoreImpl) CheckFavoriteExists(ctx context.Context, userID, fol
 	return cnt > 0, err
 }
 
+// DeleteFavoriteByVideo removes a specific favorite entry.
 func (p *FavoriteStoreImpl) DeleteFavoriteByVideo(ctx context.Context, userID, folderID, videoID uint64) error {
 	return p.db.WithContext(ctx).
 		Where("user_id = ? AND folder_id = ? AND video_id = ?", userID, folderID, videoID).
 		Delete(&video.VideoFavorite{}).Error
 }
 
+// DeleteFavoritesByFolder removes all favorite entries of a folder.
 func (p *FavoriteStoreImpl) DeleteFavoritesByFolder(ctx context.Context, folderID uint64) error {
 	return p.db.WithContext(ctx).Where("folder_id = ?", folderID).Delete(&video.VideoFavorite{}).Error
 }
 
+// CountFavoritesInFolder counts favorite entries in a folder.
 func (p *FavoriteStoreImpl) CountFavoritesInFolder(ctx context.Context, folderID uint64) (int64, error) {
 	var cnt int64
 	err := p.db.WithContext(ctx).Model(&video.VideoFavorite{}).Where("folder_id = ?", folderID).Count(&cnt).Error
 	return cnt, err
 }
 
+// LatestFavoriteInFolder returns the newest favorite entry in a folder.
 func (p *FavoriteStoreImpl) LatestFavoriteInFolder(ctx context.Context, folderID uint64) (*video.VideoFavorite, error) {
 	var fav video.VideoFavorite
 	if err := p.db.WithContext(ctx).Where("folder_id = ?", folderID).
@@ -200,6 +222,7 @@ func (p *FavoriteStoreImpl) LatestFavoriteInFolder(ctx context.Context, folderID
 	return &fav, nil
 }
 
+// CountOwnedFolders counts how many of the given folder ids belong to the user.
 func (p *FavoriteStoreImpl) CountOwnedFolders(ctx context.Context, userID uint64, ids []uint64) (int64, error) {
 	var owned int64
 	err := p.db.WithContext(ctx).Model(&video.FavoriteFolder{}).
@@ -208,6 +231,7 @@ func (p *FavoriteStoreImpl) CountOwnedFolders(ctx context.Context, userID uint64
 	return owned, err
 }
 
+// FindFavoritesForUserVideo lists a user's favorite entries for one video.
 func (p *FavoriteStoreImpl) FindFavoritesForUserVideo(ctx context.Context, userID, videoID uint64) ([]video.VideoFavorite, error) {
 	var existing []video.VideoFavorite
 	if err := p.db.WithContext(ctx).Where("user_id = ? AND video_id = ?", userID, videoID).Find(&existing).Error; err != nil {
@@ -216,14 +240,17 @@ func (p *FavoriteStoreImpl) FindFavoritesForUserVideo(ctx context.Context, userI
 	return existing, nil
 }
 
+// CreateVideoFavorite inserts a favorite row.
 func (p *FavoriteStoreImpl) CreateVideoFavorite(ctx context.Context, row *video.VideoFavorite) error {
 	return p.db.WithContext(ctx).Create(row).Error
 }
 
+// DeleteVideoFavorite removes a favorite row.
 func (p *FavoriteStoreImpl) DeleteVideoFavorite(ctx context.Context, row *video.VideoFavorite) error {
 	return p.db.WithContext(ctx).Delete(row).Error
 }
 
+// ListUserFavoriteVideoRows lists a user's favorite rows (optionally in one folder) with total count.
 func (p *FavoriteStoreImpl) ListUserFavoriteVideoRows(ctx context.Context, ownerID uint64, limit int, folderID uint64, filterFolder bool) ([]video.VideoFavorite, int64, error) {
 	base := p.db.WithContext(ctx).Model(&video.VideoFavorite{}).Where("user_id = ?", ownerID)
 	if filterFolder {
@@ -250,6 +277,7 @@ func (p *FavoriteStoreImpl) ListUserFavoriteVideoRows(ctx context.Context, owner
 	return rows, total, nil
 }
 
+// CountPublicFoldersByUser counts a user's public folders.
 func (p *FavoriteStoreImpl) CountPublicFoldersByUser(ctx context.Context, userID uint64) (int64, error) {
 	var cnt int64
 	err := p.db.WithContext(ctx).Model(&video.FavoriteFolder{}).
@@ -258,6 +286,7 @@ func (p *FavoriteStoreImpl) CountPublicFoldersByUser(ctx context.Context, userID
 	return cnt, err
 }
 
+// DeleteFolderCascade deletes a user's folder and its favorite entries atomically.
 func (p *FavoriteStoreImpl) DeleteFolderCascade(ctx context.Context, folderID, userID uint64) error {
 	return p.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.WithContext(ctx).Where("user_id = ? AND folder_id = ?", userID, folderID).
@@ -268,6 +297,7 @@ func (p *FavoriteStoreImpl) DeleteFolderCascade(ctx context.Context, folderID, u
 	})
 }
 
+// FilterPublishedVideoIDs returns the subset of video ids that are published.
 func (p *FavoriteStoreImpl) FilterPublishedVideoIDs(ctx context.Context, videoIDs []uint64) ([]uint64, error) {
 	if len(videoIDs) == 0 {
 		return nil, nil
@@ -279,6 +309,7 @@ func (p *FavoriteStoreImpl) FilterPublishedVideoIDs(ctx context.Context, videoID
 	return publishedIDs, err
 }
 
+// ToggleFavorite toggles a user's favorite on a video, returning the new state and fav count.
 func (p *FavoriteStoreImpl) ToggleFavorite(ctx context.Context, userID, videoID uint64) (bool, uint64, error) {
 	var rows []video.VideoFavorite
 	res := p.db.WithContext(ctx).Where("user_id = ? AND video_id = ?", userID, videoID).Find(&rows)
@@ -308,6 +339,7 @@ func (p *FavoriteStoreImpl) ToggleFavorite(ctx context.Context, userID, videoID 
 	return false, v.FavCount, nil
 }
 
+// MoveFavoritesBetweenFolders moves a user's favorites between folders, returning remaining count in the source.
 func (p *FavoriteStoreImpl) MoveFavoritesBetweenFolders(ctx context.Context, uid, fromFolderID, toFolderID uint64) (int64, error) {
 	var favs []video.VideoFavorite
 	if err := p.db.WithContext(ctx).Where("user_id = ? AND folder_id = ?", uid, fromFolderID).
@@ -331,6 +363,7 @@ func (p *FavoriteStoreImpl) MoveFavoritesBetweenFolders(ctx context.Context, uid
 	return remaining, nil
 }
 
+// VideoFavCount returns a video's stored favorite count.
 func (p *FavoriteStoreImpl) VideoFavCount(ctx context.Context, videoID uint64) (uint64, error) {
 	var v video.Video
 	if err := p.db.WithContext(ctx).Select("fav_count").First(&v, videoID).Error; err != nil {
@@ -339,6 +372,7 @@ func (p *FavoriteStoreImpl) VideoFavCount(ctx context.Context, videoID uint64) (
 	return v.FavCount, nil
 }
 
+// ToggleVideoFavoriteWithFolder toggles a favorite in a specific folder, returning the new state and fav count.
 func (p *FavoriteStoreImpl) ToggleVideoFavoriteWithFolder(ctx context.Context, userID, videoID, folderID uint64) (bool, uint64, error) {
 	var rows []video.VideoFavorite
 	res := p.db.WithContext(ctx).Where("user_id = ? AND video_id = ?", userID, videoID).Find(&rows)
@@ -368,6 +402,7 @@ func (p *FavoriteStoreImpl) ToggleVideoFavoriteWithFolder(ctx context.Context, u
 	return false, v.FavCount, nil
 }
 
+// AdjustVideoFavCount adjusts a video's fav count by delta (negative clamps at zero).
 func (p *FavoriteStoreImpl) AdjustVideoFavCount(ctx context.Context, videoID uint64, delta int) error {
 	if delta >= 0 {
 		return p.db.WithContext(ctx).Model(&video.Video{}).Where("id = ?", videoID).
@@ -377,6 +412,7 @@ func (p *FavoriteStoreImpl) AdjustVideoFavCount(ctx context.Context, videoID uin
 		UpdateColumn("fav_count", gorm.Expr("CASE WHEN fav_count - ? < 0 THEN 0 ELSE fav_count - ? END", -delta, -delta)).Error
 }
 
+// UserFavoriteCount counts a user's favorite entries for a video.
 func (p *FavoriteStoreImpl) UserFavoriteCount(ctx context.Context, userID, videoID uint64) (int64, error) {
 	var cnt int64
 	err := p.db.WithContext(ctx).Model(&video.VideoFavorite{}).Where("user_id = ? AND video_id = ?", userID, videoID).Count(&cnt).Error

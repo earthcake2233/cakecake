@@ -17,6 +17,7 @@ type DmService struct {
 	log   *zap.Logger
 }
 
+// NewDmService creates a DmService with storage, cache, and logger.
 func NewDmService(db *gorm.DB, rdb *redis.Client, log *zap.Logger) *DmService {
 	return &DmService{store: NewDmStore(db), rdb: rdb, log: log}
 }
@@ -45,6 +46,7 @@ type DmStoreImpl struct {
 	db *gorm.DB
 }
 
+// NewDmStore creates a gorm-backed DmStore implementation.
 func NewDmStore(db *gorm.DB) *DmStoreImpl {
 	return &DmStoreImpl{db: db}
 }

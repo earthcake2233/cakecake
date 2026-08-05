@@ -16,10 +16,12 @@ type UserProviderImpl struct {
 	db *gorm.DB
 }
 
+// NewUserProvider creates a gorm-backed UserProvider implementation.
 func NewUserProvider(db *gorm.DB) *UserProviderImpl {
 	return &UserProviderImpl{db: db}
 }
 
+// GetUser loads one user as a UserInfo projection.
 func (p *UserProviderImpl) GetUser(ctx context.Context, id uint64) (UserInfo, error) {
 	var u user.User
 	if err := p.db.WithContext(ctx).First(&u, id).Error; err != nil {
@@ -28,6 +30,7 @@ func (p *UserProviderImpl) GetUser(ctx context.Context, id uint64) (UserInfo, er
 	return ToUserInfo(&u), nil
 }
 
+// GetUsersByIDs loads users by ids as UserInfo projections.
 func (p *UserProviderImpl) GetUsersByIDs(ctx context.Context, ids []uint64) (map[uint64]UserInfo, error) {
 	if len(ids) == 0 {
 		return nil, nil
@@ -43,6 +46,7 @@ func (p *UserProviderImpl) GetUsersByIDs(ctx context.Context, ids []uint64) (map
 	return result, nil
 }
 
+// BatchCurrentLevels maps user ids to their current account levels.
 func (p *UserProviderImpl) BatchCurrentLevels(ctx context.Context, ids []uint64) (map[uint64]int, error) {
 	if len(ids) == 0 {
 		return nil, nil
@@ -66,6 +70,7 @@ func (p *UserProviderImpl) BatchCurrentLevels(ctx context.Context, ids []uint64)
 	return result, nil
 }
 
+// ToUserInfo projects a user row into the shared UserInfo DTO (hiding anonymized accounts).
 func ToUserInfo(u *user.User) UserInfo {
 	name := u.Username
 	avatar := u.AvatarURL
@@ -82,12 +87,14 @@ func ToUserInfo(u *user.User) UserInfo {
 	}
 }
 
+// DecrementCoins deducts coins from a user when the balance is sufficient.
 func (p *UserProviderImpl) DecrementCoins(ctx context.Context, userID uint64, amount int) error {
 	cost := usercoin.CostTenths(amount)
 	return p.db.WithContext(ctx).Model(&user.User{}).Where("id = ? AND coin_balance_tenths >= ?", userID, cost).
 		UpdateColumn("coin_balance_tenths", gorm.Expr("coin_balance_tenths - ?", cost)).Error
 }
 
+// GetUserByID loads a full user row by id.
 func (p *UserProviderImpl) GetUserByID(ctx context.Context, id uint64) (*user.User, error) {
 	var u user.User
 	if err := p.db.WithContext(ctx).First(&u, id).Error; err != nil {
@@ -96,6 +103,7 @@ func (p *UserProviderImpl) GetUserByID(ctx context.Context, id uint64) (*user.Us
 	return &u, nil
 }
 
+// GetUserByUsername loads a full user row by username.
 func (p *UserProviderImpl) GetUserByUsername(ctx context.Context, name string) (*user.User, error) {
 	var u user.User
 	if err := p.db.WithContext(ctx).Where("username = ?", name).First(&u).Error; err != nil {
@@ -104,6 +112,7 @@ func (p *UserProviderImpl) GetUserByUsername(ctx context.Context, name string) (
 	return &u, nil
 }
 
+// BatchGetUsersByIDs loads full user rows by ids.
 func (p *UserProviderImpl) BatchGetUsersByIDs(ctx context.Context, ids []uint64) (map[uint64]*user.User, error) {
 	out := make(map[uint64]*user.User, len(ids))
 	if len(ids) == 0 {
@@ -120,33 +129,40 @@ func (p *UserProviderImpl) BatchGetUsersByIDs(ctx context.Context, ids []uint64)
 	return out, nil
 }
 
+// UsernameTaken reports whether a username is used by another user.
 func (p *UserProviderImpl) UsernameTaken(ctx context.Context, name string, excludeID uint64) bool {
 	var count int64
 	p.db.WithContext(ctx).Model(&user.User{}).Where("username = ? AND id != ?", name, excludeID).Count(&count)
 	return count > 0
 }
 
+// UpdateUsername renames a user.
 func (p *UserProviderImpl) UpdateUsername(ctx context.Context, id uint64, name string) error {
 	return p.db.WithContext(ctx).Model(&user.User{}).Where("id = ?", id).Update("username", name).Error
 }
 
+// UpdateUserFields applies partial updates to a user row.
 func (p *UserProviderImpl) UpdateUserFields(ctx context.Context, id uint64, fields map[string]interface{}) error {
 	return p.db.WithContext(ctx).Model(&user.User{}).Where("id = ?", id).Updates(fields).Error
 }
 
+// UpdatePasswordHash replaces a user's password hash.
 func (p *UserProviderImpl) UpdatePasswordHash(ctx context.Context, id uint64, hash string) error {
 	return p.db.WithContext(ctx).Model(&user.User{}).Where("id = ?", id).Update("password_hash", hash).Error
 }
 
+// UpdateAnnouncement sets a user's space announcement.
 func (p *UserProviderImpl) UpdateAnnouncement(ctx context.Context, id uint64, announcement string) error {
 	return p.db.WithContext(ctx).Model(&user.User{}).Where("id = ?", id).
 		Update("space_announcement", announcement).Error
 }
 
+// UpdateAvatar sets a user's avatar object key.
 func (p *UserProviderImpl) UpdateAvatar(ctx context.Context, id uint64, objectKey string) error {
 	return p.db.WithContext(ctx).Model(&user.User{}).Where("id = ?", id).Update("avatar_url", objectKey).Error
 }
 
+// SetDeletion records the deletion request and effective timestamps.
 func (p *UserProviderImpl) SetDeletion(ctx context.Context, id uint64, requestedAt, effectiveAt *time.Time) error {
 	return p.db.WithContext(ctx).Model(&user.User{}).Where("id = ?", id).Updates(map[string]interface{}{
 		"deletion_requested_at": requestedAt,
@@ -154,6 +170,7 @@ func (p *UserProviderImpl) SetDeletion(ctx context.Context, id uint64, requested
 	}).Error
 }
 
+// GetPasswordHash reads a user's password hash.
 func (p *UserProviderImpl) GetPasswordHash(ctx context.Context, id uint64) (string, error) {
 	var result struct{ PasswordHash string }
 	if err := p.db.WithContext(ctx).Raw("SELECT password_hash FROM users WHERE id = ?", id).Scan(&result).Error; err != nil {
@@ -162,6 +179,7 @@ func (p *UserProviderImpl) GetPasswordHash(ctx context.Context, id uint64) (stri
 	return result.PasswordHash, nil
 }
 
+// EnsureCakeID generates and persists a CakeID when missing.
 func (p *UserProviderImpl) EnsureCakeID(ctx context.Context, u *user.User) error {
 	if u.CakeID != "" {
 		return nil
@@ -174,6 +192,7 @@ func (p *UserProviderImpl) EnsureCakeID(ctx context.Context, u *user.User) error
 	return nil
 }
 
+// ListCoinLedger pages a user's coin ledger rows after a timestamp.
 func (p *UserProviderImpl) ListCoinLedger(ctx context.Context, userID uint64, since time.Time, limit, offset int) (total int64, rows []user.CoinLedger, err error) {
 	q := p.db.WithContext(ctx).Model(&user.CoinLedger{}).Where("user_id = ? AND created_at >= ?", userID, since)
 	if err := q.Count(&total).Error; err != nil {
@@ -185,6 +204,7 @@ func (p *UserProviderImpl) ListCoinLedger(ctx context.Context, userID uint64, si
 	return total, rows, nil
 }
 
+// CreateUserWithCakeID creates a user and its CakeID atomically.
 func (p *UserProviderImpl) CreateUserWithCakeID(ctx context.Context, u *user.User) error {
 	err := p.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(u).Error; err != nil {
@@ -199,10 +219,12 @@ func (p *UserProviderImpl) CreateUserWithCakeID(ctx context.Context, u *user.Use
 	return p.db.WithContext(ctx).First(u, u.ID).Error
 }
 
+// MarkLogin records a daily login reward for the user.
 func (p *UserProviderImpl) MarkLogin(ctx context.Context, userID uint64) error {
 	return dailyreward.MarkLogin(p.db, userID)
 }
 
+// WithTx runs fn inside a transaction.
 func (p *UserProviderImpl) WithTx(ctx context.Context, fn func(tx *gorm.DB) error) error {
 	return p.db.WithContext(ctx).Transaction(fn)
 }

@@ -26,6 +26,7 @@ type PlatformExecutor struct {
 	Sens *sensitive.Filter
 }
 
+// Execute runs a platform tool by name with the given JSON arguments.
 func (p *PlatformExecutor) Execute(ctx context.Context, toolName string, args json.RawMessage) (string, error) {
 	if p.Sens != nil {
 		raw := string(args)

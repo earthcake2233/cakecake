@@ -2,6 +2,7 @@ package article
 
 import "time"
 
+// StatusPublished marks an article as publicly published.
 const (
 	StatusPublished     = "published"
 	StatusDraft         = "draft"
@@ -12,6 +13,7 @@ const (
 	StatusRejected      = "rejected"
 )
 
+// Article is an article row spanning draft, review, and published states.
 type Article struct {
 	ID           uint64 `gorm:"primaryKey"`
 	UserID       uint64 `gorm:"index:idx_article_user;not null"`
@@ -36,12 +38,16 @@ type Article struct {
 	CreatedAt         time.Time `gorm:"index:idx_article_created"`
 	UpdatedAt         time.Time
 }
+
+// ArticleFavorite records a user's favorite on an article.
 type ArticleFavorite struct {
 	ID        uint64 `gorm:"primaryKey"`
 	UserID    uint64 `gorm:"uniqueIndex:idx_article_fav_user_article;not null"`
 	ArticleID uint64 `gorm:"uniqueIndex:idx_article_fav_user_article;not null"`
 	CreatedAt time.Time
 }
+
+// ArticleCoin records a user's coin contribution to an article.
 type ArticleCoin struct {
 	ID        uint64 `gorm:"primaryKey"`
 	UserID    uint64 `gorm:"uniqueIndex:idx_article_coin_user_article;not null"`

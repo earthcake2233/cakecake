@@ -13,6 +13,7 @@ import (
 
 const favoriteFolderCapacity = 999
 
+// FavoriteService handles favorite folders and video favorites.
 type FavoriteService struct {
 	store FavoriteStore
 	rdb   *redis.Client
@@ -23,6 +24,8 @@ type FavoriteService struct {
 	videos vsvc.VideoProvider
 }
 
+// NewFavoriteService creates a FavoriteService with the given storage, cache,
+// logger, and cross-domain user/video providers.
 func NewFavoriteService(db *gorm.DB, rdb *redis.Client, log *zap.Logger, users service.UserProvider, videos vsvc.VideoProvider) *FavoriteService {
 	return &FavoriteService{store: NewFavoriteStore(db), rdb: rdb, log: log, users: users, videos: videos}
 }

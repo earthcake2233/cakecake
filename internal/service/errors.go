@@ -8,10 +8,12 @@ type SvcError struct {
 	Msg  string
 }
 
+// Error formats the business error as "[code] message".
 func (e *SvcError) Error() string {
 	return fmt.Sprintf("[%d] %s", e.Code, e.Msg)
 }
 
+// Is reports whether target is a SvcError with the same code.
 func (e *SvcError) Is(target error) bool {
 	if t, ok := target.(*SvcError); ok {
 		return e.Code == t.Code

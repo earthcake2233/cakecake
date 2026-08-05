@@ -11,11 +11,13 @@ import (
 const writeBufferLen = 64
 const writeWait = 5 * time.Second
 
+// Client is a single WebSocket connection with a buffered write queue.
 type Client struct {
 	Conn *websocket.Conn
 	send chan []byte
 }
 
+// Send queues a message to the client's write pump.
 func (c *Client) Send(data []byte) bool {
 	if data == nil || c.send == nil {
 		return false
@@ -43,15 +45,18 @@ func (c *Client) writePump() {
 	}
 }
 
+// Hub tracks live WebSocket clients per video room.
 type Hub struct {
 	mu    sync.Mutex
 	rooms map[uint64]map[*Client]struct{}
 }
 
+// NewHub creates an empty Hub.
 func NewHub() *Hub {
 	return &Hub{rooms: make(map[uint64]map[*Client]struct{})}
 }
 
+// Join registers a WebSocket connection in a video room.
 func (h *Hub) Join(videoID uint64, conn *websocket.Conn) *Client {
 	cl := &Client{Conn: conn, send: make(chan []byte, writeBufferLen)}
 	go cl.writePump()
@@ -66,6 +71,7 @@ func (h *Hub) Join(videoID uint64, conn *websocket.Conn) *Client {
 	return cl
 }
 
+// Leave removes a client from a video room.
 func (h *Hub) Leave(videoID uint64, cl *Client) {
 	if cl == nil {
 		return
@@ -83,6 +89,7 @@ func (h *Hub) Leave(videoID uint64, cl *Client) {
 	}
 }
 
+// RoomSize returns the number of live clients in a video room.
 func (h *Hub) RoomSize(videoID uint64) int {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -92,6 +99,7 @@ func (h *Hub) RoomSize(videoID uint64) int {
 	return 0
 }
 
+// TotalConnections returns the total number of live WebSocket clients.
 func (h *Hub) TotalConnections() int {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -102,6 +110,7 @@ func (h *Hub) TotalConnections() int {
 	return n
 }
 
+// BroadcastJSON JSON-encodes data and broadcasts it to a video room.
 func (h *Hub) BroadcastJSON(videoID uint64, v interface{}) {
 	data, err := json.Marshal(v)
 	if err != nil {
@@ -110,6 +119,7 @@ func (h *Hub) BroadcastJSON(videoID uint64, v interface{}) {
 	h.BroadcastRaw(videoID, data)
 }
 
+// BroadcastRaw broadcasts raw bytes to a video room without re-encoding.
 func (h *Hub) BroadcastRaw(videoID uint64, data []byte) {
 	if len(data) == 0 {
 		return

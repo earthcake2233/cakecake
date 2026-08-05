@@ -91,6 +91,7 @@ func adminArticleToJSON(art *article.Article, uploaderName string) adminArticleI
 
 // AdminListArticles GET /api/v1/admin/articles
 
+// AdminListArticles lists articles for the admin panel with filters.
 func (a *API) AdminListArticles(c *gin.Context) {
 	page, pageSize := parsePagination(c, 20)
 	statusQ := c.DefaultQuery("status", article.StatusPendingReview)

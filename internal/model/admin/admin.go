@@ -2,8 +2,10 @@ package admin
 
 import "time"
 
+// StatusActive marks an admin account as active.
 const StatusActive = "active"
 
+// Admin is a platform administrator row.
 type Admin struct {
 	ID           uint64 `gorm:"primaryKey"`
 	Username     string `gorm:"size:64;uniqueIndex;not null"`
@@ -14,6 +16,8 @@ type Admin struct {
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 }
+
+// HomeBanner is a home-page banner configuration.
 type HomeBanner struct {
 	ID         uint64 `gorm:"primaryKey"`
 	Title      string `gorm:"size:120;not null"`
@@ -27,6 +31,8 @@ type HomeBanner struct {
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
 }
+
+// HotSearchOp is a hot-search intervention (pin/block/manual).
 type HotSearchOp struct {
 	ID           uint64 `gorm:"primaryKey"`
 	OpType       string `gorm:"size:16;not null;index"`   // pin | block | manual
@@ -40,6 +46,8 @@ type HotSearchOp struct {
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 }
+
+// HotSearchDisplayLayout pins an ordered display row for hot search.
 type HotSearchDisplayLayout struct {
 	ID        uint64 `gorm:"primaryKey"`
 	OrderJSON string `gorm:"type:text;not null"`

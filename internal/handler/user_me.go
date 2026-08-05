@@ -52,6 +52,7 @@ type announcementResponse struct {
 	Announcement string `json:"announcement"`
 }
 
+// GetMe returns the caller's own profile.
 func (a *API) GetMe(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -99,6 +100,7 @@ func (a *API) GetMe(c *gin.Context) {
 	resp.OK(c, out)
 }
 
+// UpdateMeProfile updates the caller's profile fields.
 func (a *API) UpdateMeProfile(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -147,6 +149,7 @@ func (a *API) UpdateMeProfile(c *gin.Context) {
 	})
 }
 
+// UpdateMeUsername renames the caller's account.
 func (a *API) UpdateMeUsername(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -167,6 +170,7 @@ func (a *API) UpdateMeUsername(c *gin.Context) {
 	resp.OK(c, okResponse{OK: true})
 }
 
+// UpdateMePassword changes the caller's password.
 func (a *API) UpdateMePassword(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -208,6 +212,7 @@ func (a *API) UpdateMePassword(c *gin.Context) {
 	resp.OK(c, okResponse{OK: true})
 }
 
+// UpdateMeAvatar uploads/replaces the caller's avatar.
 func (a *API) UpdateMeAvatar(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -245,6 +250,7 @@ func (a *API) UpdateMeAvatar(c *gin.Context) {
 	resp.OK(c, imageURLResponse{ImageURL: objectKey})
 }
 
+// UpdateMeAnnouncement updates the caller's space announcement.
 func (a *API) UpdateMeAnnouncement(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {

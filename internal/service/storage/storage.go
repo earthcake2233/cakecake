@@ -48,6 +48,7 @@ func (s *StorageService) backend() StorageBackend {
 	return s.oss
 }
 
+// NewStorageService creates a StorageService with config, optional OSS client, and logger.
 func NewStorageService(cfg *config.C, oss *storage.OSS, log *zap.Logger) *StorageService {
 	return &StorageService{cfg: cfg, oss: oss, log: log}
 }

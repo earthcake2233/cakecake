@@ -2,6 +2,7 @@ package video
 
 import "time"
 
+// StatusPublished marks a video as publicly published.
 const (
 	StatusPublished     = "published"
 	StatusDraft         = "draft"
@@ -14,6 +15,7 @@ const (
 	StatusPrivate       = "private"
 )
 
+// Video is a video row spanning draft, processing, and published states.
 type Video struct {
 	ID           uint64  `gorm:"primaryKey"`
 	UserID       uint64  `gorm:"index:idx_video_user;not null"`
@@ -48,12 +50,16 @@ type Video struct {
 	CreatedAt         time.Time `gorm:"index:idx_video_created"`
 	UpdatedAt         time.Time
 }
+
+// VideoLike records a user's like on a video.
 type VideoLike struct {
 	ID        uint64 `gorm:"primaryKey"`
 	UserID    uint64 `gorm:"uniqueIndex:idx_video_like_user_video;not null"`
 	VideoID   uint64 `gorm:"uniqueIndex:idx_video_like_user_video;not null"`
 	CreatedAt time.Time
 }
+
+// FavoriteFolder is a user's favorite-collection folder.
 type FavoriteFolder struct {
 	ID          uint64 `gorm:"primaryKey"`
 	UserID      uint64 `gorm:"index:idx_fav_folder_user;not null"`
@@ -65,6 +71,8 @@ type FavoriteFolder struct {
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 }
+
+// VideoFavorite maps a video into a favorite folder.
 type VideoFavorite struct {
 	ID        uint64 `gorm:"primaryKey"`
 	UserID    uint64 `gorm:"uniqueIndex:idx_video_fav_user_video_folder,priority:1;not null"`
@@ -72,6 +80,8 @@ type VideoFavorite struct {
 	FolderID  uint64 `gorm:"uniqueIndex:idx_video_fav_user_video_folder,priority:3;index:idx_video_fav_folder;not null;default:0"`
 	CreatedAt time.Time
 }
+
+// VideoCoin records a user's coin contribution to a video.
 type VideoCoin struct {
 	ID        uint64 `gorm:"primaryKey"`
 	UserID    uint64 `gorm:"uniqueIndex:idx_video_coin_user_video;not null"`
@@ -79,6 +89,8 @@ type VideoCoin struct {
 	Amount    int    `gorm:"not null;default:1"` // 1 or 2
 	CreatedAt time.Time
 }
+
+// WatchLater marks a video in a user's watch-later list.
 type WatchLater struct {
 	ID        uint64    `gorm:"primaryKey"`
 	UserID    uint64    `gorm:"uniqueIndex:idx_watch_later_user_video;not null"`

@@ -13,6 +13,7 @@ import (
 	"cakecake/internal/pkg/usercoin"
 )
 
+// ExpLogin is the EXP awarded for the daily login task.
 const (
 	ExpLogin       = 5
 	ExpWatch       = 5

@@ -133,6 +133,7 @@ type ReorderItem struct {
 	Source  string
 }
 
+// ReorderItems persists a manual ordering of hot-search items.
 func (s *HotSearchService) ReorderItems(ctx context.Context, items []ReorderItem) error {
 	allOps, err := s.FindAllOps(ctx)
 	if err != nil {

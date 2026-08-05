@@ -25,14 +25,17 @@ type AdminProvider interface {
 	UpdateAdminLoginTime(ctx context.Context, id uint64, t time.Time) error
 }
 
+// AdminProviderImpl implements the admin storage boundary using *gorm.DB.
 type AdminProviderImpl struct {
 	db *gorm.DB
 }
 
+// NewAdminProvider creates a gorm-backed admin provider.
 func NewAdminProvider(db *gorm.DB) *AdminProviderImpl {
 	return &AdminProviderImpl{db: db}
 }
 
+// FindAdminByUsername loads an admin by username.
 func (p *AdminProviderImpl) FindAdminByUsername(ctx context.Context, username string) (*admin.Admin, error) {
 	var adm admin.Admin
 	if err := p.db.WithContext(ctx).Where("username = ?", username).First(&adm).Error; err != nil {
@@ -41,6 +44,7 @@ func (p *AdminProviderImpl) FindAdminByUsername(ctx context.Context, username st
 	return &adm, nil
 }
 
+// GetAdminByID loads an admin by id.
 func (p *AdminProviderImpl) GetAdminByID(ctx context.Context, id uint64) (*admin.Admin, error) {
 	var adm admin.Admin
 	if err := p.db.WithContext(ctx).First(&adm, id).Error; err != nil {
@@ -49,6 +53,7 @@ func (p *AdminProviderImpl) GetAdminByID(ctx context.Context, id uint64) (*admin
 	return &adm, nil
 }
 
+// UpdateAdminLoginTime records an admin's last login time.
 func (p *AdminProviderImpl) UpdateAdminLoginTime(ctx context.Context, id uint64, t time.Time) error {
 	return p.db.WithContext(ctx).Model(&admin.Admin{}).Where("id = ?", id).Update("last_login_at", t).Error
 }

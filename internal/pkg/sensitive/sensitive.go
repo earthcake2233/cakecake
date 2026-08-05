@@ -23,6 +23,7 @@ type Filter struct {
 // ErrBlocked indicates content must be rejected (hit sensitive word or filter disabled).
 type ErrBlocked struct{}
 
+// Error implements the error interface for blocked content.
 func (ErrBlocked) Error() string { return "sensitive content blocked" }
 
 // NewFilter creates a filter; call Reload before use.

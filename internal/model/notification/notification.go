@@ -2,6 +2,7 @@ package notification
 
 import "time"
 
+// Notification is an in-app notification row.
 type Notification struct {
 	ID              uint64 `gorm:"primaryKey"`
 	RecipientID     uint64 `gorm:"index:idx_notif_recipient;not null"`
@@ -16,10 +17,13 @@ type Notification struct {
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 }
+
+// LikeNotifMute silences like notifications for a comment.
 type LikeNotifMute struct {
 	RecipientID uint64 `gorm:"uniqueIndex:idx_like_notif_mute_pair;not null"`
 	CommentID   uint64 `gorm:"uniqueIndex:idx_like_notif_mute_pair;not null"`
 	CreatedAt   time.Time
 }
 
+// TableName returns the like_notif_mutes table name.
 func (LikeNotifMute) TableName() string { return "like_notif_mutes" }

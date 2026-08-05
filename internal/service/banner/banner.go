@@ -14,6 +14,7 @@ type BannerService struct {
 	store BannerStore
 }
 
+// NewBannerService creates a BannerService backed by the gorm store.
 func NewBannerService(db *gorm.DB) *BannerService {
 	return &BannerService{store: NewBannerStore(db)}
 }
@@ -33,10 +34,12 @@ type BannerStoreImpl struct {
 	db *gorm.DB
 }
 
+// NewBannerStore creates a gorm-backed BannerStore implementation.
 func NewBannerStore(db *gorm.DB) *BannerStoreImpl {
 	return &BannerStoreImpl{db: db}
 }
 
+// ListActiveBanners lists banners enabled for public display within their time window.
 func (p *BannerStoreImpl) ListActiveBanners(ctx context.Context) ([]admin.HomeBanner, error) {
 	now := time.Now()
 	var rows []admin.HomeBanner
@@ -50,6 +53,7 @@ func (p *BannerStoreImpl) ListActiveBanners(ctx context.Context) ([]admin.HomeBa
 	return rows, nil
 }
 
+// ListBanners lists all banners for the admin panel.
 func (p *BannerStoreImpl) ListBanners(ctx context.Context) ([]admin.HomeBanner, error) {
 	var rows []admin.HomeBanner
 	if err := p.db.WithContext(ctx).Order("sort_order ASC, id ASC").Find(&rows).Error; err != nil {
@@ -58,10 +62,12 @@ func (p *BannerStoreImpl) ListBanners(ctx context.Context) ([]admin.HomeBanner, 
 	return rows, nil
 }
 
+// CreateBanner inserts a home banner.
 func (p *BannerStoreImpl) CreateBanner(ctx context.Context, b *admin.HomeBanner) error {
 	return p.db.WithContext(ctx).Create(b).Error
 }
 
+// GetBanner loads a banner by id.
 func (p *BannerStoreImpl) GetBanner(ctx context.Context, id uint64) (*admin.HomeBanner, error) {
 	var b admin.HomeBanner
 	if err := p.db.WithContext(ctx).First(&b, id).Error; err != nil {
@@ -70,10 +76,12 @@ func (p *BannerStoreImpl) GetBanner(ctx context.Context, id uint64) (*admin.Home
 	return &b, nil
 }
 
+// UpdateBanner applies partial updates to a banner.
 func (p *BannerStoreImpl) UpdateBanner(ctx context.Context, id uint64, updates map[string]interface{}) error {
 	return p.db.WithContext(ctx).Model(&admin.HomeBanner{}).Where("id = ?", id).Updates(updates).Error
 }
 
+// DeleteBanner removes a banner by id.
 func (p *BannerStoreImpl) DeleteBanner(ctx context.Context, id uint64) error {
 	return p.db.WithContext(ctx).Delete(&admin.HomeBanner{}, id).Error
 }

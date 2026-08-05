@@ -1,5 +1,6 @@
 package errcode
 
+// CodeSuccess indicates a successful response.
 const (
 	CodeSuccess               = 0
 	CodeParamError            = 40001

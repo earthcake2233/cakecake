@@ -2,11 +2,13 @@ package dm
 
 import "time"
 
+// DmKindHuman identifies a human-to-human conversation.
 const (
 	DmKindHuman = "human"
 	DmKindAgent = "agent"
 )
 
+// DmConversation is a direct-message thread between two users (or a user and an agent).
 type DmConversation struct {
 	ID             uint64    `gorm:"primaryKey"`
 	UserLow        uint64    `gorm:"uniqueIndex:idx_dm_pair_low_high;not null"`
@@ -18,6 +20,8 @@ type DmConversation struct {
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 }
+
+// DmParticipant tracks one side of a DM conversation.
 type DmParticipant struct {
 	ID             uint64     `gorm:"primaryKey"`
 	ConversationID uint64     `gorm:"uniqueIndex:idx_dm_part_user_conv;not null"`
@@ -30,6 +34,8 @@ type DmParticipant struct {
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 }
+
+// DmMessage is a single direct-message row.
 type DmMessage struct {
 	ID             uint64 `gorm:"primaryKey"`
 	ConversationID uint64 `gorm:"index:idx_dm_msg_conv;not null"`

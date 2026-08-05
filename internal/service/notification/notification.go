@@ -13,6 +13,7 @@ import (
 	"gorm.io/gorm"
 )
 
+// NotificationService creates and manages in-app notifications.
 type NotificationService struct {
 	store NotificationStore
 	rdb   *redis.Client
@@ -22,6 +23,8 @@ type NotificationService struct {
 	users service.UserProvider
 }
 
+// NewNotificationService creates a NotificationService with storage, cache,
+// logger, and a user provider for sender enrichment.
 func NewNotificationService(db *gorm.DB, rdb *redis.Client, log *zap.Logger, users service.UserProvider) *NotificationService {
 	return &NotificationService{store: NewNotificationStore(db), rdb: rdb, log: log, users: users}
 }
@@ -34,6 +37,7 @@ func truncateStr(s string, max int) string {
 	return string(runes[:max])
 }
 
+// NotifyVideoComment notifies the uploader about a new top-level video comment.
 func (ns *NotificationService) NotifyVideoComment(ctx context.Context, uploaderID, commenterID uint64, cm comment.Comment) {
 	if uploaderID == 0 || commenterID == uploaderID {
 		return
@@ -45,6 +49,7 @@ func (ns *NotificationService) NotifyVideoComment(ctx context.Context, uploaderI
 	})
 }
 
+// NotifyCommentReply notifies the parent comment author about a video reply.
 func (ns *NotificationService) NotifyCommentReply(ctx context.Context, videoID, replierID uint64, reply *comment.Comment, parentID uint64) {
 	parent, err := ns.store.GetCommentByID(ctx, parentID)
 	if err != nil {
@@ -60,6 +65,7 @@ func (ns *NotificationService) NotifyCommentReply(ctx context.Context, videoID, 
 	})
 }
 
+// NotifyCommentLike records a like notification (with aggregation dedup).
 func (ns *NotificationService) NotifyCommentLike(ctx context.Context, cm comment.Comment, likerID uint64) {
 	if cm.UserID == 0 || cm.UserID == likerID {
 		return
@@ -121,6 +127,7 @@ func (ns *NotificationService) NotifyCommentLike(ctx context.Context, cm comment
 	}
 }
 
+// NotifyArticleComment notifies the author about a new top-level article comment.
 func (ns *NotificationService) NotifyArticleComment(ctx context.Context, authorID, commenterID uint64, cm comment.ArticleComment) {
 	if authorID == 0 || commenterID == authorID {
 		return
@@ -132,6 +139,7 @@ func (ns *NotificationService) NotifyArticleComment(ctx context.Context, authorI
 	})
 }
 
+// NotifyArticleCommentReply notifies the parent comment author about an article reply.
 func (ns *NotificationService) NotifyArticleCommentReply(ctx context.Context, articleID, replierID uint64, reply *comment.ArticleComment, parentID uint64) {
 	parent, err := ns.store.GetArticleCommentByID(ctx, parentID)
 	if err != nil {
@@ -152,26 +160,32 @@ func (ns *NotificationService) UnreadSummary(ctx context.Context, userID uint64)
 	return ns.store.UnreadSummary(ctx, userID)
 }
 
+// ListNotifications pages a user's notifications by category.
 func (ns *NotificationService) ListNotifications(ctx context.Context, userID uint64, cat string, page, pageSize int) ([]notification.Notification, int64, error) {
 	return ns.store.ListNotifications(ctx, userID, cat, page, pageSize)
 }
 
+// MarkNotificationsRead marks specific notifications as read.
 func (ns *NotificationService) MarkNotificationsRead(ctx context.Context, userID uint64, ids []uint64) error {
 	return ns.store.MarkNotificationsRead(ctx, userID, ids)
 }
 
+// MarkCategoryRead marks all notifications in a category as read.
 func (ns *NotificationService) MarkCategoryRead(ctx context.Context, userID uint64, cat string) error {
 	return ns.store.MarkCategoryRead(ctx, userID, cat)
 }
 
+// DeleteNotification removes one of the user's notifications.
 func (ns *NotificationService) DeleteNotification(ctx context.Context, userID, notifID uint64) error {
 	return ns.store.DeleteNotification(ctx, userID, notifID)
 }
 
+// GetNotification loads one of the user's notifications.
 func (ns *NotificationService) GetNotification(ctx context.Context, notifID, userID uint64) (*notification.Notification, error) {
 	return ns.store.GetNotification(ctx, notifID, userID)
 }
 
+// MuteLikeNotification stops like notifications for the comment behind a notification.
 func (ns *NotificationService) MuteLikeNotification(ctx context.Context, userID, notifID uint64) error {
 	n, err := ns.store.GetNotification(ctx, notifID, userID)
 	if err != nil {

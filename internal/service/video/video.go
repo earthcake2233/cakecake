@@ -29,6 +29,8 @@ type VideoService struct {
 // the external ffprobe binary.
 var VideoProbe = ffmpeg.ProbeDurationSeconds
 
+// NewVideoService creates a VideoService with storage, cache, logger,
+// optional search client, and optional transcode queue publisher.
 func NewVideoService(db *gorm.DB, rdb *redis.Client, log *zap.Logger, es *search.Client, mq queue.TranscodePublisher) *VideoService {
 	return &VideoService{videos: NewVideoProvider(db), rdb: rdb, log: log, es: es, mq: mq}
 }
@@ -193,12 +195,14 @@ type MyVideoFilter struct {
 	PageSize int
 }
 
+// MyVideoPageResult is a paginated video list for the creator panel.
 type MyVideoPageResult struct {
 	Videos     []video.Video
 	Total      int64
 	TotalPages int
 }
 
+// ListMyVideosAdvanced pages the caller's videos with the given filter.
 func (s *VideoService) ListMyVideosAdvanced(ctx context.Context, f MyVideoFilter) (*MyVideoPageResult, error) {
 	return s.videos.ListUserVideosAdvanced(ctx, f)
 }

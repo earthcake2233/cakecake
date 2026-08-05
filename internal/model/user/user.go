@@ -5,6 +5,7 @@ import (
 	"time"
 )
 
+// User is an account row.
 type User struct {
 	ID           uint64 `gorm:"primaryKey"`
 	Username     string `gorm:"size:64;uniqueIndex;not null"`
@@ -42,18 +43,24 @@ type User struct {
 	// ViewHistoryPaused stops recording new watch-history entries when true.
 	ViewHistoryPaused bool `gorm:"not null;default:0"`
 }
+
+// UserFollow records a follow relationship.
 type UserFollow struct {
 	ID         uint64 `gorm:"primaryKey"`
 	FollowerID uint64 `gorm:"uniqueIndex:idx_user_follow_pair,priority:1;index:idx_user_follow_follower;not null"`
 	FolloweeID uint64 `gorm:"uniqueIndex:idx_user_follow_pair,priority:2;index:idx_user_follow_followee;not null"`
 	CreatedAt  time.Time
 }
+
+// UserBlock records a user blocking another user.
 type UserBlock struct {
 	ID        uint64 `gorm:"primaryKey"`
 	BlockerID uint64 `gorm:"uniqueIndex:idx_user_block_pair,priority:1;index;not null"`
 	BlockedID uint64 `gorm:"uniqueIndex:idx_user_block_pair,priority:2;index;not null"`
 	CreatedAt time.Time
 }
+
+// CoinLedger records a coin balance change.
 type CoinLedger struct {
 	ID          uint64    `gorm:"primaryKey"`
 	UserID      uint64    `gorm:"index:idx_coin_ledger_user_created,priority:1;not null"`
@@ -62,12 +69,16 @@ type CoinLedger struct {
 	VideoID     uint64    `gorm:"index;not null;default:0"`
 	CreatedAt   time.Time `gorm:"index:idx_coin_ledger_user_created,priority:2"`
 }
+
+// UserFollowGroup is a user-created follow group.
 type UserFollowGroup struct {
 	ID        uint64 `gorm:"primaryKey"`
 	UserID    uint64 `gorm:"index:idx_follow_group_user;not null"`
 	Name      string `gorm:"size:20;not null"`
 	CreatedAt time.Time
 }
+
+// UserFollowGroupMember maps a followee into a follow group.
 type UserFollowGroupMember struct {
 	ID         uint64 `gorm:"primaryKey"`
 	GroupID    uint64 `gorm:"uniqueIndex:idx_follow_group_member,priority:1;index;not null"`
@@ -75,9 +86,12 @@ type UserFollowGroupMember struct {
 	CreatedAt  time.Time
 }
 
+// IsUserAnonymized reports whether the user account was deleted/anonymized.
 func IsUserAnonymized(u *User) bool {
 	return u != nil && u.AnonymizedAt != nil
 }
+
+// DisplayUsername returns the best display name for a user.
 func DisplayUsername(u *User) string {
 	if u == nil {
 		return ""
@@ -88,6 +102,7 @@ func DisplayUsername(u *User) string {
 	return u.Username
 }
 
+// FormatCakeID formats a user id into its CakeID string.
 func FormatCakeID(id uint64) string {
 	return fmt.Sprintf("cake_%011d", id)
 }

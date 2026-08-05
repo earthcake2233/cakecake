@@ -27,6 +27,7 @@ type VideoDraftService struct {
 // ReplaceMedia, where the caller should clean up newly saved temp files.
 var ErrReplaceMediaUpdate = errors.New("replace media: draft field update failed")
 
+// NewVideoDraftService creates a VideoDraftService for the draft editing flow.
 func NewVideoDraftService(db *gorm.DB, rdb *redis.Client, log *zap.Logger, mq queue.TranscodePublisher) *VideoDraftService {
 	return &VideoDraftService{videos: NewVideoProvider(db), rdb: rdb, log: log, mq: mq}
 }

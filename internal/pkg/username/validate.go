@@ -6,6 +6,7 @@ import (
 	"unicode/utf8"
 )
 
+// MinRunes is the minimum username length in runes.
 const (
 	MinRunes = 3
 	MaxRunes = 32

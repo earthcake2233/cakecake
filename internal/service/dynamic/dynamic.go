@@ -17,6 +17,7 @@ type DynamicService struct {
 	log   *zap.Logger
 }
 
+// NewDynamicService creates a DynamicService with storage, cache, and logger.
 func NewDynamicService(db *gorm.DB, rdb *redis.Client, log *zap.Logger) *DynamicService {
 	return &DynamicService{store: NewDynamicStore(db), rdb: rdb, log: log}
 }
@@ -43,10 +44,12 @@ type DynamicStoreImpl struct {
 	db *gorm.DB
 }
 
+// NewDynamicStore creates a gorm-backed DynamicStore implementation.
 func NewDynamicStore(db *gorm.DB) *DynamicStoreImpl {
 	return &DynamicStoreImpl{db: db}
 }
 
+// GetDynamicByID loads a dynamic by id.
 func (p *DynamicStoreImpl) GetDynamicByID(ctx context.Context, id uint64) (*dynamic.UserDynamic, error) {
 	var d dynamic.UserDynamic
 	if err := p.db.WithContext(ctx).First(&d, id).Error; err != nil {
@@ -55,10 +58,12 @@ func (p *DynamicStoreImpl) GetDynamicByID(ctx context.Context, id uint64) (*dyna
 	return &d, nil
 }
 
+// CreateDynamic inserts a dynamic row.
 func (p *DynamicStoreImpl) CreateDynamic(ctx context.Context, d *dynamic.UserDynamic) error {
 	return p.db.WithContext(ctx).Create(d).Error
 }
 
+// DeleteDynamic removes a dynamic and its cascade rows atomically.
 func (p *DynamicStoreImpl) DeleteDynamic(ctx context.Context, id uint64) error {
 	return p.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		_ = tx.Where("dynamic_id = ?", id).Delete(&comment.UserDynamicLike{}).Error
@@ -142,6 +147,7 @@ func (p *DynamicStoreImpl) BatchCheckLiked(ctx context.Context, viewerID uint64,
 	return out
 }
 
+// ListDynamics pages a user's dynamics (newest first).
 func (p *DynamicStoreImpl) ListDynamics(ctx context.Context, userID uint64, page, pageSize int) ([]dynamic.UserDynamic, int64, error) {
 	q := p.db.WithContext(ctx).Model(&dynamic.UserDynamic{}).Where("user_id = ?", userID)
 	var total int64
@@ -178,12 +184,14 @@ type MyDynamicFilter struct {
 	PageSize int
 }
 
+// MyDynamicPageResult is a paginated dynamic list for the creator panel.
 type MyDynamicPageResult struct {
 	Dynamics   []dynamic.UserDynamic
 	Total      int64
 	TotalPages int
 }
 
+// ListMyDynamicsAdvanced pages a user's dynamics with advanced filtering.
 func (p *DynamicStoreImpl) ListMyDynamicsAdvanced(ctx context.Context, f MyDynamicFilter) (*MyDynamicPageResult, error) {
 	q := p.db.WithContext(ctx).Model(&dynamic.UserDynamic{}).Where("user_id = ?", f.UserID)
 	if f.TitleQ != "" {

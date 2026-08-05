@@ -49,14 +49,17 @@ type ArticleStoreImpl struct {
 	db *gorm.DB
 }
 
+// NewArticleStore creates a gorm-backed ArticleStore implementation.
 func NewArticleStore(db *gorm.DB) *ArticleStoreImpl {
 	return &ArticleStoreImpl{db: db}
 }
 
+// CreateArticle inserts an article row.
 func (p *ArticleStoreImpl) CreateArticle(ctx context.Context, art *article.Article) error {
 	return p.db.WithContext(ctx).Create(art).Error
 }
 
+// GetArticleByID loads an article by id.
 func (p *ArticleStoreImpl) GetArticleByID(ctx context.Context, id uint64) (*article.Article, error) {
 	var a article.Article
 	if err := p.db.WithContext(ctx).First(&a, id).Error; err != nil {
@@ -65,6 +68,7 @@ func (p *ArticleStoreImpl) GetArticleByID(ctx context.Context, id uint64) (*arti
 	return &a, nil
 }
 
+// GetPublishedArticle loads an article that is published.
 func (p *ArticleStoreImpl) GetPublishedArticle(ctx context.Context, id uint64) (*article.Article, error) {
 	var a article.Article
 	if err := p.db.WithContext(ctx).Where("id = ? AND status = ?", id, article.StatusPublished).First(&a).Error; err != nil {
@@ -73,15 +77,18 @@ func (p *ArticleStoreImpl) GetPublishedArticle(ctx context.Context, id uint64) (
 	return &a, nil
 }
 
+// UpdateArticleByID applies partial updates to an article.
 func (p *ArticleStoreImpl) UpdateArticleByID(ctx context.Context, id uint64, updates map[string]interface{}) error {
 	return p.db.WithContext(ctx).Model(&article.Article{}).Where("id = ?", id).Updates(updates).Error
 }
 
+// IncrArticleView increments an article's view count.
 func (p *ArticleStoreImpl) IncrArticleView(ctx context.Context, id uint64) error {
 	return p.db.WithContext(ctx).Model(&article.Article{}).Where("id = ?", id).
 		UpdateColumn("view_count", gorm.Expr("view_count + 1")).Error
 }
 
+// BatchFavRows loads a viewer's favorite rows for the given articles.
 func (p *ArticleStoreImpl) BatchFavRows(ctx context.Context, viewerID uint64, articleIDs []uint64) ([]article.ArticleFavorite, error) {
 	var favRows []article.ArticleFavorite
 	if err := p.db.WithContext(ctx).Where("user_id = ? AND article_id IN ?", viewerID, articleIDs).Find(&favRows).Error; err != nil {
@@ -90,6 +97,7 @@ func (p *ArticleStoreImpl) BatchFavRows(ctx context.Context, viewerID uint64, ar
 	return favRows, nil
 }
 
+// BatchCoinRows loads a viewer's coin rows for the given articles.
 func (p *ArticleStoreImpl) BatchCoinRows(ctx context.Context, viewerID uint64, articleIDs []uint64) ([]article.ArticleCoin, error) {
 	var coinRows []article.ArticleCoin
 	if err := p.db.WithContext(ctx).Where("user_id = ? AND article_id IN ?", viewerID, articleIDs).Find(&coinRows).Error; err != nil {
@@ -98,6 +106,7 @@ func (p *ArticleStoreImpl) BatchCoinRows(ctx context.Context, viewerID uint64, a
 	return coinRows, nil
 }
 
+// CountArticlesByStatus counts a user's articles per status.
 func (p *ArticleStoreImpl) CountArticlesByStatus(ctx context.Context, userID uint64) map[string]int64 {
 	type statusRow struct {
 		Status string
@@ -130,6 +139,7 @@ func (p *ArticleStoreImpl) CountArticlesByStatus(ctx context.Context, userID uin
 	return out
 }
 
+// ToggleArticleFavorite toggles a user's favorite on an article, returning the new state and fav count.
 func (p *ArticleStoreImpl) ToggleArticleFavorite(ctx context.Context, userID, articleID uint64) (bool, uint64, error) {
 	var favorited bool
 	var favCount uint64
@@ -168,16 +178,19 @@ func (p *ArticleStoreImpl) ToggleArticleFavorite(ctx context.Context, userID, ar
 	return favorited, favCount, err
 }
 
+// DeleteArticle deletes an article with its cascade rows atomically.
 func (p *ArticleStoreImpl) DeleteArticle(ctx context.Context, id uint64) error {
 	return p.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		return deleteArticleCascadeTx(tx, id)
 	})
 }
 
+// DeleteArticleCascadeTx runs the article cascade delete inside a transaction.
 func (p *ArticleStoreImpl) DeleteArticleCascadeTx(tx *gorm.DB, articleID uint64) error {
 	return deleteArticleCascadeTx(tx, articleID)
 }
 
+// ListArticlesCursor pages published articles with a keyset cursor.
 func (p *ArticleStoreImpl) ListArticlesCursor(ctx context.Context, cursor uint64, limit int, sort string) (*ListArticlesCursorResult, error) {
 	q := p.db.WithContext(ctx).Model(&article.Article{}).Where("status = ?", article.StatusPublished)
 	if cursor > 0 {
@@ -198,6 +211,7 @@ func (p *ArticleStoreImpl) ListArticlesCursor(ctx context.Context, cursor uint64
 	return &ListArticlesCursorResult{Items: list, HasMore: hasMore}, nil
 }
 
+// ListMyArticlesCursor pages the caller's articles with status/title/sort filters.
 func (p *ArticleStoreImpl) ListMyArticlesCursor(ctx context.Context, userID uint64, cursor uint64, limit int, status, titleQ, sortKey string) (*ListArticlesCursorResult, error) {
 	q := p.db.WithContext(ctx).Model(&article.Article{}).Where("user_id = ?", userID)
 	if st := manuscriptStatusToDB(status); st != "" {
@@ -231,6 +245,7 @@ func (p *ArticleStoreImpl) ListMyArticlesCursor(ctx context.Context, userID uint
 	return &ListArticlesCursorResult{Items: list, HasMore: hasMore}, nil
 }
 
+// ListMyArticlesPage pages the caller's non-draft articles with filters.
 func (p *ArticleStoreImpl) ListMyArticlesPage(ctx context.Context, userID uint64, page, pageSize int, status, titleQ, sortKey string) (*ListMyArticlesPageResult, error) {
 	q := p.db.WithContext(ctx).Model(&article.Article{}).Where("user_id = ?", userID)
 	if st := manuscriptStatusToDB(status); st != "" {
@@ -264,6 +279,7 @@ func (p *ArticleStoreImpl) ListMyArticlesPage(ctx context.Context, userID uint64
 	return &ListMyArticlesPageResult{Items: list, Total: total}, nil
 }
 
+// ListUserPublishedArticlesCursor pages a user's published articles with a keyset cursor.
 func (p *ArticleStoreImpl) ListUserPublishedArticlesCursor(ctx context.Context, userID uint64, cursor uint64, limit int) (*ListArticlesCursorResult, error) {
 	q := p.db.WithContext(ctx).Model(&article.Article{}).Where("user_id = ? AND status = ?", userID, article.StatusPublished)
 	if cursor > 0 {
@@ -280,6 +296,7 @@ func (p *ArticleStoreImpl) ListUserPublishedArticlesCursor(ctx context.Context, 
 	return &ListArticlesCursorResult{Items: list, HasMore: hasMore}, nil
 }
 
+// ListFavoritedArticlesV2 pages a user's favorited article rows with a keyset cursor.
 func (p *ArticleStoreImpl) ListFavoritedArticlesV2(ctx context.Context, userID, cursor uint64, limit int) ([]article.ArticleFavorite, bool, error) {
 	q := p.db.WithContext(ctx).Model(&article.ArticleFavorite{}).Where("user_id = ?", userID)
 	if cursor > 0 {
@@ -296,6 +313,7 @@ func (p *ArticleStoreImpl) ListFavoritedArticlesV2(ctx context.Context, userID, 
 	return favs, hasMore, nil
 }
 
+// BatchFetchArticles loads articles by ids, optionally published only.
 func (p *ArticleStoreImpl) BatchFetchArticles(ctx context.Context, ids []uint64, onlyPublished bool) map[uint64]*article.Article {
 	out := make(map[uint64]*article.Article, len(ids))
 	if len(ids) == 0 {
@@ -315,6 +333,7 @@ func (p *ArticleStoreImpl) BatchFetchArticles(ctx context.Context, ids []uint64,
 	return out
 }
 
+// CountFavoritedArticles counts a user's favorited articles.
 func (p *ArticleStoreImpl) CountFavoritedArticles(ctx context.Context, userID uint64, onlyPublished bool) (int64, error) {
 	q := p.db.WithContext(ctx).Table("article_favorites").
 		Joins("INNER JOIN articles ON articles.id = article_favorites.article_id")
@@ -327,6 +346,7 @@ func (p *ArticleStoreImpl) CountFavoritedArticles(ctx context.Context, userID ui
 	return total, err
 }
 
+// HasArticleCoin returns a user's existing coin row for an article, if any.
 func (p *ArticleStoreImpl) HasArticleCoin(ctx context.Context, userID, articleID uint64) (*article.ArticleCoin, error) {
 	var exist article.ArticleCoin
 	res := p.db.WithContext(ctx).Where("user_id = ? AND article_id = ?", userID, articleID).Limit(1).Find(&exist)
@@ -339,6 +359,7 @@ func (p *ArticleStoreImpl) HasArticleCoin(ctx context.Context, userID, articleID
 	return &exist, nil
 }
 
+// UpdateArticleCoinTx upgrades a user's article coin to max amount and updates counts.
 func (p *ArticleStoreImpl) UpdateArticleCoinTx(ctx context.Context, userID, authorID, articleID uint64, exist *article.ArticleCoin) error {
 	return p.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := usercoin.SpendOnArticleCoin(tx, userID, authorID, articleID, 1); err != nil {
@@ -352,6 +373,7 @@ func (p *ArticleStoreImpl) UpdateArticleCoinTx(ctx context.Context, userID, auth
 	})
 }
 
+// CreateArticleCoinTx spends coins and records a new article coin row.
 func (p *ArticleStoreImpl) CreateArticleCoinTx(ctx context.Context, userID, authorID, articleID uint64, amount int) error {
 	return p.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := usercoin.SpendOnArticleCoin(tx, userID, authorID, articleID, amount); err != nil {
@@ -366,20 +388,24 @@ func (p *ArticleStoreImpl) CreateArticleCoinTx(ctx context.Context, userID, auth
 	})
 }
 
+// CoinProgress returns the user's daily coin-task EXP progress.
 func (p *ArticleStoreImpl) CoinProgress(uid uint64) int {
 	return dailyreward.CoinProgress(p.db, uid)
 }
 
+// GrantCoinExp grants daily coin-task EXP to the user.
 func (p *ArticleStoreImpl) GrantCoinExp(uid uint64, before, after int) error {
 	return dailyreward.GrantCoinExp(p.db, uid, before, after)
 }
 
+// CountByStatus counts articles with the given status.
 func (p *ArticleStoreImpl) CountByStatus(ctx context.Context, status string) (int64, error) {
 	var cnt int64
 	err := p.db.WithContext(ctx).Model(&article.Article{}).Where("status = ?", status).Count(&cnt).Error
 	return cnt, err
 }
 
+// AdminListArticles pages all articles for the admin panel.
 func (p *ArticleStoreImpl) AdminListArticles(ctx context.Context, statuses []string, titleQ string, page, pageSize int) (*AdminListArticlesResult, error) {
 	q := p.db.WithContext(ctx).Model(&article.Article{})
 	if len(statuses) > 0 {
@@ -402,6 +428,7 @@ func (p *ArticleStoreImpl) AdminListArticles(ctx context.Context, statuses []str
 	return &AdminListArticlesResult{Total: total, Rows: rows, PendingCount: pending}, nil
 }
 
+// PublishArticle marks an article published and indexes it in Elasticsearch.
 func (p *ArticleStoreImpl) PublishArticle(ctx context.Context, esc *search.Client, log *zap.Logger, articleID uint64, adminID *uint64) error {
 	var art article.Article
 	if err := p.db.WithContext(ctx).First(&art, articleID).Error; err != nil {
@@ -433,6 +460,7 @@ func (p *ArticleStoreImpl) PublishArticle(ctx context.Context, esc *search.Clien
 	return nil
 }
 
+// AdminDeleteArticleCascade runs the cascade delete callback inside a transaction.
 func (p *ArticleStoreImpl) AdminDeleteArticleCascade(ctx context.Context, id uint64, fn func(tx *gorm.DB) error) error {
 	return p.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := fn(tx); err != nil {

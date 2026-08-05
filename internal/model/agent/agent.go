@@ -71,4 +71,5 @@ type AgentSettings struct {
 	UpdatedAt        time.Time
 }
 
+// AgentSettingsRowID is the singleton id of the agent settings row.
 const AgentSettingsRowID uint64 = 1

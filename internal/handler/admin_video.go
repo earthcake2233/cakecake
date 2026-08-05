@@ -89,6 +89,7 @@ func adminVideoToJSON(v *video.Video, uploaderName string) adminVideoItem {
 
 // AdminListVideos GET /api/v1/admin/videos
 
+// AdminListVideos lists videos for the admin panel with filters.
 func (a *API) AdminListVideos(c *gin.Context) {
 	page, pageSize := parsePagination(c, 20)
 	statusQ := c.DefaultQuery("status", video.StatusPendingReview)

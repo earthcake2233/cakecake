@@ -368,6 +368,7 @@ func agentAvatarURLChanged(oldURL, newURL string) bool {
 
 // Legacy singleton endpoints (compat): map to first profile.
 
+// AdminGetAgentSettings returns the global agent settings.
 func (a *API) AdminGetAgentSettings(c *gin.Context) {
 	ctx := c.Request.Context()
 	list, err := a.Agent.ListAgentProfiles(ctx)
@@ -401,6 +402,7 @@ func (a *API) AdminGetAgentSettings(c *gin.Context) {
 	})
 }
 
+// AdminPutAgentSettings updates the global agent settings.
 func (a *API) AdminPutAgentSettings(c *gin.Context) {
 	ctx := c.Request.Context()
 	list, _ := a.Agent.ListAgentProfiles(ctx)
@@ -459,6 +461,7 @@ type adminAgentSettingsReq struct {
 	AssistantEnabled *bool  `json:"assistant_enabled"`
 }
 
+// AdminUploadAgentAvatar uploads/replaces the agent avatar.
 func (a *API) AdminUploadAgentAvatar(c *gin.Context) {
 	list, _ := a.Agent.ListAgentProfiles(c.Request.Context())
 	if len(list) == 0 {

@@ -41,18 +41,22 @@ const (
 	ChannelDanmakuFanout = "minibili:danmaku:fanout"
 )
 
+// DanmakuCooldownKey returns the Redis key for per-user danmaku cooldown.
 func DanmakuCooldownKey(userID, videoID uint64) string {
 	return fmt.Sprintf("%s%d:%d", PrefixDanmakuCooldown, userID, videoID)
 }
 
+// RefreshInvalidKey returns the Redis key marking a user's refresh token invalid.
 func RefreshInvalidKey(tokenID string) string {
 	return PrefixRefreshInvalid + tokenID
 }
 
+// AdminRefreshInvalidKey returns the Redis key marking an admin's refresh token invalid.
 func AdminRefreshInvalidKey(tokenID string) string {
 	return PrefixAdminRefreshInvalid + tokenID
 }
 
+// VideoPlayDeltaKey returns the Redis key for a video's buffered play-count delta.
 func VideoPlayDeltaKey(videoID uint64) string {
 	return fmt.Sprintf("%s%d", PrefixVideoPlayDelta, videoID)
 }

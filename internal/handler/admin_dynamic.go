@@ -64,6 +64,7 @@ func adminDynamicToJSON(d *dynamic.UserDynamic, authorName string) adminDynamicI
 
 // AdminListDynamics GET /api/v1/admin/dynamics — dynamics do not require review; ops can view and delete.
 
+// AdminListDynamics lists dynamics for the admin panel.
 func (a *API) AdminListDynamics(c *gin.Context) {
 	page, pageSize := parsePagination(c, 20)
 	q := strings.TrimSpace(c.Query("q"))

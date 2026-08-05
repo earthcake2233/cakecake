@@ -41,27 +41,32 @@ type EngagementStoreImpl struct {
 	db *gorm.DB
 }
 
+// NewEngagementStore creates a gorm-backed EngagementStore implementation.
 func NewEngagementStore(db *gorm.DB) *EngagementStoreImpl {
 	return &EngagementStoreImpl{db: db}
 }
 
+// HasCoined reports whether the user coined the video.
 func (p *EngagementStoreImpl) HasCoined(ctx context.Context, userID, videoID uint64) bool {
 	var cnt int64
 	p.db.WithContext(ctx).Model(&video.VideoCoin{}).Where("user_id = ? AND video_id = ?", userID, videoID).Count(&cnt)
 	return cnt > 0
 }
 
+// DecrementUserCoinsFallback deducts coins when the balance is sufficient.
 func (p *EngagementStoreImpl) DecrementUserCoinsFallback(ctx context.Context, userID uint64, amount int) error {
 	cost := usercoin.CostTenths(amount)
 	return p.db.WithContext(ctx).Model(&user.User{}).Where("id = ? AND coin_balance_tenths >= ?", userID, cost).
 		UpdateColumn("coin_balance_tenths", gorm.Expr("coin_balance_tenths - ?", cost)).Error
 }
 
+// IncrVideoCoinCount adjusts a video's coin count by delta.
 func (p *EngagementStoreImpl) IncrVideoCoinCount(ctx context.Context, videoID uint64, delta int) error {
 	return p.db.WithContext(ctx).Model(&video.Video{}).Where("id = ?", videoID).
 		UpdateColumn("coin_count", gorm.Expr("coin_count + ?", delta)).Error
 }
 
+// ToggleWatchLater toggles a watch-later entry, returning the new state.
 func (p *EngagementStoreImpl) ToggleWatchLater(ctx context.Context, userID, videoID uint64) (bool, error) {
 	var existing video.WatchLater
 	if err := p.db.WithContext(ctx).Where("user_id = ? AND video_id = ?", userID, videoID).First(&existing).Error; err == nil {
@@ -75,6 +80,7 @@ func (p *EngagementStoreImpl) ToggleWatchLater(ctx context.Context, userID, vide
 	return true, nil
 }
 
+// ListWatchLater pages a user's watch-later entries.
 func (p *EngagementStoreImpl) ListWatchLater(ctx context.Context, userID uint64, page, pageSize int) ([]video.WatchLater, int64, error) {
 	var total int64
 	_ = p.db.WithContext(ctx).Model(&video.WatchLater{}).Where("user_id = ?", userID).Count(&total).Error
@@ -87,19 +93,23 @@ func (p *EngagementStoreImpl) ListWatchLater(ctx context.Context, userID uint64,
 	return list, total, nil
 }
 
+// ClearWatchLater removes all of a user's watch-later entries.
 func (p *EngagementStoreImpl) ClearWatchLater(ctx context.Context, userID uint64) error {
 	return p.db.WithContext(ctx).Where("user_id = ?", userID).Delete(&video.WatchLater{}).Error
 }
 
+// ClearWatchedWatchLater removes a user's already-watched entries.
 func (p *EngagementStoreImpl) ClearWatchedWatchLater(ctx context.Context, userID uint64) error {
 	return p.db.WithContext(ctx).Where("user_id = ? AND watched = ?", userID, true).Delete(&video.WatchLater{}).Error
 }
 
+// MarkWatchLaterWatched marks a watch-later entry as watched.
 func (p *EngagementStoreImpl) MarkWatchLaterWatched(ctx context.Context, userID, videoID uint64) error {
 	return p.db.WithContext(ctx).Model(&video.WatchLater{}).
 		Where("user_id = ? AND video_id = ?", userID, videoID).Update("watched", true).Error
 }
 
+// BatchHasCoined maps video ids to whether the user coined them.
 func (p *EngagementStoreImpl) BatchHasCoined(ctx context.Context, userID uint64, videoIDs []uint64) map[uint64]bool {
 	result := make(map[uint64]bool)
 	if userID == 0 || len(videoIDs) == 0 {
@@ -113,6 +123,7 @@ func (p *EngagementStoreImpl) BatchHasCoined(ctx context.Context, userID uint64,
 	return result
 }
 
+// BatchWatchLater maps video ids to whether they are in the user's watch-later list.
 func (p *EngagementStoreImpl) BatchWatchLater(ctx context.Context, userID uint64, videoIDs []uint64) map[uint64]bool {
 	result := make(map[uint64]bool)
 	if userID == 0 || len(videoIDs) == 0 {
@@ -126,6 +137,7 @@ func (p *EngagementStoreImpl) BatchWatchLater(ctx context.Context, userID uint64
 	return result
 }
 
+// BatchCoinedByUser maps video ids to the user's coin amounts.
 func (p *EngagementStoreImpl) BatchCoinedByUser(ctx context.Context, userID uint64, videoIDs []uint64) map[uint64]int {
 	result := make(map[uint64]int)
 	if userID == 0 || len(videoIDs) == 0 {
@@ -146,6 +158,7 @@ func (p *EngagementStoreImpl) BatchCoinedByUser(ctx context.Context, userID uint
 	return result
 }
 
+// GetVideoCoinRow loads a user's coin row for a video, if any.
 func (p *EngagementStoreImpl) GetVideoCoinRow(ctx context.Context, userID, videoID uint64) (*video.VideoCoin, bool, error) {
 	var exist video.VideoCoin
 	res := p.db.WithContext(ctx).Where("user_id = ? AND video_id = ?", userID, videoID).Limit(1).Find(&exist)
@@ -158,6 +171,7 @@ func (p *EngagementStoreImpl) GetVideoCoinRow(ctx context.Context, userID, video
 	return &exist, true, nil
 }
 
+// UpdateVideoCoinTx upgrades a user's video coin to max amount and updates counts.
 func (p *EngagementStoreImpl) UpdateVideoCoinTx(ctx context.Context, uid, uploaderID, vid uint64, exist *video.VideoCoin) error {
 	return p.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := usercoin.SpendOnVideoCoin(tx, uid, uploaderID, vid, 1); err != nil {
@@ -170,6 +184,7 @@ func (p *EngagementStoreImpl) UpdateVideoCoinTx(ctx context.Context, uid, upload
 	})
 }
 
+// CreateVideoCoinTx spends coins and records a new video coin row.
 func (p *EngagementStoreImpl) CreateVideoCoinTx(ctx context.Context, uid, uploaderID, vid uint64, amount int) error {
 	return p.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := usercoin.SpendOnVideoCoin(tx, uid, uploaderID, vid, amount); err != nil {
@@ -183,14 +198,17 @@ func (p *EngagementStoreImpl) CreateVideoCoinTx(ctx context.Context, uid, upload
 	})
 }
 
+// CoinProgress returns the user's daily coin-task EXP progress.
 func (p *EngagementStoreImpl) CoinProgress(uid uint64) int {
 	return dailyreward.CoinProgress(p.db, uid)
 }
 
+// GrantCoinExp grants daily coin-task EXP to the user.
 func (p *EngagementStoreImpl) GrantCoinExp(uid uint64, before, after int) error {
 	return dailyreward.GrantCoinExp(p.db, uid, before, after)
 }
 
+// GetVideoByID loads a video row by id.
 func (p *EngagementStoreImpl) GetVideoByID(ctx context.Context, id uint64) (*video.Video, error) {
 	var v video.Video
 	if err := p.db.WithContext(ctx).First(&v, id).Error; err != nil {
@@ -199,6 +217,7 @@ func (p *EngagementStoreImpl) GetVideoByID(ctx context.Context, id uint64) (*vid
 	return &v, nil
 }
 
+// GetUserByID loads a user row by id.
 func (p *EngagementStoreImpl) GetUserByID(ctx context.Context, id uint64) (*user.User, error) {
 	var u user.User
 	if err := p.db.WithContext(ctx).First(&u, id).Error; err != nil {
@@ -207,6 +226,7 @@ func (p *EngagementStoreImpl) GetUserByID(ctx context.Context, id uint64) (*user
 	return &u, nil
 }
 
+// BatchVideoLikes maps video ids to whether the user liked them.
 func (p *EngagementStoreImpl) BatchVideoLikes(ctx context.Context, userID uint64, videoIDs []uint64) map[uint64]bool {
 	result := make(map[uint64]bool)
 	if userID == 0 || len(videoIDs) == 0 {
@@ -220,6 +240,7 @@ func (p *EngagementStoreImpl) BatchVideoLikes(ctx context.Context, userID uint64
 	return result
 }
 
+// BatchPublishedVideosRaw loads published video rows by ids.
 func (p *EngagementStoreImpl) BatchPublishedVideosRaw(ctx context.Context, ids []uint64) (map[uint64]video.Video, error) {
 	result := make(map[uint64]video.Video, len(ids))
 	if len(ids) == 0 {
@@ -235,6 +256,7 @@ func (p *EngagementStoreImpl) BatchPublishedVideosRaw(ctx context.Context, ids [
 	return result, nil
 }
 
+// ListUserCoinedVideosRows lists a user's coin rows (newest first) with total count.
 func (p *EngagementStoreImpl) ListUserCoinedVideosRows(ctx context.Context, ownerID uint64, limit int) ([]video.VideoCoin, int64, error) {
 	var coins []video.VideoCoin
 	if err := p.db.WithContext(ctx).Where("user_id = ?", ownerID).Order("created_at DESC").Limit(limit).Find(&coins).Error; err != nil {

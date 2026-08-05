@@ -6,6 +6,7 @@ import (
 	"strings"
 )
 
+// IndexVideos is the Elasticsearch index for videos.
 const (
 	IndexVideos   = "minibili_videos"
 	IndexArticles = "minibili_articles"

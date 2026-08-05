@@ -10,6 +10,7 @@ import (
 // CommentKind identifies which comment table a storage operation targets.
 type CommentKind int
 
+// CommentVideo is the video comment kind.
 const (
 	CommentVideo CommentKind = iota
 	CommentArticle
@@ -72,10 +73,12 @@ type CommentProviderImpl struct {
 	db *gorm.DB
 }
 
+// NewCommentProvider creates a gorm-backed CommentProvider implementation.
 func NewCommentProvider(db *gorm.DB) *CommentProviderImpl {
 	return &CommentProviderImpl{db: db}
 }
 
+// WithTx runs fn inside a transaction.
 func (p *CommentProviderImpl) WithTx(ctx context.Context, fn func(tx *gorm.DB) error) error {
 	return p.db.WithContext(ctx).Transaction(fn)
 }
@@ -124,6 +127,8 @@ func commentDislikeModel(kind CommentKind) interface{} {
 	}
 }
 
+// ListComments lists comments of the given kind for a target media id,
+// optionally filtering to curated-approved rows.
 func (p *CommentProviderImpl) ListComments(ctx context.Context, kind CommentKind, targetID uint64, curated bool) ([]commentListRow, error) {
 	col := commentTargetColumn(kind)
 	q := p.db.WithContext(ctx).Where(col+" = ?", targetID)
@@ -152,18 +157,22 @@ func (p *CommentProviderImpl) ListComments(ctx context.Context, kind CommentKind
 	}
 }
 
+// CreateVideoComment inserts a video comment row.
 func (p *CommentProviderImpl) CreateVideoComment(ctx context.Context, cm *comment.Comment) error {
 	return p.db.WithContext(ctx).Create(cm).Error
 }
 
+// CreateArticleComment inserts an article comment row.
 func (p *CommentProviderImpl) CreateArticleComment(ctx context.Context, cm *comment.ArticleComment) error {
 	return p.db.WithContext(ctx).Create(cm).Error
 }
 
+// CreateDynamicComment inserts a dynamic comment row.
 func (p *CommentProviderImpl) CreateDynamicComment(ctx context.Context, cm *comment.DynamicComment) error {
 	return p.db.WithContext(ctx).Create(cm).Error
 }
 
+// GetVideoComment loads a video comment by id.
 func (p *CommentProviderImpl) GetVideoComment(ctx context.Context, id uint64) (*comment.Comment, error) {
 	var cm comment.Comment
 	if err := p.db.WithContext(ctx).First(&cm, id).Error; err != nil {
@@ -172,6 +181,7 @@ func (p *CommentProviderImpl) GetVideoComment(ctx context.Context, id uint64) (*
 	return &cm, nil
 }
 
+// GetArticleComment loads an article comment by id.
 func (p *CommentProviderImpl) GetArticleComment(ctx context.Context, id uint64) (*comment.ArticleComment, error) {
 	var cm comment.ArticleComment
 	if err := p.db.WithContext(ctx).First(&cm, id).Error; err != nil {
@@ -180,6 +190,7 @@ func (p *CommentProviderImpl) GetArticleComment(ctx context.Context, id uint64) 
 	return &cm, nil
 }
 
+// GetDynamicComment loads a dynamic comment by id.
 func (p *CommentProviderImpl) GetDynamicComment(ctx context.Context, id uint64) (*comment.DynamicComment, error) {
 	var cm comment.DynamicComment
 	if err := p.db.WithContext(ctx).First(&cm, id).Error; err != nil {
@@ -188,6 +199,7 @@ func (p *CommentProviderImpl) GetDynamicComment(ctx context.Context, id uint64) 
 	return &cm, nil
 }
 
+// GetCommentParent returns the target media id and level of a parent comment.
 func (p *CommentProviderImpl) GetCommentParent(ctx context.Context, kind CommentKind, id uint64) (targetID uint64, level int, err error) {
 	switch kind {
 	case CommentArticle:
@@ -211,6 +223,7 @@ func (p *CommentProviderImpl) GetCommentParent(ctx context.Context, kind Comment
 	}
 }
 
+// GetCommentForDelete returns the owner id and target media id of a comment.
 func (p *CommentProviderImpl) GetCommentForDelete(ctx context.Context, kind CommentKind, id uint64) (ownerID, targetID uint64, err error) {
 	switch kind {
 	case CommentArticle:
@@ -234,6 +247,7 @@ func (p *CommentProviderImpl) GetCommentForDelete(ctx context.Context, kind Comm
 	}
 }
 
+// GetCommentPin returns the target media id and pinned state of a comment.
 func (p *CommentProviderImpl) GetCommentPin(ctx context.Context, kind CommentKind, id uint64) (targetID uint64, pinned bool, err error) {
 	switch kind {
 	case CommentArticle:
@@ -257,24 +271,29 @@ func (p *CommentProviderImpl) GetCommentPin(ctx context.Context, kind CommentKin
 	}
 }
 
+// UnpinComments clears the pinned flag on all comments of a target media id.
 func (p *CommentProviderImpl) UnpinComments(ctx context.Context, kind CommentKind, targetID uint64) error {
 	col := commentTargetColumn(kind)
 	return p.db.WithContext(ctx).Model(commentModel(kind)).
 		Where(col+" = ? AND pinned = ?", targetID, true).Update("pinned", false).Error
 }
 
+// UpdateCommentPinned sets the pinned flag on a single comment.
 func (p *CommentProviderImpl) UpdateCommentPinned(ctx context.Context, kind CommentKind, id uint64, pinned bool) error {
 	return p.db.WithContext(ctx).Model(commentModel(kind)).Where("id = ?", id).Update("pinned", pinned).Error
 }
 
+// ApproveComment marks a comment as curated-approved.
 func (p *CommentProviderImpl) ApproveComment(ctx context.Context, kind CommentKind, id uint64) error {
 	return p.db.WithContext(ctx).Model(commentModel(kind)).Where("id = ?", id).Update("approved", true).Error
 }
 
+// IgnoreComment soft-marks a comment as curated-ignored.
 func (p *CommentProviderImpl) IgnoreComment(ctx context.Context, kind CommentKind, id uint64) error {
 	return p.db.WithContext(ctx).Model(commentModel(kind)).Where("id = ?", id).Update("curated_ignored", true).Error
 }
 
+// CollectCommentDescendants returns all descendant comment ids under a root comment.
 func (p *CommentProviderImpl) CollectCommentDescendants(tx *gorm.DB, kind CommentKind, root uint64) []uint64 {
 	var ids []uint64
 	children, err := p.pluckCommentChildren(tx, kind, root)
@@ -301,19 +320,23 @@ func (p *CommentProviderImpl) pluckCommentChildren(tx *gorm.DB, kind CommentKind
 	return ids, err
 }
 
+// DeleteCommentLikesTx deletes like rows for the given comment ids inside a transaction.
 func (p *CommentProviderImpl) DeleteCommentLikesTx(tx *gorm.DB, kind CommentKind, ids []uint64) error {
 	return tx.Where("comment_id IN ?", ids).Delete(commentLikeModel(kind)).Error
 }
 
+// DeleteCommentDislikesTx deletes dislike rows for the given comment ids inside a transaction.
 func (p *CommentProviderImpl) DeleteCommentDislikesTx(tx *gorm.DB, kind CommentKind, ids []uint64) error {
 	return tx.Where("comment_id IN ?", ids).Delete(commentDislikeModel(kind)).Error
 }
 
+// DeleteCommentRowsTx deletes comment rows for the given ids inside a transaction.
 func (p *CommentProviderImpl) DeleteCommentRowsTx(tx *gorm.DB, kind CommentKind, ids []uint64) (int64, error) {
 	res := tx.Where("id IN ?", ids).Delete(commentModel(kind))
 	return res.RowsAffected, res.Error
 }
 
+// LoadCommentLikes returns which of the given comment ids are liked by the viewer.
 func (p *CommentProviderImpl) LoadCommentLikes(ctx context.Context, kind CommentKind, viewerID uint64, ids []uint64) (map[uint64]bool, error) {
 	result := make(map[uint64]bool)
 	if viewerID == 0 || len(ids) == 0 {
@@ -348,6 +371,7 @@ func (p *CommentProviderImpl) LoadCommentLikes(ctx context.Context, kind Comment
 	return result, nil
 }
 
+// LoadCommentDislikes returns which of the given comment ids are disliked by the viewer.
 func (p *CommentProviderImpl) LoadCommentDislikes(ctx context.Context, kind CommentKind, viewerID uint64, ids []uint64) (map[uint64]bool, error) {
 	result := make(map[uint64]bool)
 	if viewerID == 0 || len(ids) == 0 {
@@ -382,6 +406,7 @@ func (p *CommentProviderImpl) LoadCommentDislikes(ctx context.Context, kind Comm
 	return result, nil
 }
 
+// GetCommentLikeCount returns the stored like count of a comment.
 func (p *CommentProviderImpl) GetCommentLikeCount(ctx context.Context, kind CommentKind, id uint64) (uint64, error) {
 	switch kind {
 	case CommentArticle:
@@ -405,24 +430,29 @@ func (p *CommentProviderImpl) GetCommentLikeCount(ctx context.Context, kind Comm
 	}
 }
 
+// HasCommentLike reports whether the user liked the comment.
 func (p *CommentProviderImpl) HasCommentLike(ctx context.Context, kind CommentKind, userID, commentID uint64) (bool, error) {
 	err := p.db.WithContext(ctx).Where("user_id = ? AND comment_id = ?", userID, commentID).First(commentLikeModel(kind)).Error
 	return err == nil, nil
 }
 
+// HasCommentDislike reports whether the user disliked the comment.
 func (p *CommentProviderImpl) HasCommentDislike(ctx context.Context, kind CommentKind, userID, commentID uint64) (bool, error) {
 	err := p.db.WithContext(ctx).Where("user_id = ? AND comment_id = ?", userID, commentID).First(commentDislikeModel(kind)).Error
 	return err == nil, nil
 }
 
+// ClearCommentLike removes the user's like on the comment.
 func (p *CommentProviderImpl) ClearCommentLike(ctx context.Context, kind CommentKind, userID, commentID uint64) error {
 	return p.db.WithContext(ctx).Where("user_id = ? AND comment_id = ?", userID, commentID).Delete(commentLikeModel(kind)).Error
 }
 
+// ClearCommentDislike removes the user's dislike on the comment.
 func (p *CommentProviderImpl) ClearCommentDislike(ctx context.Context, kind CommentKind, userID, commentID uint64) error {
 	return p.db.WithContext(ctx).Where("user_id = ? AND comment_id = ?", userID, commentID).Delete(commentDislikeModel(kind)).Error
 }
 
+// CreateCommentLike records a like from the user on the comment.
 func (p *CommentProviderImpl) CreateCommentLike(ctx context.Context, kind CommentKind, userID, commentID uint64) error {
 	switch kind {
 	case CommentArticle:
@@ -434,10 +464,12 @@ func (p *CommentProviderImpl) CreateCommentLike(ctx context.Context, kind Commen
 	}
 }
 
+// DeleteCommentLike removes the user's like row on the comment.
 func (p *CommentProviderImpl) DeleteCommentLike(ctx context.Context, kind CommentKind, userID, commentID uint64) error {
 	return p.db.WithContext(ctx).Where("user_id = ? AND comment_id = ?", userID, commentID).Delete(commentLikeModel(kind)).Error
 }
 
+// CreateCommentDislike records a dislike from the user on the comment.
 func (p *CommentProviderImpl) CreateCommentDislike(ctx context.Context, kind CommentKind, userID, commentID uint64) error {
 	switch kind {
 	case CommentArticle:
@@ -449,10 +481,12 @@ func (p *CommentProviderImpl) CreateCommentDislike(ctx context.Context, kind Com
 	}
 }
 
+// DeleteCommentDislike removes the user's dislike row on the comment.
 func (p *CommentProviderImpl) DeleteCommentDislike(ctx context.Context, kind CommentKind, userID, commentID uint64) error {
 	return p.db.WithContext(ctx).Where("user_id = ? AND comment_id = ?", userID, commentID).Delete(commentDislikeModel(kind)).Error
 }
 
+// IncrCommentLikeCount adjusts a comment's like count by delta (negative clamps at zero).
 func (p *CommentProviderImpl) IncrCommentLikeCount(ctx context.Context, kind CommentKind, commentID uint64, delta int) error {
 	if delta < 0 {
 		return p.db.WithContext(ctx).Model(commentModel(kind)).Where("id = ?", commentID).
@@ -462,6 +496,7 @@ func (p *CommentProviderImpl) IncrCommentLikeCount(ctx context.Context, kind Com
 		UpdateColumn("like_count", gorm.Expr("like_count + ?", delta)).Error
 }
 
+// CountCommentLikes returns the stored like count of a comment (zero on lookup failure).
 func (p *CommentProviderImpl) CountCommentLikes(ctx context.Context, kind CommentKind, commentID uint64) uint64 {
 	switch kind {
 	case CommentArticle:

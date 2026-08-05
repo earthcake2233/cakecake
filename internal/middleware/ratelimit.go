@@ -77,6 +77,7 @@ func (rl *RateLimiter) loadScript() (string, error) {
 	return sha, nil
 }
 
+// RateLimit returns a Gin middleware enforcing the token bucket rate limit.
 func (rl *RateLimiter) RateLimit() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Check dynamic enabled flag

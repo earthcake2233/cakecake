@@ -21,6 +21,7 @@ type ViewHistoryService struct {
 	log   *zap.Logger
 }
 
+// NewViewHistoryService creates a ViewHistoryService with storage, cache, and logger.
 func NewViewHistoryService(db *gorm.DB, rdb *redis.Client, log *zap.Logger) *ViewHistoryService {
 	return &ViewHistoryService{store: NewViewHistoryStore(db), rdb: rdb, log: log}
 }

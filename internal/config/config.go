@@ -279,6 +279,7 @@ func (c *C) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	return nil
 }
 
+// OSSObjectURL builds the public URL for an OSS object key.
 func (c *C) OSSObjectURL(objectKey string) string {
 	prefix := strings.TrimSuffix(c.OSSPublicURLPrefix, "/")
 	if prefix == "" && c.OSSEndpoint != "" && c.OSSBucket != "" {

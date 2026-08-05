@@ -47,6 +47,7 @@ type postDynamicCommentResponse struct {
 	LikeCount uint64  `json:"like_count"`
 }
 
+// ListDynamicComments lists comments on a dynamic.
 func (a *API) ListDynamicComments(c *gin.Context) {
 	did, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil || did == 0 {
@@ -73,6 +74,7 @@ func (a *API) ListDynamicComments(c *gin.Context) {
 	resp.OK(c, dynamicCommentListResponse{Items: out, CommentsCurated: result.CommentsCurated, CommentsClosed: result.CommentsClosed})
 }
 
+// PostDynamicComment creates a comment on a dynamic.
 func (a *API) PostDynamicComment(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -103,6 +105,7 @@ func (a *API) PostDynamicComment(c *gin.Context) {
 	resp.OK(c, postDynamicCommentResponse{ID: cm.ID, UserID: cm.UserID, Content: cm.Content})
 }
 
+// DeleteDynamicComment deletes a comment on a dynamic.
 func (a *API) DeleteDynamicComment(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -134,6 +137,7 @@ func (a *API) DeleteDynamicComment(c *gin.Context) {
 	resp.OK(c, okResponse{OK: true})
 }
 
+// ToggleDynamicCommentLike toggles the caller's like on a dynamic comment.
 func (a *API) ToggleDynamicCommentLike(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -153,6 +157,7 @@ func (a *API) ToggleDynamicCommentLike(c *gin.Context) {
 	resp.OK(c, likeToggleResponse{Liked: liked, LikeCount: total})
 }
 
+// ToggleDynamicCommentDislike toggles the caller's dislike on a dynamic comment.
 func (a *API) ToggleDynamicCommentDislike(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -173,6 +178,7 @@ func (a *API) ToggleDynamicCommentDislike(c *gin.Context) {
 	resp.OK(c, dislikeToggleResponse{Disliked: disliked})
 }
 
+// ApproveDynamicComment approves a dynamic comment for public display.
 func (a *API) ApproveDynamicComment(c *gin.Context) {
 	cid, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
@@ -186,6 +192,7 @@ func (a *API) ApproveDynamicComment(c *gin.Context) {
 	resp.OK(c, okResponse{OK: true})
 }
 
+// IgnoreCuratedDynamicComment marks a dynamic comment as curated-ignored.
 func (a *API) IgnoreCuratedDynamicComment(c *gin.Context) {
 	cid, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {

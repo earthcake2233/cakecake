@@ -17,10 +17,12 @@ type VideoProviderImpl struct {
 	db *gorm.DB
 }
 
+// NewVideoProvider creates a gorm-backed VideoProvider implementation.
 func NewVideoProvider(db *gorm.DB) *VideoProviderImpl {
 	return &VideoProviderImpl{db: db}
 }
 
+// GetPublishedVideo loads a published video as a VideoInfo projection.
 func (p *VideoProviderImpl) GetPublishedVideo(ctx context.Context, id uint64) (*VideoInfo, error) {
 	var v video.Video
 	if err := p.db.WithContext(ctx).First(&v, id).Error; err != nil {
@@ -38,6 +40,7 @@ func (p *VideoProviderImpl) GetPublishedVideo(ctx context.Context, id uint64) (*
 	}, nil
 }
 
+// GetVideoAuthor returns the owner id of a video.
 func (p *VideoProviderImpl) GetVideoAuthor(ctx context.Context, id uint64) (uint64, error) {
 	var v video.Video
 	if err := p.db.WithContext(ctx).Select("user_id").First(&v, id).Error; err != nil {
@@ -46,6 +49,7 @@ func (p *VideoProviderImpl) GetVideoAuthor(ctx context.Context, id uint64) (uint
 	return v.UserID, nil
 }
 
+// GetVideoByID loads a full video row by id.
 func (p *VideoProviderImpl) GetVideoByID(ctx context.Context, id uint64) (*video.Video, error) {
 	var v video.Video
 	if err := p.db.WithContext(ctx).First(&v, id).Error; err != nil {
@@ -54,6 +58,7 @@ func (p *VideoProviderImpl) GetVideoByID(ctx context.Context, id uint64) (*video
 	return &v, nil
 }
 
+// GetVideoByUser loads a video by id and owner.
 func (p *VideoProviderImpl) GetVideoByUser(ctx context.Context, id, uid uint64) (*video.Video, error) {
 	var v video.Video
 	if err := p.db.WithContext(ctx).Where("id = ? AND user_id = ?", id, uid).First(&v).Error; err != nil {
@@ -62,6 +67,7 @@ func (p *VideoProviderImpl) GetVideoByUser(ctx context.Context, id, uid uint64) 
 	return &v, nil
 }
 
+// GetVideoByUserStatus loads a video by id, owner, and status.
 func (p *VideoProviderImpl) GetVideoByUserStatus(ctx context.Context, id, uid uint64, status string) (*video.Video, error) {
 	var v video.Video
 	if err := p.db.WithContext(ctx).Where("id = ? AND user_id = ? AND status = ?", id, uid, status).First(&v).Error; err != nil {
@@ -70,26 +76,32 @@ func (p *VideoProviderImpl) GetVideoByUserStatus(ctx context.Context, id, uid ui
 	return &v, nil
 }
 
+// CreateVideo inserts a video row.
 func (p *VideoProviderImpl) CreateVideo(ctx context.Context, v *video.Video) error {
 	return p.db.WithContext(ctx).Create(v).Error
 }
 
+// DeleteVideo removes a video row by id.
 func (p *VideoProviderImpl) DeleteVideo(ctx context.Context, id uint64) error {
 	return p.db.WithContext(ctx).Where("id = ?", id).Delete(&video.Video{}).Error
 }
 
+// UpdateVideo applies partial updates to a loaded video.
 func (p *VideoProviderImpl) UpdateVideo(ctx context.Context, v *video.Video, updates map[string]interface{}) error {
 	return p.db.WithContext(ctx).Model(v).Updates(updates).Error
 }
 
+// UpdateVideoByID applies partial updates to a video by id.
 func (p *VideoProviderImpl) UpdateVideoByID(ctx context.Context, id uint64, updates map[string]interface{}) error {
 	return p.db.WithContext(ctx).Model(&video.Video{}).Where("id = ?", id).Updates(updates).Error
 }
 
+// UpdateVideoField updates a single field on a loaded video.
 func (p *VideoProviderImpl) UpdateVideoField(ctx context.Context, v *video.Video, field string, value interface{}) error {
 	return p.db.WithContext(ctx).Model(v).Update(field, value).Error
 }
 
+// ListPublishedVideos pages published videos by zone/recency/order options.
 func (p *VideoProviderImpl) ListPublishedVideos(ctx context.Context, opts VideoListOpts) (*VideoListResult, error) {
 	q := p.db.WithContext(ctx).Model(&video.Video{}).Where("status = ?", video.StatusPublished)
 	if opts.ZoneParent != "" {
@@ -150,6 +162,7 @@ func (p *VideoProviderImpl) ListPublishedVideos(ctx context.Context, opts VideoL
 	}, nil
 }
 
+// ListUserVideos pages a user's videos, optionally filtered by status.
 func (p *VideoProviderImpl) ListUserVideos(ctx context.Context, uid uint64, status string, page, pageSize int) ([]video.Video, int64, error) {
 	q := p.db.WithContext(ctx).Model(&video.Video{}).Where("user_id = ?", uid)
 	if status != "" {
@@ -167,6 +180,7 @@ func (p *VideoProviderImpl) ListUserVideos(ctx context.Context, uid uint64, stat
 	return list, total, nil
 }
 
+// ListUserVideosAdvanced pages a user's videos with multi-status/title filters.
 func (p *VideoProviderImpl) ListUserVideosAdvanced(ctx context.Context, f MyVideoFilter) (*MyVideoPageResult, error) {
 	q := p.db.WithContext(ctx).Model(&video.Video{}).Where("user_id = ?", f.UserID)
 	if f.Status != "" {
@@ -206,6 +220,7 @@ func (p *VideoProviderImpl) ListUserVideosAdvanced(ctx context.Context, f MyVide
 	return &MyVideoPageResult{Videos: list, Total: total, TotalPages: totalPages}, nil
 }
 
+// ListUserPublishedVideosCursor pages a user's published videos with a keyset cursor.
 func (p *VideoProviderImpl) ListUserPublishedVideosCursor(ctx context.Context, uid uint64, cursorID uint64, limit int) ([]video.Video, error) {
 	q := p.db.WithContext(ctx).Model(&video.Video{}).Where("user_id = ? AND status = ?", uid, video.StatusPublished)
 	if cursorID > 0 {
@@ -218,6 +233,7 @@ func (p *VideoProviderImpl) ListUserPublishedVideosCursor(ctx context.Context, u
 	return list, nil
 }
 
+// ListDrafts pages a user's draft videos.
 func (p *VideoProviderImpl) ListDrafts(ctx context.Context, uid uint64, page, pageSize int) ([]video.Video, int64, error) {
 	q := p.db.WithContext(ctx).Model(&video.Video{}).Where("user_id = ? AND status = 'draft'", uid)
 	var total int64
@@ -232,12 +248,14 @@ func (p *VideoProviderImpl) ListDrafts(ctx context.Context, uid uint64, page, pa
 	return list, total, nil
 }
 
+// CountDrafts counts a user's draft videos.
 func (p *VideoProviderImpl) CountDrafts(ctx context.Context, uid uint64) (int64, error) {
 	var count int64
 	err := p.db.WithContext(ctx).Model(&video.Video{}).Where("user_id = ? AND status = 'draft'", uid).Count(&count).Error
 	return count, err
 }
 
+// CountVideosByStatusForUser counts a user's videos per status.
 func (p *VideoProviderImpl) CountVideosByStatusForUser(uid uint64) map[string]int64 {
 	result := map[string]int64{}
 	for _, st := range []string{video.StatusProcessing, video.StatusPending, video.StatusRejected, video.StatusPublished, video.StatusPrivate} {
@@ -248,6 +266,7 @@ func (p *VideoProviderImpl) CountVideosByStatusForUser(uid uint64) map[string]in
 	return result
 }
 
+// CountZoneVideos counts published videos under a zone (including children).
 func (p *VideoProviderImpl) CountZoneVideos(zoneParent string) int64 {
 	if zoneParent == "" {
 		return 0
@@ -260,18 +279,21 @@ func (p *VideoProviderImpl) CountZoneVideos(zoneParent string) int64 {
 	return n
 }
 
+// CountPublishedVideos counts all published videos.
 func (p *VideoProviderImpl) CountPublishedVideos(ctx context.Context) int64 {
 	var n int64
 	p.db.WithContext(ctx).Model(&video.Video{}).Where("status = ?", video.StatusPublished).Count(&n)
 	return n
 }
 
+// CountByStatus counts videos with the given status.
 func (p *VideoProviderImpl) CountByStatus(ctx context.Context, status string) (int64, error) {
 	var cnt int64
 	err := p.db.WithContext(ctx).Model(&video.Video{}).Where("status = ?", status).Count(&cnt).Error
 	return cnt, err
 }
 
+// ToggleVideoLike toggles a video like (Phase 1: no-op stub, likes live in handler).
 func (p *VideoProviderImpl) ToggleVideoLike(ctx context.Context, userID, videoID uint64) (bool, error) {
 	var like video.VideoLike
 	res := p.db.WithContext(ctx).Where("user_id = ? AND video_id = ?", userID, videoID).Limit(1).Find(&like)
@@ -295,6 +317,7 @@ func (p *VideoProviderImpl) ToggleVideoLike(ctx context.Context, userID, videoID
 	return false, nil
 }
 
+// PublishVideo marks a video published, stamps review metadata, and indexes it in Elasticsearch.
 func (p *VideoProviderImpl) PublishVideo(ctx context.Context, esc *search.Client, log *zap.Logger, videoID uint64, adminID *uint64) error {
 	var v video.Video
 	if err := p.db.WithContext(ctx).First(&v, videoID).Error; err != nil {
@@ -327,16 +350,19 @@ func (p *VideoProviderImpl) PublishVideo(ctx context.Context, esc *search.Client
 	return nil
 }
 
+// AdminDeleteVideoCascade runs the cascade delete callback inside a transaction.
 func (p *VideoProviderImpl) AdminDeleteVideoCascade(ctx context.Context, id uint64, fn func(tx *gorm.DB) error) error {
 	return p.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		return fn(tx)
 	})
 }
 
+// WithTx runs fn inside a transaction.
 func (p *VideoProviderImpl) WithTx(ctx context.Context, fn func(tx *gorm.DB) error) error {
 	return p.db.WithContext(ctx).Transaction(fn)
 }
 
+// AdminListVideos pages all videos for the admin panel with status/title filters.
 func (p *VideoProviderImpl) AdminListVideos(ctx context.Context, statuses []string, titleQ string, page, pageSize int) (*AdminListVideosResult, error) {
 	q := p.db.WithContext(ctx).Model(&video.Video{})
 	if len(statuses) > 0 {
@@ -363,11 +389,13 @@ func (p *VideoProviderImpl) AdminListVideos(ctx context.Context, statuses []stri
 	}, nil
 }
 
+// IncrCommentCount adjusts a video's comment count by delta.
 func (p *VideoProviderImpl) IncrCommentCount(ctx context.Context, id uint64, delta int) error {
 	return p.db.WithContext(ctx).Model(&video.Video{}).Where("id = ?", id).
 		UpdateColumn("comment_count", gorm.Expr("comment_count + ?", delta)).Error
 }
 
+// IncrFavCount adjusts a video's fav count by delta (negative clamps at zero).
 func (p *VideoProviderImpl) IncrFavCount(ctx context.Context, id uint64, delta int) error {
 	q := p.db.WithContext(ctx).Model(&video.Video{}).Where("id = ?", id)
 	if delta < 0 {
@@ -378,6 +406,7 @@ func (p *VideoProviderImpl) IncrFavCount(ctx context.Context, id uint64, delta i
 	return q.UpdateColumn("fav_count", gorm.Expr("fav_count + ?", delta)).Error
 }
 
+// BatchGetPublishedVideos loads published videos by ids as VideoInfo projections.
 func (p *VideoProviderImpl) BatchGetPublishedVideos(ctx context.Context, ids []uint64) (map[uint64]*VideoInfo, error) {
 	if len(ids) == 0 {
 		return nil, nil

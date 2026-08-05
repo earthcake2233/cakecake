@@ -38,6 +38,7 @@ type articleFavListResponse struct {
 	Total      int64                `json:"total"`
 }
 
+// ToggleArticleFavorite toggles the caller's favorite on an article.
 func (a *API) ToggleArticleFavorite(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
@@ -119,6 +120,7 @@ func (a *API) PostArticleCoin(c *gin.Context) {
 	})
 }
 
+// ListMyArticleFavorites lists the caller's favorited articles.
 func (a *API) ListMyArticleFavorites(c *gin.Context) {
 	uid, ok := middleware.UserID(c)
 	if !ok {
