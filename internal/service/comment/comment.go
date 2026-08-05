@@ -141,11 +141,14 @@ func (s *CommentService) DeleteComment(ctx context.Context, userID, commentID ui
 			return s.comments.DeleteCommentRowsTx(tx, CommentVideo, ids)
 		},
 		incrCount: func(ctx context.Context, targetID uint64, delta int) {
-			s.videos.IncrCommentCount(ctx, targetID, delta)
+			if err := s.videos.IncrCommentCount(ctx, targetID, delta); err != nil && s.log != nil {
+				s.log.Warn("incr video comment count failed", zap.Uint64("video_id", targetID), zap.Int("delta", delta), zap.Error(err))
+			}
 		},
 	})
 }
 
+// PinComment pins or unpins a video comment (returning the new state).
 func (s *CommentService) PinComment(ctx context.Context, videoID, commentID uint64) (bool, error) {
 	return s.pinCommentGeneric(ctx, videoID, commentID, commentPinAdapter{
 		checkTarget: func(ctx context.Context, targetID uint64) error {
@@ -269,11 +272,14 @@ func (s *CommentService) DeleteArticleComment(ctx context.Context, userID, comme
 			return s.comments.DeleteCommentRowsTx(tx, CommentArticle, ids)
 		},
 		incrCount: func(ctx context.Context, targetID uint64, delta int) {
-			s.articles.IncrCommentCount(ctx, targetID, delta)
+			if err := s.articles.IncrCommentCount(ctx, targetID, delta); err != nil && s.log != nil {
+				s.log.Warn("incr article comment count failed", zap.Uint64("article_id", targetID), zap.Int("delta", delta), zap.Error(err))
+			}
 		},
 	})
 }
 
+// PinArticleComment pins or unpins an article comment (returning the new state).
 func (s *CommentService) PinArticleComment(ctx context.Context, articleID, commentID uint64) (bool, error) {
 	return s.pinCommentGeneric(ctx, articleID, commentID, commentPinAdapter{
 		checkTarget: func(ctx context.Context, targetID uint64) error {
@@ -383,11 +389,14 @@ func (s *CommentService) DeleteDynamicComment(ctx context.Context, userID, comme
 			return s.comments.DeleteCommentRowsTx(tx, CommentDynamic, ids)
 		},
 		incrCount: func(ctx context.Context, targetID uint64, delta int) {
-			s.dynamics.IncrCommentCount(ctx, targetID, delta)
+			if err := s.dynamics.IncrCommentCount(ctx, targetID, delta); err != nil && s.log != nil {
+				s.log.Warn("incr dynamic comment count failed", zap.Uint64("dynamic_id", targetID), zap.Int("delta", delta), zap.Error(err))
+			}
 		},
 	})
 }
 
+// ToggleDynamicCommentReaction toggles a dynamic comment like/dislike (returning the new state and like count).
 func (s *CommentService) ToggleDynamicCommentReaction(ctx context.Context, userID, commentID uint64, like bool) (bool, int, error) {
 	ad := s.dynamicReactionAdapter()
 	if like {

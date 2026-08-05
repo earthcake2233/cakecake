@@ -12,6 +12,9 @@ import (
 
 	"gorm.io/gorm"
 
+	"go.uber.org/zap"
+
+	"cakecake/internal/logger"
 	"cakecake/internal/pkg/sensitive"
 	"cakecake/internal/search"
 )
@@ -183,7 +186,9 @@ func (p *PlatformExecutor) getVideoDetail(ctx context.Context, raw json.RawMessa
 	}
 	var tags []string
 	if v.TagsJSON != "" {
-		json.Unmarshal([]byte(v.TagsJSON), &tags)
+		if err := json.Unmarshal([]byte(v.TagsJSON), &tags); err != nil && logger.L != nil {
+			logger.L.Warn("toolkit: parse video tags failed", zap.Uint64("video_id", v.ID), zap.Error(err))
+		}
 	}
 	b, _ := json.Marshal(map[string]interface{}{
 		"items": []map[string]interface{}{

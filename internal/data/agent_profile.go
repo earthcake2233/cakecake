@@ -16,6 +16,7 @@ import (
 	"gorm.io/gorm"
 
 	"cakecake/internal/config"
+	"cakecake/internal/logger"
 )
 
 var agentSlugRe = regexp.MustCompile(`^[a-z][a-z0-9_]{1,30}$`)
@@ -30,7 +31,9 @@ func EnsureAgentProfiles(db *gorm.DB, cfg *config.C, lg *zap.Logger) error {
 	_ = EnsureDefaultAgentSettings(db, lg)
 
 	var n int64
-	_ = db.Model(&agent.AgentProfile{}).Count(&n).Error
+	if err := db.Model(&agent.AgentProfile{}).Count(&n).Error; err != nil && lg != nil {
+		lg.Warn("count agent profiles failed", zap.Error(err))
+	}
 	if n > 0 {
 		return backfillDmAgentProfileIDs(db, lg)
 	}
@@ -117,7 +120,9 @@ func findOrCreateLegacyBotUser(db *gorm.DB, cfg *config.C, displayName, sign, av
 		return 0, err
 	}
 	cid := user.FormatCakeID(u.ID)
-	_ = db.Model(&u).Update("cake_id", cid).Error
+	if err := db.Model(&u).Update("cake_id", cid).Error; err != nil && lg != nil {
+		lg.Warn("set legacy agent bot cake_id failed", zap.Uint64("user_id", u.ID), zap.Error(err))
+	}
 	if lg != nil {
 		lg.Info("legacy agent bot user created", zap.String("username", username), zap.Uint64("user_id", u.ID))
 	}
@@ -230,7 +235,9 @@ func EnsureAgentConversationForProfile(db *gorm.DB, humanID uint64, profile *age
 			"kind":             dm.DmKindAgent,
 			"agent_profile_id": profile.ID,
 		}
-		_ = db.Model(&conv).Updates(updates).Error
+		if err := db.Model(&conv).Updates(updates).Error; err != nil && logger.L != nil {
+			logger.L.Warn("update agent conversation profile failed", zap.Uint64("conversation_id", conv.ID), zap.Error(err))
+		}
 		conv.Kind = dm.DmKindAgent
 		conv.AgentProfileID = profile.ID
 		ensureDmParticipants(db, conv.ID, humanID, profile.BotUserID)
@@ -260,7 +267,9 @@ func EnsureAgentConversationForProfile(db *gorm.DB, humanID uint64, profile *age
 		Content:        welcome,
 		CreatedAt:      now,
 	}
-	_ = db.Create(&msg).Error
+	if err := db.Create(&msg).Error; err != nil && logger.L != nil {
+		logger.L.Warn("create agent welcome message failed", zap.Uint64("conversation_id", conv.ID), zap.Error(err))
+	}
 	return &conv, true, nil
 }
 
@@ -297,7 +306,9 @@ func CreateAgentBotUser(db *gorm.DB, slug, displayName, sign, avatarURL string) 
 		return 0, err
 	}
 	cid := user.FormatCakeID(u.ID)
-	_ = db.Model(&u).Update("cake_id", cid).Error
+	if err := db.Model(&u).Update("cake_id", cid).Error; err != nil && logger.L != nil {
+		logger.L.Warn("set agent bot cake_id failed", zap.Uint64("user_id", u.ID), zap.Error(err))
+	}
 	return u.ID, nil
 }
 
@@ -433,11 +444,13 @@ func ensureDmParticipants(db *gorm.DB, convID, humanID, botID uint64) {
 	for _, uid := range []uint64{humanID, botID} {
 		var p dm.DmParticipant
 		if db.Where("conversation_id = ? AND user_id = ?", convID, uid).First(&p).Error == gorm.ErrRecordNotFound {
-			_ = db.Create(&dm.DmParticipant{
+			if err := db.Create(&dm.DmParticipant{
 				ConversationID: convID,
 				UserID:         uid,
 				UnreadCount:    0,
-			}).Error
+			}).Error; err != nil && logger.L != nil {
+				logger.L.Warn("create dm participant failed", zap.Uint64("conversation_id", convID), zap.Uint64("user_id", uid), zap.Error(err))
+			}
 		}
 	}
 }

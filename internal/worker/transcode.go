@@ -233,10 +233,12 @@ func failVideo(db *gorm.DB, id uint64, reason string) {
 	if msg == "" {
 		msg = "视频处理失败，请稍后重试。"
 	}
-	_ = db.Model(&video.Video{}).Where("id = ?", id).Updates(map[string]interface{}{
+	if err := db.Model(&video.Video{}).Where("id = ?", id).Updates(map[string]interface{}{
 		"status":      video.StatusFailed,
 		"fail_reason": truncate(msg, 1900),
-	}).Error
+	}).Error; err != nil && logger.L != nil {
+		logger.L.Warn("fail video db update failed", zap.Uint64("video_id", id), zap.Error(err))
+	}
 }
 
 func truncate(s string, n int) string {

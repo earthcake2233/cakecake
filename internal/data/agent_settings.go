@@ -33,7 +33,9 @@ func EnsureDefaultAgentSettings(db *gorm.DB, lg *zap.Logger) error {
 	if err == nil {
 		// Always sync global prompt from code constant on startup
 		st.SystemPrompt = defaultAgentSystemPrompt
-		_ = db.Model(&st).Update("system_prompt", st.SystemPrompt)
+		if err := db.Model(&st).Update("system_prompt", st.SystemPrompt).Error; err != nil && lg != nil {
+			lg.Warn("sync agent_settings system_prompt failed", zap.Error(err))
+		}
 		if lg != nil {
 			lg.Info("synced agent_settings system_prompt from code constant")
 		}

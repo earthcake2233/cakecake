@@ -42,9 +42,6 @@ else
 end
 `
 
-var tokenBucketScriptSHA string
-var scriptLoadOnce sync.Once
-
 // RateLimiter implements an IP-based token bucket rate limiter backed by Redis.
 // When a RuntimeConfig is provided, rate/burst values are read dynamically per-request.
 type RateLimiter struct {

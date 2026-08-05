@@ -14,7 +14,10 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"go.uber.org/zap"
 	"gorm.io/gorm"
+
+	"cakecake/internal/logger"
 )
 
 type videoDoc struct {
@@ -173,7 +176,9 @@ func (c *Client) IndexVideoFromDB(ctx context.Context, db *gorm.DB, videoID uint
 		return c.deleteDoc(ctx, IndexVideos, strconv.FormatUint(videoID, 10))
 	}
 	var u user.User
-	_ = db.First(&u, v.UserID).Error
+	if err := db.First(&u, v.UserID).Error; err != nil && err != gorm.ErrRecordNotFound && logger.L != nil {
+		logger.L.Warn("search sync: load video uploader failed", zap.Uint64("video_id", v.ID), zap.Error(err))
+	}
 	zone := normalizeVideoZoneForSearch(v.Zone)
 	parent, _ := splitVideoZoneForSearch(zone)
 	doc := videoDoc{
@@ -218,7 +223,9 @@ func (c *Client) IndexArticleFromDB(ctx context.Context, db *gorm.DB, articleID 
 		body = body[:8000]
 	}
 	var u user.User
-	_ = db.First(&u, a.UserID).Error
+	if err := db.First(&u, a.UserID).Error; err != nil && err != gorm.ErrRecordNotFound && logger.L != nil {
+		logger.L.Warn("search sync: load article author failed", zap.Uint64("article_id", a.ID), zap.Error(err))
+	}
 	doc := articleDoc{
 		ID:           a.ID,
 		UserID:       a.UserID,

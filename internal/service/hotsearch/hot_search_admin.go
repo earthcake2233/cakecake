@@ -7,7 +7,10 @@ import (
 	"strings"
 	"time"
 
+	"go.uber.org/zap"
 	"gorm.io/gorm"
+
+	"cakecake/internal/logger"
 )
 
 // ListHotSearchMergedDetail merges ops + Redis and annotates each row's source.
@@ -38,7 +41,9 @@ func listHotSearchMergedDetailFromOps(ctx context.Context, db *gorm.DB, rec *Sea
 	now := time.Now()
 	var ops []admin.HotSearchOp
 	if db != nil {
-		_ = db.Where("enabled = ?", true).Order("pin_rank ASC, id ASC").Find(&ops).Error
+		if err := db.Where("enabled = ?", true).Order("pin_rank ASC, id ASC").Find(&ops).Error; err != nil && logger.L != nil {
+			logger.L.Warn("hotsearch: load ops failed", zap.Error(err))
+		}
 	}
 	active := make([]admin.HotSearchOp, 0, len(ops))
 	blocked := make(map[string]struct{})
@@ -176,7 +181,9 @@ func ActiveHotSearchOpFlags(db *gorm.DB) map[string]HotSearchOpFlags {
 	}
 	now := time.Now()
 	var ops []admin.HotSearchOp
-	_ = db.Where("enabled = ?", true).Find(&ops).Error
+	if err := db.Where("enabled = ?", true).Find(&ops).Error; err != nil && logger.L != nil {
+		logger.L.Warn("hotsearch: load active ops flags failed", zap.Error(err))
+	}
 	for i := range ops {
 		op := ops[i]
 		if !hotSearchOpActive(now, op.StartAt, op.EndAt) {

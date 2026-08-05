@@ -9,8 +9,6 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http/httptest"
-	"net/url"
-	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -41,10 +39,6 @@ func doJSON(r *gin.Engine, method, path, token string, body interface{}) *httpte
 		rd = bytes.NewReader(b)
 	}
 	return doReq(r, method, path, token, "application/json", rd)
-}
-
-func doForm(r *gin.Engine, method, path, token string, form url.Values) *httptest.ResponseRecorder {
-	return doReq(r, method, path, token, "application/x-www-form-urlencoded", strings.NewReader(form.Encode()))
 }
 
 func doMultipart(r *gin.Engine, method, path, token string, fields map[string]string) *httptest.ResponseRecorder {

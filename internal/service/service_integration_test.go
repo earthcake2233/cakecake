@@ -3,36 +3,13 @@
 package service
 
 import (
-	"cakecake/internal/model/admin"
-	"cakecake/internal/model/agent"
-	"cakecake/internal/model/dm"
 	"cakecake/internal/service/hotsearch"
 	"context"
 	"testing"
 
 	"github.com/alicebob/miniredis/v2"
-	"github.com/glebarez/sqlite"
 	"github.com/redis/go-redis/v9"
-	"gorm.io/gorm"
 )
-
-// setupSQLiteDB creates an in-memory SQLite DB with auto-migration for tests.
-func setupSQLiteDB(t *testing.T) *gorm.DB {
-	t.Helper()
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
-	if err != nil {
-		t.Fatalf("failed to open sqlite: %v", err)
-	}
-	if err := db.AutoMigrate(
-		&admin.HotSearchOp{},
-		&admin.HotSearchDisplayLayout{},
-		&dm.DmConversation{},
-		&agent.AgentProfile{},
-	); err != nil {
-		t.Fatalf("auto migrate: %v", err)
-	}
-	return db
-}
 
 // ---------- hotsearch.SearchHotRecorder: TopWithScores, BoostKeyword, RemoveKeyword ----------
 

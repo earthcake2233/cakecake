@@ -4,23 +4,12 @@ package handler
 
 import (
 	"cakecake/internal/model/dynamic"
-	"encoding/json"
 	"fmt"
-	"net/http/httptest"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 )
-
-func codeFromResp(t *testing.T, w *httptest.ResponseRecorder) int {
-	t.Helper()
-	var r struct {
-		Code int `json:"code"`
-	}
-	json.Unmarshal(w.Body.Bytes(), &r)
-	return r.Code
-}
 
 func Test_SearchHistoryFlow(t *testing.T) {
 	api, r, _ := newTestAPI(t)

@@ -214,7 +214,9 @@ func (s *AgentService) enabledTools() map[string]bool {
 // generateTraceID creates a short unique trace identifier.
 func generateTraceID() string {
 	b := make([]byte, 4)
-	rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		return fmt.Sprintf("%x", time.Now().UnixNano())
+	}
 	return hex.EncodeToString(b)
 }
 
@@ -224,7 +226,9 @@ func (s *AgentService) setupToolCallbacks(traceID string, humanID uint64) {
 	}
 	s.Gateway.OnToolCallStart = func(tid, spanID, parentSpanID, toolName string, argsJSON json.RawMessage) {
 		var args interface{}
-		json.Unmarshal(argsJSON, &args)
+		if err := json.Unmarshal(argsJSON, &args); err != nil && s.Log != nil {
+			s.Log.Warn("agent: parse tool call args failed", zap.String("tool", toolName), zap.Error(err))
+		}
 		payload := map[string]interface{}{
 			"trace_id":       tid,
 			"span_id":        spanID,

@@ -12,6 +12,8 @@ import (
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
+
+	"cakecake/internal/logger"
 )
 
 // CreatorCommentService handles creator comment management business logic.
@@ -205,7 +207,9 @@ func listCreatorComments[R any, L any](ctx context.Context, db *gorm.DB, q creat
 	}
 	if q.ViewerID > 0 && len(list) > 0 {
 		var likes []L
-		_ = db.WithContext(ctx).Where("user_id = ? AND comment_id IN ?", q.ViewerID, result.CommentIDs).Find(&likes).Error
+		if err := db.WithContext(ctx).Where("user_id = ? AND comment_id IN ?", q.ViewerID, result.CommentIDs).Find(&likes).Error; err != nil && logger.L != nil {
+			logger.L.Warn("creator comment: load viewer likes failed", zap.Uint64("viewer_id", q.ViewerID), zap.Error(err))
+		}
 		for _, lk := range likes {
 			result.LikedByViewer[spec.likeIDOf(lk)] = true
 		}

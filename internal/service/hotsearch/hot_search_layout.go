@@ -7,7 +7,10 @@ import (
 	"strings"
 	"time"
 
+	"go.uber.org/zap"
 	"gorm.io/gorm"
+
+	"cakecake/internal/logger"
 )
 
 const hotSearchLayoutSingletonID uint64 = 1
@@ -102,7 +105,9 @@ func buildHotSearchMergePools(ctx context.Context, db *gorm.DB, rec *SearchHotRe
 	}
 	now := time.Now()
 	var ops []admin.HotSearchOp
-	_ = db.Where("enabled = ?", true).Find(&ops).Error
+	if err := db.Where("enabled = ?", true).Find(&ops).Error; err != nil && logger.L != nil {
+		logger.L.Warn("hotsearch: load layout ops failed", zap.Error(err))
+	}
 	for i := range ops {
 		op := ops[i]
 		if !hotSearchOpActive(now, op.StartAt, op.EndAt) {

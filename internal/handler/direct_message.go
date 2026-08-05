@@ -29,11 +29,6 @@ type dmPostMessageReq struct {
 	Content string `json:"content"`
 }
 
-type dmSettingsReq struct {
-	Pinned *bool `json:"pinned"`
-	Muted  *bool `json:"muted"`
-}
-
 func dmPinnedAtAfter(a, b *time.Time) bool {
 	if a == nil && b == nil {
 		return false

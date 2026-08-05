@@ -20,8 +20,6 @@ type Filter struct {
 	log    *zap.Logger
 }
 
-var blockedMarker = struct{}{}
-
 // ErrBlocked indicates content must be rejected (hit sensitive word or filter disabled).
 type ErrBlocked struct{}
 

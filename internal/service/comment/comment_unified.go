@@ -128,16 +128,6 @@ func (s *CommentService) buildCommentList(
 	return r, nil
 }
 
-// loadUsersForCommentIDs loads users and levels for a set of user IDs.
-func (s *CommentService) loadUsersForCommentIDs(ctx context.Context, uids []uint64) (map[uint64]service.UserInfo, map[uint64]int) {
-	if len(uids) == 0 {
-		return nil, nil
-	}
-	users, _ := s.users.GetUsersByIDs(ctx, uids)
-	levels, _ := s.users.BatchCurrentLevels(ctx, uids)
-	return users, levels
-}
-
 func (s *CommentService) loadCommentLikesByIDs(ctx context.Context, viewerID uint64, ids []uint64) (map[uint64]bool, error) {
 	return s.comments.LoadCommentLikes(ctx, CommentVideo, viewerID, ids)
 }

@@ -6,8 +6,10 @@ import (
 	"cakecake/internal/model/video"
 	"strings"
 
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"cakecake/internal/logger"
 	"cakecake/internal/pkg/useravatar"
 	"cakecake/internal/pkg/userlevel"
 )
@@ -33,20 +35,28 @@ func EnrichUserHits(db *gorm.DB, viewer uint64, hits []UserHit) []UserHit {
 		hits[i].Level = userlevel.FromExperience(u.Experience).CurrentLevel
 
 		var videoCnt, articleCnt int64
-		_ = db.Model(&video.Video{}).Where("user_id = ? AND status = ?", u.ID, video.StatusPublished).Count(&videoCnt).Error
-		_ = db.Model(&article.Article{}).Where("user_id = ? AND status = ?", u.ID, article.StatusPublished).Count(&articleCnt).Error
+		if err := db.Model(&video.Video{}).Where("user_id = ? AND status = ?", u.ID, video.StatusPublished).Count(&videoCnt).Error; err != nil && logger.L != nil {
+			logger.L.Warn("search enrich: count published videos failed", zap.Uint64("user_id", u.ID), zap.Error(err))
+		}
+		if err := db.Model(&article.Article{}).Where("user_id = ? AND status = ?", u.ID, article.StatusPublished).Count(&articleCnt).Error; err != nil && logger.L != nil {
+			logger.L.Warn("search enrich: count published articles failed", zap.Uint64("user_id", u.ID), zap.Error(err))
+		}
 		hits[i].Archives = int(videoCnt + articleCnt)
 
 		var fanCnt int64
-		_ = db.Model(&user.UserFollow{}).Where("followee_id = ?", u.ID).Count(&fanCnt).Error
+		if err := db.Model(&user.UserFollow{}).Where("followee_id = ?", u.ID).Count(&fanCnt).Error; err != nil && logger.L != nil {
+			logger.L.Warn("search enrich: count fans failed", zap.Uint64("user_id", u.ID), zap.Error(err))
+		}
 		hits[i].Fans = int(fanCnt)
 
 		hits[i].FollowedByMe = false
 		if viewer > 0 && viewer != u.ID {
 			var rel int64
-			_ = db.Model(&user.UserFollow{}).
+			if err := db.Model(&user.UserFollow{}).
 				Where("follower_id = ? AND followee_id = ?", viewer, u.ID).
-				Count(&rel).Error
+				Count(&rel).Error; err != nil && logger.L != nil {
+				logger.L.Warn("search enrich: count follow relation failed", zap.Uint64("viewer_id", viewer), zap.Uint64("user_id", u.ID), zap.Error(err))
+			}
 			hits[i].FollowedByMe = rel > 0
 		}
 
@@ -60,10 +70,12 @@ func recentArchivesForUser(db *gorm.DB, userID uint64, limit int) []UserArchiveI
 		return nil
 	}
 	var videos []video.Video
-	_ = db.Where("user_id = ? AND status = ?", userID, video.StatusPublished).
+	if err := db.Where("user_id = ? AND status = ?", userID, video.StatusPublished).
 		Order("id DESC").
 		Limit(limit).
-		Find(&videos).Error
+		Find(&videos).Error; err != nil && logger.L != nil {
+		logger.L.Warn("search enrich: load recent videos failed", zap.Uint64("user_id", userID), zap.Error(err))
+	}
 	out := make([]UserArchiveItem, 0, len(videos))
 	for _, v := range videos {
 		out = append(out, UserArchiveItem{
@@ -79,10 +91,12 @@ func recentArchivesForUser(db *gorm.DB, userID uint64, limit int) []UserArchiveI
 	}
 	remain := limit - len(out)
 	var articles []article.Article
-	_ = db.Where("user_id = ? AND status = ?", userID, article.StatusPublished).
+	if err := db.Where("user_id = ? AND status = ?", userID, article.StatusPublished).
 		Order("COALESCE(published_at, created_at) DESC, id DESC").
 		Limit(remain).
-		Find(&articles).Error
+		Find(&articles).Error; err != nil && logger.L != nil {
+		logger.L.Warn("search enrich: load recent articles failed", zap.Uint64("user_id", userID), zap.Error(err))
+	}
 	for _, a := range articles {
 		pub := a.CreatedAt.Unix()
 		if a.PublishedAt != nil {

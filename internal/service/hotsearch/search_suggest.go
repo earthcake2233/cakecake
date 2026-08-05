@@ -9,7 +9,10 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"go.uber.org/zap"
 	"gorm.io/gorm"
+
+	"cakecake/internal/logger"
 )
 
 // SearchSuggestTag is one row for search box autocomplete (Bilibili-style suggest.tag).
@@ -96,10 +99,12 @@ func collectUserHistorySuggestions(ctx context.Context, db *gorm.DB, userID uint
 		return
 	}
 	var rows []extra.UserSearchHistory
-	_ = db.Where("user_id = ?", userID).
+	if err := db.Where("user_id = ?", userID).
 		Order("updated_at DESC, id DESC").
 		Limit(40).
-		Find(&rows).Error
+		Find(&rows).Error; err != nil && logger.L != nil {
+		logger.L.Warn("hotsearch: load suggest history failed", zap.Uint64("user_id", userID), zap.Error(err))
+	}
 	for i, r := range rows {
 		coll.add(r.Keyword, 1000-i)
 	}
@@ -110,7 +115,9 @@ func collectOpsRuleSuggestions(ctx context.Context, db *gorm.DB, now time.Time, 
 		return
 	}
 	var ops []admin.HotSearchOp
-	_ = db.Where("enabled = ?", true).Find(&ops).Error
+	if err := db.Where("enabled = ?", true).Find(&ops).Error; err != nil && logger.L != nil {
+		logger.L.Warn("hotsearch: load suggest ops failed", zap.Error(err))
+	}
 	for i := range ops {
 		op := ops[i]
 		if !hotSearchOpActive(now, op.StartAt, op.EndAt) {

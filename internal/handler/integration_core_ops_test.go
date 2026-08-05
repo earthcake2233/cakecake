@@ -3,34 +3,13 @@
 package handler
 
 import (
-	"cakecake/internal/model/article"
 	"cakecake/internal/model/comment"
-	"cakecake/internal/model/video"
 	"encoding/json"
-	"net/http/httptest"
 	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
-
-func decodeDataVideo(t *testing.T, w *httptest.ResponseRecorder) video.Video {
-	t.Helper()
-	var r struct {
-		Data video.Video `json:"data"`
-	}
-	json.Unmarshal(w.Body.Bytes(), &r)
-	return r.Data
-}
-
-func decodeDataArticle(t *testing.T, w *httptest.ResponseRecorder) article.Article {
-	t.Helper()
-	var r struct {
-		Data article.Article `json:"data"`
-	}
-	json.Unmarshal(w.Body.Bytes(), &r)
-	return r.Data
-}
 
 // Test_CommentBasicOps tests basic comment lifecycle
 func Test_CommentBasicOps(t *testing.T) {

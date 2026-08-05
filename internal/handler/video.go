@@ -318,9 +318,6 @@ func (a *API) ListPublishedVideos(c *gin.Context) {
 		HasMore:        res.HasMore,
 	})
 }
-func (a *API) countZoneVideos(zoneParent string) int64 {
-	return a.VideoSvc.CountZoneVideos(zoneParent)
-}
 
 func manuscriptVideoStatusToDB(st string) string {
 	switch strings.TrimSpace(st) {
@@ -352,21 +349,6 @@ func manuscriptVideoStatusFilter(st string) (single string, multi []string) {
 			return db, nil
 		}
 		return "", nil
-	}
-}
-
-func orderClauseForMyVideos(sort string) string {
-	switch strings.TrimSpace(sort) {
-	case "view":
-		return "play_count DESC, id DESC"
-	case "fav":
-		return "fav_count DESC, id DESC"
-	case "danmu":
-		return "danmaku_count DESC, id DESC"
-	case "reply":
-		return "comment_count DESC, id DESC"
-	default:
-		return "id DESC"
 	}
 }
 

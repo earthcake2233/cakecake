@@ -2,7 +2,11 @@ package userlevel
 
 import (
 	"cakecake/internal/model/user"
+
+	"go.uber.org/zap"
 	"gorm.io/gorm"
+
+	"cakecake/internal/logger"
 )
 
 // BatchCurrentLevels maps user id to account level (1–6) from stored experience.
@@ -27,7 +31,9 @@ func BatchCurrentLevels(db *gorm.DB, uids []uint64) map[uint64]int {
 		return out
 	}
 	var users []user.User
-	_ = db.Select("id", "experience").Where("id IN ?", uniq).Find(&users).Error
+	if err := db.Select("id", "experience").Where("id IN ?", uniq).Find(&users).Error; err != nil && logger.L != nil {
+		logger.L.Warn("userlevel: batch load users failed", zap.Error(err))
+	}
 	for i := range users {
 		u := &users[i]
 		out[u.ID] = FromExperience(u.Experience).CurrentLevel

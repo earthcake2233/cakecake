@@ -6,8 +6,10 @@ import (
 	"cakecake/internal/model/video"
 	"time"
 
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"cakecake/internal/logger"
 	"cakecake/internal/pkg/usercoin"
 )
 
@@ -65,10 +67,12 @@ type RewardsSnapshot struct {
 func CoinProgress(db *gorm.DB, uid uint64) int {
 	start, end := dayBounds()
 	var sum int64
-	_ = db.Model(&video.VideoCoin{}).
+	if err := db.Model(&video.VideoCoin{}).
 		Where("user_id = ? AND created_at >= ? AND created_at < ?", uid, start, end).
 		Select("COALESCE(SUM(amount), 0)").
-		Scan(&sum).Error
+		Scan(&sum).Error; err != nil && logger.L != nil {
+		logger.L.Warn("dailyreward: coin progress scan failed", zap.Uint64("user_id", uid), zap.Error(err))
+	}
 	p := int(sum) * ExpPerCoinUnit
 	if p > ExpCoinMax {
 		p = ExpCoinMax

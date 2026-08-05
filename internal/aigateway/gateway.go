@@ -8,6 +8,9 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
+	"go.uber.org/zap"
+
+	"cakecake/internal/logger"
 )
 
 const defaultSystemPrompt = `你是 cakecake 站内 AI 助手。帮助用户了解本站功能。
@@ -187,7 +190,9 @@ func (g *Gateway) executeToolCalls(ctx context.Context, calls []ToolCall, traceI
 
 			if g.OnToolCallStart != nil {
 				var raw json.RawMessage
-				json.Unmarshal([]byte(tc.Function.Arguments), &raw)
+				if err := json.Unmarshal([]byte(tc.Function.Arguments), &raw); err != nil && logger.L != nil {
+					logger.L.Warn("aigateway: parse tool call args failed", zap.String("tool", tc.Function.Name), zap.Error(err))
+				}
 				g.OnToolCallStart(traceID, spanID, parentSpanID, tc.Function.Name, raw)
 			}
 
