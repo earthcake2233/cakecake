@@ -117,11 +117,13 @@ jobs:
         uses: github/codeql-action/upload-sarif@c3400c2f38909e0dcf3c3a41f2030a8217be5d3e # v3
         with:
           sarif_file: trivy-backend.sarif
+          category: trivy-backend
 
       - name: Upload web SARIF to code scanning
         uses: github/codeql-action/upload-sarif@c3400c2f38909e0dcf3c3a41f2030a8217be5d3e # v3
         with:
           sarif_file: trivy-web.sarif
+          category: trivy-web
 
       - name: Show logs on failure
         if: failure()
