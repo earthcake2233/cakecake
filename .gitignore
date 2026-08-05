@@ -3,6 +3,8 @@ Minibili.md
 Minibili_EN.md
 README_REFLECT.md
 README_REFLECT_EN.md
+docker-config.md
+ci-checks.md
 docs/service-refactor-*.md
 
 # ── Secrets & local env（切勿提交）──

@@ -20,6 +20,8 @@ ROOT = Path(__file__).resolve().parent.parent
 SKIP_PATTERNS = [
     "incident-*.md",
     "service-refactor-*.md",
+    "docker-config*.md",
+    "ci-checks*.md",
 ]
 
 def extract_heading_levels(text):
