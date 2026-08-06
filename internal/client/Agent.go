@@ -33,6 +33,7 @@ type Agent interface {
 	PostAssistantMessage(conv *dm.DmConversation, humanID uint64, content string, extra ...string) (*dm.DmMessage, error)
 	ProfileCount(ctx context.Context) (int64, error)
 	ReloadProfiles()
+	ResetConversation(ctx context.Context, conv *dm.DmConversation, humanID uint64) (*dm.DmMessage, error)
 	RenameAgentProfileSlug(ctx context.Context, p *agent.AgentProfile, newSlug string) error
 	SyncAgentProfile(ctx context.Context, p *agent.AgentProfile) error
 	UnmarshalWelcomeList(raw json.RawMessage, fallback []string) ([]string, error)

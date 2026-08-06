@@ -313,7 +313,7 @@ func (a *API) DeleteDmConversation(c *gin.Context) {
 // @Success      200 {object} map[string]interface{}
 // @Router       /dm/conversations/{id}/reset [post]
 func (a *API) ResetDmAgentConversation(c *gin.Context) {
-	_, ok := middleware.UserID(c)
+	uid, ok := middleware.UserID(c)
 	if !ok {
 		resp.Err(c, http.StatusUnauthorized, errcode.CodeUnauthorized)
 		return
@@ -323,11 +323,38 @@ func (a *API) ResetDmAgentConversation(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	if err := a.DmSvc.ResetConversationForAgent(c.Request.Context(), convID); err != nil {
+	ctx := c.Request.Context()
+	conv, err := a.DmSvc.GetConversationByID(ctx, convID)
+	if err != nil {
+		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
+		return
+	}
+	if _, err := a.DmSvc.GetParticipant(ctx, convID, uid); err != nil {
+		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
+		return
+	}
+
+	// Agent conversations restart with a fresh welcome message; other threads
+	// keep the legacy clear-history behavior.
+	var welcome *dmMessageDTO
+	if a.dmIsAgentConv(conv) && a.Agent != nil {
+		msg, err := a.Agent.ResetConversation(ctx, conv, uid)
+		if err != nil {
+			resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
+			return
+		}
+		senderName, senderAvatar := a.dmUserBrief(ctx, msg.SenderID)
+		dto := a.dmFormatMessage(msg, senderName, senderAvatar)
+		welcome = &dto
+	} else if err := a.DmSvc.ResetConversationForAgent(ctx, convID); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	resp.OK(c, okResponse{OK: true})
+	part, _ := a.DmSvc.GetParticipant(ctx, convID, uid)
+	resp.OK(c, gin.H{
+		"conversation":    a.dmFormatConversation(ctx, conv, uid, part),
+		"welcome_message": welcome,
+	})
 }
 
 // PatchDmConversationSettings updates pin / mute for the current user's participant row.
