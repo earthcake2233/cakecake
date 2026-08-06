@@ -72,6 +72,12 @@ jobs:
           GOOS=linux GOARCH=amd64 CGO_ENABLED=0 \
             go build -ldflags="-s -w" -o cakecake-linux ./cmd/cakecake
 
+      - name: Compress backend binary (UPX, official static build)
+        run: |
+          curl -fsSL https://github.com/upx/upx/releases/download/v4.2.4/upx-4.2.4-amd64_linux.tar.xz -o /tmp/upx.tar.xz
+          tar -xJf /tmp/upx.tar.xz -C /tmp
+          /tmp/upx-4.2.4-amd64_linux/upx --best -q cakecake-linux && echo "UPX OK" || echo "UPX skipped (continuing)"
+
       - name: Pack release bundle
         run: |
           mkdir -p release/dist release/migrations
