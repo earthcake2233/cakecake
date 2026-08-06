@@ -7,6 +7,7 @@ on:
   pull_request:
     paths:
       - "docker-compose.yml"
+      - "docker-compose.dev.yml"
       - ".env.example"
       - "deploy/env.production.example"
       - "Dockerfile"
@@ -20,6 +21,7 @@ on:
     branches: [main, master]
     paths:
       - "docker-compose.yml"
+      - "docker-compose.dev.yml"
       - ".env.example"
       - "deploy/env.production.example"
       - "Dockerfile"
@@ -50,6 +52,9 @@ jobs:
       - name: Validate compose file
         run: docker compose config --quiet
 
+      - name: Validate dev compose override
+        run: docker compose -f docker-compose.yml -f docker-compose.dev.yml config --quiet
+
       - name: Env drift check (.env.example <-> compose)
         run: python3 scripts/check_compose_env.py
 
@@ -75,7 +80,7 @@ jobs:
           RABBITMQ_PORT: 15672
           RABBITMQ_MGMT_PORT: 15673
           ES_PORT: 19200
-        run: docker compose up -d --build
+        run: docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
 
       - name: Wait for frontend to serve
         run: |
@@ -110,7 +115,7 @@ jobs:
       - name: Scan backend image (Trivy)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          image-ref: cakecake-backend:latest
+          image-ref: earthcake/cakecake-backend:latest
           format: sarif
           output: trivy-backend.sarif
           severity: HIGH,CRITICAL
@@ -118,7 +123,7 @@ jobs:
       - name: Scan web image (Trivy)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          image-ref: cakecake-web:latest
+          image-ref: earthcake/cakecake-web:latest
           format: sarif
           output: trivy-web.sarif
           severity: HIGH,CRITICAL

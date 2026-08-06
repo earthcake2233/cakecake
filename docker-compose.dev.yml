@@ -1,0 +1,18 @@
+# Dev override: build backend/web images from local source instead of pulling
+# the published Docker Hub images. Requires a full repo checkout.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+  web:
+    build:
+      context: .
+      dockerfile: cakecake-vue/cakecake-web/Dockerfile
+      args:
+        VITE_VIDEO_UPLOAD_DISABLED: ${VITE_VIDEO_UPLOAD_DISABLED:-true}

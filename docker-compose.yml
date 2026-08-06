@@ -2,7 +2,8 @@
 #
 # Usage:
 #   cp .env.example .env            # optional; defaults work without it
-#   docker compose up -d --build    # builds & starts MySQL/Redis/RabbitMQ/ES + backend + frontend
+#   docker compose up -d            # pulls published images & starts MySQL/Redis/RabbitMQ/ES + backend + frontend
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build  # build from source
 #   open http://localhost:8888
 #
 # Maintenance contract (guarded by CI .github/workflows/compose-check.yml):
@@ -90,9 +91,7 @@ services:
       start_period: 60s
 
   backend:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: earthcake/cakecake-backend:latest
     container_name: cakecake-backend
     restart: unless-stopped
     depends_on:
@@ -165,11 +164,7 @@ services:
       start_period: 30s
 
   web:
-    build:
-      context: .
-      dockerfile: cakecake-vue/cakecake-web/Dockerfile
-      args:
-        VITE_VIDEO_UPLOAD_DISABLED: ${VITE_VIDEO_UPLOAD_DISABLED:-true}
+    image: earthcake/cakecake-web:latest
     container_name: cakecake-web
     restart: unless-stopped
     depends_on:

@@ -39,8 +39,10 @@
 ```bash
 cd <仓库根目录>
 cp .env.example .env          # 可选：不复制也能用默认值
-docker compose up -d --build
+docker compose up -d
 ```
+
+compose 默认从 Docker Hub 拉取已发布的镜像（`earthcake/cakecake-backend:latest` / `earthcake/cakecake-web:latest`），无需本地构建；想从源码构建时改用 `docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build`。
 
 打开 **[http://localhost:8888](http://localhost:8888)**。首次启动自动完成：GORM AutoMigrate 建表 → `SEED_DEMO_DATA=true` 写入演示用户 / 视频 / 弹幕 → ES 全量索引。
 
@@ -57,8 +59,36 @@ docker compose up -d --build
 ### 可选增强
 
 - **AI 助手（DeepSeek Function Calling）**：`.env` 填入 `DEEPSEEK_API_KEY`，执行 `docker compose up -d backend` 重启后端；
-- **网页上传 + 异步转码**：`.env` 填入 `OSS_*` 凭证，并把 `VIDEO_UPLOAD_DISABLED=false`、`VITE_VIDEO_UPLOAD_DISABLED=false`（前端编译期开关），然后 `docker compose up -d --build web backend` 重建前端并重启后端；
+- **网页上传 + 异步转码**：按下方「开启网页上传」四步操作。**注意：Docker Hub 发布镜像的前端开关已编译为关闭，只用发布镜像（`docker compose up -d` 拉取的镜像）无法开启上传，必须本地重建前端镜像。**
 - **停止 / 重置**：`docker compose down`；彻底重置（删除数据卷）用 `docker compose down -v`。
+
+#### 开启网页上传（需要阿里云 OSS）
+
+默认"演示模式"不上传（前端入口隐藏、后端无 OSS）。按下面四步开启：
+
+① `.env` 填入阿里云 OSS 凭证（5 个变量）：
+
+```bash
+OSS_ACCESS_KEY_ID=xxx
+OSS_ACCESS_KEY_SECRET=xxx
+OSS_BUCKET=xxx
+OSS_ENDPOINT=oss-cn-hangzhou.aliyuncs.com
+OSS_PUBLIC_URL_PREFIX=https://xxx.oss-cn-hangzhou.aliyuncs.com
+```
+
+② `.env` 打开前端编译期开关：
+
+```bash
+VITE_VIDEO_UPLOAD_DISABLED=false
+```
+
+③ 重建前端镜像并重启后端（**关键：发布镜像里前端开关已编译成 true，只改 `.env` 不生效**）：
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build web backend
+```
+
+④ 打开 http://localhost:8888，创作中心出现上传入口；上传 → RabbitMQ 异步转码 → 封面截帧全链路可用。
 
 ### 与生产部署的差异
 
@@ -67,6 +97,8 @@ compose 面向**本地一键体验**：上传默认禁用（与线上 Demo 行�
 ### CI 守护
 
 `.github/workflows/compose-check.yml` 对 compose 做三重守护：环境变量漂移检查（`.env.example` ↔ compose）、`docker compose config` 语法校验、全栈冒烟测试（真实构建镜像并验证健康检查与种子数据）。代码演进导致 compose 失效时，CI 会直接报红。
+
+镜像发布由 `.github/workflows/docker-publish.yml` 负责：main 合并 / `v*` tag 时自动构建并推送 Docker Hub（`latest` + `sha-<前12位>`，tag 事件额外推 `vX.Y.Z`）。
 
 ---
 
