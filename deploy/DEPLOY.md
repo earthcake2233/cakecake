@@ -42,7 +42,7 @@ cp .env.example .env          # 可选：不复制也能用默认值
 docker compose up -d --build
 ```
 
-打开 **http://localhost:8888**。首次启动自动完成：GORM AutoMigrate 建表 → `SEED_DEMO_DATA=true` 写入演示用户 / 视频 / 弹幕 → ES 全量索引。
+打开 **[http://localhost:8888](http://localhost:8888)**。首次启动自动完成：GORM AutoMigrate 建表 → `SEED_DEMO_DATA=true` 写入演示用户 / 视频 / 弹幕 → ES 全量索引。
 
 ### 端口与账号
 
