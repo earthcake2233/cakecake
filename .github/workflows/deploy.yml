@@ -72,6 +72,12 @@ jobs:
           GOOS=linux GOARCH=amd64 CGO_ENABLED=0 \
             go build -ldflags="-s -w" -o cakecake-linux ./cmd/cakecake
 
+      - name: Compress backend binary (UPX)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq upx
+          upx --best -q cakecake-linux && echo "UPX OK" || echo "UPX skipped (continuing)"
+
       - name: Pack release bundle
         run: |
           mkdir -p release/dist release/migrations
@@ -90,6 +96,7 @@ jobs:
           source: minibili-release.tar.gz
           target: /tmp
           debug: true
+          command_timeout: 30m
 
       - name: Install on server and restart
         uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
