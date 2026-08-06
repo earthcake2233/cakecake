@@ -72,12 +72,6 @@ jobs:
           GOOS=linux GOARCH=amd64 CGO_ENABLED=0 \
             go build -ldflags="-s -w" -o cakecake-linux ./cmd/cakecake
 
-      - name: Compress backend binary (UPX)
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq upx
-          upx --best -q cakecake-linux && echo "UPX OK" || echo "UPX skipped (continuing)"
-
       - name: Pack release bundle
         run: |
           mkdir -p release/dist release/migrations
