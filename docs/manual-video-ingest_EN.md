@@ -144,6 +144,32 @@ Then `npm run build` and upload `dist/`.
 
 Local dev `.env.local` can keep unset or `false` for normal upload endpoint debugging.
 
+For Docker Compose (published images + dev override rebuild):
+
+```bash
+# set VITE_VIDEO_UPLOAD_DISABLED=false in .env, then
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build web backend
+```
+
+Note: the published Docker Hub images have the frontend flag baked to `true` — a local frontend rebuild is required for this to take effect; full steps live in [deploy/DEPLOY_EN.md](../deploy/DEPLOY_EN.md).
+
+---
+
+## 7. Docker Compose Environments
+
+The compose demo mode also disables upload by default; manual ingest is identical (transcode locally → OSS → insert into DB) — only where you run the SQL differs:
+
+- The database runs in the `cakecake-mysql` container; make sure the stack is up: `docker compose ps`
+- Open the MySQL shell and run the same SQL as sections 2 / 3 / 4:
+
+```bash
+docker compose exec mysql mysql -uroot -p cakecake
+# Password: MYSQL_ROOT_PASSWORD from .env (default cakecake_dev); database: MYSQL_DATABASE (default cakecake)
+```
+
+- Finding user_id and the INSERT statements are exactly the same as sections 2 / 3 / 4; `user_id` can be one of the demo accounts (e.g., `暗猫の祝福`)
+- After inserting, open `http://localhost:8888/#/video/BV{id}`; with ES enabled in compose, `docker compose restart backend` triggers indexing
+
 ---
 
 ## Related Files

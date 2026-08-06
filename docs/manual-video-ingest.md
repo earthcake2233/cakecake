@@ -144,6 +144,32 @@ VITE_VIDEO_UPLOAD_DISABLED=false
 
 本地开发 `.env.local` 不设或设为 `false`，本机仍可正常走上传接口联调。
 
+Docker Compose 环境（发布镜像 + dev override 重建）：
+
+```bash
+# .env 设 VITE_VIDEO_UPLOAD_DISABLED=false，然后
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build web backend
+```
+
+注意：Docker Hub 发布镜像的前端开关已编译为关闭，必须本地重建前端镜像才能生效；完整步骤见 [deploy/DEPLOY.md](../deploy/DEPLOY.md)。
+
+---
+
+## 7. Docker Compose 环境
+
+compose 演示模式同样默认关闭上传，手动发视频流程与上面完全一致（本机转码 → OSS → 写库），区别只在执行 SQL 的位置：
+
+- 数据库在 `cakecake-mysql` 容器内；先确认栈已启动：`docker compose ps`
+- 进入 MySQL 执行与第 2 / 3 / 4 节相同的 SQL：
+
+```bash
+docker compose exec mysql mysql -uroot -p cakecake
+# 密码：.env 的 MYSQL_ROOT_PASSWORD（默认 cakecake_dev）；库名：MYSQL_DATABASE（默认 cakecake）
+```
+
+- 查 user_id、插入语句与第 2 / 3 / 4 节完全相同；`user_id` 可直接用演示账号（如 `暗猫の祝福`）
+- 插入后访问 `http://localhost:8888/#/video/BV{id}`；compose 已配 ES 时，`docker compose restart backend` 会触发索引
+
 ---
 
 ## 相关文件

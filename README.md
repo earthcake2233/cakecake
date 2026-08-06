@@ -46,18 +46,24 @@
 
 ---
 
-## Docker Compose 快速启动
+## Docker 一键启动
 
-前置要求：Docker Engine（含 Compose v2），建议内存 ≥ 4 GB（Elasticsearch 占用较高）。
+仅需 Docker（Compose v2，建议内存 ≥ 4 GB），无需本地 Go / Node 环境，一条命令启动 MySQL/Redis/RabbitMQ/ES + 前后端：
 
 ```bash
-cp .env.example .env
-docker compose up -d --build
+curl -fsSL https://raw.githubusercontent.com/earthcake2233/cakecake/main/scripts/quickstart.sh | bash
 ```
 
-启动完成后访问 **[http://localhost:8888](http://localhost:8888)**。首次启动自动完成数据库迁移、Elasticsearch 索引与演示数据初始化，无需本地安装 Go / Node / MySQL / Redis / RabbitMQ / Elasticsearch / FFmpeg。
+或手动执行（Windows 原生终端走此路径）：
 
-端口映射、演示账号、AI 助手与 OSS 上传的开启方式及故障排查，见 [deploy/DEPLOY.md · 本地一键体验](./deploy/DEPLOY.md#〇本地一键体验docker-compose)。
+```bash
+git clone --depth 1 git@github.com:earthcake2233/cakecake.git
+cd cakecake
+cp .env.example .env
+docker compose up -d
+```
+
+启动后访问 **[http://localhost:8888](http://localhost:8888)**。首次启动自动完成数据库迁移、ES 索引与演示数据初始化；端口、账号与扩展配置见 [deploy/DEPLOY.md · 本地一键体验](./deploy/DEPLOY.md#〇本地一键体验docker-compose)。
 
 ---
 
@@ -142,8 +148,6 @@ npm run dev                   # http://localhost:8888
 | [deploy/DEPLOY.md](./deploy/DEPLOY.md)                                       | 运维                   | 生产部署（Nginx、systemd、OSS、ES）       |
 | [docs/manual-video-ingest.md](./docs/manual-video-ingest.md)                 | 运维                   | 关闭网页上传时，本地 OSS + 手动写库发视频 |
 | [docs/ai-gateway.md](./docs/ai-gateway.md)                                   | 运维                   | AI 助手（DeepSeek）配置                   |
-| [.github/workflows/deploy.yml](./.github/workflows/deploy.yml)               | 运维                   | 可选：GitHub Actions 构建并 SSH 部署      |
-| [.github/workflows/compose-check.yml](./.github/workflows/compose-check.yml) | 运维                   | compose 环境变量漂移检查 + 语法校验 + 冒烟测试 |
 | [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)                               | 全栈 / 面试            | 系统架构、核心模块设计、关键决策          |
 | [docs/ARCHITECTURE_EN.md](./docs/ARCHITECTURE_EN.md)                         | Full-stack / Interview | Architecture (English)                    |
 | [SPEC.md](./SPEC.md)                                                         | 开发                   | 功能与验收规格                            |
@@ -156,8 +160,10 @@ npm run dev                   # http://localhost:8888
 
 ```
 cakecake/
-├── Dockerfile              # 后端镜像（含 FFmpeg）
-├── docker-compose.yml      # 一键启动：MySQL/Redis/RabbitMQ/ES + 前后端
+├── Dockerfile               # 后端镜像（含 FFmpeg）
+├── docker-compose.yml       # 一键启动（默认拉 Docker Hub 发布镜像）
+├── docker-compose.dev.yml   # 开发者本地构建 override
+├── scripts/quickstart.sh    # 一键启动脚本（curl | bash）
 ├── cmd/cakecake/            # Go 入口
 ├── internal/                # handler / service / worker / ws 等
 ├── configs/                 # sensitive_words.txt、ip2region_v4.xdb
@@ -178,7 +184,7 @@ cakecake/
 | ---------------------------------- | ------------------------------------------------------------------------------------- |
 | **Go** 1.22+（`go.mod` 当前 1.25） | 后端                                                                                  |
 | **Node.js** + **npm**              | 前端（请用 npm，勿与 yarn 混用锁文件）                                                |
-| **Docker**（可选）                 | 一条命令启动完整前后端（见上方 Compose 快速开始）                                     |
+| **Docker**（可选）                 | 一条命令启动完整前后端（见上方 Docker 一键启动）                                       |
 | **MySQL**                          | 持久化                                                                                |
 | **Redis**                          | 播放计数、弹幕冷却、Refresh Token 等                                                  |
 | **RabbitMQ**                       | 转码队列（规格要求，不可用 Redis List 替代）                                          |

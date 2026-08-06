@@ -46,18 +46,24 @@ Versioned DB migrations, global rate limiting, graceful shutdown, observability,
 
 ---
 
-## Docker Compose Quick Start
+## Docker One-Command Startup
 
-Prerequisites: Docker Engine with Compose v2; ≥ 4 GB RAM recommended (Elasticsearch is memory-hungry).
+Docker with Compose v2 is all you need (≥ 4 GB RAM recommended); no local Go/Node toolchain. One command starts MySQL/Redis/RabbitMQ/ES + backend + frontend:
 
 ```bash
-cp .env.example .env
-docker compose up -d --build
+curl -fsSL https://raw.githubusercontent.com/earthcake2233/cakecake/main/scripts/quickstart.sh | bash
 ```
 
-Open **[http://localhost:8888](http://localhost:8888)**. First boot runs DB migration, Elasticsearch indexing, and demo-data seeding automatically — no local Go / Node / MySQL / Redis / RabbitMQ / Elasticsearch / FFmpeg installation needed.
+Or manually (use this path on native Windows terminals):
 
-Ports, demo accounts, enabling the AI assistant / OSS uploads, and troubleshooting live in [deploy/DEPLOY.md · Local One-Command Experience](./deploy/DEPLOY.md#0-local-one-command-experience-docker-compose).
+```bash
+git clone --depth 1 git@github.com:earthcake2233/cakecake.git
+cd cakecake
+cp .env.example .env
+docker compose up -d
+```
+
+Open **[http://localhost:8888](http://localhost:8888)**. First boot runs DB migration, ES indexing, and demo-data seeding automatically; ports, accounts, and extension setup live in [deploy/DEPLOY_EN.md · Local One-Command Experience](./deploy/DEPLOY_EN.md#0-local-one-command-experience-docker-compose).
 
 ---
 
@@ -142,8 +148,6 @@ Frontend details and env vars: **[cakecake-vue/cakecake-web/README.md](./cakecak
 | [deploy/DEPLOY.md](./deploy/DEPLOY.md)                                        | Ops                     | Production deploy (Nginx, systemd, OSS, ES) |
 | [docs/manual-video-ingest.md](./docs/manual-video-ingest.md)                  | Ops                     | Local OSS + manual DB insert when web upload is disabled |
 | [docs/ai-gateway.md](./docs/ai-gateway.md)                                    | Ops                     | AI assistant (DeepSeek) config           |
-| [.github/workflows/deploy.yml](./.github/workflows/deploy.yml)                | Ops                     | Optional GitHub Actions build & SSH deploy |
-| [.github/workflows/compose-check.yml](./.github/workflows/compose-check.yml)  | Ops                     | Compose env-drift check + config validation + smoke test |
 | [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)                                | Full-stack / Interview  | Architecture, core modules, decisions    |
 | [docs/ARCHITECTURE_EN.md](./docs/ARCHITECTURE_EN.md)                          | Full-stack / Interview  | Architecture (English)                   |
 | [SPEC.md](./SPEC.md)                                                          | Developer               | Functional & acceptance spec             |
@@ -156,8 +160,10 @@ Frontend details and env vars: **[cakecake-vue/cakecake-web/README.md](./cakecak
 
 ```
 cakecake/
-├── Dockerfile              # Backend image (includes FFmpeg)
-├── docker-compose.yml      # One-command stack: MySQL/Redis/RabbitMQ/ES + frontend/backend
+├── Dockerfile               # Backend image (includes FFmpeg)
+├── docker-compose.yml       # One-command stack (pulls published Docker Hub images by default)
+├── docker-compose.dev.yml   # Dev override to build from source
+├── scripts/quickstart.sh    # One-command launcher (curl | bash)
 ├── cmd/cakecake/            # Go entrypoint
 ├── internal/                # handler / service / worker / ws etc.
 ├── configs/                 # sensitive_words.txt, ip2region_v4.xdb
@@ -178,7 +184,7 @@ cakecake/
 | ---------------------------------- | ------------------------------------------------------------------------------------- |
 | **Go** 1.22+ (`go.mod` is 1.25)    | Backend                                                                               |
 | **Node.js** + **npm**              | Frontend (use npm; do not mix yarn lockfiles)                                         |
-| **Docker** (optional)              | One-command full-stack startup (see Compose quick start above)                        |
+| **Docker** (optional)              | One-command full-stack startup (see Docker One-Command Startup above)                  |
 | **MySQL**                          | Persistence                                                                           |
 | **Redis**                          | Play counts, danmaku cooldown, refresh tokens, etc.                                   |
 | **RabbitMQ**                       | Transcode queue (required by spec; Redis List is not a substitute)                    |

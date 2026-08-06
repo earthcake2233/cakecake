@@ -39,8 +39,10 @@ To see the project running in 30 seconds, skip the full production setup for now
 ```bash
 cd <repo root>
 cp .env.example .env          # optional; defaults work without it
-docker compose up -d --build
+docker compose up -d
 ```
+
+The compose file pulls the published images from Docker Hub by default (`earthcake/cakecake-backend:latest` / `earthcake/cakecake-web:latest`) — no local build required; to build from source, use `docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build` instead.
 
 Open **[http://localhost:8888](http://localhost:8888)**. On first boot: GORM AutoMigrate creates the schema → `SEED_DEMO_DATA=true` writes demo users / videos / danmaku → ES is fully reindexed.
 
@@ -57,8 +59,36 @@ Open **[http://localhost:8888](http://localhost:8888)**. On first boot: GORM Aut
 ### Optional Upgrades
 
 - **AI assistant (DeepSeek Function Calling)**: put `DEEPSEEK_API_KEY` in `.env`, then `docker compose up -d backend`;
-- **Web upload + async transcoding**: put `OSS_*` credentials in `.env`, set `VIDEO_UPLOAD_DISABLED=false` and `VITE_VIDEO_UPLOAD_DISABLED=false` (frontend build-time flag), then `docker compose up -d --build web backend`;
+- **Web upload + async transcoding**: follow the four steps in "Enabling Web Upload" below. **Note: the published Docker Hub images have the frontend flag baked to `true`, so uploads cannot be enabled with the published images alone — you must rebuild the frontend locally.**
 - **Stop / reset**: `docker compose down`; full reset (removes volumes) with `docker compose down -v`.
+
+#### Enabling Web Upload (Alibaba Cloud OSS)
+
+The default "demo mode" does not upload (frontend entry hidden, backend has no OSS). Enable it in four steps:
+
+1. Put the Alibaba Cloud OSS credentials in `.env` (5 variables):
+
+```bash
+OSS_ACCESS_KEY_ID=xxx
+OSS_ACCESS_KEY_SECRET=xxx
+OSS_BUCKET=xxx
+OSS_ENDPOINT=oss-cn-hangzhou.aliyuncs.com
+OSS_PUBLIC_URL_PREFIX=https://xxx.oss-cn-hangzhou.aliyuncs.com
+```
+
+2. Turn on the frontend build-time flag in `.env`:
+
+```bash
+VITE_VIDEO_UPLOAD_DISABLED=false
+```
+
+3. Rebuild the frontend image and restart the backend (**key: the published image has the flag baked to `true`, so editing `.env` alone has no effect**):
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build web backend
+```
+
+4. Open http://localhost:8888 — the upload entry appears in the creator center; upload → RabbitMQ async transcoding → cover thumbnail generation all work.
 
 ### Differences from Production
 
@@ -67,6 +97,8 @@ Compose targets the **local one-command experience**: upload is disabled by defa
 ### CI Guard
 
 `.github/workflows/compose-check.yml` triple-guards the stack: env-drift checks (`.env.example` ↔ compose), `docker compose config` validation, and a full-stack smoke test (real image builds, health checks, seed data). If code evolution breaks the one-command experience, CI fails loudly.
+
+Image publishing is handled by `.github/workflows/docker-publish.yml`: on main merges / `v*` tags it builds and pushes to Docker Hub (`latest` + `sha-<first 12>`, plus `vX.Y.Z` on tag events).
 
 ---
 
