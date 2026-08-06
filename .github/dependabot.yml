@@ -1,6 +1,6 @@
 # Dependency update automation (GitHub Actions, Go modules, npm).
 # Grouped so each ecosystem produces one PR per cycle instead of one per dependency;
-# high-risk major bumps for frontend tooling and the deploy scp action are ignored.
+# high-risk major bumps for frontend tooling are ignored.
 version: 2
 updates:
   - package-ecosystem: github-actions
@@ -11,9 +11,6 @@ updates:
     groups:
       actions:
         patterns: ["*"]
-    ignore:
-      - dependency-name: "appleboy/scp-action"
-        versions: [">=1.0.0"]
 
   - package-ecosystem: gomod
     directory: /
