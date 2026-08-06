@@ -20,6 +20,10 @@ A production-grade video community built with Go + Vue3: real-time danmaku over 
 Versioned DB migrations, global rate limiting, graceful shutdown, observability, and human-approved CI/CD: enterprise-grade engineering practices, one fully runnable repository.
 
 <p align="center">
+  <img src="docs/images/ai-function-calling.webp" alt="AI assistant Function Calling demo" width="720"/>
+</p>
+
+<p align="center">
   <a href="https://chengzisoft.top/#/">
     <img src="https://img.shields.io/badge/Live%20Demo-chengzisoft.top-00a1d6?style=flat-square" alt="Live Demo">
   </a>
@@ -27,10 +31,6 @@ Versioned DB migrations, global rate limiting, graceful shutdown, observability,
     <img src="https://img.shields.io/badge/Demo%20Video-Bilibili-00a1d6?style=flat-square&logo=bilibili" alt="Demo Video">
   </a>
   <img src="https://img.shields.io/badge/Docker%20Compose-ready-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker Compose">
-  <a href="https://github.com/earthcake2233/cakecake">
-    <img src="https://img.shields.io/github/stars/earthcake2233/cakecake?style=flat-square&logo=github" alt="Stars">
-  </a>
-  <img src="https://img.shields.io/github/go-mod/go-version/earthcake2233/cakecake?style=flat-square&logo=go&logoColor=white&label=Go" alt="Go">
   <img src="https://img.shields.io/badge/License-PolyForm%20Noncommercial%201.0.0-important?style=flat-square" alt="License">
   <a href="https://github.com/earthcake2233/cakecake/actions">
     <img src="https://img.shields.io/github/actions/workflow/status/earthcake2233/cakecake/ci.yml?branch=main&style=flat-square&logo=github&label=CI" alt="CI">
@@ -43,6 +43,44 @@ Versioned DB migrations, global rate limiting, graceful shutdown, observability,
     <img src="https://img.shields.io/docker/image-size/earthcake/cakecake-backend?style=flat-square&logo=docker&logoColor=white&label=Image%20Size" alt="Docker Image Size">
   </a>
 </p>
+
+---
+
+## How It Compares
+
+| Capability | Typical bilibili-clone tutorial | cakecake |
+| --- | --- | --- |
+| Real-time danmaku | Polling / fake real-time | WebSocket + Redis Pub/Sub, horizontally scalable |
+| Async transcoding | None / synchronous | RabbitMQ queue + FFmpeg pipeline, upload returns immediately |
+| AI assistant | None | DeepSeek Function Calling with structured tool use |
+| Full-text search | None / MySQL LIKE | Elasticsearch indexing |
+| Engineering | CRUD-first | Versioned migrations, rate limiting, graceful shutdown, observability, enterprise CI/CD |
+
+---
+
+## Screenshots
+
+<table>
+  <tr>
+    <td align="center" colspan="2"><b>AI Assistant — Structured Tool Results</b><br><img src="docs/images/ai-chat-structured-results.webp" alt="AI chat structured results" width="500"/></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Home</b><br><img src="docs/images/homepage.webp" alt="Home" width="400"/></td>
+    <td align="center"><b>Video Player (with danmaku)</b><br><img src="docs/images/video-player.webp" alt="Video player" width="400"/></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Search</b><br><img src="docs/images/search.webp" alt="Search" width="400"/></td>
+    <td align="center"><b>Profile</b><br><img src="docs/images/profile.webp" alt="Profile" width="400"/></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Personal Space</b><br><img src="docs/images/personal-space.webp" alt="Personal space" width="400"/></td>
+    <td align="center"><b>Feeds</b><br><img src="docs/images/dynamic.webp" alt="Feeds" width="400"/></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Ranking</b><br><img src="docs/images/ranking-list.webp" alt="Ranking" width="400"/></td>
+    <td align="center"><b>Message Center</b><br><img src="docs/images/message-center.webp" alt="Message center" width="400"/></td>
+  </tr>
+</table>
 
 ---
 
@@ -64,6 +102,37 @@ docker compose up -d
 ```
 
 Open **[http://localhost:8888](http://localhost:8888)**. First boot runs DB migration, ES indexing, and demo-data seeding automatically; ports, accounts, and extension setup live in [deploy/DEPLOY_EN.md · Local One-Command Experience](./deploy/DEPLOY_EN.md#0-local-one-command-experience-docker-compose).
+
+---
+
+## Tech Stack
+
+| Layer | Choice |
+| :--- | :--- |
+| Backend | Go · Gin · GORM |
+| Data | MySQL · Redis · RabbitMQ |
+| Search | Elasticsearch 8.x (optional; OpenSearch / Bonsai compatible) |
+| Storage | Alibaba Cloud OSS (videos/covers/avatars) |
+| Transcoding | FFmpeg / ffprobe |
+| Frontend | Vue 3 · Vite · TypeScript |
+| Auth | JWT (Access + Refresh Token) |
+
+---
+
+## Documentation
+
+| Doc                                                                           | Audience                | Description                              |
+| ----------------------------------------------------------------------------- | ----------------------- | ---------------------------------------- |
+| **This README**                                                               | Full-stack / Backend    | Environment, backend startup, API, tests |
+| [cakecake-vue/cakecake-web/README.md](./cakecake-vue/cakecake-web/README.md)  | Frontend                | Install, env vars, dev / build           |
+| [deploy/DEPLOY.md](./deploy/DEPLOY.md)                                        | Ops                     | Production deploy (Nginx, systemd, OSS, ES) |
+| [docs/manual-video-ingest.md](./docs/manual-video-ingest.md)                  | Ops                     | Local OSS + manual DB insert when web upload is disabled |
+| [docs/ai-gateway.md](./docs/ai-gateway.md)                                    | Ops                     | AI assistant (DeepSeek) config           |
+| [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)                                | Full-stack / Interview  | Architecture, core modules, decisions    |
+| [docs/ARCHITECTURE_EN.md](./docs/ARCHITECTURE_EN.md)                          | Full-stack / Interview  | Architecture (English)                   |
+| [SPEC.md](./SPEC.md)                                                          | Developer               | Functional & acceptance spec             |
+| [Rule.md](./Rule.md)                                                          | Developer               | Engineering rules                        |
+| [Skill.md](./Skill.md)                                                        | Developer               | Standard operations (migrations, token, WS) |
 
 ---
 
@@ -96,63 +165,6 @@ npm run dev                   # http://localhost:8888
 - Invalid path or missing video → `#/404`
 
 Frontend details and env vars: **[cakecake-vue/cakecake-web/README.md](./cakecake-vue/cakecake-web/README.md)**.
-
----
-
-## Screenshots
-
-<table>
-  <tr>
-    <td align="center" colspan="2"><b>AI Assistant — Structured Tool Results</b><br><img src="docs/images/ai-chat-structured-results.png" alt="AI chat structured results" width="500"/></td>
-  </tr>
-  <tr>
-    <td align="center"><b>Home</b><br><img src="docs/images/homepage.png" alt="Home" width="400"/></td>
-    <td align="center"><b>Video Player (with danmaku)</b><br><img src="docs/images/video-player.png" alt="Video player" width="400"/></td>
-  </tr>
-  <tr>
-    <td align="center"><b>Search</b><br><img src="docs/images/search.png" alt="Search" width="400"/></td>
-    <td align="center"><b>Profile</b><br><img src="docs/images/profile.png" alt="Profile" width="400"/></td>
-  </tr>
-  <tr>
-    <td align="center"><b>Personal Space</b><br><img src="docs/images/personal-space.png" alt="Personal space" width="400"/></td>
-    <td align="center"><b>Feeds</b><br><img src="docs/images/dynamic.png" alt="Feeds" width="400"/></td>
-  </tr>
-  <tr>
-    <td align="center"><b>Ranking</b><br><img src="docs/images/ranking-list.png" alt="Ranking" width="400"/></td>
-    <td align="center"><b>Message Center</b><br><img src="docs/images/message-center.png" alt="Message center" width="400"/></td>
-  </tr>
-</table>
-
----
-
-## Tech Stack
-
-| Layer | Choice |
-| :--- | :--- |
-| Backend | Go · Gin · GORM |
-| Data | MySQL · Redis · RabbitMQ |
-| Search | Elasticsearch 8.x (optional; OpenSearch / Bonsai compatible) |
-| Storage | Alibaba Cloud OSS (videos/covers/avatars) |
-| Transcoding | FFmpeg / ffprobe |
-| Frontend | Vue 3 · Vite · TypeScript |
-| Auth | JWT (Access + Refresh Token) |
-
----
-
-## Documentation
-
-| Doc                                                                           | Audience                | Description                              |
-| ----------------------------------------------------------------------------- | ----------------------- | ---------------------------------------- |
-| **This README**                                                               | Full-stack / Backend    | Environment, backend startup, API, tests |
-| [cakecake-vue/cakecake-web/README.md](./cakecake-vue/cakecake-web/README.md)  | Frontend                | Install, env vars, dev / build           |
-| [deploy/DEPLOY.md](./deploy/DEPLOY.md)                                        | Ops                     | Production deploy (Nginx, systemd, OSS, ES) |
-| [docs/manual-video-ingest.md](./docs/manual-video-ingest.md)                  | Ops                     | Local OSS + manual DB insert when web upload is disabled |
-| [docs/ai-gateway.md](./docs/ai-gateway.md)                                    | Ops                     | AI assistant (DeepSeek) config           |
-| [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)                                | Full-stack / Interview  | Architecture, core modules, decisions    |
-| [docs/ARCHITECTURE_EN.md](./docs/ARCHITECTURE_EN.md)                          | Full-stack / Interview  | Architecture (English)                   |
-| [SPEC.md](./SPEC.md)                                                          | Developer               | Functional & acceptance spec             |
-| [Rule.md](./Rule.md)                                                          | Developer               | Engineering rules                        |
-| [Skill.md](./Skill.md)                                                        | Developer               | Standard operations (migrations, token, WS) |
 
 ---
 
@@ -259,6 +271,28 @@ See **[deploy/DEPLOY.md](./deploy/DEPLOY.md)** (static assets usually live in `/
 
 ---
 
+## FAQ
+
+**Do I need Go / Node / MySQL installed?**
+No. The Docker one-command startup pulls the published images and the infrastructure images; first boot auto-creates the schema, indexes, and demo data.
+
+**Can I upload videos?**
+Demo mode disables upload by default; after configuring Alibaba Cloud OSS and rebuilding the frontend locally, the full upload → async transcoding pipeline works (see [DEPLOY_EN.md · Enabling Web Upload](./deploy/DEPLOY_EN.md)).
+
+**Does the AI assistant work?**
+Fill in `DEEPSEEK_API_KEY` in `.env` and restart the backend (`docker compose up -d backend`); without a key the entry is shown but replies indicate it is not configured.
+
+**Will secrets leak?**
+No. All secrets (JWT / OSS / DeepSeek) live only in the local `.env` (gitignored); the compose file keeps `${VAR:-default}` placeholders only.
+
+**How much memory does it need?**
+≥ 4 GB is recommended (Elasticsearch is memory-hungry); on low-spec machines you can comment out the ES service — the search page shows "not ready" and everything else keeps working.
+
+**Does it run on Windows?**
+Yes. Docker Desktop (Compose v2) + Git Bash / WSL for the one-liner, or the standard `docker compose up -d` steps.
+
+---
+
 ## Contributing
 
 Development rules: [Rule.md](./Rule.md); standard operations: [Skill.md](./Skill.md). Before committing, run the CN/EN doc sync check: `python scripts/check_en_sync.py --check-sync`.
@@ -268,3 +302,7 @@ Development rules: [Rule.md](./Rule.md); standard operations: [Skill.md](./Skill
 ## License
 
 This project is licensed under the **[PolyForm Noncommercial License 1.0.0](./LICENSE)**: personal and educational use permitted; commercial use prohibited.
+
+---
+
+If you find this project helpful, a ⭐ would be greatly appreciated — issues and PRs are welcome too.

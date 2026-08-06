@@ -20,6 +20,10 @@
 版本化数据库迁移、全局限流、优雅关闭、可观测性、人工审批的 CI/CD：企业级工程实践，Go + Vue3 一个仓库完整闭环。
 
 <p align="center">
+  <img src="docs/images/ai-function-calling.webp" alt="AI 助手 Function Calling 演示" width="720"/>
+</p>
+
+<p align="center">
   <a href="https://chengzisoft.top/#/">
     <img src="https://img.shields.io/badge/在线体验-chengzisoft.top-00a1d6?style=flat-square" alt="在线体验">
   </a>
@@ -27,10 +31,6 @@
     <img src="https://img.shields.io/badge/演示视频-B站-00a1d6?style=flat-square&logo=bilibili" alt="演示视频">
   </a>
   <img src="https://img.shields.io/badge/Docker%20Compose-ready-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker Compose">
-  <a href="https://github.com/earthcake2233/cakecake">
-    <img src="https://img.shields.io/github/stars/earthcake2233/cakecake?style=flat-square&logo=github" alt="Stars">
-  </a>
-  <img src="https://img.shields.io/github/go-mod/go-version/earthcake2233/cakecake?style=flat-square&logo=go&logoColor=white&label=Go" alt="Go">
   <img src="https://img.shields.io/badge/License-PolyForm%20Noncommercial%201.0.0-important?style=flat-square" alt="License">
   <a href="https://github.com/earthcake2233/cakecake/actions">
     <img src="https://img.shields.io/github/actions/workflow/status/earthcake2233/cakecake/ci.yml?branch=main&style=flat-square&logo=github&label=CI" alt="CI">
@@ -43,6 +43,44 @@
     <img src="https://img.shields.io/docker/image-size/earthcake/cakecake-backend?style=flat-square&logo=docker&logoColor=white&label=Image%20Size" alt="Docker Image Size">
   </a>
 </p>
+
+---
+
+## 与同类项目的差异
+
+| 能力 | 普通仿 B 站教程项目 | cakecake |
+| --- | --- | --- |
+| 实时弹幕 | 轮询 / 伪实时 | WebSocket + Redis Pub/Sub，多实例可水平扩展 |
+| 异步转码 | 无 / 同步阻塞 | RabbitMQ 队列 + FFmpeg 流水线，上传即返回 |
+| AI 助手 | 无 | DeepSeek Function Calling 结构化工具调用 |
+| 全文搜索 | 无 / MySQL LIKE | Elasticsearch 索引 |
+| 工程化 | CRUD 为主 | 版本化迁移、限流、优雅停机、可观测性、企业级 CI/CD |
+
+---
+
+## 界面截图
+
+<table>
+  <tr>
+    <td align="center" colspan="2"><b>AI 智能助手 — 结构化工具结果展示</b><br><img src="docs/images/ai-chat-structured-results.webp" alt="AI 聊天结构化结果" width="500"/></td>
+  </tr>
+  <tr>
+    <td align="center"><b>首页</b><br><img src="docs/images/homepage.webp" alt="首页" width="400"/></td>
+    <td align="center"><b>视频播放（含弹幕）</b><br><img src="docs/images/video-player.webp" alt="视频播放" width="400"/></td>
+  </tr>
+  <tr>
+    <td align="center"><b>搜索</b><br><img src="docs/images/search.webp" alt="搜索" width="400"/></td>
+    <td align="center"><b>个人中心</b><br><img src="docs/images/profile.webp" alt="个人中心" width="400"/></td>
+  </tr>
+  <tr>
+    <td align="center"><b>个人空间</b><br><img src="docs/images/personal-space.webp" alt="个人空间" width="400"/></td>
+    <td align="center"><b>动态</b><br><img src="docs/images/dynamic.webp" alt="动态" width="400"/></td>
+  </tr>
+  <tr>
+    <td align="center"><b>排行榜</b><br><img src="docs/images/ranking-list.webp" alt="排行榜" width="400"/></td>
+    <td align="center"><b>消息中心</b><br><img src="docs/images/message-center.webp" alt="消息中心" width="400"/></td>
+  </tr>
+</table>
 
 ---
 
@@ -64,6 +102,37 @@ docker compose up -d
 ```
 
 启动后访问 **[http://localhost:8888](http://localhost:8888)**。首次启动自动完成数据库迁移、ES 索引与演示数据初始化；端口、账号与扩展配置见 [deploy/DEPLOY.md · 本地一键体验](./deploy/DEPLOY.md#〇本地一键体验docker-compose)。
+
+---
+
+## 技术栈
+
+| 层 | 选型 |
+| :--- | :--- |
+| 后端 | Go · Gin · GORM |
+| 数据 | MySQL · Redis · RabbitMQ |
+| 搜索 | Elasticsearch 8.x（可选，兼容 OpenSearch / Bonsai） |
+| 存储 | 阿里云 OSS（视频/封面/头像） |
+| 转码 | FFmpeg / ffprobe |
+| 前端 | Vue 3 · Vite · TypeScript |
+| 认证 | JWT（Access + Refresh Token） |
+
+---
+
+## 文档索引
+
+| 文档                                                                         | 读者                   | 说明                                      |
+| ---------------------------------------------------------------------------- | ---------------------- | ----------------------------------------- |
+| **本文**                                                                     | 全栈 / 后端            | 环境、后端启动、API 约定、测试            |
+| [cakecake-vue/cakecake-web/README.md](./cakecake-vue/cakecake-web/README.md) | 前端                   | 安装、环境变量、开发 / 构建               |
+| [deploy/DEPLOY.md](./deploy/DEPLOY.md)                                       | 运维                   | 生产部署（Nginx、systemd、OSS、ES）       |
+| [docs/manual-video-ingest.md](./docs/manual-video-ingest.md)                 | 运维                   | 关闭网页上传时，本地 OSS + 手动写库发视频 |
+| [docs/ai-gateway.md](./docs/ai-gateway.md)                                   | 运维                   | AI 助手（DeepSeek）配置                   |
+| [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)                               | 全栈 / 面试            | 系统架构、核心模块设计、关键决策          |
+| [docs/ARCHITECTURE_EN.md](./docs/ARCHITECTURE_EN.md)                         | Full-stack / Interview | Architecture (English)                    |
+| [SPEC.md](./SPEC.md)                                                         | 开发                   | 功能与验收规格                            |
+| [Rule.md](./Rule.md)                                                         | 开发                   | 工程红线                                  |
+| [Skill.md](./Skill.md)                                                       | 开发                   | 标准操作（迁移、Token、WS 等）            |
 
 ---
 
@@ -96,63 +165,6 @@ npm run dev                   # http://localhost:8888
 - 无效路径或不存在的视频 → `#/404`
 
 前端细节、环境变量说明见 **[cakecake-vue/cakecake-web/README.md](./cakecake-vue/cakecake-web/README.md)**。
-
----
-
-## 界面截图
-
-<table>
-  <tr>
-    <td align="center" colspan="2"><b>AI 智能助手 — 结构化工具结果展示</b><br><img src="docs/images/ai-chat-structured-results.png" alt="AI 聊天结构化结果" width="500"/></td>
-  </tr>
-  <tr>
-    <td align="center"><b>首页</b><br><img src="docs/images/homepage.png" alt="首页" width="400"/></td>
-    <td align="center"><b>视频播放（含弹幕）</b><br><img src="docs/images/video-player.png" alt="视频播放" width="400"/></td>
-  </tr>
-  <tr>
-    <td align="center"><b>搜索</b><br><img src="docs/images/search.png" alt="搜索" width="400"/></td>
-    <td align="center"><b>个人中心</b><br><img src="docs/images/profile.png" alt="个人中心" width="400"/></td>
-  </tr>
-  <tr>
-    <td align="center"><b>个人空间</b><br><img src="docs/images/personal-space.png" alt="个人空间" width="400"/></td>
-    <td align="center"><b>动态</b><br><img src="docs/images/dynamic.png" alt="动态" width="400"/></td>
-  </tr>
-  <tr>
-    <td align="center"><b>排行榜</b><br><img src="docs/images/ranking-list.png" alt="排行榜" width="400"/></td>
-    <td align="center"><b>消息中心</b><br><img src="docs/images/message-center.png" alt="消息中心" width="400"/></td>
-  </tr>
-</table>
-
----
-
-## 技术栈
-
-| 层 | 选型 |
-| :--- | :--- |
-| 后端 | Go · Gin · GORM |
-| 数据 | MySQL · Redis · RabbitMQ |
-| 搜索 | Elasticsearch 8.x（可选，兼容 OpenSearch / Bonsai） |
-| 存储 | 阿里云 OSS（视频/封面/头像） |
-| 转码 | FFmpeg / ffprobe |
-| 前端 | Vue 3 · Vite · TypeScript |
-| 认证 | JWT（Access + Refresh Token） |
-
----
-
-## 文档索引
-
-| 文档                                                                         | 读者                   | 说明                                      |
-| ---------------------------------------------------------------------------- | ---------------------- | ----------------------------------------- |
-| **本文**                                                                     | 全栈 / 后端            | 环境、后端启动、API 约定、测试            |
-| [cakecake-vue/cakecake-web/README.md](./cakecake-vue/cakecake-web/README.md) | 前端                   | 安装、环境变量、开发 / 构建               |
-| [deploy/DEPLOY.md](./deploy/DEPLOY.md)                                       | 运维                   | 生产部署（Nginx、systemd、OSS、ES）       |
-| [docs/manual-video-ingest.md](./docs/manual-video-ingest.md)                 | 运维                   | 关闭网页上传时，本地 OSS + 手动写库发视频 |
-| [docs/ai-gateway.md](./docs/ai-gateway.md)                                   | 运维                   | AI 助手（DeepSeek）配置                   |
-| [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)                               | 全栈 / 面试            | 系统架构、核心模块设计、关键决策          |
-| [docs/ARCHITECTURE_EN.md](./docs/ARCHITECTURE_EN.md)                         | Full-stack / Interview | Architecture (English)                    |
-| [SPEC.md](./SPEC.md)                                                         | 开发                   | 功能与验收规格                            |
-| [Rule.md](./Rule.md)                                                         | 开发                   | 工程红线                                  |
-| [Skill.md](./Skill.md)                                                       | 开发                   | 标准操作（迁移、Token、WS 等）            |
 
 ---
 
@@ -259,6 +271,28 @@ go test -tags=integration ./internal/handler/... -count=1
 
 ---
 
+## FAQ
+
+**要装 Go / Node / MySQL 等环境吗？**
+不用。Docker 一键启动会拉取发布镜像与基础设施镜像，首次启动自动建表、建索引、写入演示数据。
+
+**能上传视频吗？**
+演示模式默认关闭上传；配置阿里云 OSS 并本地重建前端后可开启完整的上传 → 异步转码链路（见 [DEPLOY.md · 开启网页上传](./deploy/DEPLOY.md)）。
+
+**AI 助手能用吗？**
+在 `.env` 填入 `DEEPSEEK_API_KEY` 后重启后端即可（`docker compose up -d backend`）；未配置时入口正常展示，但回复会提示未配置。
+
+**会不会泄露密钥？**
+不会。所有密钥（JWT / OSS / DeepSeek）只存在于本地 `.env`（已 gitignore），compose 文件只保留 `${VAR:-默认值}` 占位。
+
+**内存要求高吗？**
+建议 ≥ 4 GB（Elasticsearch 是资源大户）；低配机器可注释掉 ES 服务，搜索页提示未就绪，其余功能不受影响。
+
+**Windows 能跑吗？**
+能。Docker Desktop（Compose v2）+ Git Bash / WSL 跑一行命令，或按标准步骤 `docker compose up -d`。
+
+---
+
 ## Contributing
 
 开发规范见 [Rule.md](./Rule.md)，标准操作见 [Skill.md](./Skill.md)；提交前请运行中英文档同步检查：`python scripts/check_en_sync.py --check-sync`。
@@ -268,3 +302,7 @@ go test -tags=integration ./internal/handler/... -count=1
 ## License
 
 本项目采用 **[PolyForm Noncommercial License 1.0.0](./LICENSE)**：允许个人与教育用途，禁止商业使用。
+
+---
+
+如果这个项目对你有帮助，欢迎 ⭐ Star 支持，也欢迎提 Issue 与 PR。
