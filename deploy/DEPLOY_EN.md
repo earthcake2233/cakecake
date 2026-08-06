@@ -42,7 +42,7 @@ cp .env.example .env          # optional; defaults work without it
 docker compose up -d --build
 ```
 
-Open **http://localhost:8888**. On first boot: GORM AutoMigrate creates the schema → `SEED_DEMO_DATA=true` writes demo users / videos / danmaku → ES is fully reindexed.
+Open **[http://localhost:8888](http://localhost:8888)**. On first boot: GORM AutoMigrate creates the schema → `SEED_DEMO_DATA=true` writes demo users / videos / danmaku → ES is fully reindexed.
 
 ### Ports & Accounts
 

@@ -26,6 +26,7 @@
   <a href="https://b23.tv/9VnJIWm">
     <img src="https://img.shields.io/badge/演示视频-B站-00a1d6?style=flat-square&logo=bilibili" alt="演示视频">
   </a>
+  <img src="https://img.shields.io/badge/Docker%20Compose-ready-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker Compose">
   <a href="https://github.com/earthcake2233/cakecake">
     <img src="https://img.shields.io/github/stars/earthcake2233/cakecake?style=flat-square&logo=github" alt="Stars">
   </a>
@@ -38,6 +39,9 @@
   <a href="https://codecov.io/gh/earthcake2233/cakecake"><img src="https://img.shields.io/codecov/c/github/earthcake2233/cakecake?flag=frontend&style=flat-square&logo=codecov&logoColor=white&label=Vue%20Coverage" alt="Vue Coverage"></a>
   <a href="https://codecov.io/gh/earthcake2233/cakecake"><img src="https://img.shields.io/codecov/c/github/earthcake2233/cakecake?flag=backend&style=flat-square&logo=codecov&logoColor=white&label=Go%20Coverage" alt="Go Coverage"></a>
   <img src="https://img.shields.io/github/commit-activity/m/earthcake2233/cakecake?style=flat-square&logo=github" alt="Commit activity">
+  <a href="https://hub.docker.com/r/earthcake/cakecake-backend">
+    <img src="https://img.shields.io/docker/image-size/earthcake/cakecake-backend?style=flat-square&logo=docker&logoColor=white&label=Image%20Size" alt="Docker Image Size">
+  </a>
 </p>
 
 ---
@@ -51,7 +55,7 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
-启动完成后访问 **http://localhost:8888**。首次启动自动完成数据库迁移、Elasticsearch 索引与演示数据初始化，无需本地安装 Go / Node / MySQL / Redis / RabbitMQ / Elasticsearch / FFmpeg。
+启动完成后访问 **[http://localhost:8888](http://localhost:8888)**。首次启动自动完成数据库迁移、Elasticsearch 索引与演示数据初始化，无需本地安装 Go / Node / MySQL / Redis / RabbitMQ / Elasticsearch / FFmpeg。
 
 端口映射、演示账号、AI 助手与 OSS 上传的开启方式及故障排查，见 [deploy/DEPLOY.md · 本地一键体验](./deploy/DEPLOY.md#〇本地一键体验docker-compose)。
 

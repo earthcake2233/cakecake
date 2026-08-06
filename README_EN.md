@@ -26,6 +26,7 @@ Versioned DB migrations, global rate limiting, graceful shutdown, observability,
   <a href="https://b23.tv/9VnJIWm">
     <img src="https://img.shields.io/badge/Demo%20Video-Bilibili-00a1d6?style=flat-square&logo=bilibili" alt="Demo Video">
   </a>
+  <img src="https://img.shields.io/badge/Docker%20Compose-ready-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker Compose">
   <a href="https://github.com/earthcake2233/cakecake">
     <img src="https://img.shields.io/github/stars/earthcake2233/cakecake?style=flat-square&logo=github" alt="Stars">
   </a>
@@ -38,6 +39,9 @@ Versioned DB migrations, global rate limiting, graceful shutdown, observability,
   <a href="https://codecov.io/gh/earthcake2233/cakecake"><img src="https://img.shields.io/codecov/c/github/earthcake2233/cakecake?flag=frontend&style=flat-square&logo=codecov&logoColor=white&label=Vue%20Coverage" alt="Vue Coverage"></a>
   <a href="https://codecov.io/gh/earthcake2233/cakecake"><img src="https://img.shields.io/codecov/c/github/earthcake2233/cakecake?flag=backend&style=flat-square&logo=codecov&logoColor=white&label=Go%20Coverage" alt="Go Coverage"></a>
   <img src="https://img.shields.io/github/commit-activity/m/earthcake2233/cakecake?style=flat-square&logo=github" alt="Commit activity">
+  <a href="https://hub.docker.com/r/earthcake/cakecake-backend">
+    <img src="https://img.shields.io/docker/image-size/earthcake/cakecake-backend?style=flat-square&logo=docker&logoColor=white&label=Image%20Size" alt="Docker Image Size">
+  </a>
 </p>
 
 ---
@@ -51,7 +55,7 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
-Open **http://localhost:8888**. First boot runs DB migration, Elasticsearch indexing, and demo-data seeding automatically — no local Go / Node / MySQL / Redis / RabbitMQ / Elasticsearch / FFmpeg installation needed.
+Open **[http://localhost:8888](http://localhost:8888)**. First boot runs DB migration, Elasticsearch indexing, and demo-data seeding automatically — no local Go / Node / MySQL / Redis / RabbitMQ / Elasticsearch / FFmpeg installation needed.
 
 Ports, demo accounts, enabling the AI assistant / OSS uploads, and troubleshooting live in [deploy/DEPLOY.md · Local One-Command Experience](./deploy/DEPLOY.md#0-local-one-command-experience-docker-compose).
 
