@@ -4,7 +4,8 @@
     class="app"
     :class="{
       'creator-center-layout': isCreatorCenterPage,
-      'app--mb-user-space': isCakecakeGrayPage
+      'app--mb-user-space': isCakecakeGrayPage,
+      'app--msg-center': isMessagesPage
     }"
   >
     <app-header v-if="!hideGlobalChrome"></app-header>
@@ -86,10 +87,14 @@ export default {
       const n = this.$route.name;
       return n === "cakecakeUserSpace" || n === "cakecakeUserSpaceRelations";
     },
+    isMessagesPage() {
+      return this.$route.name === "cakecakeMessages";
+    },
     showAppFooter() {
       if (this.hideGlobalChrome) return false;
       const n = this.$route.name;
       if (n === "notFound") return false;
+      if (n === "cakecakeMessages") return false;
       if (n === "cakecakeUserSpace" && this.$route.query?.nav === "dynamic") {
         return false;
       }
@@ -157,6 +162,19 @@ export default {
 <style lang="scss">
 @import "../src/style/common";
 @import "../src/style/mixin";
+
+/* 消息中心：App 壳固定视口高度，页面不滚动，只保留聊天面板内部滚动 */
+#app.app.app--msg-center {
+  height: 100vh;
+  overflow: hidden;
+}
+
+.app--msg-center .app-body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  margin-bottom: 0;
+}
 
 body {
   position: relative;

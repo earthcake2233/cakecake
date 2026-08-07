@@ -93,6 +93,7 @@ func RegisterRoutes(r *gin.Engine, a *API, jwtm *jwttoken.Manager, appEnv string
 		admin.POST("/dynamics/:id/delete", a.AdminDeleteDynamic)
 		admin.DELETE("/dynamics/:id", a.AdminDeleteDynamic)
 		admin.GET("/agent-settings", a.AdminGetAgentSettings)
+		admin.GET("/agent-feedbacks", a.AdminListAgentFeedbacks)
 		admin.PUT("/agent-settings", a.AdminPutAgentSettings)
 		admin.POST("/agent-settings/avatar", a.AdminUploadAgentAvatar)
 		admin.GET("/agent-profiles", a.AdminListAgentProfiles)
@@ -230,6 +231,7 @@ func RegisterRoutes(r *gin.Engine, a *API, jwtm *jwttoken.Manager, appEnv string
 		authd.PATCH("/dm/conversations/:id/settings", a.PatchDmConversationSettings)
 		authd.GET("/dm/conversations/:id/messages", a.ListDmMessages)
 		authd.POST("/dm/conversations/:id/messages", a.PostDmMessage)
+		authd.POST("/dm/agent/feedback", a.PostAgentFeedback)
 	}
 
 	r.GET("/api/v1/ws/danmaku", a.ServeDanmaku)

@@ -15,30 +15,43 @@ import (
 type Agent interface {
 	CheckAgentSlugExists(ctx context.Context, slug string) (bool, error)
 	CheckQuota(ctx context.Context, userID uint64) bool
+	BeginGeneration(uid uint64, genID uint64)
+	ClearGenerationState(uid uint64)
+	ContinueReplyStream(ctx context.Context, conv *dm.DmConversation, partial string) (string, []string, error)
 	CountActiveAgentProfiles(ctx context.Context) (int64, error)
 	CreateAgentBotUser(ctx context.Context, slug string, displayName string, sign string, avatarURL string) (uint64, error)
 	CreateAgentProfile(ctx context.Context, p *agent.AgentProfile) error
 	DeleteAgentProfile(ctx context.Context, id uint64) error
+	DropCurrentGeneration(uid uint64)
+	EndGeneration(uid uint64, genID uint64)
 	EnsureAgentProfiles(ctx context.Context) error
 	EnsureForUser(humanID uint64) error
 	GenerateReply(ctx context.Context, conv *dm.DmConversation, userText string) (*serviceagent.GenerateReplyResult, error)
 	GetAgentProfile(ctx context.Context, id uint64) (*agent.AgentProfile, error)
 	GetGlobalSystemPrompt(ctx context.Context) string
+	GenerateSuggestions(ctx context.Context, reply string) []string
 	IncrQuota(ctx context.Context, userID uint64)
 	IsAgentConversation(conv *dm.DmConversation) bool
 	IsBotUser(uid uint64) bool
+	IsGenerationPaused(uid uint64) bool
 	ListAgentProfiles(ctx context.Context) ([]agent.AgentProfile, error)
 	MaxProfiles() int
 	NormalizeSlug(slug string) (string, error)
+	PauseGeneration(uid uint64)
 	PostAssistantMessage(conv *dm.DmConversation, humanID uint64, content string, extra ...string) (*dm.DmMessage, error)
 	ProfileCount(ctx context.Context) (int64, error)
 	ReloadProfiles()
 	ResetConversation(ctx context.Context, conv *dm.DmConversation, humanID uint64) (*dm.DmMessage, error)
+	ListAgentFeedbacks(ctx context.Context, limit int, offset int) ([]agent.AgentFeedback, error)
+	ListAgentFeedbacksWithContent(ctx context.Context, limit int, offset int) ([]serviceagent.AgentFeedbackRow, error)
+	SetMessageFeedback(ctx context.Context, messageID uint64, userID uint64, feedback string) error
 	RenameAgentProfileSlug(ctx context.Context, p *agent.AgentProfile, newSlug string) error
+	ResumeGeneration(uid uint64)
 	SyncAgentProfile(ctx context.Context, p *agent.AgentProfile) error
 	UnmarshalWelcomeList(raw json.RawMessage, fallback []string) ([]string, error)
 	UpdateAgentAvatar(ctx context.Context, id uint64, avatarURL string) error
 	UpdateAgentProfile(ctx context.Context, id uint64, updates map[string]interface{}) error
+	UpdateMessageSuggestions(ctx context.Context, messageID uint64, suggestions []string) error
 }
 
 var _ Agent = (*serviceagent.AgentService)(nil)

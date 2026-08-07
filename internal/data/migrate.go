@@ -47,7 +47,60 @@ func RegisteredMigrations() []Migration {
 		{17, "resync_article_comment_counts", "recompute comment_count for curated articles", resyncCuratedArticleCommentCounts},
 		{18, "backfill_dynamic_comment_approved", "mark existing dynamic comments as approved", backfillDynamicCommentApproved},
 		{19, "resync_dynamic_comment_counts", "recompute comment_count for curated dynamics", resyncCuratedDynamicCommentCounts},
+		{20, "dm_message_content_text", "enlarge dm_messages.content to TEXT for long AI replies", migrateDmMessageContentText},
+		{21, "dm_message_suggestions", "add suggestions column for AI follow-up chips", migrateDmMessageSuggestions},
+		{22, "agent_feedback_table", "create agent_feedbacks table", migrateAgentFeedbackTable},
 	}
+}
+
+// migrateAgentFeedbackTable creates agent_feedbacks for existing installations.
+func migrateAgentFeedbackTable(db *gorm.DB, lg *zap.Logger) error {
+	if db.Dialector.Name() != "mysql" {
+		return nil
+	}
+	if err := db.AutoMigrate(&agent.AgentFeedback{}); err != nil {
+		return err
+	}
+	if lg != nil {
+		lg.Info("created agent_feedbacks table")
+	}
+	return nil
+}
+
+// migrateDmMessageSuggestions adds dm_messages.suggestions (JSON array of
+// model-generated follow-up questions). Stays in sync with the DmMessage model
+// tag and migrations/00003_*.sql.
+func migrateDmMessageSuggestions(db *gorm.DB, lg *zap.Logger) error {
+	if db.Dialector.Name() != "mysql" {
+		return nil
+	}
+	if dbColumnExists(db, "dm_messages", "suggestions") {
+		return nil
+	}
+	if err := db.Exec("ALTER TABLE `dm_messages` ADD COLUMN `suggestions` TEXT NULL").Error; err != nil {
+		return err
+	}
+	if lg != nil {
+		lg.Info("added dm_messages.suggestions")
+	}
+	return nil
+}
+
+// migrateDmMessageContentText enlarges dm_messages.content from VARCHAR(500) to
+// TEXT so long AI assistant replies are not truncated. It must stay in sync
+// with the DmMessage model tag (type:text) and migrations/00002_*.sql.
+func migrateDmMessageContentText(db *gorm.DB, lg *zap.Logger) error {
+	if db.Dialector.Name() != "mysql" {
+		// Fresh sqlite test DBs already create the column as TEXT via AutoMigrate.
+		return nil
+	}
+	if err := db.Exec("ALTER TABLE `dm_messages` MODIFY COLUMN `content` TEXT NOT NULL").Error; err != nil {
+		return err
+	}
+	if lg != nil {
+		lg.Info("dm_messages.content enlarged to TEXT")
+	}
+	return nil
 }
 
 // autoMigrateCoreModels runs GORM AutoMigrate on every domain model table.
@@ -81,6 +134,7 @@ func autoMigrateCoreModels(db *gorm.DB, lg *zap.Logger) error {
 		&system.SystemConfig{},
 		&agent.AgentSettings{},
 		&agent.AgentProfile{},
+		&agent.AgentFeedback{},
 		&article.Article{},
 		&article.ArticleFavorite{},
 		&article.ArticleCoin{},

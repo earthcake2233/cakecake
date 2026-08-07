@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"cakecake/internal/aigateway"
+	"cakecake/internal/model/dm"
 	"cakecake/internal/ws"
 )
 
@@ -30,6 +31,15 @@ func TestSetupToolCallbacks_NilGateway(t *testing.T) {
 	s := &AgentService{ChatHub: ws.NewChatHub()}
 	s.setupToolCallbacks("test123", 42)
 	require.Nil(t, s.Gateway)
+}
+
+func TestHumanPeerForConversation(t *testing.T) {
+	// Bot has the smaller id: user_low is the bot, but the human must win.
+	require.Equal(t, uint64(18), humanPeerForConversation(&dm.DmConversation{UserLow: 14, UserHigh: 18}, 14))
+	// Bot has the larger id: user_high is the bot, the human is user_low.
+	require.Equal(t, uint64(3), humanPeerForConversation(&dm.DmConversation{UserLow: 3, UserHigh: 99}, 99))
+	// Nil conversation is safe.
+	require.Zero(t, humanPeerForConversation(nil, 14))
 }
 
 func TestClearToolCallbacks_NilGateway(t *testing.T) {

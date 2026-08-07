@@ -1793,7 +1793,8 @@ $c-row-on: #f4f5f7;
 .msg-page {
   position: relative;
   isolation: isolate;
-  min-height: 100vh;
+  height: 100%;
+  overflow: hidden;
   box-sizing: border-box;
 }
 
@@ -1815,9 +1816,13 @@ $c-row-on: #f4f5f7;
   position: relative;
   z-index: 1;
   box-sizing: border-box;
-  min-height: 100vh;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
   width: 100%;
   padding: 20px 16px 24px;
+  display: flex;
+  flex-direction: column;
   background: transparent;
 }
 
@@ -1869,20 +1874,27 @@ $c-row-on: #f4f5f7;
 }
 
 .msg-layout {
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   max-width: 1160px;
   margin: 0 auto;
 }
 
 .msg-stack {
   width: 100%;
+  flex: 1;
+  min-height: 0;
+  display: flex;
 }
 
 .msg-panel {
   display: flex;
   align-items: stretch;
-  height: calc(100vh - 88px);
-  max-height: calc(100vh - 88px);
-  min-height: calc(100vh - 88px);
+  flex: 1;
+  min-height: 0;
   background: rgba(255, 255, 255, 0.24);
   -webkit-backdrop-filter: blur(18px);
   backdrop-filter: blur(18px);

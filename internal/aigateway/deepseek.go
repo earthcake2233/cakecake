@@ -1,6 +1,7 @@
 package aigateway
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -75,6 +76,25 @@ type chatCompletionResp struct {
 	} `json:"error,omitempty"`
 }
 
+// chatCompletionStreamChunk is one SSE `data:` line of a streaming response
+// (OpenAI-compatible; tool call arguments arrive as fragments by index).
+type chatCompletionStreamChunk struct {
+	Choices []struct {
+		Delta struct {
+			Content   string `json:"content"`
+			ToolCalls []struct {
+				Index    int    `json:"index"`
+				ID       string `json:"id"`
+				Function struct {
+					Name      string `json:"name"`
+					Arguments string `json:"arguments"`
+				} `json:"function"`
+			} `json:"tool_calls"`
+		} `json:"delta"`
+		FinishReason string `json:"finish_reason"`
+	} `json:"choices"`
+}
+
 // Complete returns the assistant text (no tools).
 func (c *Client) Complete(ctx context.Context, messages []ChatMessage) (string, error) {
 	msg, err := c.completeInternal(ctx, messages, nil)
@@ -105,7 +125,7 @@ func (c *Client) completeInternal(ctx context.Context, messages []ChatMessage, t
 		Model:       model,
 		Messages:    messages,
 		Tools:       tools,
-		Temperature: 0.7,
+		Temperature: 0.5,
 		Stream:      false,
 	})
 	if err != nil {
@@ -145,6 +165,110 @@ func (c *Client) completeInternal(ctx context.Context, messages []ChatMessage, t
 		return ChatMessage{}, fmt.Errorf("deepseek: empty completion")
 	}
 	return out.Choices[0].Message, nil
+}
+
+// CompleteStream streams the assistant text deltas through onDelta and returns
+// the fully accumulated message (including tool calls).
+func (c *Client) CompleteStream(ctx context.Context, messages []ChatMessage, onDelta func(string)) (ChatMessage, error) {
+	return c.completeInternalStream(ctx, messages, nil, onDelta)
+}
+
+// CompleteWithToolsStream is the streaming variant of CompleteWithTools.
+func (c *Client) CompleteWithToolsStream(ctx context.Context, messages []ChatMessage, tools []ToolDef, onDelta func(string)) (ChatMessage, error) {
+	return c.completeInternalStream(ctx, messages, tools, onDelta)
+}
+
+func (c *Client) completeInternalStream(ctx context.Context, messages []ChatMessage, tools []ToolDef, onDelta func(string)) (ChatMessage, error) {
+	if c == nil || strings.TrimSpace(c.APIKey) == "" {
+		return ChatMessage{}, fmt.Errorf("deepseek: api key not configured")
+	}
+	base := strings.TrimRight(c.BaseURL, "/")
+	if base == "" {
+		base = "https://api.deepseek.com"
+	}
+	model := c.Model
+	if model == "" {
+		model = "deepseek-chat"
+	}
+	body, err := json.Marshal(chatCompletionReq{
+		Model:       model,
+		Messages:    messages,
+		Tools:       tools,
+		Temperature: 0.5,
+		Stream:      true,
+	})
+	if err != nil {
+		return ChatMessage{}, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, base+"/v1/chat/completions", bytes.NewReader(body))
+	if err != nil {
+		return ChatMessage{}, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+c.APIKey)
+	req.Header.Set("Accept", "text/event-stream")
+
+	hc := c.HTTPClient
+	if hc == nil {
+		hc = &http.Client{Timeout: 90 * time.Second}
+	}
+	res, err := hc.Do(req)
+	if err != nil {
+		return ChatMessage{}, err
+	}
+	defer res.Body.Close()
+	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		raw, _ := io.ReadAll(io.LimitReader(res.Body, 1<<20))
+		return ChatMessage{}, fmt.Errorf("deepseek: http %d: %s", res.StatusCode, truncate(string(raw), 400))
+	}
+
+	var acc ChatMessage
+	acc.Role = "assistant"
+	scanner := bufio.NewScanner(res.Body)
+	scanner.Buffer(make([]byte, 0, 64*1024), 2<<20)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if !strings.HasPrefix(line, "data:") {
+			continue
+		}
+		payload := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+		if payload == "[DONE]" {
+			break
+		}
+		var chunk chatCompletionStreamChunk
+		if err := json.Unmarshal([]byte(payload), &chunk); err != nil {
+			continue
+		}
+		if len(chunk.Choices) == 0 {
+			continue
+		}
+		delta := chunk.Choices[0].Delta
+		if delta.Content != "" {
+			acc.Content += delta.Content
+			if onDelta != nil {
+				onDelta(delta.Content)
+			}
+		}
+		for _, tc := range delta.ToolCalls {
+			for len(acc.ToolCalls) <= tc.Index {
+				acc.ToolCalls = append(acc.ToolCalls, ToolCall{Type: "function"})
+			}
+			if tc.ID != "" {
+				acc.ToolCalls[tc.Index].ID = tc.ID
+			}
+			if tc.Function.Name != "" {
+				acc.ToolCalls[tc.Index].Function.Name = tc.Function.Name
+			}
+			acc.ToolCalls[tc.Index].Function.Arguments += tc.Function.Arguments
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return ChatMessage{}, fmt.Errorf("deepseek stream: %w", err)
+	}
+	if strings.TrimSpace(acc.Content) == "" && len(acc.ToolCalls) == 0 {
+		return ChatMessage{}, fmt.Errorf("deepseek: empty streaming completion")
+	}
+	return acc, nil
 }
 
 func truncate(s string, n int) string {

@@ -5,8 +5,10 @@ import (
 	"cakecake/internal/model/dm"
 	"cakecake/internal/service/servicetest"
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -349,7 +351,7 @@ func TestAgentService_PostAssistantMessage(t *testing.T) {
 		require.Contains(t, updated.LastPreview, "Hello!")
 	})
 
-	t.Run("truncates long content to 500", func(t *testing.T) {
+	t.Run("truncates long content to 8000", func(t *testing.T) {
 		db := servicetest.NewDB(t)
 		prof := seedAgentProfile(t, db)
 		conv := seedAgentConversation(t, db, 42, prof.BotUserID, prof.ID)
@@ -359,14 +361,14 @@ func TestAgentService_PostAssistantMessage(t *testing.T) {
 		}).Error)
 
 		long := ""
-		for i := 0; i < 600; i++ {
+		for i := 0; i < 8500; i++ {
 			long += "a"
 		}
 		s := &AgentService{Store: NewAgentStore(db)}
 		msg, err := s.PostAssistantMessage(conv, 42, long)
 		require.NoError(t, err)
 		require.NotNil(t, msg)
-		require.Equal(t, 500, len([]rune(msg.Content)))
+		require.Equal(t, 8000, len([]rune(msg.Content)))
 	})
 }
 
@@ -493,6 +495,141 @@ func TestAgentService_GenerateReply(t *testing.T) {
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "empty system prompt")
 	})
+}
+
+func TestFilterReferencedItems(t *testing.T) {
+	items := json.RawMessage(`[
+		{"id":1,"title":"打上花火治愈心灵","author":"earthcake"},
+		{"id":2,"title":"Go 与 MySQL 实战教程","author":"earthcake"}
+	]`)
+
+	// Reply cites only the relevant video by title -> only that card survives.
+	kept := filterReferencedItems("推荐你看看《Go 与 MySQL 实战教程》", items)
+	require.NotNil(t, kept)
+	var arr []map[string]interface{}
+	require.NoError(t, json.Unmarshal(kept, &arr))
+	require.Len(t, arr, 1)
+	require.Equal(t, float64(2), arr[0]["id"])
+
+	// Reply mentions an id explicitly -> that item survives.
+	kept2 := filterReferencedItems("视频 1 不错", items)
+	require.NotNil(t, kept2)
+	var arr2 []map[string]interface{}
+	require.NoError(t, json.Unmarshal(kept2, &arr2))
+	require.Len(t, arr2, 1)
+	require.Equal(t, float64(1), arr2[0]["id"])
+
+	// Reply says nothing relevant -> nothing survives.
+	require.Nil(t, filterReferencedItems("站内暂时没有相关教程", items))
+}
+
+func TestReplyDismissesResults(t *testing.T) {
+	require.True(t, replyDismissesResults("我在站里搜了一圈，结果只翻出几个动画区视频，跟编程八竿子打不着，站内暂时没有相关教程。"))
+	require.True(t, replyDismissesResults("搜到了《溯》，但和编程无关"))
+	require.True(t, replyDismissesResults("没找到相关教程"))
+	require.True(t, replyDismissesResults("咱们站确实没有 Go 连 MySQL 的教程视频"))
+	require.True(t, replyDismissesResults("结果只有动画和音乐的投稿"))
+	require.False(t, replyDismissesResults("推荐你看看《Go 与 MySQL 实战教程》，站内有这个视频。"))
+}
+
+// buildReplyResult must drop all result cards when the reply dismisses them,
+// even if a result title is mentioned while being dismissed.
+func TestBuildReplyResult_DropsDismissedResults(t *testing.T) {
+	items := json.RawMessage(`[{"id":7,"title":"曾火遍全网的《溯》，你是否还知道？"}]`)
+	coll := &toolActivityCollector{
+		acts: []map[string]interface{}{
+			{"span_id": "s1", "tool_name": "search_videos", "status": "done"},
+		},
+		results: map[string]json.RawMessage{"s1": items},
+	}
+	result, err := buildReplyResult("搜到了《溯》，但和编程无关，站内暂时没有相关教程。", coll)
+	require.NoError(t, err)
+	require.Empty(t, result.ToolResultData)
+	require.NotEmpty(t, result.ToolActivities)
+}
+
+func TestParseSuggestionsJSON(t *testing.T) {
+	require.Equal(t, []string{"a", "b", "c"}, parseSuggestionsJSON(`["a","b","c"]`))
+	require.Equal(t, []string{"a", "b"}, parseSuggestionsJSON("下面是追问：\n```json\n[\"a\",\"b\"]\n```"))
+	require.Equal(t, []string{"x", "y", "z"}, parseSuggestionsJSON(`["x","y","z","w"]`))
+	require.Nil(t, parseSuggestionsJSON("没有追问"))
+	require.Nil(t, parseSuggestionsJSON(""))
+}
+
+func TestPlainTextPreview(t *testing.T) {
+	got := plainTextPreview("**评论区：**\n- earthcake：我喜欢你\n- 支持！\n```go\nfmt.Println(\"hi\")\n```\n[链接](https://x.com)")
+	require.NotContains(t, got, "**")
+	require.NotContains(t, got, "```")
+	require.NotContains(t, got, "- earthcake")
+	require.NotContains(t, got, "[链接]")
+	require.Contains(t, got, "评论区")
+	require.Contains(t, got, "earthcake")
+	require.Contains(t, got, "支持")
+}
+
+func TestPartialEndsInsideCodeFence(t *testing.T) {
+	require.False(t, partialEndsInsideCodeFence("第一段没有代码"))
+	require.True(t, partialEndsInsideCodeFence("先看代码：\n```go\npackage main\nfunc main() {"))
+	require.False(t, partialEndsInsideCodeFence("```go\nfmt.Println(1)\n```\n结束"))
+}
+
+func TestNormalizeMarkdownFences(t *testing.T) {
+	got := normalizeMarkdownFences("开头\n````go\ncode\n```\n结尾")
+	require.Equal(t, "开头\n```go\ncode\n```\n结尾", got)
+	got2 := normalizeMarkdownFences("```go\nunclosed")
+	require.True(t, strings.HasSuffix(got2, "\n```"))
+	require.Equal(t, 2, strings.Count(got2, "```"))
+	got3 := normalizeMarkdownFences("// 验证```go\n// 验证连接是否成功\n}")
+	require.NotContains(t, got3, "```")
+	require.Equal(t, "// 验证\n// 验证连接是否成功\n}", got3)
+	got4 := normalizeMarkdownFences("```go\ncode line\n```go\nmore code\n```")
+	require.Equal(t, "```go\ncode line\n\nmore code\n```", got4)
+}
+
+func TestDropSeamDuplicateLines(t *testing.T) {
+	got := dropSeamDuplicateLines(
+		"    // 格式：用户名:密码@tcp(主机:端口)/数据库名?参数",
+		"// 格式：用户名:密码@tcp(主机:端口)/数据库名?参数\n    db, err := sql.Open(\"mysql\", dsn)",
+	)
+	require.Equal(t, "    db, err := sql.Open(\"mysql\", dsn)", got)
+
+	got2 := dropSeamDuplicateLines(
+		"\tdsn := \"root:123456@tcp(127",
+		"\tdsn := \"root:123456@tcp(127.0.0.1:3306)/testdb?charset=utf8&parseTime=true&loc=Local\"\n\n\tdb, err := sql.Open(\"mysql\", dsn)",
+	)
+	require.Equal(t, "\tdsn := \"root:123456@tcp(127.0.0.1:3306)/testdb?charset=utf8&parseTime=true&loc=Local\"\n\n\tdb, err := sql.Open(\"mysql\", dsn)", got2)
+
+	got3 := dropSeamDuplicateLines(
+		"\tdefer db.Close",
+		"\tdefer db.Close()\n\n\tif err := db.Ping(); err != nil {",
+	)
+	require.Equal(t, "\tdefer db.Close()\n\n\tif err := db.Ping(); err != nil {", got3)
+}
+
+func TestMergeContinuation(t *testing.T) {
+	require.Equal(t, "a\nb", mergeContinuation("a", "b"))
+	require.Equal(
+		t,
+		"// 验证连接是否通\nerr := db.Ping()",
+		mergeContinuation("// 验证连接是否通", "// 验证连接是否通\nerr := db.Ping()"),
+	)
+	require.Equal(
+		t,
+		"// 一定要 Ping 一下，确认数据库真的能连上\n\tif err := db.Ping(); err != nil {",
+		mergeContinuation(
+			"// 一定要 Ping 一下，确认",
+			"\t// 一定要 Ping 一下，确认数据库真的能连上\n\tif err := db.Ping(); err != nil {",
+		),
+	)
+	require.Equal(t, "```go\ncode", mergeContinuation("```go", "```go\ncode"))
+	require.Equal(t, "part", mergeContinuation("part", ""))
+	require.Equal(t, "tail", mergeContinuation("", "tail"))
+}
+
+func TestDedupeConsecutiveLines(t *testing.T) {
+	require.Equal(t, "a\nb", dedupeConsecutiveLines("a\na\nb"))
+	require.Equal(t, "x\ny", dedupeConsecutiveLines("x\ny\ny"))
+	require.Equal(t, "x\ny", dedupeConsecutiveLines("x\ny"))
 }
 
 // ---------- ResetConversation ----------

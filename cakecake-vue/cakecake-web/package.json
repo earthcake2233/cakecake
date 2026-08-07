@@ -18,6 +18,7 @@
     "axios": "^1.7.9",
     "dompurify": "^3.4.5",
     "element-plus": "^2.9.4",
+    "highlight.js": "^11.11.1",
     "markdown-it": "^14.1.1",
     "vue": "^3.5.13",
     "vue-lazyload": "^3.0.0-rc.2",

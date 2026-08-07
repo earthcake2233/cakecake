@@ -53,7 +53,7 @@ func definition(name string) aigateway.ToolDef {
 			Type: "function",
 			Function: aigateway.ToolFuncDef{
 				Name:        ToolSearchVideos,
-				Description: "Search videos by keyword. Returns a list of matching videos with title, uploader, play count, and duration.",
+				Description: "Search videos on this site by keyword. Returns matching videos with title, uploader, play count, and duration. Call it whenever searching this site's content could help answer the user; only present results that actually match the user's question.",
 				Parameters: Object(map[string]interface{}{
 					"keyword":   S("Search keyword (required)."),
 					"page":      I("Page number, starting from 1. Default 1."),

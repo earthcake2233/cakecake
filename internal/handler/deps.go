@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"sync"
+
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -65,6 +67,20 @@ type Dependencies struct {
 
 	// hotRecCh buffers SearchHot.Record requests (async, best-effort).
 	hotRecCh chan<- hotRecordReq
+
+	// agentCancelMu guards agentCancels (per-user in-flight agent reply cancellation).
+	agentCancelMu sync.Mutex
+	agentCancels  map[uint64]agentGenReg
+	agentGenSeq   uint64
+
+	// agentRunMu guards agentRunLocks (per-user generation serialization).
+	agentRunMu    sync.Mutex
+	agentRunLocks map[uint64]*sync.Mutex
+
+	// pendingAgentReplyMu guards pendingAgentReplies (replies completed while
+	// paused, waiting for a resume to persist them).
+	pendingAgentReplyMu sync.Mutex
+	pendingAgentReplies map[uint64]pendingAgentReply
 }
 
 // API exposes HTTP handlers.

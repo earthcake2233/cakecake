@@ -128,6 +128,79 @@ func (g *Gateway) CompleteUserTurn(ctx context.Context, conversationID uint64, u
 	return reply, nil
 }
 
+// CompleteUserTurnStream is the streaming variant of CompleteUserTurn.
+func (g *Gateway) CompleteUserTurnStream(ctx context.Context, conversationID uint64, userText string, onDelta func(string)) (string, error) {
+	if g == nil || g.LLM == nil {
+		return "", fmt.Errorf("agent gateway not configured")
+	}
+	if onDelta == nil {
+		onDelta = func(string) {}
+	}
+	msgs, err := g.BuildMessages(ctx, conversationID, userText)
+	if err != nil {
+		return "", err
+	}
+	replyMsg, err := g.LLM.CompleteStream(ctx, msgs, onDelta)
+	if err != nil {
+		return "", err
+	}
+	reply := strings.TrimSpace(replyMsg.Content)
+	if reply == "" {
+		return "", fmt.Errorf("empty model reply")
+	}
+	allMsgs := append(msgs, replyMsg)
+	g.persistHistory(ctx, conversationID, allMsgs)
+	return reply, nil
+}
+
+// ContinueTurnStream resumes a user-stopped reply. The partial is sent to the
+// model as its own previous assistant message (not as user text), so it
+// continues naturally instead of echoing the seam — the same technique chat
+// UIs use for stop/continue. History persists the stitched full reply.
+func (g *Gateway) ContinueTurnStream(ctx context.Context, conversationID uint64, partial string, instruction string, onDelta func(string)) (ChatMessage, error) {
+	if g == nil || g.LLM == nil {
+		return ChatMessage{}, fmt.Errorf("agent gateway not configured")
+	}
+	if onDelta == nil {
+		onDelta = func(string) {}
+	}
+	msgs, err := g.BuildMessages(ctx, conversationID, "")
+	if err != nil {
+		return ChatMessage{}, err
+	}
+	// Drop the trailing empty user message BuildMessages appended.
+	if len(msgs) > 0 && msgs[len(msgs)-1].Role == "user" &&
+		strings.TrimSpace(msgs[len(msgs)-1].Content) == "" {
+		msgs = msgs[:len(msgs)-1]
+	}
+	r := []rune(partial)
+	if len(r) > 3000 {
+		partial = string(r[:3000])
+	}
+	partial = strings.TrimSpace(partial)
+	msgs = append(msgs,
+		ChatMessage{Role: "assistant", Content: partial},
+		ChatMessage{Role: "user", Content: instruction},
+	)
+	replyMsg, err := g.LLM.CompleteStream(ctx, msgs, onDelta)
+	if err != nil {
+		return ChatMessage{}, err
+	}
+	if strings.TrimSpace(replyMsg.Content) == "" {
+		return ChatMessage{}, fmt.Errorf("empty model reply")
+	}
+	// Persist prior turns + the stitched full reply, dropping the transient
+	// partial/instruction messages from the stored history.
+	fullReply := partial
+	if c := strings.TrimSpace(replyMsg.Content); c != "" {
+		fullReply += "\n" + c
+	}
+	hist := append([]ChatMessage{}, msgs[:len(msgs)-2]...)
+	hist = append(hist, ChatMessage{Role: "assistant", Content: fullReply})
+	g.persistHistory(ctx, conversationID, hist)
+	return replyMsg, nil
+}
+
 // CompleteUserTurnWithTools runs the multi-turn tool calling loop.
 // tools: the enabled tool definitions.
 // traceID: a unique identifier for this turn (for observability + front-end).
@@ -176,6 +249,56 @@ func (g *Gateway) CompleteUserTurnWithTools(
 	}
 
 	// Max iterations reached: return last assistant content or fallback
+	return "抱歉，操作超时，请稍后重试或简化问题。", nil
+}
+
+// CompleteUserTurnWithToolsStream is the streaming variant of
+// CompleteUserTurnWithTools (text deltas are forwarded via OnTextDelta).
+func (g *Gateway) CompleteUserTurnWithToolsStream(
+	ctx context.Context,
+	conversationID uint64,
+	userText string,
+	tools []ToolDef,
+	traceID string,
+	onDelta func(string),
+) (string, error) {
+	if g == nil || g.LLM == nil {
+		return "", fmt.Errorf("agent gateway not configured")
+	}
+	if onDelta == nil {
+		onDelta = func(string) {}
+	}
+	msgs, err := g.BuildMessages(ctx, conversationID, userText)
+	if err != nil {
+		return "", err
+	}
+
+	for iter := 0; iter < maxToolIterations; iter++ {
+		msg, err := g.LLM.CompleteWithToolsStream(ctx, msgs, tools, onDelta)
+		if err != nil {
+			return "", err
+		}
+		msgs = append(msgs, msg)
+
+		if msg.FinishReason() == "stop" || (len(msg.ToolCalls) == 0 && msg.Content != "") {
+			reply := strings.TrimSpace(msg.Content)
+			if reply == "" {
+				return "", fmt.Errorf("empty model reply")
+			}
+			g.persistHistory(ctx, conversationID, msgs)
+			return reply, nil
+		}
+
+		if len(msg.ToolCalls) == 0 {
+			continue
+		}
+		if g.ToolExec == nil {
+			return "", fmt.Errorf("tool executor not configured")
+		}
+		toolMsgs := g.executeToolCalls(ctx, msg.ToolCalls, traceID, iter)
+		msgs = append(msgs, toolMsgs...)
+	}
+
 	return "抱歉，操作超时，请稍后重试或简化问题。", nil
 }
 
