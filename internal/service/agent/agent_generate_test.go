@@ -80,6 +80,8 @@ func TestAgentService_GenerateReply_StreamSuccess(t *testing.T) {
 
 func TestAgentService_GenerateReply_WithTools(t *testing.T) {
 	s, conv := seedGenTest(t)
+	hub, _ := newStateTestHub(t, 18)
+	s.ChatHub = hub
 	callCount := 0
 	llm := mockLLM(t, func(r *http.Request) (int, string) {
 		callCount++
