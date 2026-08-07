@@ -62,7 +62,7 @@
 
 <table>
   <tr>
-    <td align="center" colspan="2"><b>AI 智能助手 — 结构化工具结果展示</b><br><img src="docs/images/ai-chat-structured-results.png" alt="AI 聊天结构化结果" width="500"/></td>
+    <td align="center" colspan="2"><b>AI 智能助手 — 结构化工具结果展示</b><br><img src="docs/images/ai-chat-structured-results.webp" alt="AI 聊天结构化结果" width="500"/></td>
   </tr>
   <tr>
     <td align="center"><b>首页</b><br><img src="docs/images/homepage.webp" alt="首页" width="400"/></td>
