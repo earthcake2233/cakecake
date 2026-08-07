@@ -62,7 +62,7 @@ Versioned DB migrations, global rate limiting, graceful shutdown, observability,
 
 <table>
   <tr>
-    <td align="center" colspan="2"><b>AI Assistant — Structured Tool Results</b><br><img src="docs/images/ai-chat-structured-results.webp" alt="AI chat structured results" width="500"/></td>
+    <td align="center" colspan="2"><b>AI Assistant — Structured Tool Results</b><br><img src="docs/images/ai-chat-structured-results.png" alt="AI chat structured results" width="500"/></td>
   </tr>
   <tr>
     <td align="center"><b>Home</b><br><img src="docs/images/homepage.webp" alt="Home" width="400"/></td>
