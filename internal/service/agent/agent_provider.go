@@ -6,6 +6,9 @@ import (
 	"cakecake/internal/model/agent"
 	"cakecake/internal/model/dm"
 	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
 	"time"
 
 	"go.uber.org/zap"
@@ -34,6 +37,10 @@ type AgentStore interface {
 	RenameAgentProfileSlug(ctx context.Context, p *agent.AgentProfile, newSlug string) error
 	SyncAgentProfile(ctx context.Context, p *agent.AgentProfile) error
 	EnsureAgentProfiles(cfg *config.C, log *zap.Logger) error
+	SetMessageFeedback(ctx context.Context, messageID uint64, userID uint64, feedback string) error
+	UpdateMessageSuggestions(ctx context.Context, messageID uint64, suggestions []string) error
+	ListAgentFeedbacks(ctx context.Context, limit int, offset int) ([]agent.AgentFeedback, error)
+	ListAgentFeedbacksWithContent(ctx context.Context, limit int, offset int) ([]AgentFeedbackRow, error)
 }
 
 // AgentStoreImpl implements AgentStore using *gorm.DB (Phase 1 monolith).
@@ -44,6 +51,99 @@ type AgentStoreImpl struct {
 // NewAgentStore creates a gorm-backed AgentStore implementation.
 func NewAgentStore(db *gorm.DB) *AgentStoreImpl {
 	return &AgentStoreImpl{db: db}
+}
+
+// UpdateMessageSuggestions stores follow-up chips on an assistant message.
+func (s *AgentStoreImpl) UpdateMessageSuggestions(ctx context.Context, messageID uint64, suggestions []string) error {
+	if messageID == 0 {
+		return fmt.Errorf("message_id is required")
+	}
+	if len(suggestions) == 0 {
+		return nil
+	}
+	b, err := json.Marshal(suggestions)
+	if err != nil {
+		return err
+	}
+	return s.db.WithContext(ctx).
+		Model(&dm.DmMessage{}).
+		Where("id = ?", messageID).
+		Update("suggestions", string(b)).Error
+}
+
+// SetMessageFeedback upserts a like/dislike; repeating the same feedback
+// removes it (toggle). Different feedback replaces the previous value.
+func (s *AgentStoreImpl) SetMessageFeedback(ctx context.Context, messageID uint64, userID uint64, feedback string) error {
+	if messageID == 0 || userID == 0 {
+		return fmt.Errorf("message_id and user_id are required")
+	}
+	var existing agent.AgentFeedback
+	err := s.db.WithContext(ctx).
+		Where("message_id = ? AND user_id = ?", messageID, userID).
+		First(&existing).Error
+	if err == nil {
+		if existing.Feedback == feedback {
+			return s.db.WithContext(ctx).Delete(&existing).Error
+		}
+		return s.db.WithContext(ctx).Model(&existing).Updates(map[string]interface{}{
+			"feedback":   feedback,
+			"updated_at": time.Now(),
+		}).Error
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return err
+	}
+	return s.db.WithContext(ctx).Create(&agent.AgentFeedback{
+		MessageID: messageID,
+		UserID:    userID,
+		Feedback:  feedback,
+	}).Error
+}
+
+func (s *AgentStoreImpl) ListAgentFeedbacks(ctx context.Context, limit int, offset int) ([]agent.AgentFeedback, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	var rows []agent.AgentFeedback
+	if err := s.db.WithContext(ctx).
+		Order("id DESC").
+		Limit(limit).
+		Offset(offset).
+		Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	return rows, nil
+}
+
+// AgentFeedbackRow joins a feedback row with the related assistant message
+// content so the admin console can show what was rated.
+type AgentFeedbackRow struct {
+	agent.AgentFeedback
+	MessageContent string `gorm:"column:message_content" json:"message_content"`
+}
+
+func (s *AgentStoreImpl) ListAgentFeedbacksWithContent(ctx context.Context, limit int, offset int) ([]AgentFeedbackRow, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	var rows []AgentFeedbackRow
+	if err := s.db.WithContext(ctx).
+		Table("agent_feedbacks AS af").
+		Select("af.*, m.content AS message_content").
+		Joins("LEFT JOIN dm_messages m ON m.id = af.message_id").
+		Order("af.id DESC").
+		Limit(limit).
+		Offset(offset).
+		Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+	return rows, nil
 }
 
 // EnsureAllAgentConversationsForUser ensures threads exist for each enabled profile.

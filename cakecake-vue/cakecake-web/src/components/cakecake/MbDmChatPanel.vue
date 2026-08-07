@@ -157,7 +157,11 @@
           <template v-for="(grp, gi) in chatMessageGroups" :key="'g' + gi">
             <div class="msg-chat-time">{{ grp.label }}</div>
             <template v-for="m in grp.messages" :key="m.id">
-            <div class="msg-chat-row" :class="{ 'msg-chat-row--mine': m.is_mine }">
+            <div
+              class="msg-chat-row"
+              :class="{ 'msg-chat-row--mine': m.is_mine }"
+              :data-msg-id="m.id != null ? String(m.id) : ''"
+            >
               <img
                 class="msg-chat-face"
                 :src="m.face"
@@ -165,7 +169,92 @@
                 width="32"
                 height="32"
               />
-              <div class="msg-chat-bubble">{{ m.content }}</div>
+              <div
+                v-if="m.is_agent && m.isStreaming && !m.content"
+                class="msg-chat-bubble msg-chat-bubble--md msg-chat-bubble--streaming"
+              >
+                正在重新生成…
+              </div>
+              <div
+                v-else
+                class="msg-chat-bubble"
+                :class="{ 'msg-chat-bubble--md': m.is_agent }"
+                v-html="renderMsgContent(m)"
+              ></div>
+            </div>
+            <div
+              v-if="m.is_agent && m.id !== 'agent-draft' && !m.isStreaming"
+              class="msg-chat-actions"
+            >
+              <button
+                type="button"
+                class="msg-chat-action"
+                title="复制"
+                @click.stop="copyMessage(m)"
+              >
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="9" y="9" width="11" height="11" rx="2" />
+                  <path d="M5 15V5a2 2 0 0 1 2-2h10" />
+                </svg>
+                <span v-if="_copiedMsgId === m.id" class="msg-chat-action__tip">已复制</span>
+              </button>
+              <button
+                type="button"
+                class="msg-chat-action"
+                :class="{ 'is-active is-active--like': feedbackOf(m) === 'like' }"
+                title="有帮助"
+                @click.stop="setFeedback(m, 'like')"
+              >
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M7 10v11H4a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1h3zm0 0l4-7a2 2 0 0 1 2 2v4h6a2 2 0 0 1 2 2.2l-1.2 6A2 2 0 0 1 17.8 21H7" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                class="msg-chat-action"
+                :class="{ 'is-active is-active--dislike': feedbackOf(m) === 'dislike' }"
+                title="没帮助"
+                @click.stop="setFeedback(m, 'dislike')"
+              >
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M17 14V3h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-3zm0 0l-4 7a2 2 0 0 1-2-2v-4H5a2 2 0 0 1-2-2.2L4.2 6A2 2 0 0 1 6.2 3H17" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                class="msg-chat-action"
+                title="重新生成"
+                @click.stop="regenerateReply(m)"
+              >
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+                  <path d="M21 3v6h-6" />
+                </svg>
+              </button>
+            </div>
+            <div
+              v-if="m.is_agent && !m.isStreaming && m.versions && m.versions.length > 1"
+              class="msg-chat-versions"
+            >
+              <button
+                type="button"
+                class="msg-chat-versions__btn"
+                :disabled="m.versionIndex <= 0"
+                @click.stop="switchVersion(m, m.versionIndex - 1)"
+              >
+                ‹
+              </button>
+              <span class="msg-chat-versions__count">
+                {{ m.versionIndex + 1 }} / {{ m.versions.length }}
+              </span>
+              <button
+                type="button"
+                class="msg-chat-versions__btn"
+                :disabled="m.versionIndex >= m.versions.length - 1"
+                @click.stop="switchVersion(m, m.versionIndex + 1)"
+              >
+                ›
+              </button>
             </div>
             <div v-if="m.toolActivities.length" class="msg-tool-activities">
               <div v-for="act in m.toolActivities" :key="act.span_id" class="msg-tool-activity">
@@ -210,6 +299,20 @@
                 </div>
               </template>
             </div>
+            <div
+              v-if="m.is_agent && !m.isStreaming && m.id !== 'agent-draft' && suggestionsFor(m).length"
+              class="msg-chat-chips"
+            >
+              <button
+                v-for="s in suggestionsFor(m)"
+                :key="s"
+                type="button"
+                class="msg-chat-chip"
+                @click.stop="sendSuggestion(s)"
+              >
+                {{ s }}
+              </button>
+            </div>
           </template>
           </template>
           <div v-if="chatAwaitingAgent && _liveToolActs.length" class="msg-tool-activities msg-tool-activities--live">
@@ -220,11 +323,27 @@
             </div>
           </div>
           <div
-            v-if="chatAwaitingAgent"
+            v-if="chatAwaitingAgent && (!_agentDraftContent || _agentContinuePending)"
             class="msg-chat-loading msg-chat-loading--typing"
           >
-            AI 正在输入…
+            {{ _agentRegenerating ? "AI 正在重新生成…" : "AI 正在输入…" }}
           </div>
+          <button
+            v-if="chatAwaitingAgent"
+            type="button"
+            class="msg-chat-stop"
+            @click="stopAgentReply"
+          >
+            停止生成
+          </button>
+          <button
+            v-if="_agentStopped"
+            type="button"
+            class="msg-chat-stop msg-chat-stop--primary"
+            @click="continueAgentReply"
+          >
+            继续生成
+          </button>
         </div>
         <footer class="msg-chat-compose">
           <div class="msg-chat-compose-box">
@@ -366,6 +485,7 @@ import {
   mbPatchDmConversationSettings,
   mbPostDmMessage,
   mbResetDmAgentConversation,
+  mbPostAgentFeedback,
   mbWsChatUrl
 } from "@/api/cakecake";
 import { getAccessToken, getUserId } from "@/utils/authTokens";
@@ -373,6 +493,32 @@ import defaultFace from "@/assets/akari.jpg";
 import gochatIllus from "@/assets/gochat.png";
 import muteIcon from "@/assets/mute.png";
 import { refreshMessageUnread } from "@/utils/messageUnread";
+import MarkdownIt from "markdown-it";
+import DOMPurify from "dompurify";
+import hljs from "highlight.js";
+import "highlight.js/styles/atom-one-dark.css";
+
+const md = new MarkdownIt({
+  html: false,
+  linkify: true,
+  breaks: true,
+  highlight(str, lang) {
+    if (lang && hljs.getLanguage(lang)) {
+      try {
+        return (
+          '<pre class="hljs"><code class="language-' +
+          lang +
+          '">' +
+          hljs.highlight(str, { language: lang, ignoreIllegals: true }).value +
+          "</code></pre>"
+        );
+      } catch (e) {
+        /* fall through to escaped plain block */
+      }
+    }
+    return "<pre class=\"hljs\"><code>" + md.utils.escapeHtml(str) + "</code></pre>";
+  }
+});
 
 /** 每次向服务端请求的历史消息条数 */
 const DM_MESSAGE_PAGE_SIZE = 30;
@@ -417,6 +563,16 @@ export default {
       chatLoadingMore: false,
       chatPosting: false,
       chatAwaitingAgent: false,
+      _agentDraftContent: "",
+      _agentStopped: false,
+      _agentContinuePending: false,
+      _agentContinuing: false,
+      _agentRegenerating: false,
+      _agentLastAction: "",
+      _versionSel: {},
+      _copiedMsgId: null,
+      _copiedTimer: null,
+      _feedbackMap: {},
       _agentReplyTimer: null,
       deletingConvId: 0,
       resettingAgent: false,
@@ -427,6 +583,8 @@ export default {
       _chatWsRetryTimer: null,
       _liveToolActs: [],
       _wsReconnectAttempts: 0,
+      _pendingWsControls: [],
+      _userScrolledUp: false,
     };
   },
   computed: {
@@ -434,7 +592,7 @@ export default {
       return (this.dmConversations || []).map(c => ({
         id: Number(c.id),
         name: c.peer_name || "用户",
-        snippet: c.last_preview || "暂无消息",
+        snippet: this.stripPreviewMd(c.last_preview) || "暂无消息",
         face: c.peer_avatar || defaultFace,
         unread: Number(c.unread_count) || 0,
         muted: !!c.muted,
@@ -466,19 +624,49 @@ export default {
           groups.push({ label: curLabel, messages: curMsgs });
         }
       };
+      const conv = this.dmConversations.find(
+        c => Number(c.id) === Number(this.selectedConvId)
+      );
+      let pendingAgent = null;
       for (const raw of this.chatMessages || []) {
         const d = parseApiTime(raw.created_at);
         const label = `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日 ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-        const isMine =
-          me != null && Number(raw.sender_id) === Number(me);
+        const isMine = me != null && Number(raw.sender_id) === Number(me);
+        const isAgent = raw.role === "assistant" || !!raw.is_agent;
         const item = {
           id: raw.id,
           content: raw.content,
-          face: raw.sender_avatar || defaultFace,
+          face: isAgent
+            ? raw.sender_avatar || (conv && conv.peer_avatar) || defaultFace
+            : raw.sender_avatar || defaultFace,
           is_mine: isMine,
+          is_agent: isAgent,
           toolActivities: raw.tool_activities ? JSON.parse(raw.tool_activities) : (raw._toolActivities || []),
-          toolResultData: raw.tool_result_data ? JSON.parse(raw.tool_result_data) : (raw._toolResultData || {})
+          toolResultData: raw.tool_result_data ? JSON.parse(raw.tool_result_data) : (raw._toolResultData || {}),
+          suggestions: raw.suggestions ? JSON.parse(raw.suggestions) : (raw._suggestions || [])
         };
+        if (isAgent && pendingAgent) {
+          // Consecutive assistant messages are versions of the same reply:
+          // merge into the previous bubble instead of creating a new row.
+          pendingAgent.versions.push(raw.content);
+          pendingAgent.versionIds.push(raw.id);
+          pendingAgent.versionTools.push(item.toolActivities);
+          pendingAgent.versionResults.push(item.toolResultData);
+          pendingAgent.versionSuggestions.push(item.suggestions);
+          pendingAgent.face = item.face;
+          continue;
+        }
+        if (isAgent) {
+          item.groupId = String(raw.id);
+          item.versions = [raw.content];
+          item.versionIds = [raw.id];
+          item.versionTools = [item.toolActivities];
+          item.versionResults = [item.toolResultData];
+          item.versionSuggestions = [item.suggestions];
+          pendingAgent = item;
+        } else {
+          pendingAgent = null;
+        }
         if (label !== curLabel) {
           flush();
           curLabel = label;
@@ -488,6 +676,65 @@ export default {
         }
       }
       flush();
+      // Resolve the selected version per agent bubble (after the final flush so
+      // the last time-group is included).
+      for (const grp of groups) {
+        for (const m of grp.messages) {
+          if (!m.is_agent || !m.versions || m.versions.length <= 1) continue;
+          const rawSel = this._versionSel[m.groupId];
+          const sel =
+            rawSel == null || rawSel < 0 || rawSel >= m.versions.length
+              ? m.versions.length - 1
+              : rawSel;
+          m.versionIndex = sel;
+          m.content = m.versions[sel];
+          m.id = m.versionIds[sel];
+          m.toolActivities = m.versionTools[sel];
+          m.toolResultData = m.versionResults[sel];
+          m.suggestions = m.versionSuggestions[sel];
+        }
+      }
+      const draftText = this._agentDraftContent || "";
+      let lastAgent = null;
+      for (const grp of groups) {
+        for (const m of grp.messages) {
+          if (m.is_agent) lastAgent = m;
+        }
+      }
+      // In-place rewrite only applies to regenerate; continue re-prompts a
+      // fresh reply whose draft is a separate bubble (nothing persisted yet).
+      const inPlaceDraft = this._agentRegenerating && lastAgent;
+      if ((this.chatAwaitingAgent || this._agentStopped) && draftText) {
+        if (inPlaceDraft) {
+          // Regenerate/continue: the new reply grows IN the last bubble.
+          lastAgent.content = draftText;
+          lastAgent.isStreaming = true;
+          // Hide the previous version's tool calls/result cards/suggestions
+          // while the new reply streams; the new version brings its own.
+          lastAgent.toolActivities = [];
+          lastAgent.toolResultData = {};
+          lastAgent.suggestions = [];
+        } else {
+          curMsgs.push({
+            id: "agent-draft",
+            content: draftText,
+            face: this.agentFaceForDraft(),
+            is_mine: false,
+            is_agent: true,
+            toolActivities: [],
+            toolResultData: {},
+            isStreaming: true
+          });
+        }
+      } else if (this._agentRegenerating && lastAgent) {
+        // Regenerate started but no token arrived yet: clear the old rendering
+        // so the bubble is visibly rewritten in place.
+        lastAgent.content = "";
+        lastAgent.isStreaming = true;
+        lastAgent.toolActivities = [];
+        lastAgent.toolResultData = {};
+        lastAgent.suggestions = [];
+      }
       return groups;
     }
   },
@@ -505,7 +752,14 @@ export default {
   mounted() {
     void this.loadConversations();
     this.connectChatWs();
+    this.loadAgentFeedback();
     document.addEventListener("click", this.onDocumentClick);
+  },
+  updated() {
+    this.$nextTick(() => {
+      const el = this.$refs.chatScrollEl;
+      if (el) this.enhanceRenderedMd(el);
+    });
   },
   beforeUnmount() {
     this.clearAgentReplyTimer();
@@ -513,6 +767,207 @@ export default {
     document.removeEventListener("click", this.onDocumentClick);
   },
   methods: {
+    escapeHtmlText(str) {
+      return String(str || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    },
+    renderMsgContent(m) {
+      if (!m || !m.content) return "";
+      if (!m.is_agent) return this.escapeHtmlText(m.content);
+      return DOMPurify.sanitize(md.render(m.content));
+    },
+    async copyMessage(m) {
+      if (!m || !m.content) return;
+      await this.copyPlainText(m.content);
+      this._copiedMsgId = m.id;
+      if (this._copiedTimer) clearTimeout(this._copiedTimer);
+      this._copiedTimer = setTimeout(() => {
+        this._copiedMsgId = null;
+        this._copiedTimer = null;
+      }, 1500);
+    },
+    async copyPlainText(text) {
+      if (!text) return;
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch {
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        try {
+          document.execCommand("copy");
+        } catch {
+          /* ignore */
+        }
+        document.body.removeChild(ta);
+      }
+    },
+    enhanceRenderedMd(rootEl) {
+      if (!rootEl) return;
+      rootEl.querySelectorAll(".msg-chat-bubble--md pre").forEach(pre => {
+        if (pre.querySelector(".msg-code-copy")) return;
+        pre.style.position = "relative";
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "msg-code-copy";
+        btn.textContent = "复制";
+        btn.addEventListener("click", ev => {
+          ev.stopPropagation();
+          const code = pre.querySelector("code");
+          const text = (code && code.innerText) || pre.innerText || "";
+          void this.copyPlainText(text).then(() => {
+            btn.textContent = "已复制";
+            setTimeout(() => {
+              btn.textContent = "复制";
+            }, 1500);
+          });
+        });
+        pre.appendChild(btn);
+      });
+    },
+    feedbackOf(m) {
+      return (m && this._feedbackMap[String(m.id)]) || "";
+    },
+    async setFeedback(m, kind) {
+      if (!m || m.id == null || m.id === "agent-draft") return;
+      const key = String(m.id);
+      const cur = this._feedbackMap[key] || "";
+      const next = cur === kind ? "" : kind;
+      this._feedbackMap = { ...this._feedbackMap, [key]: next };
+      try {
+        const payload = next === "" ? cur : next;
+        await mbPostAgentFeedback(Number(m.id), payload);
+        try {
+          localStorage.setItem(
+            "cakecake_agent_feedback",
+            JSON.stringify(this._feedbackMap)
+          );
+        } catch {
+          /* ignore */
+        }
+      } catch (e) {
+        this._feedbackMap = { ...this._feedbackMap, [key]: cur };
+        ElMessage.error((e && e.message) || "反馈失败，请稍后再试");
+      }
+    },
+    loadAgentFeedback() {
+      try {
+        const s = localStorage.getItem("cakecake_agent_feedback");
+        if (s) this._feedbackMap = JSON.parse(s) || {};
+      } catch {
+        /* ignore */
+      }
+    },
+    suggestionsFor(m) {
+      if (!m || !m.is_agent) return [];
+      if (Array.isArray(m.suggestions) && m.suggestions.length) {
+        return m.suggestions.slice(0, 3);
+      }
+      return [];
+    },
+    sendSuggestion(text) {
+      if (!text || this.chatPosting || this.chatAwaitingAgent) return;
+      this.chatDraft = text;
+      void this.sendChatMessage();
+    },
+    sendWsControl(payload) {
+      if (!this.chatWs || this.chatWs.readyState !== WebSocket.OPEN) {
+        // Queue the control so a stop/continue clicked during a reconnect is
+        // not silently lost (otherwise the LLM keeps streaming and the reply
+        // appears fully generated at once).
+        this._pendingWsControls.push(payload);
+        this.connectChatWs();
+        return;
+      }
+      try {
+        this.chatWs.send(JSON.stringify(payload));
+      } catch {
+        /* ignore */
+      }
+    },
+    stopAgentReply() {
+      this.sendWsControl({ type: "agent_cancel" });
+      this.clearAgentReplyTimer();
+      this.chatAwaitingAgent = false;
+      this._agentStopped = true;
+      this._agentContinuePending = false;
+      // Keep the in-place rewrite flag: a paused regenerate must keep hiding
+      // the previous version until the new reply is persisted, otherwise the
+      // old content (and a duplicate draft bubble) would flash back.
+      // _agentContinuing stays true so a paused continue can resume in place.
+      this._pendingToolActs = [];
+      this._liveToolActs = [];
+      this._pendingResultData = {};
+    },
+    continueAgentReply() {
+      const partial = this._agentDraftContent || "";
+      if (this.chatAwaitingAgent || this._agentContinuePending) return;
+      const cid = Number(this.selectedConvId);
+      if (!cid) return;
+      if (!partial.trim()) {
+        // Stopped before the first delta: continue == regenerate the reply.
+        this.sendWsControl({ type: "agent_regenerate", conversation_id: cid });
+        this._agentStopped = false;
+        this._agentContinuing = false;
+        this._agentRegenerating = true;
+        this._agentLastAction = "regenerate";
+        this.startAgentReplyWait();
+        return;
+      }
+      this.sendWsControl({
+        type: "agent_continue",
+        conversation_id: cid,
+        partial
+      });
+      this._agentStopped = false;
+      this._agentContinuePending = true;
+      this._agentContinuing = true;
+      this._agentLastAction = "continue";
+      this.startAgentReplyWait();
+    },
+    switchVersion(m, idx) {
+      if (!m || !m.groupId || !m.versions) return;
+      const max = m.versions.length - 1;
+      const next = Math.max(0, Math.min(max, idx));
+      if (next === m.versionIndex) return;
+      this._versionSel = { ...this._versionSel, [m.groupId]: next };
+    },
+    regenerateReply() {
+      if (this.chatAwaitingAgent || this.chatPosting || this._agentRegenerating) return;
+      const cid = Number(this.selectedConvId);
+      if (!cid) return;
+      this.sendWsControl({
+        type: "agent_regenerate",
+        conversation_id: cid
+      });
+      this._agentDraftContent = "";
+      this._agentStopped = false;
+      this._agentRegenerating = true;
+      this._agentLastAction = "regenerate";
+      this.startAgentReplyWait();
+      this.$nextTick(() => {
+        const msgs = this.chatMessages || [];
+        for (let i = msgs.length - 1; i >= 0; i--) {
+          const raw = msgs[i];
+          if (String(raw.role) !== "assistant" && !raw.is_agent) {
+            this.scrollToMessageTop({ id: raw.id });
+            // Once the jump animation settles, let the regenerated reply
+            // auto-follow the typewriter (manual up-scroll still wins later).
+            setTimeout(() => {
+              this._userScrolledUp = false;
+            }, 700);
+            break;
+          }
+        }
+      });
+    },
     async loadConversations() {
       try {
         const { items } = await mbListDmConversations();
@@ -537,6 +992,11 @@ export default {
       if (!cid) return;
       this.clearAgentReplyTimer();
       this.chatAwaitingAgent = false;
+      this._agentDraftContent = "";
+      this._agentStopped = false;
+      this._agentContinuing = false;
+      this._agentRegenerating = false;
+      this._versionSel = {};
       this.closeHeadMenu();
       this.selectedConvId = cid;
       const hit = this.dmConversations.find(c => Number(c.id) === cid);
@@ -545,6 +1005,7 @@ export default {
       this.syncChatPrefsFromConv();
       this.chatMessages = [];
       this.chatNextCursor = "";
+      this._userScrolledUp = false;
       await this.loadChatMessages(false);
       this.$nextTick(() => this.scrollChatToBottom());
     },
@@ -595,7 +1056,12 @@ export default {
     },
     onChatScroll() {
       const el = this.$refs.chatScrollEl;
-      if (!el || !this.chatNextCursor || this.chatLoadingMore || this.chatLoading) {
+      if (!el) {
+        return;
+      }
+      const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+      this._userScrolledUp = !nearBottom;
+      if (!this.chatNextCursor || this.chatLoadingMore || this.chatLoading) {
         return;
       }
       if (el.scrollTop < 48) {
@@ -616,6 +1082,11 @@ export default {
           this.selectedPeerId = 0;
           this.selectedPeerName = "";
           this.chatMessages = [];
+          this._agentDraftContent = "";
+          this._agentStopped = false;
+          this._agentContinuing = false;
+          this._agentRegenerating = false;
+          this._versionSel = {};
           this.chatNextCursor = "";
         }
         void refreshMessageUnread();
@@ -628,7 +1099,8 @@ export default {
     },
     scrollChatToBottom() {
       const el = this.$refs.chatScrollEl;
-      if (el) el.scrollTop = el.scrollHeight;
+      if (!el || this._userScrolledUp) return;
+      el.scrollTop = el.scrollHeight;
     },
     appendMessageIfNew(msg) {
       if (!msg || msg.id == null) return;
@@ -637,15 +1109,58 @@ export default {
       if (this.chatMessages.some(m => Number(m.id) === Number(msg.id))) return;
       this.chatMessages = [...this.chatMessages, msg];
       const me = getUserId();
+      const isAgentReply =
+        this.selectedIsAgent && me != null && Number(msg.sender_id) !== Number(me);
       if (
-        this.selectedIsAgent &&
-        me != null &&
-        Number(msg.sender_id) !== Number(me)
+        isAgentReply
       ) {
         this.clearAgentReplyTimer();
         this.chatAwaitingAgent = false;
       }
-      this.$nextTick(() => this.scrollChatToBottom());
+      this.$nextTick(() => {
+        if (isAgentReply) {
+          if (this._agentLastAction === "continue") {
+            this.scrollToMessageTop(msg);
+          } else if (this._agentLastAction !== "regenerate") {
+            this.scrollChatToBottom();
+          }
+          // regenerate: keep the view where the in-place rewrite happened.
+          this._agentLastAction = "";
+        } else {
+          this.scrollChatToBottom();
+        }
+      });
+    },
+    scrollToMessageTop(msg) {
+      const el = this.$refs.chatScrollEl;
+      if (!el || !msg || msg.id == null) return;
+      const target = el.querySelector(`.msg-chat-row[data-msg-id="${String(msg.id)}"]`);
+      if (!target) {
+        this.scrollChatToBottom();
+        return;
+      }
+      const top =
+        target.getBoundingClientRect().top -
+        el.getBoundingClientRect().top +
+        el.scrollTop -
+        12;
+      this.animateScrollTo(el, Math.max(0, top));
+    },
+    animateScrollTo(el, to) {
+      if (!el) return;
+      const from = el.scrollTop;
+      const delta = to - from;
+      if (Math.abs(delta) < 1) return;
+      const duration = Math.min(500, Math.max(250, Math.abs(delta) * 0.35));
+      const start = performance.now();
+      const ease = t =>
+        t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+      const step = now => {
+        const t = Math.min(1, (now - start) / duration);
+        el.scrollTop = from + delta * ease(t);
+        if (t < 1) requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
     },
     clearAgentReplyTimer() {
       if (this._agentReplyTimer) {
@@ -659,6 +1174,11 @@ export default {
       this._agentReplyTimer = setTimeout(() => {
         this.chatAwaitingAgent = false;
         this._agentReplyTimer = null;
+        if (this._agentContinuePending && this._agentDraftContent) {
+          this._agentContinuePending = false;
+          this._agentStopped = true;
+          ElMessage.warning("续写未完成，可重试或复制已生成内容");
+        }
       }, 120000);
     },
     upsertConversation(conv) {
@@ -681,6 +1201,15 @@ export default {
       };
       ws.onopen = () => {
         this._wsReconnectAttempts = 0;
+        const pending = this._pendingWsControls || [];
+        this._pendingWsControls = [];
+        for (const p of pending) {
+          try {
+            this.chatWs.send(JSON.stringify(p));
+          } catch {
+            /* ignore */
+          }
+        }
       };
       ws.onclose = () => {
         if (this.chatWs !== ws) return;
@@ -729,18 +1258,45 @@ export default {
         this._pendingResultData[data.body.span_id] = data.body.items;
         return;
       }
+      if (data.type === "agent_delta" && data.body && typeof data.body.content === "string") {
+        if (this._agentStopped) return;
+        this._agentContinuePending = false;
+        this._agentDraftContent += data.body.content;
+        this.$nextTick(() => this.scrollChatToBottom());
+        return;
+      }
+      if (
+        data.type === "agent_suggestions" &&
+        data.message_id &&
+        Array.isArray(data.suggestions)
+      ) {
+        const mid = Number(data.message_id);
+        const idx = this.chatMessages.findIndex(
+          (m) => Number(m.id) === mid
+        );
+        if (idx >= 0) {
+          this.chatMessages = this.chatMessages.map((m, i) =>
+            i === idx
+              ? { ...m, suggestions: JSON.stringify(data.suggestions) }
+              : m
+          );
+        }
+        return;
+      }
       if (!data || typeof data !== "object") return;
       if (data.type === "dm_message" && data.message) {
+        this._agentDraftContent = "";
+        this._agentStopped = false;
+        this._agentContinuePending = false;
+        this._agentContinuing = false;
+        this._agentRegenerating = false;
         if (this._pendingToolActs.length) {
           // Mark any tools still "running" as "done" (dm_message means LLM finished processing all results)
           this._pendingToolActs.forEach(t => { if (t.status === "running") t.status = "done"; });
-          data.message._toolActivities = [...this._pendingToolActs];
-          data.message._toolResultData = { ...this._pendingResultData };
           // Finalize any remaining running tools before clear
           this._liveToolActs.forEach(t => { if (t.status === "running") t.status = "done"; });
           this._pendingToolActs = []; this._liveToolActs = [];
           this._pendingResultData = {};
-          // Data is now persisted in DB by backend, no need for sessionStorage
         }
         this.upsertConversationFromMessage(data.message);
         this.appendMessageIfNew(data.message);
@@ -872,6 +1428,11 @@ export default {
         }
         this.clearAgentReplyTimer();
         this.chatAwaitingAgent = false;
+        this._agentDraftContent = "";
+        this._agentStopped = false;
+        this._agentContinuing = false;
+        this._agentRegenerating = false;
+        this._versionSel = {};
         this.chatNextCursor = "";
         await this.loadChatMessages(false);
         this.$nextTick(() => this.scrollChatToBottom());
@@ -931,6 +1492,29 @@ export default {
       if (n >= 1000) return (n / 1000).toFixed(1) + "千";
       return String(n);
     },
+    stripPreviewMd(s) {
+      return String(s || "")
+        .replace(/```[\s\S]*?```/g, " ")
+        .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+        .replace(/\*\*|__|`/g, "")
+        .replace(/^[#>+\-*]\s*/gm, "")
+        .replace(/\s+/g, " ")
+        .trim();
+    },
+    agentFaceForDraft() {
+      const conv = this.dmConversations.find(
+        c => Number(c.id) === Number(this.selectedConvId)
+      );
+      if (conv && conv.peer_avatar) return conv.peer_avatar;
+      const msgs = this.chatMessages || [];
+      for (let i = msgs.length - 1; i >= 0; i--) {
+        const m = msgs[i];
+        if (m.sender_avatar && String(m.role) === "assistant") {
+          return m.sender_avatar;
+        }
+      }
+      return defaultFace;
+    },
     onAvatarError(e) {
       if (!e.target._fallback) {
         e.target._fallback = true;
@@ -954,7 +1538,13 @@ export default {
       this.chatPosting = true;
       try {
         const msg = await mbPostDmMessage(this.selectedConvId, text);
-        this.chatDraft = "";
+      this.chatDraft = "";
+      this._userScrolledUp = false;
+      this._agentDraftContent = "";
+        this._agentStopped = false;
+        this._agentRegenerating = false;
+        this._agentContinuing = false;
+        this._agentLastAction = "new";
         this.appendMessageIfNew(msg);
         this.upsertConversationFromMessage(msg);
         if (awaitAgent) {

@@ -1557,6 +1557,18 @@ export async function mbPostDmMessage(
   return unwrap(r);
 }
 
+export async function mbPostAgentFeedback(
+  messageId: number,
+  feedback: string
+): Promise<unknown> {
+  const r = await http.post(
+    `/api/v1/dm/agent/feedback`,
+    { message_id: messageId, feedback },
+    authAxiosOpts
+  );
+  return unwrap(r);
+}
+
 export async function mbPatchDmConversationSettings(
   conversationId: number,
   body: { pinned?: boolean; muted?: boolean }

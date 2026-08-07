@@ -162,6 +162,12 @@ export function adminListAgentProfiles() {
   return adminHttp.get("/api/v1/admin/agent-profiles");
 }
 
+export function adminListAgentFeedbacks(limit = 50, offset = 0) {
+  return adminHttp.get("/api/v1/admin/agent-feedbacks", {
+    params: { limit, offset }
+  });
+}
+
 export function adminCreateAgentProfile(payload) {
   return adminHttp.post("/api/v1/admin/agent-profiles", payload);
 }

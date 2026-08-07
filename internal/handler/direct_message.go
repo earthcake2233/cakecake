@@ -73,6 +73,7 @@ type dmMessageDTO struct {
 	Role           string `json:"role"`
 	ToolActivities string `json:"tool_activities"`
 	ToolResultData string `json:"tool_result_data"`
+	Suggestions    string `json:"suggestions"`
 	CreatedAt      string `json:"created_at"`
 }
 
@@ -128,6 +129,7 @@ func (a *API) dmFormatMessage(m *dm.DmMessage, senderName, senderAvatar string) 
 		Role:           role,
 		ToolActivities: m.ToolActivities,
 		ToolResultData: m.ToolResultData,
+		Suggestions:    m.Suggestions,
 		CreatedAt:      m.CreatedAt.Format("2006-01-02 15:04:05"),
 	}
 }

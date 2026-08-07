@@ -184,3 +184,133 @@ flowchart TD
 3. **并行执行**：同轮 tool_calls 用 goroutine 并行执行，提升响应速度
 4. **防滥用三层**：配额检查 → 敏感词入参/出参过滤 → 每工具独立 RuntimeConfig 开关
 5. **trace_id 贯穿**：同一 trace_id 既写 Zap 日志又推前端，后端调试和前端展示共用同一链路 ID
+
+---
+
+## 流式 / 暂停 / 继续 / 重新生成：开发踩坑与关键技术点
+
+> 这一节记录了 AI 助手从「非流式完整回复」演进到「流式打字机 + 停止/继续 + 重新生成 + 追问建议」过程中踩过的坑。
+
+### 1. 流式 delta 推送目标：DM 会话的 `UserLow/UserHigh` 陷阱
+
+DM 会话按 `(min, max)` 排序存储双方 ID（`user_low/user_high`）。当 bot 的 ID（如 14）小于用户 ID（如 18）时，`conv.UserLow` 是 **bot** 而不是用户。
+
+曾经用 `conv.UserLow` 作为流式推送目标：`dm_message` 走的是正确的 `humanID`，所以最终消息能收到；但 `agent_delta` 全推给了 bot（无人连接），前端一个字都收不到，表现为「流式不生效、只有最后一条」。
+
+解决：新增 `humanPeerForConversation(conv, botUserID)` 显式返回「非 bot 的一方」，并配单元测试锁定。
+
+### 2. 全局回调 vs 按调用回调（多用户并发串号）
+
+Gateway 早期用单一字段 `OnTextDelta`，由 `setupToolCallbacks` 在每次生成前覆盖。两个用户并发生成时，后设置的闭包会覆盖前者，A 用户的 token 可能推到 B 用户。
+
+解决：`CompleteUserTurnStream` / `CompleteUserTurnWithToolsStream` / `ContinueTurnStream` 全部改为接收 **per-call** 的 `onDelta func(string)`，每次调用持有自己的闭包（含自己的 `humanID`），彻底消除跨用户串号。
+
+### 3. 暂停/继续状态机（最容易乱序露馅的部分）
+
+设计目标：点击「停止」后 **LLM 流继续在后台跑**，delta 进入缓冲；点击「继续」= 按打字机节奏回放缓冲 + 恢复实时推送。
+
+核心状态：
+
+| 字段 | 含义 |
+|------|------|
+| `paused` | 是否暂停（暂停时 delta 进缓冲，不推送） |
+| `buffer []string` | 暂停期间的 delta 片段 |
+| `dropped` | 被更新的生成取代，丢弃后续 delta |
+| `genID` | 生成代次，防止旧 goroutine 清掉新状态 |
+| `pauseSeq` | 停止序号，每次暂停 +1 |
+| `resuming` | 回放中标志，保证并发 continue 串行 |
+
+踩过的三个坑：
+
+- **回放前先解除暂停**：回放缓冲与实时 delta 并发写 WS，文字乱序插进代码块。修：回放期间保持 `paused=true`，缓冲排空后才解除。
+- **两次 continue 并发回放**：第二个回放在第一个没播完时就解除暂停，乱序复现。修：`resuming` 标志让并发 resume 等待，只有「回放期间没有新暂停（`pauseSeq` 未变）且缓冲为空」才解除暂停。
+- **回放途中点停止被覆盖**：回放结束时的「解除暂停」会把刚点的停止冲掉，表现为停止失效、一口气生成完。修：**每推送一个片段前检查 `pauseSeq`**，发现新停止立即中断回放，剩余片段留在缓冲等下次继续。
+
+### 4. 防重复落库：不要用 substring 匹配草稿
+
+曾用「最新 assistant 内容 contains 流式草稿」判断回复是否已落库。两个致命问题：
+
+1. 持久化前经过 `normalizeMarkdownFences` / `dedupeConsecutiveLines` / trim，而草稿是原始流，两者根本对不上；
+2. `ListMessages` 返回的是 DESC（新的在前），旧代码却从数组尾部往前遍历并「遇到第一条 assistant 就返回」，比对的其实是窗口里最旧的消息。
+
+结果：停止晚到（回复已落库）后再点继续，会重新请求模型生成第二条。
+
+解决：`latestUserTurnHasAssistantReply` —— 只判断「该轮用户消息之后是否已有 assistant 行」，不比较文本；配合每用户 `agentRunLock` 串行化 resume 的决策与落库，双 continue 也只落一条。
+
+### 5. 追问建议异步生成（消除结尾死等）
+
+回复文本流完后，若同步再调一次 LLM 生成「追问 chips」（最长 15s），最终消息会迟迟不落库，体验是「等了好久最后才生成」。
+
+解决：回复先落库 + 推送（suggestions 为空），后台 goroutine 生成建议后：
+
+1. `UpdateMessageSuggestions(messageID, sugg)` 更新行；
+2. 通过 WS 推送新事件 `agent_suggestions {message_id, suggestions}`；
+3. 前端按 `message_id` 更新已有消息的 suggestions，chips 后补出现。
+
+实测：流式结束到消息落库从 5~15s 降到约 100ms。
+
+### 6. Markdown 围栏归一化
+
+模型在停止/继续接缝处经常多吐 ````go`、多余开栅栏或重复行。落库前统一：
+
+- `normalizeMarkdownFences`：栅栏统一三个反引号、去掉接缝处多余开栅栏、末尾未闭合自动补 ` ``` `；
+- `dedupeConsecutiveLines`：去掉完全相同的连续行；
+- `plainTextPreview`：会话列表预览剥掉 markdown。
+
+⚠️ 测试流式顺序时，必须把「客户端收到的原始 delta 拼接」与「落库文本」做**相同的归一化**后再比较，否则会因围栏差异误报乱序。
+
+### 7. 前端状态机：重新生成原地改写
+
+连续的 assistant 行会被前端合并成「版本气泡」（`versions` + `‹ n / n ›` 切换器）。
+
+重新生成流程：`_agentRegenerating=true` → 原地清空旧内容 → 新流在同一个气泡里打字。
+
+踩过的两个坑：
+
+- **停止时清掉 `_agentRegenerating`**：渲染逻辑以为原地改写结束，旧版本内容弹回 + 多出一个 `agent-draft` 气泡（露馅）。修：stop/continue 期间**保留**原地改写标记，直到收到最终 `dm_message` 才清除。
+- **重新生成时未清旧版本的工具数据**：上一轮的 `search_videos` 卡片/状态露出来。修：原地改写时同时清空 `toolActivities` / `toolResultData` / `suggestions`。
+
+### 8. 滚动与 UX
+
+- 每个 delta 都 `scrollToBottom` 会抢用户滚动。修：`onChatScroll` 维护 `_userScrolledUp`，只有贴底时才自动滚动。
+- 重新生成点击后跳转到用户提问行（用户明确要求），跳转动画结束后（约 700ms）恢复自动跟随打字；用户手动上滑仍然优先。
+- 停止/继续保持原地改写后，滚动不会跳到新气泡。
+
+### 9. WS 控制帧不能丢
+
+WS 断线重连期间点击「停止/继续」，如果 `sendWsControl` 发现连接未开就直接 return，控制帧会静默丢失 → 后端一直流到结束，看起来「停止无效、一口气生成完」。
+
+修：控制帧先入 `_pendingWsControls` 队列，`onopen` 后补发。
+
+### 10. 端到端验证方法
+
+这些坑用单测/接口测试覆盖不到，必须**真实浏览器 + 真实模型**复现：
+
+- **浏览器点击流**（puppeteer + Chromium）：发送 → 停止 → 继续 → 重新生成，断言 DB 行数、DOM 无 `agent-draft` 重复行、旧内容不弹回、滚动位置正确。
+- **裸 WS 竞态**：同一连接连发两个 `agent_continue`，断言只落一条 assistant。
+- **流式顺序断言**：客户端收到的全部 delta 拼接后，与落库内容做相同归一化再比对（拼接要包含回放前已收帧，曾因漏开头误报）。
+- **停止响应**：停止后最多允许 2~3 个已在途片段（网络延迟），不能继续吐整段。
+
+### 协议补充
+
+| 事件 | 方向 | 说明 |
+|------|------|------|
+| `agent_delta` | 服务端 → 前端 | 流式文本片段 `{content}` |
+| `agent_suggestions` | 服务端 → 前端 | 异步追问建议 `{message_id, suggestions}` |
+| `agent_cancel` | 前端 → 服务端 | 暂停（缓冲，不取消后台 LLM） |
+| `agent_continue` | 前端 → 服务端 | 回放缓冲并恢复实时流 |
+| `agent_regenerate` | 前端 → 服务端 | 重新生成该轮回复（新版本） |
+
+### 核心不变量
+
+- 每条用户消息（regenerate 除外）最终只落一条 assistant；regenerate 每次新增一个版本。
+- 流式推送顺序 == 落库文本顺序；暂停/继续不得乱序。
+- 停止响应时间 ≈ 一个在途片段；回放中再点停止立即生效。
+- 所有控制帧必须送达（断线重连补发），不允许静默丢弃。
+
+### 相关代码
+
+- `internal/aigateway/gateway.go` — per-call delta、流式工具编排
+- `internal/service/agent/agent.go` — 暂停/继续状态机、markdown 归一化
+- `internal/handler/agent_direct_message.go` — resume/regenerate、异步建议
+- `cakecake-vue/cakecake-web/src/components/cakecake/MbDmChatPanel.vue` — 前端状态机、滚动、控制帧队列

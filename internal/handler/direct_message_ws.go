@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"net/http"
 	"strings"
 	"time"
@@ -41,8 +42,25 @@ func (a *API) ServeChat(c *gin.Context) {
 
 	for {
 		_ = conn.SetReadDeadline(time.Now().Add(120 * time.Second))
-		if _, _, err := conn.ReadMessage(); err != nil {
+		_, data, err := conn.ReadMessage()
+		if err != nil {
 			break
+		}
+		var req struct {
+			Type           string `json:"type"`
+			ConversationID uint64 `json:"conversation_id"`
+			Partial        string `json:"partial"`
+		}
+		if err := json.Unmarshal(data, &req); err != nil {
+			continue
+		}
+		switch req.Type {
+		case "agent_cancel":
+			a.pauseAgentReply(uid)
+		case "agent_regenerate":
+			a.regenerateAgentReply(uid, req.ConversationID)
+		case "agent_continue":
+			go a.resumeAgentReply(uid, req.ConversationID, req.Partial)
 		}
 	}
 }

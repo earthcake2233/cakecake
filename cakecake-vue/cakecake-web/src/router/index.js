@@ -305,6 +305,12 @@ const routes = [
         meta: { title: "AI 角色 - 运营后台" }
       },
       {
+        path: "agent-feedbacks",
+        name: "adminAgentFeedbacks",
+        component: () => import("@/pages/admin/AgentFeedbacks.vue"),
+        meta: { title: "AI 反馈 - 运营后台" }
+      },
+      {
         path: "system-configs",
         name: "adminSystemConfigs",
         component: () => import("@/pages/admin/SystemConfigManage.vue"),

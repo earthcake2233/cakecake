@@ -57,6 +57,13 @@
           AI 角色
         </router-link>
         <router-link
+          :to="{ name: 'adminAgentFeedbacks' }"
+          class="adm-side__item"
+          active-class="adm-side__item--on"
+        >
+          AI 反馈
+        </router-link>
+        <router-link
           :to="{ name: 'adminSystemConfigs' }"
           class="adm-side__item"
           active-class="adm-side__item--on"
