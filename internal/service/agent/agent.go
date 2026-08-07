@@ -383,15 +383,16 @@ func humanPeerForConversation(conv *dm.DmConversation, botUserID uint64) uint64 
 
 // deltaSender returns a per-generation stream callback that routes deltas to
 // the human user's ChatHub connection and honors pause/drop generation state.
-// Each LLM call gets its own closure, so concurrent users never cross-wire.
-func (s *AgentService) deltaSender(humanID uint64) func(string) {
+// Each LLM call gets its own closure (capturing its own genID), so concurrent
+// users and superseded generations never cross-wire or leak late deltas.
+func (s *AgentService) deltaSender(humanID uint64, genID uint64) func(string) {
 	return func(delta string) {
 		if delta == "" || s.ChatHub == nil {
 			return
 		}
 		if st := s.generationState(humanID); st != nil {
 			st.mu.Lock()
-			if st.dropped {
+			if st.dropped || st.genID != genID {
 				st.mu.Unlock()
 				return
 			}
@@ -409,6 +410,17 @@ func (s *AgentService) deltaSender(humanID uint64) func(string) {
 			},
 		})
 	}
+}
+
+// currentGenID returns the generation id registered for the user, or 0.
+func (s *AgentService) currentGenID(uid uint64) uint64 {
+	st := s.generationState(uid)
+	if st == nil {
+		return 0
+	}
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	return st.genID
 }
 
 func (s *AgentService) generationState(uid uint64) *agentGenState {
@@ -451,23 +463,25 @@ func (s *AgentService) EndGeneration(uid uint64, genID uint64) {
 }
 
 // DropCurrentGeneration marks the user's current generation as dropped (its
-// buffered/live deltas are discarded) and removes it, so a superseding
-// generation can start clean.
+// buffered/live deltas are discarded). The state stays registered so late
+// deltas from the old stream are still recognized and dropped.
 func (s *AgentService) DropCurrentGeneration(uid uint64) {
 	if uid == 0 {
 		return
 	}
 	s.genMu.Lock()
+	if s.genStates == nil {
+		s.genStates = make(map[uint64]*agentGenState)
+	}
 	st := s.genStates[uid]
-	if st != nil {
-		delete(s.genStates, uid)
+	if st == nil {
+		st = &agentGenState{}
+		s.genStates[uid] = st
 	}
 	s.genMu.Unlock()
-	if st != nil {
-		st.mu.Lock()
-		st.dropped = true
-		st.mu.Unlock()
-	}
+	st.mu.Lock()
+	st.dropped = true
+	st.mu.Unlock()
 }
 
 // PauseGeneration stops pushing streamed deltas; they are buffered so a later
@@ -639,6 +653,7 @@ func (s *AgentService) GenerateReply(ctx context.Context, conv *dm.DmConversatio
 
 	var coll *toolActivityCollector
 	var reply string
+	genID := s.currentGenID(humanID)
 	if s.ToolExec != nil && len(toolkit.DefineTools(s.enabledTools())) > 0 {
 		traceID := generateTraceID()
 		s.setupToolCallbacks(traceID, humanID)
@@ -646,11 +661,11 @@ func (s *AgentService) GenerateReply(ctx context.Context, conv *dm.DmConversatio
 		coll = installToolCollectors(s.Gateway)
 		tools := toolkit.DefineTools(s.enabledTools())
 		s.Gateway.ToolExec = s.ToolExec
-		reply, err = s.Gateway.CompleteUserTurnWithToolsStream(ctx, conv.ID, userText, tools, traceID, s.deltaSender(humanID))
+		reply, err = s.Gateway.CompleteUserTurnWithToolsStream(ctx, conv.ID, userText, tools, traceID, s.deltaSender(humanID, genID))
 	} else {
 		s.setupToolCallbacks("", humanID)
 		defer s.clearToolCallbacks()
-		reply, err = s.Gateway.CompleteUserTurnStream(ctx, conv.ID, userText, s.deltaSender(humanID))
+		reply, err = s.Gateway.CompleteUserTurnStream(ctx, conv.ID, userText, s.deltaSender(humanID, genID))
 	}
 	if err != nil {
 		return nil, err
@@ -709,12 +724,13 @@ func (s *AgentService) ContinueReplyStream(ctx context.Context, conv *dm.DmConve
 
 	s.setupToolCallbacks("", humanID)
 	defer s.clearToolCallbacks()
+	genID := s.currentGenID(humanID)
 
 	instruction := "请从中断处直接继续你的回答，不要重复已经写过的内容，也不要另起一段重新讲解。"
 	if partialEndsInsideCodeFence(partial) {
 		instruction = "你现在正处于未闭合的代码块内部：请先接着写完这段代码（不要重复已写行，不要跳出代码块写新段落），用三个反引号闭合代码块后，如有必要再用一两句话继续讲解。"
 	}
-	replyMsg, err := s.Gateway.ContinueTurnStream(ctx, conv.ID, partial, instruction, s.deltaSender(humanID))
+	replyMsg, err := s.Gateway.ContinueTurnStream(ctx, conv.ID, partial, instruction, s.deltaSender(humanID, genID))
 	if err != nil {
 		return "", nil, err
 	}
