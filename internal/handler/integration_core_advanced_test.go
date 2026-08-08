@@ -19,7 +19,7 @@ func code(t *testing.T, w *httptest.ResponseRecorder) int {
 	var r struct {
 		Code int `json:"code"`
 	}
-	json.Unmarshal(w.Body.Bytes(), &r)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &r))
 	return r.Code
 }
 
@@ -40,7 +40,7 @@ func Test_NotifLikeFlow(t *testing.T) {
 	var cm struct {
 		Data comment.Comment `json:"data"`
 	}
-	json.Unmarshal(w.Body.Bytes(), &cm)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &cm))
 	if cm.Data.ID == 0 {
 		t.Skip("no comment id")
 	}
@@ -73,7 +73,7 @@ func Test_DMFullFlow(t *testing.T) {
 			ID uint64 `json:"id"`
 		} `json:"data"`
 	}
-	json.Unmarshal(w.Body.Bytes(), &conv)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &conv))
 	if conv.Data.ID == 0 {
 		t.Skip("conv not created")
 	}

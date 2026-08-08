@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func Test_UserDynamicCRUD(t *testing.T) {
@@ -21,7 +23,7 @@ func Test_UserDynamicCRUD(t *testing.T) {
 			ID uint64 `json:"id"`
 		} `json:"data"`
 	}
-	json.Unmarshal(w.Body.Bytes(), &dr)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &dr))
 	if dr.Code == 0 && dr.Data.ID > 0 {
 		did := dr.Data.ID
 		// Toggle like
@@ -48,7 +50,7 @@ func Test_FavoriteFolderCRUDMore(t *testing.T) {
 			ID uint64 `json:"id"`
 		} `json:"data"`
 	}
-	json.Unmarshal(w.Body.Bytes(), &fr)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &fr))
 	if fr.Code == 0 && fr.Data.ID > 0 {
 		fid := fr.Data.ID
 		// Update folder
@@ -69,7 +71,7 @@ func Test_FavoriteFolderCRUDMore(t *testing.T) {
 			ID uint64 `json:"id"`
 		} `json:"data"`
 	}
-	json.Unmarshal(w2.Body.Bytes(), &fr2)
+	require.NoError(t, json.Unmarshal(w2.Body.Bytes(), &fr2))
 	if fr2.Code == 0 && fr2.Data.ID > 0 {
 		srve(r, areq("POST", fmt.Sprintf("/api/v1/users/me/favorite-folders/%d/invalid-favorites", fr2.Data.ID), tk, nil))
 	}
@@ -127,7 +129,7 @@ func Test_VideoFavoriteFolders(t *testing.T) {
 			ID uint64 `json:"id"`
 		} `json:"data"`
 	}
-	json.Unmarshal(w.Body.Bytes(), &fr)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &fr))
 	if fr.Code == 0 && fr.Data.ID > 0 {
 		fid := fr.Data.ID
 		// Add video to folder
@@ -222,7 +224,7 @@ func Test_FollowAndGroupMore(t *testing.T) {
 			ID uint64 `json:"id"`
 		} `json:"data"`
 	}
-	json.Unmarshal(w.Body.Bytes(), &gr)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &gr))
 	if gr.Code == 0 && gr.Data.ID > 0 {
 		gid := gr.Data.ID
 		srve(r, areq("POST", fmt.Sprintf("/api/v1/users/me/follow-groups/%d/members", gid), tk, fmt.Sprintf(`{"user_id":%d}`, u2.ID)))

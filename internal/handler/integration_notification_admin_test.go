@@ -47,7 +47,7 @@ func Test_FollowGroupManagement(t *testing.T) {
 			ID uint64 `json:"id"`
 		} `json:"data"`
 	}
-	json.Unmarshal(w.Body.Bytes(), &fgr)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &fgr))
 	if fgr.Code == 0 && fgr.Data.ID > 0 {
 		gid := fgr.Data.ID
 		// Rename group
@@ -113,7 +113,7 @@ func Test_CommentReplyFlow(t *testing.T) {
 			ID uint64 `json:"id"`
 		} `json:"data"`
 	}
-	json.Unmarshal(w.Body.Bytes(), &pcr)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &pcr))
 	if pcr.Code == 0 && pcr.Data.ID > 0 {
 		pcid := pcr.Data.ID
 		// Reply from another user

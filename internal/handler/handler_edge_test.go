@@ -219,7 +219,7 @@ func TestInitVideoZoneAllowed(t *testing.T) {
 
 func TestRejectIfSensitive_EmptyFilter(t *testing.T) {
 	f := sensitive.NewFilter("", zap.NewNop())
-	f.Reload()
+	_ = f.Reload() // Reload fails on an empty path; the empty filter is intentional here
 	// Empty filter blocks ALL content by design
 	api := &API{Dependencies: &Dependencies{Sens: f, Log: zap.NewNop()}}
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())

@@ -6,7 +6,6 @@ import (
 	"cakecake/internal/model/admin"
 	"cakecake/internal/model/user"
 	"cakecake/internal/model/video"
-	"fmt"
 	"net/http"
 	"testing"
 	"time"
@@ -63,7 +62,7 @@ func TestUserSpace_PublicEndpoints(t *testing.T) {
 	require.Equal(t, http.StatusNotFound, w.Code, w.Body.String())
 
 	// ListUserPublishedVideos.
-	w = doReq(r, "GET", fmt.Sprintf("/api/v1/space/1/videos?page=1&page_size=10"), token, "", nil)
+	w = doReq(r, "GET", "/api/v1/space/1/videos?page=1&page_size=10", token, "", nil)
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 	require.Contains(t, w.Body.String(), "v")
 	w = doReq(r, "GET", "/api/v1/space/999/videos", token, "", nil)

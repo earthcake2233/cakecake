@@ -28,7 +28,7 @@ func Test_DynamicCommentApproveIgnoreDelete(t *testing.T) {
 	// Post a comment as u2
 	w := srve(r, areq("POST", fmt.Sprintf("/api/v1/user-dynamics/%d/comments", did), tk2, `{"content":"Nice!"}`))
 	var cresp map[string]interface{}
-	json.Unmarshal(w.Body.Bytes(), &cresp)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &cresp))
 	cd, _ := cresp["data"].(map[string]interface{})
 	var cid uint64
 	if cd != nil {
@@ -91,7 +91,7 @@ func Test_DmConversationEdgeCases(t *testing.T) {
 			ID uint64 `json:"id"`
 		}
 	}
-	json.Unmarshal(w.Body.Bytes(), &dcr)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &dcr))
 	if dcr.Code == 0 && dcr.Data.ID > 0 {
 		cid := dcr.Data.ID
 		// Send a message to create unread

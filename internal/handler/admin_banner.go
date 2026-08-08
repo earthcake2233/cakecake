@@ -101,8 +101,7 @@ func (a *API) AdminCreateBanner(c *gin.Context) {
 	if req.Enabled != nil {
 		en = *req.Enabled
 	}
-	var b admin.HomeBanner
-	b = admin.HomeBanner{
+	b := admin.HomeBanner{
 		Title:      title,
 		ImageURL:   img,
 		LinkType:   lt,

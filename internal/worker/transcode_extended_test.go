@@ -23,7 +23,7 @@ func Test_TranscodeJobZeroRetry(t *testing.T) {
 	job := TranscodeJob{VideoID: 2, RawPath: "/tmp/v2.mp4"}
 	b, _ := json.Marshal(job)
 	var j2 TranscodeJob
-	json.Unmarshal(b, &j2)
+	require.NoError(t, json.Unmarshal(b, &j2))
 	require.Equal(t, 0, j2.RetryCount)
 	require.Empty(t, j2.CoverPath)
 }

@@ -40,7 +40,7 @@ func Test_DynamicCommentFullFlow(t *testing.T) {
 			ID uint64 `json:"id"`
 		} `json:"data"`
 	}
-	json.Unmarshal(w.Body.Bytes(), &dcr)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &dcr))
 	if dcr.Code == 0 && dcr.Data.ID > 0 {
 		cid := dcr.Data.ID
 		srve(r, areq("POST", fmt.Sprintf("/api/v1/user-dynamics/%d/comments/%d/approve", dyn.ID, cid), tk, nil))
@@ -63,7 +63,7 @@ func Test_UserDynamicUpdateAndList(t *testing.T) {
 			ID uint64 `json:"id"`
 		} `json:"data"`
 	}
-	json.Unmarshal(w.Body.Bytes(), &dr)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &dr))
 	if dr.Code == 0 && dr.Data.ID > 0 {
 		did := dr.Data.ID
 		srve(r, areq("PUT", fmt.Sprintf("/api/v1/users/me/dynamics/%d", did), tk, `{"title":"Updated Title","content":"Updated content"}`))
@@ -88,7 +88,7 @@ func Test_VideoEngagementFolderOps(t *testing.T) {
 			ID uint64 `json:"id"`
 		} `json:"data"`
 	}
-	json.Unmarshal(w.Body.Bytes(), &fr)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &fr))
 	if fr.Code == 0 && fr.Data.ID > 0 {
 		fid := fr.Data.ID
 		srve(r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/favorite-folders/%d", v.ID, fid), tk, nil))
@@ -108,7 +108,7 @@ func Test_AdminAgentProfileCRUD(t *testing.T) {
 			ID uint64 `json:"id"`
 		} `json:"data"`
 	}
-	json.Unmarshal(w.Body.Bytes(), &apr)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &apr))
 	if apr.Code == 0 && apr.Data.ID > 0 {
 		pid := apr.Data.ID
 		srve(r, areq("PUT", fmt.Sprintf("/api/v1/admin/agent-profiles/%d", pid), at, `{"display_name":"Updated Bot","welcome_message":"Hi there"}`))
@@ -141,7 +141,7 @@ func Test_AdminBannerUploadByID_NilOSS(t *testing.T) {
 			ID uint64 `json:"id"`
 		} `json:"data"`
 	}
-	json.Unmarshal(w.Body.Bytes(), &br)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &br))
 	if br.Code == 0 && br.Data.ID > 0 {
 		srve(r, areq("POST", fmt.Sprintf("/api/v1/admin/home-banners/%d/image", br.Data.ID), at, nil))
 	}

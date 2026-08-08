@@ -84,12 +84,3 @@ func seedDmMessage(t *testing.T, db *gorm.DB, convID, senderID uint64, role, con
 	require.NoError(t, db.Create(msg).Error)
 	return msg
 }
-
-func countAssistantAfter(t *testing.T, db *gorm.DB, convID, afterID uint64) int {
-	t.Helper()
-	var n int64
-	require.NoError(t, db.Model(&dm.DmMessage{}).
-		Where("conversation_id = ? AND id > ? AND role = ?", convID, afterID, "assistant").
-		Count(&n).Error)
-	return int(n)
-}

@@ -185,7 +185,7 @@ func TestIntegration_Login(t *testing.T) {
 			AccessToken string `json:"access_token"`
 		} `json:"data"`
 	}
-	json.Unmarshal(w.Body.Bytes(), &resp)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
 	require.NotEmpty(t, resp.Data.AccessToken)
 }
 

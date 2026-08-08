@@ -1,6 +1,7 @@
 package search
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -40,7 +41,7 @@ func TestDial_EmptyURL(t *testing.T) {
 }
 func TestDial_WithMockServer(t *testing.T) {
 	srv := newMockESServer(t, func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`{"name":"es-mock","version":{"number":"8.0.0"}}`))
+		_, _ = w.Write([]byte(`{"name":"es-mock","version":{"number":"8.0.0"}}`))
 	})
 	c, err := Dial(&config.C{ElasticsearchURL: srv.URL})
 	require.NoError(t, err)
@@ -55,25 +56,25 @@ func TestEnsureIndices_Create(t *testing.T) {
 			} else {
 				w.WriteHeader(http.StatusNotFound)
 			}
-			w.Write([]byte(`{}`))
+			_, _ = w.Write([]byte(`{}`))
 			return
 		}
 		if r.Method == "GET" {
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`{}`))
+			_, _ = w.Write([]byte(`{}`))
 			return
 		}
 		if r.Method == "PUT" {
 			createdIndices = append(createdIndices, r.URL.Path)
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`{"acknowledged":true}`))
+			_, _ = w.Write([]byte(`{"acknowledged":true}`))
 			return
 		}
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{}`))
+		_, _ = w.Write([]byte(`{}`))
 	})
 	c := newMockESClient(t, srv.URL)
-	err := c.EnsureIndices(nil)
+	err := c.EnsureIndices(context.TODO())
 	require.NoError(t, err)
 	require.Len(t, createdIndices, 3)
 }
@@ -83,14 +84,14 @@ func TestEnsureIndices_AlreadyExist(t *testing.T) {
 	srv := newMockESServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "HEAD" || r.Method == "GET" {
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`{}`))
+			_, _ = w.Write([]byte(`{}`))
 			return
 		}
 		putCalls++
-		w.Write([]byte(`{}`))
+		_, _ = w.Write([]byte(`{}`))
 	})
 	c := newMockESClient(t, srv.URL)
-	err := c.EnsureIndices(nil)
+	err := c.EnsureIndices(context.TODO())
 	require.NoError(t, err)
 	assert.Equal(t, 0, putCalls)
 }
@@ -114,23 +115,23 @@ func TestSearchAll_Basic(t *testing.T) {
 					},
 				},
 			}
-			json.NewEncoder(w).Encode(resp)
+			_ = json.NewEncoder(w).Encode(resp)
 			return
 		}
-		w.Write([]byte(`{}`))
+		_, _ = w.Write([]byte(`{}`))
 	})
 	c := newMockESClient(t, srv.URL)
-	result, err := c.SearchAll(nil, SearchParams{Keyword: "test", Page: 1, PageSize: 10})
+	result, err := c.SearchAll(context.TODO(), SearchParams{Keyword: "test", Page: 1, PageSize: 10})
 	require.NoError(t, err)
 	require.NotNil(t, result)
 }
 
 func TestSearchAll_EmptyKeyword(t *testing.T) {
 	srv := newMockESServer(t, func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`{}`))
+		_, _ = w.Write([]byte(`{}`))
 	})
 	c := newMockESClient(t, srv.URL)
-	result, err := c.SearchAll(nil, SearchParams{Keyword: ""})
+	result, err := c.SearchAll(context.TODO(), SearchParams{Keyword: ""})
 	require.NoError(t, err)
 	require.NotNil(t, result)
 }
@@ -140,13 +141,13 @@ func TestDeleteVideo_WithMock(t *testing.T) {
 	srv := newMockESServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "DELETE" && strings.Contains(r.URL.Path, "_doc") {
 			deletedID = path.Base(r.URL.Path)
-			w.Write([]byte(`{"result":"deleted"}`))
+			_, _ = w.Write([]byte(`{"result":"deleted"}`))
 			return
 		}
-		w.Write([]byte(`{}`))
+		_, _ = w.Write([]byte(`{}`))
 	})
 	c := newMockESClient(t, srv.URL)
-	err := c.DeleteVideo(nil, 42)
+	err := c.DeleteVideo(context.TODO(), 42)
 	require.NoError(t, err)
 	assert.Equal(t, "42", deletedID)
 }
@@ -156,22 +157,22 @@ func TestDeleteArticle_WithMock(t *testing.T) {
 	srv := newMockESServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "DELETE" && strings.Contains(r.URL.Path, "_doc") {
 			deletedID = path.Base(r.URL.Path)
-			w.Write([]byte(`{"result":"deleted"}`))
+			_, _ = w.Write([]byte(`{"result":"deleted"}`))
 			return
 		}
-		w.Write([]byte(`{}`))
+		_, _ = w.Write([]byte(`{}`))
 	})
 	c := newMockESClient(t, srv.URL)
-	err := c.DeleteArticle(nil, 456)
+	err := c.DeleteArticle(context.TODO(), 456)
 	require.NoError(t, err)
 	assert.Equal(t, "456", deletedID)
 }
 
 func TestOperations_WithNilClient(t *testing.T) {
 	var c *Client
-	require.NoError(t, c.EnsureIndices(nil))
-	_, err2 := c.SearchAll(nil, SearchParams{Keyword: "test"})
+	require.NoError(t, c.EnsureIndices(context.TODO()))
+	_, err2 := c.SearchAll(context.TODO(), SearchParams{Keyword: "test"})
 	require.Error(t, err2)
-	require.NoError(t, c.DeleteVideo(nil, 1))
-	require.NoError(t, c.DeleteArticle(nil, 1))
+	require.NoError(t, c.DeleteVideo(context.TODO(), 1))
+	require.NoError(t, c.DeleteArticle(context.TODO(), 1))
 }

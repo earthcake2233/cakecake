@@ -2,6 +2,7 @@ package worker
 
 import (
 	"cakecake/internal/model/video"
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -72,7 +73,7 @@ func TestCleanupPaths_MixNxst(t *testing.T) {
 	dir := t.TempDir()
 	f1 := filepath.Join(dir, "keep.txt")
 	f2 := filepath.Join(dir, "missing.txt")
-	os.WriteFile(f1, []byte("data"), 0644)
+	require.NoError(t, os.WriteFile(f1, []byte("data"), 0644))
 	cleanupPaths(f1, f2)
 	if _, err := os.Stat(f1); !os.IsNotExist(err) {
 		t.Error("expected f1 to be removed")
@@ -97,7 +98,7 @@ func TestTranscodeJob_MinJSON_Adv(t *testing.T) {
 	data, err := json.Marshal(job)
 	require.NoError(t, err)
 	var m map[string]interface{}
-	json.Unmarshal(data, &m)
+	require.NoError(t, json.Unmarshal(data, &m))
 	assert.Equal(t, float64(1), m["video_id"])
 	assert.Equal(t, "/tmp/v.mp4", m["raw_path"])
 }
@@ -105,14 +106,14 @@ func TestTranscodeJob_MinJSON_Adv(t *testing.T) {
 func TestHandleDelivery_BadJSON_Adv(t *testing.T) {
 	mockAck := &mockAcknowledger{}
 	d := amqp.Delivery{Acknowledger: mockAck, Body: []byte("not json")}
-	handleDelivery(nil, nil, nil, nil, nil, nil, nil, d)
+	handleDelivery(context.TODO(), nil, nil, nil, nil, nil, nil, d)
 	assert.True(t, mockAck.ackCalled)
 }
 
 func TestHandleDelivery_EmptyBody_Adv(t *testing.T) {
 	mockAck := &mockAcknowledger{}
 	d := amqp.Delivery{Acknowledger: mockAck, Body: []byte{}}
-	handleDelivery(nil, nil, nil, nil, nil, nil, nil, d)
+	handleDelivery(context.TODO(), nil, nil, nil, nil, nil, nil, d)
 	assert.True(t, mockAck.ackCalled)
 }
 
@@ -123,7 +124,7 @@ func TestHandleDelivery_NilOSS_Adv(t *testing.T) {
 	body, _ := json.Marshal(job)
 	mockAck := &mockAcknowledger{}
 	d := amqp.Delivery{Acknowledger: mockAck, Body: body}
-	handleDelivery(nil, nil, db, nil, nil, nil, nil, d)
+	handleDelivery(context.TODO(), nil, db, nil, nil, nil, nil, d)
 	assert.True(t, mockAck.ackCalled)
 	var v video.Video
 	db.First(&v, 1)

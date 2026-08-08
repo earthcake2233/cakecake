@@ -147,7 +147,7 @@ func (p *PlatformExecutor) searchVideos(ctx context.Context, raw json.RawMessage
 	}
 	items := make([]item, 0, len(videos))
 	for _, v := range videos {
-		uploaderName, _ := userMap[v.UserID]
+		uploaderName := userMap[v.UserID]
 		if uploaderName == "" {
 			uploaderName = "unknown"
 		}
@@ -261,7 +261,7 @@ func (p *PlatformExecutor) getTrending(ctx context.Context, raw json.RawMessage)
 	}
 	items := make([]item, 0, len(videos))
 	for i, v := range videos {
-		uploaderName, _ := userMap[v.UserID]
+		uploaderName := userMap[v.UserID]
 		if uploaderName == "" {
 			uploaderName = "unknown"
 		}
@@ -399,11 +399,11 @@ func (p *PlatformExecutor) getVideoDanmaku(ctx context.Context, raw json.RawMess
 	}
 	items := make([]item, 0, len(danmakus))
 	for _, d := range danmakus {
-		userName, _ := userMap[d.UserID]
+		userName := userMap[d.UserID]
 		if userName == "" {
 			userName = "匿名"
 		}
-		userAvatar, _ := avatarMap[d.UserID]
+		userAvatar := avatarMap[d.UserID]
 		items = append(items, item{
 			Content: d.Content, VideoID: args.VideoID, VideoTime: d.VideoTime,
 			Type: d.Type, Color: d.Color, UserName: userName,

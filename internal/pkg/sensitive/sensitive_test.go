@@ -9,7 +9,7 @@ import (
 
 func TestFilter_Reload_WithValidWords(t *testing.T) {
 	lg, _ := zap.NewDevelopment()
-	defer lg.Sync()
+	defer func() { _ = lg.Sync() }()
 
 	content := "badword1\n# comment\nbadword2\n\n"
 	f, err := os.CreateTemp("", "sensitive-*.txt")
@@ -41,7 +41,7 @@ func TestFilter_Reload_WithValidWords(t *testing.T) {
 
 func TestFilter_Reload_EmptyWordsBlocksAll(t *testing.T) {
 	lg, _ := zap.NewDevelopment()
-	defer lg.Sync()
+	defer func() { _ = lg.Sync() }()
 
 	f, err := os.CreateTemp("", "sensitive-*.txt")
 	if err != nil {
@@ -68,7 +68,7 @@ func TestFilter_Reload_EmptyWordsBlocksAll(t *testing.T) {
 
 func TestFilter_MissingFile_ReloadError(t *testing.T) {
 	lg, _ := zap.NewDevelopment()
-	defer lg.Sync()
+	defer func() { _ = lg.Sync() }()
 
 	filter := NewFilter("/nonexistent/path/sensitive.txt", lg)
 	if err := filter.Reload(); err == nil {
@@ -83,7 +83,7 @@ func TestFilter_MissingFile_ReloadError(t *testing.T) {
 
 func TestFilter_Check_BeforeReload(t *testing.T) {
 	lg, _ := zap.NewDevelopment()
-	defer lg.Sync()
+	defer func() { _ = lg.Sync() }()
 
 	filter := NewFilter("some/path.txt", lg)
 

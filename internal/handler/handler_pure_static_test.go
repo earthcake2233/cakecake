@@ -36,7 +36,7 @@ func TestManuscriptVideoStatusFilter_Unit(t *testing.T) {
 	if s != "" || len(m) != 0 {
 		t.Errorf("empty: %q %v", s, m)
 	}
-	s, m = manuscriptVideoStatusFilter("draft")
+	s, _ = manuscriptVideoStatusFilter("draft")
 	if s != "draft" {
 		t.Errorf("draft: %q", s)
 	}

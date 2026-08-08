@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func Test_NotificationReadNonExistent(t *testing.T) {
@@ -36,7 +38,7 @@ func Test_CommentApproveByNonOwner(t *testing.T) {
 			ID uint64 `json:"id"`
 		}
 	}
-	json.Unmarshal(w.Body.Bytes(), &cr)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &cr))
 	if cr.Code == 0 && cr.Data.ID > 0 {
 		srve(r, areq("POST", fmt.Sprintf("/api/v1/comments/%d/approve", cr.Data.ID), tk, nil))
 	}

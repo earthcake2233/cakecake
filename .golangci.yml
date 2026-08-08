@@ -1,0 +1,29 @@
+# golangci-lint configuration.
+#
+# Invoked from CI with the same flags as the test suite (integration build
+# tag). Keep the enabled linter set small and explicit: the gate fails on any
+# finding, so adding a linter means committing to zero findings under it.
+#
+# Keep the installed golangci-lint version in sync with the one pinned in
+# .github/workflows/ci.yml.
+
+run:
+  timeout: 8m
+  build-tags:
+    - integration
+
+linters:
+  enable:
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+
+issues:
+  # golangci-lint's defaults (max-same-issues: 3, max-issues-per-linter: 50)
+  # cap how many findings are reported, and which subset wins is
+  # nondeterministic. Report every occurrence so the gate is stable across runs.
+  max-same-issues: 0
+  max-issues-per-linter: 0

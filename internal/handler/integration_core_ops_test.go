@@ -25,7 +25,7 @@ func Test_CommentBasicOps(t *testing.T) {
 	var resp struct {
 		Data comment.Comment `json:"data"`
 	}
-	json.Unmarshal(w.Body.Bytes(), &resp)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
 	cm = resp.Data
 	if cm.ID == 0 {
 		t.Skip("comment not created")
