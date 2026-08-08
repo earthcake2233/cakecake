@@ -568,7 +568,9 @@ func (a *API) PostDmMessage(c *gin.Context) {
 		convCopy := result.Conversation
 		userContent := content
 		go func() {
-			a.runAgentReply(uid, convCopy, userContent)
+			if a.Agent != nil {
+				a.Agent.RunReply(uid, convCopy, userContent)
+			}
 		}()
 	}
 	resp.OK(c, out)

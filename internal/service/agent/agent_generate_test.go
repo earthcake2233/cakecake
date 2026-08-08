@@ -142,7 +142,7 @@ func TestAgentService_FeedbackWrappers(t *testing.T) {
 func TestCurrentGenID(t *testing.T) {
 	s := &AgentService{}
 	require.Zero(t, s.currentGenID(1))
-	genID := s.BeginGeneration(1, nil)
+	genID := s.beginGeneration(1, nil)
 	require.Equal(t, genID, s.currentGenID(1))
 }
 

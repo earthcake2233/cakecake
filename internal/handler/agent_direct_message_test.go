@@ -9,7 +9,6 @@ import (
 	"cakecake/internal/service/servicetest"
 	"cakecake/internal/service/user"
 	"cakecake/internal/ws"
-	"context"
 	"testing"
 	"time"
 
@@ -35,6 +34,7 @@ func newAgentHandlerAPI(t *testing.T) (*API, *gorm.DB, *serviceagent.AgentServic
 			AgentDailyQuota:     80,
 			AgentRequestTimeout: 5 * time.Second,
 		},
+		Dm: dmSvc,
 	}
 	api := &API{
 		Dependencies: &Dependencies{
@@ -47,6 +47,7 @@ func newAgentHandlerAPI(t *testing.T) (*API, *gorm.DB, *serviceagent.AgentServic
 			Agent:   agentSvc,
 		},
 	}
+	agentSvc.Pusher = api
 	return api, db, agentSvc
 }
 
@@ -91,133 +92,4 @@ func countAssistantAfter(t *testing.T, db *gorm.DB, convID, afterID uint64) int 
 		Where("conversation_id = ? AND id > ? AND role = ?", convID, afterID, "assistant").
 		Count(&n).Error)
 	return int(n)
-}
-
-func TestLatestUserTurnHasAssistantReply(t *testing.T) {
-	api, db, _ := newAgentHandlerAPI(t)
-	conv, _ := seedAgentConvForHandler(t, db, 18, 14)
-
-	require.False(t, api.latestUserTurnHasAssistantReply(18, conv.ID))
-
-	userMsg := seedDmMessage(t, db, conv.ID, 18, "user", "hi")
-	require.False(t, api.latestUserTurnHasAssistantReply(18, conv.ID))
-
-	seedDmMessage(t, db, conv.ID, 14, "assistant", "hello")
-	require.True(t, api.latestUserTurnHasAssistantReply(18, conv.ID))
-
-	seedDmMessage(t, db, conv.ID, 18, "user", "again")
-	require.False(t, api.latestUserTurnHasAssistantReply(18, conv.ID))
-
-	_ = userMsg
-}
-
-func TestResumeAgentReply_NoOpWhenReplyAlreadyPersisted(t *testing.T) {
-	api, db, _ := newAgentHandlerAPI(t)
-	conv, _ := seedAgentConvForHandler(t, db, 18, 14)
-	seedDmMessage(t, db, conv.ID, 18, "user", "hi")
-	seedDmMessage(t, db, conv.ID, 14, "assistant", "already done")
-
-	api.resumeAgentReply(18, conv.ID)
-	time.Sleep(50 * time.Millisecond)
-	require.Equal(t, 1, countAssistantAfter(t, db, conv.ID, 0))
-}
-
-func TestResumeAgentReply_PendingPathPersistsOnce(t *testing.T) {
-	api, db, agentSvc := newAgentHandlerAPI(t)
-	conv, _ := seedAgentConvForHandler(t, db, 18, 14)
-	seedDmMessage(t, db, conv.ID, 18, "user", "hi")
-
-	genID := agentSvc.BeginGeneration(18, nil)
-	agentSvc.PauseGeneration(18)
-	agentSvc.StorePendingReply(18, genID, conv, &serviceagent.GenerateReplyResult{Content: "待落库回复"})
-
-	api.resumeAgentReply(18, conv.ID)
-
-	deadline := time.Now().Add(5 * time.Second)
-	for time.Now().Before(deadline) {
-		if countAssistantAfter(t, db, conv.ID, 0) == 1 {
-			break
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
-	require.Equal(t, 1, countAssistantAfter(t, db, conv.ID, 0))
-
-	var msg dm.DmMessage
-	require.NoError(t, db.Where("conversation_id = ? AND role = ?", conv.ID, "assistant").First(&msg).Error)
-	require.Equal(t, "待落库回复", msg.Content)
-	_ = agentSvc
-}
-
-func TestRegenerateAgentReply_NotConfiguredFallback(t *testing.T) {
-	api, db, _ := newAgentHandlerAPI(t)
-	conv, _ := seedAgentConvForHandler(t, db, 18, 14)
-	seedDmMessage(t, db, conv.ID, 18, "user", "hi")
-
-	api.regenerateAgentReply(18, conv.ID)
-
-	deadline := time.Now().Add(5 * time.Second)
-	for time.Now().Before(deadline) {
-		if countAssistantAfter(t, db, conv.ID, 0) == 1 {
-			break
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
-	require.Equal(t, 1, countAssistantAfter(t, db, conv.ID, 0))
-	var msg dm.DmMessage
-	require.NoError(t, db.Where("conversation_id = ? AND role = ?", conv.ID, "assistant").First(&msg).Error)
-	require.Contains(t, msg.Content, "未配置")
-}
-
-func TestRegenerateAgentReply_QuotaExceeded(t *testing.T) {
-	api, db, agentSvc := newAgentHandlerAPI(t)
-	agentSvc.Cfg.AgentDailyQuota = 1
-	agentSvc.IncrQuota(context.Background(), 18) // consume the only quota
-
-	conv, _ := seedAgentConvForHandler(t, db, 18, 14)
-	seedDmMessage(t, db, conv.ID, 18, "user", "hi")
-	api.regenerateAgentReply(18, conv.ID)
-
-	deadline := time.Now().Add(5 * time.Second)
-	for time.Now().Before(deadline) {
-		if countAssistantAfter(t, db, conv.ID, 0) == 1 {
-			break
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
-	require.Equal(t, 1, countAssistantAfter(t, db, conv.ID, 0))
-	var msg dm.DmMessage
-	require.NoError(t, db.Where("conversation_id = ? AND role = ?", conv.ID, "assistant").First(&msg).Error)
-	require.Contains(t, msg.Content, "今日 AI 对话次数已达上限")
-}
-
-func TestContinueAgentReply_NotConfiguredNoMessage(t *testing.T) {
-	api, db, _ := newAgentHandlerAPI(t)
-	conv, _ := seedAgentConvForHandler(t, db, 18, 14)
-	seedDmMessage(t, db, conv.ID, 18, "user", "hi")
-
-	api.continueAgentReply(18, conv.ID, "partial text")
-	time.Sleep(200 * time.Millisecond)
-	require.Equal(t, 0, countAssistantAfter(t, db, conv.ID, 0))
-}
-
-func TestAttachAgentSuggestions_NoGateway(t *testing.T) {
-	api, db, _ := newAgentHandlerAPI(t)
-	conv, _ := seedAgentConvForHandler(t, db, 18, 14)
-	msg := seedDmMessage(t, db, conv.ID, 14, "assistant", "reply")
-	api.attachAgentSuggestions(18, msg.ID, "reply") // gateway nil -> no suggestions
-	api.attachAgentSuggestions(18, 0, "reply")      // messageID 0 -> early return
-	require.True(t, true)
-}
-
-func TestAgentRunLockAndNoopControls(t *testing.T) {
-	api, _, _ := newAgentHandlerAPI(t)
-	mu1 := api.agentRunLock(18)
-	mu2 := api.agentRunLock(18)
-	mu3 := api.agentRunLock(19)
-	require.Same(t, mu1, mu2)
-	require.NotSame(t, mu1, mu3)
-
-	api.pauseAgentReply(18) // Agent non-nil; no-op when no generation state
-	api.continueAgentReply(18, 0, "")
-	require.True(t, true)
 }

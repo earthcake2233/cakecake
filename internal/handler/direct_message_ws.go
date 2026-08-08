@@ -55,11 +55,17 @@ func (a *API) ServeChat(c *gin.Context) {
 		}
 		switch req.Type {
 		case "agent_cancel":
-			a.pauseAgentReply(uid)
+			if a.Agent != nil {
+				a.Agent.PauseGeneration(uid)
+			}
 		case "agent_regenerate":
-			a.regenerateAgentReply(uid, req.ConversationID)
+			if a.Agent != nil {
+				a.Agent.RegenerateReply(uid, req.ConversationID)
+			}
 		case "agent_continue":
-			go a.resumeAgentReply(uid, req.ConversationID)
+			if a.Agent != nil {
+				go a.Agent.ResumeReply(uid, req.ConversationID)
+			}
 		}
 	}
 }

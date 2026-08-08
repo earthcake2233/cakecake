@@ -19,6 +19,7 @@ const defaultSystemPrompt = `你是 cakecake 站内 AI 助手。帮助用户了�
 - 不！要！用！任！何！emoji！表情符号
 - 不要用夸张语气、不要营销号腔
 - 简洁直接，普通用户看得懂
+- 当你在回复中引用了工具结果（搜索/详情/榜单）时，在回复最后单独输出一行展示清单，格式：【展示】工具名#ID,工具名#ID（例如【展示】search_videos#23）。ID 必须是工具结果中的 id，只列你明确推荐展示的结果；这行不会显示给用户，不要解释它
 - 不要编造不存在的功能
 - 不确定时诚实说不知道`
 
@@ -84,6 +85,12 @@ func (g *Gateway) historyKey(conversationID uint64) string {
 		p = "mb:agent:hist:"
 	}
 	return fmt.Sprintf("%s%d", p, conversationID)
+}
+
+// PersistHistory stores full message history for a conversation (used by
+// callers that assemble history outside the standard turn methods).
+func (g *Gateway) PersistHistory(ctx context.Context, conversationID uint64, msgs []ChatMessage) {
+	g.persistHistory(ctx, conversationID, msgs)
 }
 
 // BuildMessages loads ALL history (including tool messages) and appends user turn.

@@ -321,6 +321,10 @@ func main() {
 		CreatorCommentSvc: creatorCommentSvc,
 	}
 	api := &handler.API{Dependencies: deps}
+	// Wire the agent service ports: DM reads for orchestration decisions and
+	// the transport adapter for pushing formatted agent events.
+	agentSvc.Dm = dmSvc
+	agentSvc.Pusher = api
 	api.InitHotRecorder(64)
 
 	if cfg.AppEnv == "development" {
