@@ -26,7 +26,7 @@ func seedUser(t *testing.T, api *API, username, nickname string, coin int) user.
 	t.Helper()
 	u := user.User{Username: username, PasswordHash: "hash", Nickname: nickname, CoinBalanceTenths: int64(coin * 10)}
 	require.NoError(t, api.DB.Create(&u).Error)
-	api.UserSvc.EnsureCakeID(context.Background(), &u)
+	require.NoError(t, api.UserSvc.EnsureCakeID(context.Background(), &u))
 	return u
 }
 

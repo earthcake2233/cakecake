@@ -20,7 +20,8 @@ func decodeCode(t *testing.T, w *httptest.ResponseRecorder) int {
 	var r struct {
 		Code int `json:"code"`
 	}
-	json.Unmarshal(w.Body.Bytes(), &r)
+	// Some endpoints (e.g. DELETE) return an empty body; treat that as code 0.
+	_ = json.Unmarshal(w.Body.Bytes(), &r)
 	return r.Code
 }
 
@@ -29,7 +30,7 @@ func decodeDataComment(t *testing.T, w *httptest.ResponseRecorder) comment.Comme
 	var r struct {
 		Data comment.Comment `json:"data"`
 	}
-	json.Unmarshal(w.Body.Bytes(), &r)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &r))
 	return r.Data
 }
 
@@ -74,7 +75,7 @@ func Test_ArticleCommentPinAndToggle(t *testing.T) {
 		} `json:"data"`
 	}
 	var acr artCmResp
-	json.Unmarshal(w.Body.Bytes(), &acr)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &acr))
 	if acr.Code == 0 && acr.Data.ID > 0 {
 		cid := acr.Data.ID
 		srve(r, areq("POST", fmt.Sprintf("/api/v1/article-comments/%d/like", cid), tk, nil))
@@ -111,7 +112,7 @@ func Test_FollowGroupRenameAndDelete(t *testing.T) {
 		} `json:"data"`
 	}
 	var fgr fgResp
-	json.Unmarshal(w.Body.Bytes(), &fgr)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &fgr))
 	if fgr.Code == 0 && fgr.Data.ID > 0 {
 		gid := fgr.Data.ID
 		// Rename
@@ -137,7 +138,7 @@ func Test_DmActions(t *testing.T) {
 		} `json:"data"`
 	}
 	var dcr dmConvResp
-	json.Unmarshal(w.Body.Bytes(), &dcr)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &dcr))
 	if dcr.Code == 0 && dcr.Data.ID > 0 {
 		cid := dcr.Data.ID
 		// List messages
@@ -184,7 +185,7 @@ func Test_ArticleActions(t *testing.T) {
 		} `json:"data"`
 	}
 	var ar artResp
-	json.Unmarshal(w.Body.Bytes(), &ar)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &ar))
 
 	// List my articles
 	srve(r, areq("GET", "/api/v1/users/me/articles?page=1&page_size=10", tk, nil))
@@ -295,7 +296,7 @@ func Test_DanmakuActions(t *testing.T) {
 		} `json:"data"`
 	}
 	var dkr dkResp
-	json.Unmarshal(w.Body.Bytes(), &dkr)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &dkr))
 	if dkr.Code == 0 && dkr.Data.ID > 0 {
 		did := dkr.Data.ID
 		// Toggle danmaku like

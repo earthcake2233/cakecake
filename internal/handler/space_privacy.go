@@ -71,7 +71,7 @@ func (a *API) UpdateMeSpacePrivacy(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	u, err := a.UserSvc.GetPrivacySettings(c.Request.Context(), uid)
+	_, err := a.UserSvc.GetPrivacySettings(c.Request.Context(), uid)
 	if err != nil {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
@@ -100,6 +100,6 @@ func (a *API) UpdateMeSpacePrivacy(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	u, _ = a.UserSvc.GetPrivacySettings(c.Request.Context(), uid)
+	u, _ := a.UserSvc.GetPrivacySettings(c.Request.Context(), uid)
 	resp.OK(c, spacePrivacyFromUser(u))
 }

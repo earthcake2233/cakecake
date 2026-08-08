@@ -62,21 +62,11 @@ type historyEntry struct {
 }
 
 func chatMsgToEntry(m ChatMessage) historyEntry {
-	return historyEntry{
-		Role:       m.Role,
-		Content:    m.Content,
-		ToolCalls:  m.ToolCalls,
-		ToolCallID: m.ToolCallID,
-	}
+	return historyEntry(m)
 }
 
 func entryToChatMsg(e historyEntry) ChatMessage {
-	return ChatMessage{
-		Role:       e.Role,
-		Content:    e.Content,
-		ToolCalls:  e.ToolCalls,
-		ToolCallID: e.ToolCallID,
-	}
+	return ChatMessage(e)
 }
 
 func (g *Gateway) historyKey(conversationID uint64) string {

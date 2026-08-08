@@ -144,7 +144,7 @@ func Test_UserDynamicPutAndPlayback(t *testing.T) {
 			ID uint64 `json:"id"`
 		} `json:"data"`
 	}
-	json.Unmarshal(w.Body.Bytes(), &dr)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &dr))
 	if dr.Code == 0 && dr.Data.ID > 0 {
 		did := dr.Data.ID
 		// Update dynamic
@@ -188,7 +188,7 @@ func Test_ArticleCommentSubActions(t *testing.T) {
 			ID uint64 `json:"id"`
 		} `json:"data"`
 	}
-	json.Unmarshal(w.Body.Bytes(), &cr)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &cr))
 	if cr.Code == 0 && cr.Data.ID > 0 {
 		cid := cr.Data.ID
 		// Like
@@ -213,7 +213,7 @@ func Test_DmPostAndList(t *testing.T) {
 			ID uint64 `json:"id"`
 		} `json:"data"`
 	}
-	json.Unmarshal(w.Body.Bytes(), &dcr)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &dcr))
 	if dcr.Code == 0 && dcr.Data.ID > 0 {
 		cid := dcr.Data.ID
 		// List conversations

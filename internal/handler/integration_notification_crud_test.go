@@ -17,7 +17,7 @@ import (
 
 func seedNotification(t *testing.T, api *API, recipientID uint64, notifType string, relatedID uint64) uint64 {
 	t.Helper()
-	payload := fmt.Sprintf(`{"like_subject":"comment","article_id":0,"article_title":"","cover_url":""}`)
+	payload := `{"like_subject":"comment","article_id":0,"article_title":"","cover_url":""}`
 	n := notification.Notification{
 		RecipientID:     recipientID,
 		Type:            notifType,
@@ -71,7 +71,7 @@ func Test_NotificationLikeAggregation(t *testing.T) {
 			ID uint64 `json:"id"`
 		}
 	}
-	json.Unmarshal(w.Body.Bytes(), &cr)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &cr))
 	if cr.Code == 0 && cr.Data.ID > 0 {
 		srve(r, areq("POST", fmt.Sprintf("/api/v1/comments/%d/like", cr.Data.ID), tok(t, api, u.ID), nil))
 	}
@@ -85,14 +85,14 @@ func Test_CommentApproveIgnoreDelete(t *testing.T) {
 	u2 := seedUser(t, api, "cai2", "CAI2", 10)
 	tk := tok(t, api, u.ID)
 	v := seedVideoWithAPI(t, api, u.ID, "CAI Video")
-	w := srve(r, areq("POST", "/api/v1/videos/"+fmt.Sprint(v.ID)+"/comments", tok(t, api, u2.ID), fmt.Sprintf(`{"content":"Needs approval"}`)))
+	w := srve(r, areq("POST", "/api/v1/videos/"+fmt.Sprint(v.ID)+"/comments", tok(t, api, u2.ID), `{"content":"Needs approval"}`))
 	var cr struct {
 		Code int `json:"code"`
 		Data struct {
 			ID uint64 `json:"id"`
 		}
 	}
-	json.Unmarshal(w.Body.Bytes(), &cr)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &cr))
 	if cr.Code == 0 && cr.Data.ID > 0 {
 		cid := cr.Data.ID
 		srve(r, areq("POST", fmt.Sprintf("/api/v1/comments/%d/approve", cid), tk, nil))
@@ -109,14 +109,14 @@ func Test_CommentIgnoreCurated(t *testing.T) {
 	u2 := seedUser(t, api, "cic2", "CIC2", 10)
 	tk := tok(t, api, u.ID)
 	v := seedVideoWithAPI(t, api, u.ID, "CIC Video")
-	w := srve(r, areq("POST", "/api/v1/videos/"+fmt.Sprint(v.ID)+"/comments", tok(t, api, u2.ID), fmt.Sprintf(`{"content":"Ignore me"}`)))
+	w := srve(r, areq("POST", "/api/v1/videos/"+fmt.Sprint(v.ID)+"/comments", tok(t, api, u2.ID), `{"content":"Ignore me"}`))
 	var cr struct {
 		Code int `json:"code"`
 		Data struct {
 			ID uint64 `json:"id"`
 		}
 	}
-	json.Unmarshal(w.Body.Bytes(), &cr)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &cr))
 	if cr.Code == 0 && cr.Data.ID > 0 {
 		srve(r, areq("POST", fmt.Sprintf("/api/v1/comments/%d/ignore-curated", cr.Data.ID), tk, nil))
 	}
@@ -128,14 +128,14 @@ func Test_ArticleCommentIgnoreDelete(t *testing.T) {
 	u2 := seedUser(t, api, "acd2", "ACD2", 10)
 	tk := tok(t, api, u.ID)
 	art := seedArticle(t, api, u.ID, "ACD Article")
-	w := srve(r, areq("POST", fmt.Sprintf("/api/v1/articles/%d/comments", art.ID), tok(t, api, u2.ID), fmt.Sprintf(`{"content":"Article comment test"}`)))
+	w := srve(r, areq("POST", fmt.Sprintf("/api/v1/articles/%d/comments", art.ID), tok(t, api, u2.ID), `{"content":"Article comment test"}`))
 	var acr struct {
 		Code int `json:"code"`
 		Data struct {
 			ID uint64 `json:"id"`
 		}
 	}
-	json.Unmarshal(w.Body.Bytes(), &acr)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &acr))
 	if acr.Code == 0 && acr.Data.ID > 0 {
 		cid := acr.Data.ID
 		srve(r, areq("POST", fmt.Sprintf("/api/v1/article-comments/%d/approve", cid), tk, nil))
@@ -167,8 +167,8 @@ func Test_VideoFavoritePickerAndFolderOps(t *testing.T) {
 			ID uint64 `json:"id"`
 		}
 	}
-	json.Unmarshal(w1.Body.Bytes(), &f1)
-	json.Unmarshal(w2.Body.Bytes(), &f2)
+	require.NoError(t, json.Unmarshal(w1.Body.Bytes(), &f1))
+	require.NoError(t, json.Unmarshal(w2.Body.Bytes(), &f2))
 	if f1.Code == 0 && f1.Data.ID > 0 && f2.Code == 0 && f2.Data.ID > 0 {
 		srve(r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/favorite-folders/%d", v.ID, f1.Data.ID), tk, nil))
 		srve(r, areq("GET", fmt.Sprintf("/api/v1/videos/%d/favorite-picker", v.ID), tk, nil))
@@ -208,7 +208,7 @@ func Test_DmConversationSettingsAndReset(t *testing.T) {
 			ID uint64 `json:"id"`
 		}
 	}
-	json.Unmarshal(w.Body.Bytes(), &dcr)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &dcr))
 	if dcr.Code == 0 && dcr.Data.ID > 0 {
 		cid := dcr.Data.ID
 		srve(r, areq("PATCH", fmt.Sprintf("/api/v1/dm/conversations/%d/settings", cid), tk, `{"is_agent":false}`))
@@ -229,7 +229,7 @@ func Test_CreatorCommentsWithApproval(t *testing.T) {
 			ID uint64 `json:"id"`
 		}
 	}
-	json.Unmarshal(w.Body.Bytes(), &cr)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &cr))
 	if cr.Code == 0 && cr.Data.ID > 0 {
 		srve(r, areq("POST", fmt.Sprintf("/api/v1/comments/%d/approve", cr.Data.ID), tk, nil))
 		srve(r, areq("GET", "/api/v1/users/me/creator/comments?page=1&page_size=10&status=approved", tk, nil))
@@ -262,7 +262,7 @@ func Test_FavoriteFolderBatchRemove(t *testing.T) {
 			ID uint64 `json:"id"`
 		}
 	}
-	json.Unmarshal(w.Body.Bytes(), &fr)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &fr))
 	if fr.Code == 0 && fr.Data.ID > 0 {
 		fid := fr.Data.ID
 		srve(r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/favorite-folders/%d", v.ID, fid), tk, nil))
@@ -298,7 +298,7 @@ func Test_AdminAgentSettingsAndAvatar(t *testing.T) {
 			ID uint64 `json:"id"`
 		}
 	}
-	json.Unmarshal(w.Body.Bytes(), &apr)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &apr))
 	if apr.Code == 0 && apr.Data.ID > 0 {
 		pid := apr.Data.ID
 		srve(r, areq("PUT", fmt.Sprintf("/api/v1/admin/agent-profiles/%d", pid), at, `{"display_name":"Updated Support Bot"}`))
@@ -318,7 +318,7 @@ func Test_AgentDmEndpoints(t *testing.T) {
 			ID uint64 `json:"id"`
 		}
 	}
-	json.Unmarshal(w.Body.Bytes(), &dcr)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &dcr))
 	if dcr.Code == 0 && dcr.Data.ID > 0 {
 		cid := dcr.Data.ID
 		srve(r, areq("PATCH", fmt.Sprintf("/api/v1/dm/conversations/%d/settings", cid), tk, `{"is_agent":true}`))
@@ -367,7 +367,7 @@ func Test_DanmakuDeleteAndLike(t *testing.T) {
 			ID uint64 `json:"id"`
 		}
 	}
-	json.Unmarshal(w.Body.Bytes(), &dmr)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &dmr))
 	if dmr.Code == 0 && dmr.Data.ID > 0 {
 		did := dmr.Data.ID
 		srve(r, areq("POST", fmt.Sprintf("/api/v1/danmakus/%d/like", did), tk, nil))
@@ -407,7 +407,7 @@ func Test_ArticleFullCRUD(t *testing.T) {
 			ID uint64 `json:"id"`
 		}
 	}
-	json.Unmarshal(w.Body.Bytes(), &ar)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &ar))
 	if ar.Code == 0 && ar.Data.ID > 0 {
 		aid := ar.Data.ID
 		srve(r, areq("GET", fmt.Sprintf("/api/v1/users/me/articles/%d", aid), tk, nil))
@@ -498,7 +498,7 @@ func Test_HomeBannerAdminCRUD(t *testing.T) {
 			ID uint64 `json:"id"`
 		}
 	}
-	json.Unmarshal(w.Body.Bytes(), &br)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &br))
 	if br.Code == 0 && br.Data.ID > 0 {
 		bid := br.Data.ID
 		srve(r, areq("PUT", fmt.Sprintf("/api/v1/admin/home-banners/%d", bid), at, `{"title":"Updated Banner","link_type":"none","sort_order":2}`))

@@ -89,6 +89,7 @@ func (rc *RuntimeConfig) refresh(ctx context.Context) {
 				Value: v,
 			}).Error; err != nil {
 				// Non-fatal; next refresh will retry
+				_ = err
 			}
 		}
 	}

@@ -9,7 +9,7 @@ import (
 var (
 	mdFenceRe      = regexp.MustCompile("(?s)```.*?```")
 	mdLinkRe       = regexp.MustCompile(`\[([^\]]+)\]\([^)]*\)`)
-	mdLinePrefixRe = regexp.MustCompile("(?m)^[#>*+\\-]\\s*")
+	mdLinePrefixRe = regexp.MustCompile(`(?m)^[#>*+\-]\s*`)
 	mdFenceLineRe  = regexp.MustCompile("(?m)^(\\s*)(`{3,})(.*)$")
 	mdStrayFenceRe = regexp.MustCompile("`{3,}[a-zA-Z0-9_+-]*")
 	// mdItemDismissRe marks a sentence that dismisses the video it mentions
@@ -22,8 +22,8 @@ var (
 	// displayMarkerRe captures the model-declared display list
 	// (【展示】search_videos#23,get_video_detail#24); displayMarkerLineRe
 	// removes the whole marker line before the reply is persisted.
-	displayMarkerRe     = regexp.MustCompile("【展示】\\s*([^\\n【】]*)")
-	displayMarkerLineRe = regexp.MustCompile("(?m)^[^\\n]*【展示】[^\\n]*$")
+	displayMarkerRe     = regexp.MustCompile(`【展示】\s*([^\n【】]*)`)
+	displayMarkerLineRe = regexp.MustCompile(`(?m)^[^\n]*【展示】[^\n]*$`)
 )
 
 // plainTextPreview strips common Markdown syntax so the conversation-list

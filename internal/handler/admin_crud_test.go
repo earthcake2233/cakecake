@@ -58,7 +58,7 @@ func TestAdminBannerCRUD_Full(t *testing.T) {
 		Code int   `json:"code"`
 		Data gin.H `json:"data"`
 	}
-	json.Unmarshal(w.Body.Bytes(), &cr)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &cr))
 	require.Equal(t, 0, cr.Code)
 	id := int(cr.Data["id"].(float64))
 

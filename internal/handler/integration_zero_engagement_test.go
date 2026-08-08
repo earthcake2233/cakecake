@@ -37,7 +37,7 @@ func Test_DmUnreadTotal_Zero(t *testing.T) {
 func Test_CoinRecentListItems_Zero(t *testing.T) {
 	api, _, _ := newTestAPI(t)
 	u := seedUser(t, api, "crl1", "CRL1", 10)
-	items, _, err := api.coinRecentListItems(nil, u.ID, 10)
+	items, _, err := api.coinRecentListItems(context.TODO(), u.ID, 10)
 	if err != nil {
 		t.Fatal(err)
 	}

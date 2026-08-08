@@ -48,7 +48,7 @@ func Test_FullVideoLifecycle(t *testing.T) {
 			ID uint64 `json:"id"`
 		} `json:"data"`
 	}
-	json.Unmarshal(w.Body.Bytes(), &cr)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &cr))
 	if cr.Code == 0 && cr.Data.ID > 0 {
 		cid := cr.Data.ID
 		// Like comment
@@ -86,7 +86,7 @@ func Test_FullArticleLifecycle(t *testing.T) {
 			ID uint64 `json:"id"`
 		} `json:"data"`
 	}
-	json.Unmarshal(w.Body.Bytes(), &acr)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &acr))
 	if acr.Code == 0 && acr.Data.ID > 0 {
 		cid := acr.Data.ID
 		// Like article comment
@@ -132,7 +132,7 @@ func Test_DmConversationFull(t *testing.T) {
 			ID uint64 `json:"id"`
 		} `json:"data"`
 	}
-	json.Unmarshal(w.Body.Bytes(), &dcr)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &dcr))
 	if dcr.Code == 0 && dcr.Data.ID > 0 {
 		cid := dcr.Data.ID
 		// Post message from user 1
@@ -163,7 +163,7 @@ func Test_FavoriteFolderLifecycle(t *testing.T) {
 			ID uint64 `json:"id"`
 		} `json:"data"`
 	}
-	json.Unmarshal(w.Body.Bytes(), &ffr)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &ffr))
 	if ffr.Code == 0 && ffr.Data.ID > 0 {
 		fid := ffr.Data.ID
 		// List my folders

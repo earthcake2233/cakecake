@@ -20,7 +20,7 @@ func codeFrom(t *testing.T, w *httptest.ResponseRecorder) int {
 	var r struct {
 		Code int `json:"code"`
 	}
-	json.Unmarshal(w.Body.Bytes(), &r)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &r))
 	return r.Code
 }
 
@@ -42,7 +42,7 @@ func Test_DecrementPaths(t *testing.T) {
 	var cm struct {
 		Data comment.Comment `json:"data"`
 	}
-	json.Unmarshal(w.Body.Bytes(), &cm)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &cm))
 	if cm.Data.ID == 0 {
 		t.Skip("no comment id")
 	}
@@ -90,7 +90,7 @@ func Test_DynamicCommentReactions(t *testing.T) {
 	var dcm struct {
 		Data comment.DynamicComment `json:"data"`
 	}
-	json.Unmarshal(w.Body.Bytes(), &dcm)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &dcm))
 	if dcm.Data.ID == 0 {
 		t.Skip("no dynamic comment id")
 	}
@@ -116,7 +116,7 @@ func Test_ArticleCommentDecrement(t *testing.T) {
 	var acm struct {
 		Data comment.ArticleComment `json:"data"`
 	}
-	json.Unmarshal(w.Body.Bytes(), &acm)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &acm))
 	if acm.Data.ID == 0 {
 		t.Skip("no article comment id")
 	}
@@ -212,7 +212,7 @@ func Test_VideoFolderOperations(t *testing.T) {
 			ID uint64 `json:"id"`
 		} `json:"data"`
 	}
-	json.Unmarshal(w.Body.Bytes(), &ff)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &ff))
 	if ff.Data.ID > 0 {
 		fid := ff.Data.ID
 		// Add video to folder

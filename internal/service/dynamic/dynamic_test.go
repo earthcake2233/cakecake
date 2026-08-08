@@ -73,7 +73,7 @@ func TestDynamicService_Lists(t *testing.T) {
 	require.Equal(t, int64(3), total)
 	require.Len(t, list, 2)
 
-	list, total, err = s.ListDynamics(ctx, 1, 1, 10)
+	list, _, err = s.ListDynamics(ctx, 1, 1, 10)
 	require.NoError(t, err)
 	require.Len(t, list, 3)
 

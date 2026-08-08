@@ -48,7 +48,7 @@ jobs:
 
   test-backend:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     services:
       rabbitmq:
         image: rabbitmq:3-alpine
@@ -70,6 +70,12 @@ jobs:
             echo "$unformatted"
             exit 1
           fi
+
+      - name: Run golangci-lint
+        # Pinned to the same version used for local verification. The gate
+        # fails on any finding (see .golangci.yml for the linter set).
+        run: |
+          go run github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8 run --timeout 8m ./internal/... ./cmd/...
 
       - name: Run Go tests with coverage
         env:

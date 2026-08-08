@@ -27,7 +27,7 @@ func Test_DMFlow(t *testing.T) {
 		} `json:"data"`
 	}
 	var cr convResp
-	json.Unmarshal(w.Body.Bytes(), &cr)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &cr))
 	if cr.Code != 0 || cr.Data.ID == 0 {
 		t.Skip("dm conversation not created")
 	}
@@ -59,7 +59,7 @@ func Test_FavoriteFolderCRUD(t *testing.T) {
 		} `json:"data"`
 	}
 	var ffr ffResp
-	json.Unmarshal(w.Body.Bytes(), &ffr)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &ffr))
 	if ffr.Code != 0 || ffr.Data.ID == 0 {
 		t.Skip("favorite folder not created")
 	}
@@ -115,7 +115,7 @@ func Test_ArticleCRUD(t *testing.T) {
 		} `json:"data"`
 	}
 	var ar artResp
-	json.Unmarshal(w.Body.Bytes(), &ar)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &ar))
 	if ar.Code != 0 || ar.Data.ID == 0 {
 		t.Skip("article not created")
 	}
@@ -249,7 +249,7 @@ func Test_FollowGroupFlow(t *testing.T) {
 		} `json:"data"`
 	}
 	var fgr fgResp
-	json.Unmarshal(w.Body.Bytes(), &fgr)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &fgr))
 	if fgr.Code != 0 || fgr.Data.ID == 0 {
 		t.Skip("follow group not created")
 	}
@@ -286,7 +286,7 @@ func Test_VideoEngagementFlow(t *testing.T) {
 		} `json:"data"`
 	}
 	var ffr ffResp
-	json.Unmarshal(w.Body.Bytes(), &ffr)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &ffr))
 
 	// Toggle video favorite
 	srve(r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/favorite", v.ID), tk, nil))

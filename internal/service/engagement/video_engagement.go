@@ -239,7 +239,7 @@ func (s *EngagementService) ListWatchLaterWithVideos(ctx context.Context, userID
 		if !ok {
 			continue
 		}
-		u, _ := users_u[vi.UserID]
+		u := users_u[vi.UserID]
 		items = append(items, WatchLaterVideoItem{
 			ID:             vi.ID,
 			Title:          vi.Title,
@@ -339,7 +339,7 @@ func (s *EngagementService) ListUserCoinedVideos(ctx context.Context, ownerID ui
 		if !ok {
 			continue
 		}
-		u, _ := users_u[vi.UserID]
+		u := users_u[vi.UserID]
 		items = append(items, CoinedVideoItem{
 			ID: vi.ID, Title: vi.Title, CoverURL: vi.CoverURL,
 			PlayCount: vi.PlayCount, DanmakuCount: vi.DanmakuCount, CommentCount: vi.CommentCount,

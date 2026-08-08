@@ -362,5 +362,5 @@ func (a *API) PutMyViewHistorySettings(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	resp.OK(c, pausedResponse{Paused: body.Paused})
+	resp.OK(c, pausedResponse(body))
 }

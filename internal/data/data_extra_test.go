@@ -51,7 +51,7 @@ func Test_ResyncCuratedCountsEmpty(t *testing.T) {
 
 func Test_BackfillUserCakeIDs(t *testing.T) {
 	db := extDBWithMigrate(t, &user.User{})
-	backfillUserCakeIDs(db, zap.NewNop())
+	require.NoError(t, backfillUserCakeIDs(db, zap.NewNop()))
 }
 
 func Test_IsIgnorableAddColumnErr(t *testing.T) {

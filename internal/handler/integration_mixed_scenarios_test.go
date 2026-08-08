@@ -31,14 +31,14 @@ func Test_CommentLikeDislikeToggleFlow(t *testing.T) {
 	u2 := seedUser(t, api, "clt2", "CLT2", 10)
 	tk := tok(t, api, u.ID)
 	v := seedVideoWithAPI(t, api, u2.ID, "CLT Video")
-	w := srve(r, areq("POST", "/api/v1/videos/"+fmt.Sprint(v.ID)+"/comments", tok(t, api, u2.ID), fmt.Sprintf(`{"content":"Toggle test comment"}`)))
+	w := srve(r, areq("POST", "/api/v1/videos/"+fmt.Sprint(v.ID)+"/comments", tok(t, api, u2.ID), `{"content":"Toggle test comment"}`))
 	var cr struct {
 		Code int `json:"code"`
 		Data struct {
 			ID uint64 `json:"id"`
 		}
 	}
-	json.Unmarshal(w.Body.Bytes(), &cr)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &cr))
 	if cr.Code == 0 && cr.Data.ID > 0 {
 		cid := cr.Data.ID
 		srve(r, areq("POST", fmt.Sprintf("/api/v1/comments/%d/like", cid), tk, nil))
@@ -73,7 +73,7 @@ func Test_DynamicCommentOperations(t *testing.T) {
 			ID uint64 `json:"id"`
 		}
 	}
-	json.Unmarshal(w.Body.Bytes(), &dcr)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &dcr))
 	if dcr.Code == 0 && dcr.Data.ID > 0 {
 		cid := dcr.Data.ID
 		srve(r, areq("POST", fmt.Sprintf("/api/v1/user-dynamics/%d/comments/%d/approve", dyn.ID, cid), tk, nil))
@@ -139,7 +139,7 @@ func Test_AdminBannerFullCRUD(t *testing.T) {
 			ID uint64 `json:"id"`
 		}
 	}
-	json.Unmarshal(w.Body.Bytes(), &br)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &br))
 	if br.Code == 0 && br.Data.ID > 0 {
 		bid := br.Data.ID
 		srve(r, areq("PUT", fmt.Sprintf("/api/v1/admin/home-banners/%d", bid), at, `{"title":"B1 Updated","link_type":"none","sort_order":2}`))

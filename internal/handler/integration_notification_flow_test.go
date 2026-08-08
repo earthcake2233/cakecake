@@ -100,7 +100,7 @@ func Test_DmConversationMultipleMessages(t *testing.T) {
 			ID uint64 `json:"id"`
 		}
 	}
-	json.Unmarshal(w.Body.Bytes(), &dcr)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &dcr))
 	if dcr.Code == 0 && dcr.Data.ID > 0 {
 		cid := dcr.Data.ID
 		for i := 0; i < 3; i++ {
@@ -126,7 +126,7 @@ func Test_UserDynamicPostUpdateDelete(t *testing.T) {
 			ID uint64 `json:"id"`
 		}
 	}
-	json.Unmarshal(w.Body.Bytes(), &dr)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &dr))
 	if dr.Code == 0 && dr.Data.ID > 0 {
 		did := dr.Data.ID
 		srve(r, areq("PUT", fmt.Sprintf("/api/v1/users/me/dynamics/%d", did), tk, `{"title":"Updated","content":"Updated"}`))
@@ -149,7 +149,7 @@ func Test_VideoEngagementFullFolderFlow(t *testing.T) {
 			ID uint64 `json:"id"`
 		}
 	}
-	json.Unmarshal(w.Body.Bytes(), &fr)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &fr))
 	if fr.Code == 0 && fr.Data.ID > 0 {
 		fid := fr.Data.ID
 		srve(r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/favorite", v.ID), tk, nil))
@@ -195,7 +195,7 @@ func Test_ArticleCommentReplyFlow(t *testing.T) {
 			ID uint64 `json:"id"`
 		}
 	}
-	json.Unmarshal(w.Body.Bytes(), &acr)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &acr))
 	if acr.Code == 0 && acr.Data.ID > 0 {
 		pcid := acr.Data.ID
 		srve(r, areq("POST", fmt.Sprintf("/api/v1/articles/%d/comments", art.ID), tk, fmt.Sprintf(`{"content":"Owner reply","parent_id":%d}`, pcid)))
@@ -224,7 +224,7 @@ func Test_AdminHotSearchAllOps(t *testing.T) {
 			ID uint64 `json:"id"`
 		}
 	}
-	json.Unmarshal(w.Body.Bytes(), &hopr)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &hopr))
 	if hopr.Code == 0 && hopr.Data.ID > 0 {
 		srve(r, areq("PUT", fmt.Sprintf("/api/v1/admin/hot-search/ops/%d", hopr.Data.ID), at, `{"keyword":"summer_upd","score":90}`))
 		srve(r, areq("DELETE", fmt.Sprintf("/api/v1/admin/hot-search/ops/%d", hopr.Data.ID), at, nil))
@@ -264,7 +264,7 @@ func Test_FollowGroupMemberManagement(t *testing.T) {
 			ID uint64 `json:"id"`
 		}
 	}
-	json.Unmarshal(w.Body.Bytes(), &fgr)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &fgr))
 	if fgr.Code == 0 && fgr.Data.ID > 0 {
 		gid := fgr.Data.ID
 		srve(r, areq("POST", fmt.Sprintf("/api/v1/users/me/follow-groups/%d/members", gid), tk, fmt.Sprintf(`{"user_id":%d}`, u2.ID)))

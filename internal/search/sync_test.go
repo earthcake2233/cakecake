@@ -35,11 +35,11 @@ func TestIndexVideoFromDB_Published(t *testing.T) {
 	srv := newMockESServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "_doc/10") && r.Method == "PUT" {
 			indexed = true
-			w.Write([]byte(`{"result":"created"}`))
+			_, _ = w.Write([]byte(`{"result":"created"}`))
 			return
 		}
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{}`))
+		_, _ = w.Write([]byte(`{}`))
 	})
 	c := newMockESClient(t, srv.URL)
 	require.NoError(t, c.IndexVideoFromDB(context.Background(), db, 10))
@@ -54,10 +54,10 @@ func TestIndexVideoFromDB_NotPublished(t *testing.T) {
 		if r.Method == "DELETE" {
 			deleted = true
 			w.WriteHeader(http.StatusNotFound)
-			w.Write([]byte(`{}`))
+			_, _ = w.Write([]byte(`{}`))
 			return
 		}
-		w.Write([]byte(`{}`))
+		_, _ = w.Write([]byte(`{}`))
 	})
 	c := newMockESClient(t, srv.URL)
 	require.NoError(t, c.IndexVideoFromDB(context.Background(), db, 10))
@@ -74,11 +74,11 @@ func TestIndexArticleAndUser(t *testing.T) {
 	srv := newMockESServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "PUT" {
 			docs = append(docs, r.URL.Path)
-			w.Write([]byte(`{"result":"created"}`))
+			_, _ = w.Write([]byte(`{"result":"created"}`))
 			return
 		}
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{}`))
+		_, _ = w.Write([]byte(`{}`))
 	})
 	c := newMockESClient(t, srv.URL)
 	require.NoError(t, c.IndexArticleFromDB(context.Background(), db, 20))
@@ -95,10 +95,10 @@ func TestIndexUser_Anonymized(t *testing.T) {
 		if r.Method == "DELETE" {
 			deleted = true
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`{}`))
+			_, _ = w.Write([]byte(`{}`))
 			return
 		}
-		w.Write([]byte(`{}`))
+		_, _ = w.Write([]byte(`{}`))
 	})
 	c := newMockESClient(t, srv.URL)
 	require.NoError(t, c.IndexUserFromDB(context.Background(), db, 1))
@@ -112,7 +112,7 @@ func TestDeleteDocs(t *testing.T) {
 		} else {
 			w.WriteHeader(http.StatusOK)
 		}
-		w.Write([]byte(`{}`))
+		_, _ = w.Write([]byte(`{}`))
 	})
 	c := newMockESClient(t, srv.URL)
 	require.NoError(t, c.DeleteVideo(context.Background(), 10))
@@ -130,11 +130,11 @@ func TestReindexAll(t *testing.T) {
 	srv := newMockESServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "PUT" {
 			putCount++
-			w.Write([]byte(`{"result":"created"}`))
+			_, _ = w.Write([]byte(`{"result":"created"}`))
 			return
 		}
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{}`))
+		_, _ = w.Write([]byte(`{}`))
 	})
 	c := newMockESClient(t, srv.URL)
 	require.NoError(t, c.ReindexAll(context.Background(), db))
@@ -159,7 +159,7 @@ func TestIndexDoc_Error(t *testing.T) {
 		} else {
 			w.WriteHeader(http.StatusOK)
 		}
-		w.Write([]byte(`{"error":"boom"}`))
+		_, _ = w.Write([]byte(`{"error":"boom"}`))
 	})
 	c := newMockESClient(t, srv.URL)
 	err := c.indexDoc(context.Background(), IndexVideos, "10", map[string]interface{}{"a": 1})
@@ -185,10 +185,10 @@ func TestSearchArticles_Basic(t *testing.T) {
 					"total": map[string]interface{}{"value": float64(1)},
 				},
 			}
-			json.NewEncoder(w).Encode(resp)
+			_ = json.NewEncoder(w).Encode(resp)
 			return
 		}
-		w.Write([]byte(`{}`))
+		_, _ = w.Write([]byte(`{}`))
 	})
 	c := newMockESClient(t, srv.URL)
 	payload, err := c.SearchArticles(context.Background(), SearchParams{Keyword: "go", Page: 1, PageSize: 10, Sort: "pubdate"})
