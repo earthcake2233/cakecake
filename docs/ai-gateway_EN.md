@@ -61,7 +61,8 @@ Login to admin panel -> **AI Roles** (`/admin/agent`):
 
 - `internal/aigateway/` -- DeepSeek client, streaming orchestration & Redis context
 - `internal/service/agent/agent.go` -- Orchestration, pause/continue state machine, quotas, persistence
-- `internal/handler/agent_direct_message.go` -- resume/regenerate, async suggestions
+- `internal/service/agent/agent_orchestrate.go` -- orchestration (run/resume/regenerate, persistence, async suggestions)
+- `internal/handler/agent_direct_message.go` -- forwarding only (WS/HTTP triggers + push adapter)
 - `internal/handler/direct_message_ws.go` -- WS control frames
 - `internal/data/agent_seed.go` -- System user & conversation initialization
 
@@ -176,7 +177,7 @@ Each tool can be independently enabled/disabled via RuntimeConfig, key format: `
 
 ## Streaming / Pause / Continue / Regenerate: Pitfalls & Key Technical Points
 
-> This section records the pitfalls encountered while evolving the assistant from a non-streaming full reply into a streaming typewriter with pause/continue, regenerate, and follow-up suggestions. It is reorganized as "symptom → why it's hard → how we fixed it" so it is easier to follow.
+> The hard bugs on this path (duplicate messages, stop not working, split code blocks, missing/duplicated result cards, regenerate answering the wrong turn, welcome-regenerate freeze, layout drift) were never "a function written wrong" — they were caused by **messy structure**: the same state scattered across layers, heuristics guessing instead of explicit decisions, and rendering logic with side effects. Patching symptoms one by one only multiplies fixes; the effective move is consolidating responsibilities so every layer has a single source of truth. The table below records those structural principles.
 
 ### The Big Picture (Plain English)
 
@@ -200,111 +201,21 @@ Why it's hard: the stream is asynchronous (the backend generates while the front
 | genID | Generation counter; incremented on each regenerate, used to discard stale streams |
 | version bubble | Frontend merges multiple replies for the same question into one bubble with a `‹ n / n ›` switcher |
 
-### 1. Delta Push Target: the DM `UserLow/UserHigh` Trap
+### Structural Principles (where it was messy → how we consolidated → which bugs it prevents)
 
-**Symptom**: the final message arrives, but the typewriter never moves; debugging shows every `agent_delta` was pushed to the bot (nobody connected).
+| # | Where it was messy | Consolidated structure | Bugs prevented |
+|---|--------------------|------------------------|----------------|
+| 1 | Generation state split between the handler's cancel registry and the service's `genStates`, kept in sync by hand | The whole state machine lives in `AgentService`; the handler only forwards WS/HTTP and uses the `DmReader`/`ReplyPusher` ports | Duplicate messages, stop not working, stale generations resurfacing |
+| 2 | The draft lived in three places: frontend `_agentDraftContent`, WS `partial`, backend buffer | The draft lives only on the server; `agent_continue` carries no `partial`; `agent_continue_mode {buffer|reprompt}` tells the frontend the mode | Seam leaks at stop/continue, split code blocks |
+| 3 | Concurrent continues busy-waited with `time.Sleep`; replay kept pushing old deltas after a supersede | `sync.Cond` wakeups; replay checks `dropped` before every fragment and discards the rest on supersede | Stop not effective, stale stream leaking to the UI |
+| 4 | Card display guessed from reply text via regex (numeric substrings; whole-turn "没关系/没搜到" false kills) | The model declares `【展示】tool#ID` at the end of the reply; the backend persists exactly those; title matching is only a fallback; the frontend dedupes defensively | Irrelevant cards mixed in, recommended cards missing/duplicated |
+| 5 | Regenerate looked for the "latest user message" from the tail of a newest-first list (getting the OLDEST); silently returned when there was no user message | Scan from the head for the newest user; with no user message, regenerate the welcome instead; 120s frontend safety net | Regenerate answering the wrong turn, welcome-regenerate freeze |
+| 6 | Version merging had side effects in a computed; message actions were nested inside the flex row | Merging is the pure function `buildVersionGroups`; actions/cards are siblings of the row; frontend state moved into a reactive composable | Version switcher NaN/2, action-bar layout drift |
+| 7 | Re-prompt stitching guessed the seam with whitespace-normalized longest overlap | Non-streaming completion → deterministic stitch rules → only the unseen tail is streamed | Duplicate lines at the seam, fence corruption |
+| 8 | Follow-up chips were generated synchronously, blocking persistence for 5–15s | Persist and push first; generate `agent_suggestions` in the background | End-of-reply dead wait |
+| 9 | Push target assumed `conv.UserLow`; the delta callback was a global field | Explicit `humanPeerForConversation`; per-call `onDelta` closures | Typewriter not showing, cross-user mixups |
 
-**Why it's hard**: DM conversations store both participant IDs sorted as `(min, max)` in `user_low/user_high`. The bot ID can be smaller than the user's (e.g. bot=14, user=18), so `conv.UserLow` is the **bot**, not the user.
-
-**Fix**: `humanPeerForConversation(conv, botUserID)` explicitly returns the non-bot participant and is locked down by a unit test.
-
-### 2. Global Callback vs Per-Call Callback (Cross-User Mixup)
-
-**Symptom**: user A's reply contains fragments from user B.
-
-**Why it's hard**: the gateway originally exposed a single `OnTextDelta` field overwritten before each generation. With two concurrent generations, the later closure replaced the earlier one.
-
-**Fix**: `CompleteUserTurnStream` / `CompleteUserTurnWithToolsStream` / `ContinueTurnStream` now accept a **per-call** `onDelta func(string)`; every call holds its own closure (including its own `humanID`).
-
-### 3. Pause/Resume State Machine (The Most Leak-Prone Part)
-
-**Design goal**: clicking "stop" keeps the LLM stream running in the background and buffers deltas; clicking "continue" replays the buffer at typewriter pace and then resumes live deltas.
-
-Core state:
-
-| Field | Meaning |
-|-------|---------|
-| `paused` | Paused (deltas go to the buffer, not pushed) |
-| `buffer []string` | Deltas buffered while paused |
-| `dropped` | Superseded by a newer generation; discard later deltas |
-| `genID` | Generation id; an old goroutine can never clear newer state |
-| `pauseSeq` | Stop sequence, incremented on every pause |
-| `resuming` | Replay-in-progress flag; serializes concurrent continues |
-
-Three pitfalls hit:
-
-- **Unpausing before replay**: buffered replay and live deltas wrote concurrently, scrambling text into code blocks. Fix: stay `paused` during replay; unpause only after the buffer is drained.
-- **Two concurrent continues**: the second replay unpaused before the first finished, recreating the interleave. Fix: the `resuming` flag makes concurrent resumes wait; unpause only when no new pause happened during replay (`pauseSeq` unchanged) and the buffer is empty.
-- **A stop during replay was overridden**: the replay's final “unpause” wiped out the just-clicked stop, making stop ineffective. Fix: check `pauseSeq` **before pushing every fragment**; on a new stop, interrupt the replay immediately and keep the remainder buffered for the next continue.
-
-### 4. Avoiding Duplicate Rows: Never Substring-Match the Draft
-
-**Symptom**: after the reply was already persisted, clicking "continue" created a second reply.
-
-**Why it's hard**: we used to check whether the latest assistant content "contains" the streamed draft. Two fatal flaws:
-
-1. Persisted content is normalized (`normalizeMarkdownFences` / `dedupeConsecutiveLines` / trim) while the draft is the raw stream — they do not match;
-2. `ListMessages` returns DESC (newest first), but the old code iterated from the tail and returned on the first assistant found — effectively comparing against the **oldest** message in the window.
-
-**Fix**: `latestUserTurnHasAssistantReply` — only check whether an assistant row exists after the latest user message, with **no text comparison**; combined with a per-user `agentRunLock` that serializes the resume decision and persistence, so even a double continue persists exactly one row.
-
-### 5. Async Follow-Up Suggestions (Eliminating the End Dead-Wait)
-
-**Symptom**: after the reply text finished streaming, the final message took a long time to appear ("it finally generated after a long wait").
-
-**Why it's hard**: a **synchronous** second LLM call generated suggestion chips (up to 15s) and blocked persistence of the final message.
-
-**Fix**: persist and push the reply immediately (empty suggestions), then in a background goroutine:
-
-1. `UpdateMessageSuggestions(messageID, sugg)` updates the row;
-2. Push a new WS event `agent_suggestions {message_id, suggestions}`;
-3. The frontend updates the existing message's suggestions by `message_id`; chips appear later.
-
-Measured: the gap from stream end to persisted row dropped from 5–15s to ~100ms.
-
-### 6. Markdown Fence Normalization
-
-**Symptom**: at stop/continue seams the model often emits extra ````go`, duplicate open fences, or repeated lines, breaking frontend markdown rendering.
-
-**Fix**: normalize before persistence:
-
-- `normalizeMarkdownFences`: unify fences to three backticks, drop seam artifacts (language-tagged fence while already inside a block), append a closing fence if unclosed;
-- `dedupeConsecutiveLines`: remove exact consecutive duplicate lines;
-- `plainTextPreview`: strip markdown for conversation-list previews.
-
-⚠️ When asserting stream order, normalize both the client-side delta concatenation and the persisted text with the **same** normalization; otherwise fence differences cause false failures.
-
-### 7. Frontend State Machine: In-Place Regenerate
-
-Consecutive assistant rows are merged into a “version bubble” (`versions` + `‹ n / n ›` switcher).
-
-Regenerate flow: `_agentRegenerating=true` → clear the old content in place → the new stream types into the same bubble.
-
-Two pitfalls:
-
-- **Clearing `_agentRegenerating` on stop**: the renderer assumed the in-place rewrite ended, the old version flashed back, and a duplicate `agent-draft` bubble appeared. Fix: keep the in-place flag through stop/continue until the final `dm_message` arrives.
-- **Not clearing the old version's tool data**: the previous turn's `search_videos` cards/status leaked into the regenerating bubble. Fix: when rewriting in place, also clear `toolActivities` / `toolResultData` / `suggestions`.
-
-### 8. Scrolling & UX
-
-- Scrolling to the bottom on every delta hijacked the user's manual scroll. Fix: `onChatScroll` maintains `_userScrolledUp`; auto-scroll only runs when the view is near the bottom.
-- Clicking regenerate jumps to the user's question row (explicit requirement); ~700ms after the jump animation, auto-follow resumes. Manual up-scroll always wins.
-- Keeping the in-place rewrite during stop/continue prevents scroll jumps to a new bubble.
-
-### 9. Never Drop WS Control Frames
-
-If `sendWsControl` returns early while the WS is reconnecting, stop/continue frames are silently lost — the backend streams to completion (“stop doesn't work, it all generates at once”).
-
-Fix: queue control frames in `_pendingWsControls` and flush them in `onopen`.
-
-### 10. End-to-End Verification
-
-These bugs cannot be covered by unit/API tests; they require a **real browser + real model**:
-
-- **Browser click flow** (puppeteer + Chromium): send → stop → continue → regenerate; assert DB row count, no duplicate `agent-draft` row in the DOM, old content never flashes back, and scroll position.
-- **Raw WS race**: send two `agent_continue` frames back-to-back and assert exactly one assistant row.
-- **Stream-order assertion**: concatenate all deltas received by the client and compare with the persisted text under the same normalization (include frames received before the polling loop; we once mis-reported by skipping the head).
-- **Stop responsiveness**: at most 2–3 in-flight fragments after stop (network latency); the stream must not keep emitting whole chunks.
+Every principle has unit tests; anything involving a real model/browser (rapid stop/continue/regenerate, follow-ups, welcome regenerate, trending card counts) is verified end-to-end with puppeteer + a real model.
 
 ### Protocol Additions
 
@@ -313,7 +224,8 @@ These bugs cannot be covered by unit/API tests; they require a **real browser + 
 | `agent_delta` | server → client | Streaming text fragment `{content}` |
 | `agent_suggestions` | server → client | Async follow-up chips `{message_id, suggestions}` |
 | `agent_cancel` | client → server | Pause (buffer; background LLM keeps running) |
-| `agent_continue` | client → server | Replay buffer and resume live stream |
+| `agent_continue` | client → server | Replay buffer and resume live stream (**no partial**) |
+| `agent_continue_mode` | server → client | Continue mode: `buffer` (seamless replay) or `reprompt` (fallback re-prompt) |
 | `agent_regenerate` | client → server | Regenerate the turn (new version) |
 
 ### Core Invariants
@@ -327,5 +239,7 @@ These bugs cannot be covered by unit/API tests; they require a **real browser + 
 
 - `internal/aigateway/gateway.go` — per-call deltas, streaming tool orchestration
 - `internal/service/agent/agent.go` — pause/resume state machine, markdown normalization
-- `internal/handler/agent_direct_message.go` — resume/regenerate, async suggestions
-- `cakecake-vue/cakecake-web/src/components/cakecake/MbDmChatPanel.vue` — frontend state machine, scrolling, control-frame queue
+- `internal/service/agent/agent_orchestrate.go` — orchestration (run/resume/regenerate, persistence, async suggestions)
+- `internal/handler/agent_direct_message.go` — forwarding only (WS/HTTP triggers + push adapter)
+- `cakecake-vue/cakecake-web/src/composables/useAgentStreaming.js` — frontend streaming state machine (reactive composable)
+- `cakecake-vue/cakecake-web/src/components/cakecake/MbDmMessageItem.vue` — message bubble / actions / result cards rendering
