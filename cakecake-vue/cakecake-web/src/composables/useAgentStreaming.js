@@ -1,14 +1,15 @@
+import { reactive } from "vue";
 import { getUserId } from "@/utils/authTokens";
 import defaultFace from "@/assets/akari.jpg";
 
 /**
  * Agent streaming state machine (pause / continue / regenerate + draft + tool
- * activity). Extracted from MbDmChatPanel so the panel stays a renderer and
- * the transitions are testable pure helpers.
+ * activity) as a true Vue 3 composable: the state is reactive and every
+ * transition lives here, so MbDmChatPanel only renders and forwards transport
+ * events.
  */
-
-export function createAgentStreamState() {
-  return {
+export function useAgentStreaming({ notifyTimeout } = {}) {
+  const state = reactive({
     chatAwaitingAgent: false,
     _agentDraftContent: "",
     _agentStopped: false,
@@ -21,6 +22,141 @@ export function createAgentStreamState() {
     _pendingResultData: {},
     _pendingToolActs: [],
     _liveToolActs: []
+  });
+
+  function clearWait() {
+    if (!state._agentReplyTimer) return;
+    clearTimeout(state._agentReplyTimer);
+    state._agentReplyTimer = null;
+  }
+
+  function startWait() {
+    clearWait();
+    state.chatAwaitingAgent = true;
+    state._agentReplyTimer = setTimeout(() => {
+      state.chatAwaitingAgent = false;
+      state._agentReplyTimer = null;
+      if (state._agentContinuePending && state._agentDraftContent) {
+        state._agentContinuePending = false;
+        state._agentStopped = true;
+        if (typeof notifyTimeout === "function") notifyTimeout();
+      }
+      if (state._agentRegenerating) {
+        // Safety net: a regenerate that produced no reply (e.g. a conversation
+        // with no user message) must never leave the bubble stuck forever.
+        state._agentRegenerating = false;
+        if (typeof notifyTimeout === "function") notifyTimeout();
+      }
+    }, 120000);
+  }
+
+  function stop() {
+    state.chatAwaitingAgent = false;
+    state._agentStopped = true;
+    state._agentContinuePending = false;
+    state._pendingToolActs = [];
+    state._liveToolActs = [];
+    state._pendingResultData = {};
+  }
+
+  function startContinue() {
+    state._agentStopped = false;
+    state._agentContinuePending = true;
+    state._agentContinuing = true;
+    state._agentLastAction = "continue";
+  }
+
+  function startRegenerate() {
+    state._agentDraftContent = "";
+    state._agentStopped = false;
+    state._agentRegenerating = true;
+    state._agentLastAction = "regenerate";
+    state._pendingToolActs = [];
+    state._liveToolActs = [];
+    state._pendingResultData = {};
+  }
+
+  function onDelta(content) {
+    state._agentContinuePending = false;
+    state._agentDraftContent += content;
+  }
+
+  function setMode(mode) {
+    if (mode === "buffer" || mode === "reprompt") {
+      state._agentContinueMode = mode;
+    }
+  }
+
+  function onToolStart(body) {
+    const act = { ...body, status: "running" };
+    state._pendingToolActs.push(act);
+    state._liveToolActs.push(act);
+  }
+
+  function onToolEnd(body) {
+    const done = { ...body, status: "done" };
+    const idx = state._pendingToolActs.findIndex(t => t.span_id === body.span_id);
+    if (idx >= 0) {
+      state._pendingToolActs[idx] = { ...state._pendingToolActs[idx], ...done };
+      state._liveToolActs[idx] = { ...state._liveToolActs[idx], ...done };
+    } else {
+      state._pendingToolActs.push(done);
+      state._liveToolActs.push(done);
+    }
+  }
+
+  function onToolResult(spanId, items) {
+    state._pendingResultData[spanId] = items;
+  }
+
+  function onFinalMessage() {
+    state._agentDraftContent = "";
+    state._agentStopped = false;
+    state._agentContinuePending = false;
+    state._agentContinuing = false;
+    state._agentRegenerating = false;
+    if (state._pendingToolActs.length) {
+      state._pendingToolActs.forEach(t => {
+        if (t.status === "running") t.status = "done";
+      });
+      state._liveToolActs.forEach(t => {
+        if (t.status === "running") t.status = "done";
+      });
+      state._pendingToolActs = [];
+      state._liveToolActs = [];
+      state._pendingResultData = {};
+    }
+  }
+
+  function reset() {
+    clearWait();
+    state.chatAwaitingAgent = false;
+    state._agentDraftContent = "";
+    state._agentStopped = false;
+    state._agentContinuing = false;
+    state._agentRegenerating = false;
+    state._agentContinuePending = false;
+    state._agentLastAction = "";
+    state._agentContinueMode = "buffer";
+    state._pendingToolActs = [];
+    state._liveToolActs = [];
+    state._pendingResultData = {};
+  }
+
+  return {
+    state,
+    clearWait,
+    startWait,
+    stop,
+    startContinue,
+    startRegenerate,
+    onDelta,
+    setMode,
+    onToolStart,
+    onToolEnd,
+    onToolResult,
+    onFinalMessage,
+    reset
   };
 }
 
@@ -36,119 +172,6 @@ function parseApiTime(s) {
     Number(m[5]),
     Number(m[6])
   );
-}
-
-export function clearReplyTimer(state) {
-  if (!state || !state._agentReplyTimer) return;
-  clearTimeout(state._agentReplyTimer);
-  state._agentReplyTimer = null;
-}
-
-export function startReplyWait(state, notifyTimeout) {
-  clearReplyTimer(state);
-  state.chatAwaitingAgent = true;
-  state._agentReplyTimer = setTimeout(() => {
-    state.chatAwaitingAgent = false;
-    state._agentReplyTimer = null;
-    if (state._agentContinuePending && state._agentDraftContent) {
-      state._agentContinuePending = false;
-      state._agentStopped = true;
-      if (typeof notifyTimeout === "function") notifyTimeout();
-    }
-  }, 120000);
-}
-
-export function markStop(state) {
-  state.chatAwaitingAgent = false;
-  state._agentStopped = true;
-  state._agentContinuePending = false;
-  state._pendingToolActs = [];
-  state._liveToolActs = [];
-  state._pendingResultData = {};
-}
-
-export function markContinueStart(state) {
-  state._agentStopped = false;
-  state._agentContinuePending = true;
-  state._agentContinuing = true;
-  state._agentLastAction = "continue";
-}
-
-export function markRegenerate(state) {
-  state._agentDraftContent = "";
-  state._agentStopped = false;
-  state._agentRegenerating = true;
-  state._agentLastAction = "regenerate";
-  state._pendingToolActs = [];
-  state._liveToolActs = [];
-  state._pendingResultData = {};
-}
-
-export function applyAgentDelta(state, content) {
-  state._agentContinuePending = false;
-  state._agentDraftContent += content;
-}
-
-export function setContinueMode(state, mode) {
-  if (mode === "buffer" || mode === "reprompt") {
-    state._agentContinueMode = mode;
-  }
-}
-
-export function trackToolStart(state, body) {
-  const act = { ...body, status: "running" };
-  state._pendingToolActs.push(act);
-  state._liveToolActs.push(act);
-}
-
-export function trackToolEnd(state, body) {
-  const done = { ...body, status: "done" };
-  const idx = state._pendingToolActs.findIndex(t => t.span_id === body.span_id);
-  if (idx >= 0) {
-    state._pendingToolActs[idx] = { ...state._pendingToolActs[idx], ...done };
-    state._liveToolActs[idx] = { ...state._liveToolActs[idx], ...done };
-  } else {
-    state._pendingToolActs.push(done);
-    state._liveToolActs.push(done);
-  }
-}
-
-export function trackToolResult(state, spanId, items) {
-  state._pendingResultData[spanId] = items;
-}
-
-export function finalizeAgentMessage(state) {
-  state._agentDraftContent = "";
-  state._agentStopped = false;
-  state._agentContinuePending = false;
-  state._agentContinuing = false;
-  state._agentRegenerating = false;
-  if (state._pendingToolActs.length) {
-    state._pendingToolActs.forEach(t => {
-      if (t.status === "running") t.status = "done";
-    });
-    state._liveToolActs.forEach(t => {
-      if (t.status === "running") t.status = "done";
-    });
-    state._pendingToolActs = [];
-    state._liveToolActs = [];
-    state._pendingResultData = {};
-  }
-}
-
-export function resetAgentStream(state) {
-  clearReplyTimer(state);
-  state.chatAwaitingAgent = false;
-  state._agentDraftContent = "";
-  state._agentStopped = false;
-  state._agentContinuing = false;
-  state._agentRegenerating = false;
-  state._agentContinuePending = false;
-  state._agentLastAction = "";
-  state._agentContinueMode = "buffer";
-  state._pendingToolActs = [];
-  state._liveToolActs = [];
-  state._pendingResultData = {};
 }
 
 /**

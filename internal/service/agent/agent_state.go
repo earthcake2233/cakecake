@@ -28,7 +28,7 @@ type agentGenState struct {
 	// resuming guards the backlog replay so two continues never run it
 	// concurrently (which would let live deltas interleave with the replay).
 	resuming bool
-	// cond wakes concurrent ResumeGeneration callers instead of busy-spinning
+	// cond wakes concurrent resumeGeneration callers instead of busy-spinning
 	// while another continue is replaying the backlog.
 	cond *sync.Cond
 }
@@ -76,10 +76,10 @@ func (s *AgentService) deltaSender(humanID uint64, genID uint64) func(string) {
 	}
 }
 
-// DraftText returns the full text streamed so far for the user's generation.
-// It survives EndGeneration (copied to the sticky last-draft slot) so a
+// draftText returns the full text streamed so far for the user's generation.
+// It survives endGeneration (copied to the sticky last-draft slot) so a
 // re-prompt fallback can continue from the exact server-side draft.
-func (s *AgentService) DraftText(uid uint64) string {
+func (s *AgentService) draftText(uid uint64) string {
 	if uid == 0 {
 		return ""
 	}
@@ -116,11 +116,11 @@ func (s *AgentService) generationState(uid uint64) *agentGenState {
 	return s.genStates[uid]
 }
 
-// BeginGeneration registers a new generation state before the LLM call and
+// beginGeneration registers a new generation state before the LLM call and
 // returns its generation id. The cancel func is owned by the state: it is
 // invoked when the generation is superseded, ended, or finished while paused,
 // and supersedes any previous generation state for the user.
-func (s *AgentService) BeginGeneration(uid uint64, cancel context.CancelFunc) uint64 {
+func (s *AgentService) beginGeneration(uid uint64, cancel context.CancelFunc) uint64 {
 	if uid == 0 {
 		return 0
 	}
@@ -141,10 +141,10 @@ func (s *AgentService) BeginGeneration(uid uint64, cancel context.CancelFunc) ui
 	return s.genSeq
 }
 
-// EndGeneration removes the generation state only if it still belongs to the
+// endGeneration removes the generation state only if it still belongs to the
 // given generation id (a finished goroutine can never clear a newer state).
 // The attached cancel is invoked so request resources are released.
-func (s *AgentService) EndGeneration(uid uint64, genID uint64) {
+func (s *AgentService) endGeneration(uid uint64, genID uint64) {
 	if uid == 0 {
 		return
 	}
@@ -218,11 +218,11 @@ func (s *AgentService) clearDraft(uid uint64) {
 	s.draftMu.Unlock()
 }
 
-// SupersedeGeneration cancels and drops the user's current generation,
+// supersedeGeneration cancels and drops the user's current generation,
 // discarding its buffered deltas and any paused-completed reply that has not
 // been persisted yet. The dropped state stays registered so late deltas from
 // the old stream are still recognized and discarded.
-func (s *AgentService) SupersedeGeneration(uid uint64) {
+func (s *AgentService) supersedeGeneration(uid uint64) {
 	if uid == 0 {
 		return
 	}
@@ -253,10 +253,10 @@ func (s *AgentService) SupersedeGeneration(uid uint64) {
 	}
 }
 
-// DropCurrentGeneration marks the user's current generation as dropped (its
+// dropCurrentGeneration marks the user's current generation as dropped (its
 // buffered/live deltas are discarded). The state stays registered so late
 // deltas from the old stream are still recognized and dropped.
-func (s *AgentService) DropCurrentGeneration(uid uint64) {
+func (s *AgentService) dropCurrentGeneration(uid uint64) {
 	if uid == 0 {
 		return
 	}
@@ -278,10 +278,10 @@ func (s *AgentService) DropCurrentGeneration(uid uint64) {
 	st.mu.Unlock()
 }
 
-// HasRunningGeneration reports whether a generation goroutine is still active
+// hasRunningGeneration reports whether a generation goroutine is still active
 // for the user (used by resume to decide whether buffered deltas are enough or
 // a completed reply needs to be persisted).
-func (s *AgentService) HasRunningGeneration(uid uint64) bool {
+func (s *AgentService) hasRunningGeneration(uid uint64) bool {
 	if uid == 0 {
 		return false
 	}
@@ -294,10 +294,10 @@ func (s *AgentService) HasRunningGeneration(uid uint64) bool {
 	return st.running
 }
 
-// StorePendingReply records a reply that completed while the user had paused
+// storePendingReply records a reply that completed while the user had paused
 // the stream. The generation is marked finished (its cancel is released) but
 // its state stays registered so a resume can flush buffered deltas first.
-func (s *AgentService) StorePendingReply(uid uint64, genID uint64, conv *dm.DmConversation, result *GenerateReplyResult) {
+func (s *AgentService) storePendingReply(uid uint64, genID uint64, conv *dm.DmConversation, result *GenerateReplyResult) {
 	if uid == 0 || genID == 0 || conv == nil || result == nil {
 		return
 	}
@@ -318,9 +318,9 @@ func (s *AgentService) StorePendingReply(uid uint64, genID uint64, conv *dm.DmCo
 	}
 }
 
-// TakePendingReply consumes the user's paused-completed reply, returning the
+// takePendingReply consumes the user's paused-completed reply, returning the
 // conversation, result and generation id. The second call returns false.
-func (s *AgentService) TakePendingReply(uid uint64) (*dm.DmConversation, *GenerateReplyResult, uint64, bool) {
+func (s *AgentService) takePendingReply(uid uint64) (*dm.DmConversation, *GenerateReplyResult, uint64, bool) {
 	if uid == 0 {
 		return nil, nil, 0, false
 	}
@@ -343,7 +343,7 @@ func (s *AgentService) TakePendingReply(uid uint64) (*dm.DmConversation, *Genera
 }
 
 // PauseGeneration stops pushing streamed deltas; they are buffered so a later
-// ResumeGeneration can flush them verbatim (byte-level continuation).
+// resumeGeneration can flush them verbatim (byte-level continuation).
 func (s *AgentService) PauseGeneration(uid uint64) {
 	if uid == 0 {
 		return
@@ -364,8 +364,8 @@ func (s *AgentService) PauseGeneration(uid uint64) {
 	st.mu.Unlock()
 }
 
-// ResumeGeneration un-pauses and flushes the buffered deltas in order.
-func (s *AgentService) ResumeGeneration(uid uint64) {
+// resumeGeneration un-pauses and flushes the buffered deltas in order.
+func (s *AgentService) resumeGeneration(uid uint64) {
 	if uid == 0 {
 		return
 	}
@@ -461,8 +461,8 @@ func (s *AgentService) ResumeGeneration(uid uint64) {
 	}
 }
 
-// IsGenerationPaused reports whether the user's generation is paused.
-func (s *AgentService) IsGenerationPaused(uid uint64) bool {
+// isGenerationPaused reports whether the user's generation is paused.
+func (s *AgentService) isGenerationPaused(uid uint64) bool {
 	st := s.generationState(uid)
 	if st == nil {
 		return false
@@ -472,8 +472,8 @@ func (s *AgentService) IsGenerationPaused(uid uint64) bool {
 	return st.paused
 }
 
-// ClearGenerationState removes the user's pause/buffer state.
-func (s *AgentService) ClearGenerationState(uid uint64) {
+// clearGenerationState removes the user's pause/buffer state.
+func (s *AgentService) clearGenerationState(uid uint64) {
 	if uid == 0 {
 		return
 	}

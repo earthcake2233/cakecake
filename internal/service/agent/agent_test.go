@@ -503,33 +503,111 @@ func TestFilterReferencedItems(t *testing.T) {
 		{"id":2,"title":"Go 与 MySQL 实战教程","author":"earthcake"}
 	]`)
 
-	// Reply cites only the relevant video by title -> only that card survives.
-	kept := filterReferencedItems("推荐你看看《Go 与 MySQL 实战教程》", items)
+	// Reply cites the video by title -> only that card survives.
+	kept := filterReferencedItems("推荐你看看《Go 与 MySQL 实战教程》", items, map[string]bool{})
 	require.NotNil(t, kept)
 	var arr []map[string]interface{}
 	require.NoError(t, json.Unmarshal(kept, &arr))
 	require.Len(t, arr, 1)
 	require.Equal(t, float64(2), arr[0]["id"])
 
-	// Reply mentions an id explicitly -> that item survives.
-	kept2 := filterReferencedItems("视频 1 不错", items)
-	require.NotNil(t, kept2)
-	var arr2 []map[string]interface{}
-	require.NoError(t, json.Unmarshal(kept2, &arr2))
-	require.Len(t, arr2, 1)
-	require.Equal(t, float64(1), arr2[0]["id"])
+	// Numeric fragments ("视频 1", "4K/60帧") must NOT match ids by substring.
+	require.Nil(t, filterReferencedItems("视频 1 不错", items, map[string]bool{}))
+	require.Nil(t, filterReferencedItems("4K/60帧修复", items, map[string]bool{}))
+
+	// A repeated tool call with identical results contributes nothing new.
+	seen := map[string]bool{}
+	require.NotNil(t, filterReferencedItems("推荐你看看《Go 与 MySQL 实战教程》", items, seen))
+	require.Nil(t, filterReferencedItems("推荐你看看《Go 与 MySQL 实战教程》", items, seen))
+
+	// A citation inside a dismissive sentence is dropped per item, while a
+	// recommendation elsewhere in the same reply survives.
+	require.Nil(t, filterReferencedItems("搜到了《Go 与 MySQL 实战教程》，但和编程无关。", items, map[string]bool{}))
+	require.NotNil(t, filterReferencedItems("其他结果与需求无关。推荐你看看《Go 与 MySQL 实战教程》。", items, map[string]bool{}))
 
 	// Reply says nothing relevant -> nothing survives.
-	require.Nil(t, filterReferencedItems("站内暂时没有相关教程", items))
+	require.Nil(t, filterReferencedItems("站内暂时没有相关教程", items, map[string]bool{}))
 }
 
-func TestReplyDismissesResults(t *testing.T) {
-	require.True(t, replyDismissesResults("我在站里搜了一圈，结果只翻出几个动画区视频，跟编程八竿子打不着，站内暂时没有相关教程。"))
-	require.True(t, replyDismissesResults("搜到了《溯》，但和编程无关"))
-	require.True(t, replyDismissesResults("没找到相关教程"))
-	require.True(t, replyDismissesResults("咱们站确实没有 Go 连 MySQL 的教程视频"))
-	require.True(t, replyDismissesResults("结果只有动画和音乐的投稿"))
-	require.False(t, replyDismissesResults("推荐你看看《Go 与 MySQL 实战教程》，站内有这个视频。"))
+func TestItemReferenced_SentenceDismissal(t *testing.T) {
+	it := map[string]interface{}{"id": float64(3), "title": "曾火遍全网的《溯》，你是否还知道？"}
+
+	// Cited inside a dismissive sentence -> not referenced.
+	require.False(t, itemReferenced("搜到了「曾火遍全网的《溯》，你是否还知道？」，但和编程无关。", it))
+	require.False(t, itemReferenced("搜到了「曾火遍全网的《溯》，你是否还知道？」，和编程八竿子打不着。", it))
+
+	// Cited in a recommending/neutral sentence -> referenced.
+	require.True(t, itemReferenced("推荐你看看「曾火遍全网的《溯》，你是否还知道？」，站内有这个视频。", it))
+	require.True(t, itemReferenced("找到了「曾火遍全网的《溯》，你是否还知道？」。", it))
+
+	// A dismissal in another sentence must not kill this recommendation.
+	require.True(t, itemReferenced("其他结果与需求无关。推荐你看看「曾火遍全网的《溯》，你是否还知道？」。", it))
+}
+
+func TestExtractDisplaySelections(t *testing.T) {
+	sel, cleaned, ok := extractDisplaySelections("推荐你看这个\n【展示】search_videos#23,get_video_detail#24")
+	require.True(t, ok)
+	require.Equal(t, []uint64{23}, sel["search_videos"])
+	require.Equal(t, []uint64{24}, sel["get_video_detail"])
+	require.NotContains(t, cleaned, "【展示】")
+	require.Contains(t, cleaned, "推荐你看这个")
+
+	// Chinese punctuation and extra spaces are tolerated.
+	sel, _, ok = extractDisplaySelections("【展示】 search_videos # 23、search_videos#24")
+	require.True(t, ok)
+	require.Equal(t, []uint64{23, 24}, sel["search_videos"])
+
+	// No marker or unusable marker -> fallback.
+	_, _, ok = extractDisplaySelections("没有清单")
+	require.False(t, ok)
+	_, _, ok = extractDisplaySelections("【展示】别瞎展示")
+	require.False(t, ok)
+}
+
+func TestBuildReplyResult_ModelSelectedCards(t *testing.T) {
+	items := json.RawMessage(`[
+		{"id":23,"title":"前前前世"},
+		{"id":24,"title":"なんでもないや"},
+		{"id":25,"title":"无关视频"}
+	]`)
+	coll := &toolActivityCollector{
+		acts: []map[string]interface{}{
+			{"span_id": "s0", "tool_name": "search_videos", "status": "done"},
+		},
+		results: map[string]json.RawMessage{"s0": items},
+	}
+	result, err := buildReplyResult("推荐前两个\n【展示】search_videos#23", coll)
+	require.NoError(t, err)
+	require.NotContains(t, result.Content, "【展示】")
+	var rm map[string][]map[string]interface{}
+	require.NoError(t, json.Unmarshal(result.ToolResultData, &rm))
+	require.Len(t, rm["s0"], 1)
+	require.Equal(t, float64(23), rm["s0"][0]["id"])
+}
+
+func TestBuildReplyResult_ModelSelectedTrending(t *testing.T) {
+	items := json.RawMessage(`[
+		{"rank":1,"video_id":23,"title":"溯"},
+		{"rank":2,"video_id":24,"title":"炮姐"},
+		{"rank":3,"video_id":25,"title":"洱海"}
+	]`)
+	coll := &toolActivityCollector{
+		acts: []map[string]interface{}{
+			{"span_id": "t0", "tool_name": "get_trending", "status": "done"},
+		},
+		results: map[string]json.RawMessage{"t0": items},
+	}
+	// The model cites one video by video_id and one by rank.
+	result, err := buildReplyResult("榜单如下\n【展示】get_trending#24,get_trending#3", coll)
+	require.NoError(t, err)
+	var rm map[string][]map[string]interface{}
+	require.NoError(t, json.Unmarshal(result.ToolResultData, &rm))
+	require.Len(t, rm["t0"], 2)
+	var ids []float64
+	for _, it := range rm["t0"] {
+		ids = append(ids, it["video_id"].(float64))
+	}
+	require.ElementsMatch(t, []float64{24, 25}, ids)
 }
 
 // buildReplyResult must drop all result cards when the reply dismisses them,
@@ -586,44 +664,41 @@ func TestNormalizeMarkdownFences(t *testing.T) {
 	require.Equal(t, "```go\ncode line\n\nmore code\n```", got4)
 }
 
-func TestDropSeamDuplicateLines(t *testing.T) {
-	got := dropSeamDuplicateLines(
-		"    // 格式：用户名:密码@tcp(主机:端口)/数据库名?参数",
-		"// 格式：用户名:密码@tcp(主机:端口)/数据库名?参数\n    db, err := sql.Open(\"mysql\", dsn)",
-	)
-	require.Equal(t, "    db, err := sql.Open(\"mysql\", dsn)", got)
+func TestStitchContinuation(t *testing.T) {
+	full, tail := stitchContinuation("a", "b")
+	require.Equal(t, "a\nb", full)
+	require.Equal(t, "b", tail)
 
-	got2 := dropSeamDuplicateLines(
-		"\tdsn := \"root:123456@tcp(127",
-		"\tdsn := \"root:123456@tcp(127.0.0.1:3306)/testdb?charset=utf8&parseTime=true&loc=Local\"\n\n\tdb, err := sql.Open(\"mysql\", dsn)",
-	)
-	require.Equal(t, "\tdsn := \"root:123456@tcp(127.0.0.1:3306)/testdb?charset=utf8&parseTime=true&loc=Local\"\n\n\tdb, err := sql.Open(\"mysql\", dsn)", got2)
+	// Verbatim last-line repeat: dropped once.
+	full, tail = stitchContinuation("// 验证连接是否通", "// 验证连接是否通\nerr := db.Ping()")
+	require.Equal(t, "// 验证连接是否通\nerr := db.Ping()", full)
+	require.Equal(t, "err := db.Ping()", tail)
 
-	got3 := dropSeamDuplicateLines(
-		"\tdefer db.Close",
-		"\tdefer db.Close()\n\n\tif err := db.Ping(); err != nil {",
+	// Incomplete tail line restarted by the model: keep the complete line.
+	full, tail = stitchContinuation(
+		"// 一定要 Ping 一下，确认",
+		"\t// 一定要 Ping 一下，确认数据库真的能连上\n\tif err := db.Ping(); err != nil {",
 	)
-	require.Equal(t, "\tdefer db.Close()\n\n\tif err := db.Ping(); err != nil {", got3)
-}
+	require.Equal(t, "// 一定要 Ping 一下，确认数据库真的能连上\n\tif err := db.Ping(); err != nil {", full)
+	require.Equal(t, "数据库真的能连上\n\tif err := db.Ping(); err != nil {", tail)
 
-func TestMergeContinuation(t *testing.T) {
-	require.Equal(t, "a\nb", mergeContinuation("a", "b"))
-	require.Equal(
-		t,
-		"// 验证连接是否通\nerr := db.Ping()",
-		mergeContinuation("// 验证连接是否通", "// 验证连接是否通\nerr := db.Ping()"),
-	)
-	require.Equal(
-		t,
-		"// 一定要 Ping 一下，确认数据库真的能连上\n\tif err := db.Ping(); err != nil {",
-		mergeContinuation(
-			"// 一定要 Ping 一下，确认",
-			"\t// 一定要 Ping 一下，确认数据库真的能连上\n\tif err := db.Ping(); err != nil {",
-		),
-	)
-	require.Equal(t, "```go\ncode", mergeContinuation("```go", "```go\ncode"))
-	require.Equal(t, "part", mergeContinuation("part", ""))
-	require.Equal(t, "tail", mergeContinuation("", "tail"))
+	// Re-emitted fence opener after an unclosed fence is dropped.
+	full, tail = stitchContinuation("```go", "```go\ncode")
+	require.Equal(t, "```go\ncode", full)
+	require.Equal(t, "code", tail)
+
+	// The model re-emitted the whole partial verbatim: keep its reply as-is.
+	full, tail = stitchContinuation("你好世界", "你好世界，继续")
+	require.Equal(t, "你好世界，继续", full)
+	require.Equal(t, "，继续", tail)
+
+	// Empty sides.
+	full, tail = stitchContinuation("part", "")
+	require.Equal(t, "part", full)
+	require.Equal(t, "", tail)
+	full, tail = stitchContinuation("", "tail")
+	require.Equal(t, "tail", full)
+	require.Equal(t, "tail", tail)
 }
 
 func TestDedupeConsecutiveLines(t *testing.T) {

@@ -42,12 +42,37 @@ type AgentService struct {
 	Log      *zap.Logger
 	RC       *config.RuntimeConfig
 	ToolExec toolkit.Executor
+	// Dm is the read-only DM port used by the generation orchestration
+	// (regenerate lookup, duplicate-reply guard). Wired at the composition
+	// root; injected as an interface to keep the service free of HTTP concerns.
+	Dm DmReader
+	// Pusher delivers formatted agent events to the human user. It is the only
+	// transport seam left in the orchestration: the service decides WHAT to
+	// push, the adapter decides HOW (WebSocket formatting).
+	Pusher ReplyPusher
 
 	genMu     sync.Mutex
 	genStates map[uint64]*agentGenState
 	genSeq    uint64
 	draftMu   sync.Mutex
 	lastDraft map[uint64]string
+
+	runLocksMu sync.Mutex
+	runLocks   map[uint64]*sync.Mutex
+}
+
+// DmReader is the DM read port required by agent orchestration.
+type DmReader interface {
+	GetConversationByID(ctx context.Context, convID uint64) (*dm.DmConversation, error)
+	GetParticipant(ctx context.Context, convID uint64, userID uint64) (*dm.DmParticipant, error)
+	ListMessages(ctx context.Context, convID uint64, beforeID uint64, limit int) ([]dm.DmMessage, error)
+}
+
+// ReplyPusher is the transport port for formatted agent events. Implemented by
+// the HTTP/WS adapter so the service never formats presentation DTOs.
+type ReplyPusher interface {
+	PushAgentMessage(ctx context.Context, humanID uint64, conv *dm.DmConversation, msg *dm.DmMessage)
+	PushEvent(humanID uint64, payload map[string]interface{})
 }
 
 func (s *AgentService) gatewayReady() bool {
@@ -296,54 +321,6 @@ func (s *AgentService) UpdateMessageSuggestions(ctx context.Context, messageID u
 	return s.Store.UpdateMessageSuggestions(ctx, messageID, suggestions)
 }
 
-// ContinueReplyStream resumes a user-stopped reply from the partial text and
-// also generates follow-up suggestions. The returned string is the stitched
-// FULL reply (seam duplicates between the partial tail and the continuation
-// head are removed so the model's re-emitted lines/fences never appear twice).
-func (s *AgentService) ContinueReplyStream(ctx context.Context, conv *dm.DmConversation, partial string) (string, []string, error) {
-	if !s.gatewayReady() {
-		return "", nil, fmt.Errorf("ai assistant is not configured")
-	}
-	profile, err := s.profileForConversation(conv)
-	if err != nil {
-		return "", nil, fmt.Errorf("ai assistant profile missing")
-	}
-	if !profile.Enabled {
-		return "", nil, fmt.Errorf("ai assistant is disabled")
-	}
-	humanID := humanPeerForConversation(conv, profile.BotUserID)
-	if humanID == 0 {
-		return "", nil, fmt.Errorf("agent conversation has no human participant")
-	}
-	restore := s.agentSystemPrompt(profile)
-	defer restore()
-
-	ctx, cancel := context.WithTimeout(ctx, s.agentReplyTimeout())
-	defer cancel()
-
-	s.setupToolCallbacks("", humanID)
-	defer s.clearToolCallbacks()
-	genID := s.currentGenID(humanID)
-
-	instruction := "请从中断处直接继续你的回答，不要重复已经写过的内容，也不要另起一段重新讲解。"
-	if partialEndsInsideCodeFence(partial) {
-		instruction = "你现在正处于未闭合的代码块内部：请先接着写完这段代码（不要重复已写行，不要跳出代码块写新段落），用三个反引号闭合代码块后，如有必要再用一两句话继续讲解。"
-	}
-	replyMsg, err := s.Gateway.ContinueTurnStream(ctx, conv.ID, partial, instruction, s.deltaSender(humanID, genID))
-	if err != nil {
-		return "", nil, err
-	}
-	continuationText := strings.TrimSpace(replyMsg.Content)
-	full := mergeContinuation(strings.TrimSpace(partial), continuationText)
-	// Suggestions are attached asynchronously by the handler after persistence,
-	// so continue never blocks the final message on a second LLM round trip.
-	return full, nil, nil
-}
-
-// mergeContinuation stitches the stopped partial and the model's continuation,
-// removing the longest suffix of partial that the model re-emitted as the
-// prefix of continuation (common when asked to continue from a code fence or a
-// partial line).
 // returns nil on any error or unparseable output.
 func (s *AgentService) generateSuggestions(ctx context.Context, reply string) []string {
 	if s.Gateway == nil || s.Gateway.LLM == nil || strings.TrimSpace(reply) == "" {
@@ -390,8 +367,6 @@ func parseSuggestionsJSON(raw string) []string {
 	return out
 }
 
-// partialEndsInsideCodeFence reports whether the stopped reply ends inside an
-// unclosed fenced code block (odd number of fence lines so far).
 // agentReplyTimeout resolves the effective LLM request timeout (runtime config first).
 func (s *AgentService) agentReplyTimeout() time.Duration {
 	timeout := 90 * time.Second

@@ -3,7 +3,6 @@ package agent
 import (
 	"regexp"
 	"strings"
-	"unicode"
 	"unicode/utf8"
 )
 
@@ -13,11 +12,18 @@ var (
 	mdLinePrefixRe = regexp.MustCompile("(?m)^[#>*+\\-]\\s*")
 	mdFenceLineRe  = regexp.MustCompile("(?m)^(\\s*)(`{3,})(.*)$")
 	mdStrayFenceRe = regexp.MustCompile("`{3,}[a-zA-Z0-9_+-]*")
-	mdDismissRe    = regexp.MustCompile(
-		"没有(相关|什么)?(的)?(教程|内容|视频|投稿)" +
-			"|确实没有|没有找到|没找到|暂无|暂时没有|无关|不相关|没关系" +
-			"|八竿子打不着|没搜到|没有搜到|只有(动画|音乐|视频)",
+	// mdItemDismissRe marks a sentence that dismisses the video it mentions
+	// (e.g. "搜到了《溯》，但和编程无关"). Only items cited inside such a
+	// sentence are dropped; other recommendations stay.
+	mdItemDismissRe = regexp.MustCompile(
+		"无关|不相关|没关系|八竿子打不着|没搜到|没有搜到|没找到|没有找到" +
+			"|暂时没有|没有相关|暂无|只有(动画|音乐|视频)",
 	)
+	// displayMarkerRe captures the model-declared display list
+	// (【展示】search_videos#23,get_video_detail#24); displayMarkerLineRe
+	// removes the whole marker line before the reply is persisted.
+	displayMarkerRe     = regexp.MustCompile("【展示】\\s*([^\\n【】]*)")
+	displayMarkerLineRe = regexp.MustCompile("(?m)^[^\\n]*【展示】[^\\n]*$")
 )
 
 // plainTextPreview strips common Markdown syntax so the conversation-list
@@ -35,89 +41,100 @@ func plainTextPreview(content string) string {
 	return strings.TrimSpace(text)
 }
 
-func mergeContinuation(partial string, continuation string) string {
+// stitchContinuation merges the stopped partial with the model's continuation
+// using ONLY exact, deterministic rules (no fuzzy overlap guessing that could
+// split code blocks):
+//  1. the whole partial repeated verbatim at the head of the continuation is
+//     dropped;
+//  2. a verbatim duplicate of the partial's last line is dropped;
+//  3. an incomplete partial tail line that the model restarted from its
+//     beginning is replaced by the continuation's complete line;
+//  4. a re-emitted code-fence opener right after an unclosed fence is dropped.
+//
+// It returns the stitched full reply and the clean tail to stream to the
+// client (the client never sees the unstitched seam).
+func stitchContinuation(partial string, continuation string) (full string, tail string) {
 	p := strings.TrimSpace(partial)
 	c := strings.TrimSpace(continuation)
 	if p == "" {
-		return c
+		return c, c
 	}
 	if c == "" {
-		return p
+		return p, ""
 	}
-	np := strings.Join(strings.Fields(p), " ")
-	nc := strings.Join(strings.Fields(c), " ")
-	nr := []rune(np)
-	cr := []rune(nc)
-	maxOverlap := len(nr)
-	if l := len(cr); l < maxOverlap {
-		maxOverlap = l
-	}
-	best := 0
-	for n := maxOverlap; n >= 1; n-- {
-		if strings.HasSuffix(string(nr), string(cr[:n])) {
-			best = n
-			break
+	// Rule 1: the model re-emitted the entire partial.
+	if strings.HasPrefix(c, p) {
+		rest := strings.TrimPrefix(c, p)
+		// Only treat it as a whole-partial repeat when the partial ends at a
+		// line boundary in the continuation; otherwise the continuation is
+		// merely restarting the same line, which rule 3 handles below.
+		if rest == "" || strings.HasPrefix(rest, "\n") {
+			return c, strings.TrimSpace(rest)
 		}
 	}
-	if best == 0 {
-		c = dropSeamDuplicateLines(p, c)
-		return p + "\n" + c
-	}
-	return p + string([]rune(c)[normOverlapCut(c, best):])
-}
-
-// dropSeamDuplicateLines merges the seam when the continuation re-emits the
-// partial's trailing line: either verbatim (drop the duplicate) or by
-// restarting the whole line from its beginning (drop the partial's incomplete
-// tail line and keep the continuation's full line).
-func dropSeamDuplicateLines(p string, c string) string {
 	pl := strings.Split(p, "\n")
 	cl := strings.Split(c, "\n")
+	// Rule 4: a re-emitted opener right after an unclosed fence.
+	if partialEndsInsideCodeFence(p) && len(cl) > 0 && strings.HasPrefix(strings.TrimSpace(cl[0]), "```") {
+		cl = cl[1:]
+	}
+	for len(cl) > 0 && strings.TrimSpace(cl[0]) == "" {
+		cl = cl[1:]
+	}
+	changed := false
+	restartPrefix := ""
 	for len(cl) > 0 && len(pl) > 0 {
 		first := strings.TrimSpace(cl[0])
 		last := strings.TrimSpace(pl[len(pl)-1])
 		if first == "" {
 			cl = cl[1:]
+			changed = true
 			continue
 		}
 		if first == last {
+			// Rule 2: verbatim line-level repeat.
 			cl = cl[1:]
 			pl = pl[:len(pl)-1]
+			changed = true
 			continue
 		}
 		if last != "" && utf8.RuneCountInString(last) >= 4 && strings.HasPrefix(first, last) {
-			// The model restarted the whole line from its beginning: keep the
-			// continuation's complete line and drop the partial's half line.
+			// Rule 3: the model restarted the whole line from its beginning.
+			restartPrefix = last
 			pl = pl[:len(pl)-1]
-			return strings.Join(append(pl, cl...), "\n")
+			changed = true
+			break
 		}
 		break
 	}
-	return strings.Join(cl, "\n")
-}
-
-// normOverlapCut maps a whitespace-normalized overlap length back to a rune
-// offset in the original string.
-func normOverlapCut(s string, target int) int {
-	runes := []rune(s)
-	acc := 0
-	prevSpace := false
-	for i, r := range runes {
-		sp := unicode.IsSpace(r)
-		if sp {
-			if !prevSpace {
-				acc++
+	body := strings.TrimSpace(strings.Join(cl, "\n"))
+	if body == "" {
+		return strings.TrimSpace(p), ""
+	}
+	if changed {
+		full = strings.TrimSpace(strings.Join(append(pl, cl...), "\n"))
+	} else {
+		full = strings.TrimSpace(p + "\n" + body)
+	}
+	full = dedupeConsecutiveLines(full)
+	full = normalizeMarkdownFences(full)
+	// The tail must only contain text the user has NOT seen in the draft yet:
+	// seam-consumed lines are visible already, and a rule-3 restarted line only
+	// contributes its new suffix.
+	tailLines := cl
+	if restartPrefix != "" && len(tailLines) > 0 {
+		trimmed := strings.TrimSpace(tailLines[0])
+		if strings.HasPrefix(trimmed, restartPrefix) {
+			rest := strings.TrimPrefix(trimmed, restartPrefix)
+			if rest == "" {
+				tailLines = tailLines[1:]
+			} else {
+				tailLines = append([]string{rest}, tailLines[1:]...)
 			}
-			prevSpace = true
-		} else {
-			acc++
-			prevSpace = false
-		}
-		if acc >= target {
-			return i + 1
 		}
 	}
-	return len(runes)
+	tail = strings.TrimSpace(strings.Join(tailLines, "\n"))
+	return full, tail
 }
 
 // dedupeConsecutiveLines removes exact consecutive duplicate lines (the model

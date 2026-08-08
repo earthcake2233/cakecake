@@ -1,8 +1,6 @@
 package handler
 
 import (
-	"sync"
-
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -67,10 +65,6 @@ type Dependencies struct {
 
 	// hotRecCh buffers SearchHot.Record requests (async, best-effort).
 	hotRecCh chan<- hotRecordReq
-
-	// agentRunMu guards agentRunLocks (per-user generation serialization).
-	agentRunMu    sync.Mutex
-	agentRunLocks map[uint64]*sync.Mutex
 }
 
 // API exposes HTTP handlers.
