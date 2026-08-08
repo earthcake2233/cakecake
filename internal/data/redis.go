@@ -39,7 +39,20 @@ const (
 	SetPlayDirty         = "playcount:dirty"
 	// ChannelDanmakuFanout is Redis Pub/Sub for cross-process danmaku room fan-out (SPEC NF-3).
 	ChannelDanmakuFanout = "minibili:danmaku:fanout"
+	// ChannelAgentEvent is Redis Pub/Sub for per-user agent WebSocket events
+	// (deltas, tool frames, suggestions, dm messages) so any API replica can
+	// fan them out to the user's local ChatHub.
+	ChannelAgentEvent = "minibili:agent:event"
+	// ChannelAgentControl is Redis Pub/Sub for cross-instance agent control
+	// commands (pause/resume/supersede) routed to the generation's owner.
+	ChannelAgentControl = "minibili:agent:control"
 )
+
+// AgentGenSnapshotKey returns the Redis key holding the cross-instance
+// generation snapshot for a user.
+func AgentGenSnapshotKey(userID uint64) string {
+	return fmt.Sprintf("mb:agent:gen:%d", userID)
+}
 
 // DanmakuCooldownKey returns the Redis key for per-user danmaku cooldown.
 func DanmakuCooldownKey(userID, videoID uint64) string {

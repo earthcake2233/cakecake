@@ -25,9 +25,35 @@ sequenceDiagram
     V->>Go: POST .../dm/.../messages
     Go->>Go: Auth, persist, WS push user message
     Go-->>AI: goroutine -> DeepSeek streaming request
-    AI-->>WS: Stream deltas (agent_delta) -> PushJSON
-    AI-->>WS: Final reply persisted -> dm_message
+    AI-->>WS: Stream deltas / tool frames / dm_message -> AgentRelay
 ```
+
+In single-instance mode `AgentRelay` writes directly to the local `ChatHub`; under multiple replicas events are fanned out through Redis `agent:event` to the replica holding the user's WS, and control frames are routed through `agent:control` to the generation owner:
+
+```mermaid
+graph TB
+    A["API Replica A<br/>generation owner"]
+    B["API Replica B<br/>user WS"]
+    EV[("Redis<br/>agent:event channel")]
+    CT[("Redis<br/>agent:control channel")]
+    SNAP[("Redis<br/>mb:agent:gen:{uid} snapshot")]
+
+    A -->|delta · tool frames · dm_message| EV
+    EV --> B
+    B -->|pause / continue / supersede| CT
+    CT --> A
+    A <-->|owner / genID / pending| SNAP
+```
+
+All three Redis entities live in the same Redis instance but belong to three different planes:
+
+- **`agent:event` — message plane: where messages go.** It carries the whole real-time event stream the user's WS receives: streaming deltas, tool frames (start/end/result), continue mode, suggestions, and the final `dm_message`/`dm_conversation`. The generation owner publishes to the channel; every replica subscribes and writes to its local `ChatHub`, so the user receives everything no matter which replica holds their WS.
+- **`agent:control` — control plane: who executes the command.** It only carries pause / continue / supersede. The replica holding the user's WS publishes the command (triggered by the frontend's stop/continue); the channel routes it to the generation owner, which may run on another replica. The `from` field makes the publisher ignore its own echoed control.
+- **`mb:agent:gen:{uid}` — state plane: who is running, where it is.** It is a compact cross-instance snapshot (TTL 24h): owner, genID, running/paused, pause_seq, conv_id, and the paused-completed reply not yet persisted (pending). Any replica reads it to decide "am I the owner"; if the owner dies, the pending reply can still be recovered.
+
+One-line memory: **event = where messages go; control = who executes the command; snapshot = who is running and where it is.**
+
+Deployment topology and rationale: [ARCHITECTURE_EN.md](ARCHITECTURE_EN.md#61-multi-instance-state-externalization-horizontal-scaling).
 
 ## Admin Configuration
 
@@ -214,6 +240,7 @@ Why it's hard: the stream is asynchronous (the backend generates while the front
 | 7 | Re-prompt stitching guessed the seam with whitespace-normalized longest overlap | Non-streaming completion → deterministic stitch rules → only the unseen tail is streamed | Duplicate lines at the seam, fence corruption |
 | 8 | Follow-up chips were generated synchronously, blocking persistence for 5–15s | Persist and push first; generate `agent_suggestions` in the background | End-of-reply dead wait |
 | 9 | Push target assumed `conv.UserLow`; the delta callback was a global field | Explicit `humanPeerForConversation`; per-call `onDelta` closures | Typewriter not showing, cross-user mixups |
+| 10 | Generation state and WebSockets lived in one instance's memory; with multiple replicas pause/resume could not reach the owner | Redis Pub/Sub event/control channels + `mb:agent:gen:{uid}` snapshot (owner routing, genID-guarded); all pushes go through the event channel | Stop/continue failing under multi-instance, events lost |
 
 Every principle has unit tests; anything involving a real model/browser (rapid stop/continue/regenerate, follow-ups, welcome regenerate, trending card counts) is verified end-to-end with puppeteer + a real model.
 
@@ -240,6 +267,8 @@ Every principle has unit tests; anything involving a real model/browser (rapid s
 - `internal/aigateway/gateway.go` — per-call deltas, streaming tool orchestration
 - `internal/service/agent/agent.go` — pause/resume state machine, markdown normalization
 - `internal/service/agent/agent_orchestrate.go` — orchestration (run/resume/regenerate, persistence, async suggestions)
+- `internal/service/agent/agent_relay.go` — cross-instance event/control Redis Pub/Sub
+- `internal/service/agent/agent_snapshot.go` — cross-instance generation snapshot (owner/genID/pending)
 - `internal/handler/agent_direct_message.go` — forwarding only (WS/HTTP triggers + push adapter)
 - `cakecake-vue/cakecake-web/src/composables/useAgentStreaming.js` — frontend streaming state machine (reactive composable)
 - `cakecake-vue/cakecake-web/src/components/cakecake/MbDmMessageItem.vue` — message bubble / actions / result cards rendering

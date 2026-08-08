@@ -222,10 +222,34 @@ flowchart LR
 
 ### 6. AI Assistant (DeepSeek)
 
-- OpenAI-compatible client in `internal/aigateway/deepseek.go`
-- Users start DM conversations; admin configures agent profiles (name, avatar, system prompt)
-- Messages carry conversation history as context, agent replies inserted into the same thread
-- Temperature: 0.7, timeout: 90s, streaming: disabled (simpler for DM use case)
+- OpenAI-compatible client in `internal/aigateway/deepseek.go`, default model `deepseek-v4-flash`
+- Users chat with agent profiles via DM; **streaming typewriter** + pause/continue/regenerate + follow-up suggestions + tool calls (site search / detail / trending)
+- Result cards are declared by the model at the end of the reply (`【展示】tool#ID`); the backend persists exactly those instead of guessing from the reply text
+- Generation state and orchestration live in `internal/service/agent` (the handler only forwards WS/HTTP); see [ai-gateway_EN.md](ai-gateway_EN.md)
+
+#### 6.1 Multi-Instance State Externalization (Horizontal Scaling)
+
+Generation state (pause/buffer/generation id) and WebSocket connections are per-process resources. With multiple replicas, the user's WS may land on replica A while the generation runs on replica B — so the event plane and the control plane are externalized to Redis:
+
+```mermaid
+graph TB
+    A["API Replica A<br/>generation owner · AgentService"]
+    B["API Replica B<br/>user WS · ChatHub"]
+    EV[("Redis<br/>agent:event channel")]
+    CT[("Redis<br/>agent:control channel")]
+    SNAP[("Redis<br/>mb:agent:gen:{uid} snapshot")]
+
+    A -->|delta · tool frames · dm_message| EV
+    EV --> B
+    B -->|agent_cancel / agent_continue| CT
+    CT --> A
+    A <-->|owner / genID / pending| SNAP
+    B -.->|ResumeReply reads snapshot to find owner| SNAP
+```
+
+- **Event plane**: deltas/tool frames/suggestions/dm messages are published to `agent:event`; every replica's subscriber writes them to its local `ChatHub`, so the user receives them no matter which replica holds the WS.
+- **Control plane**: pause/continue/supersede are published to `agent:control` and only the snapshot owner applies them (`from` ignores self-published controls); snapshots are genID-guarded so a stale generation cannot clear a newer one.
+- **Performance**: the hot-path buffer/replay stays in the owner's memory; if the owner dies, a paused-completed reply can still be recovered from the snapshot's pending field.
 
 ---
 
@@ -247,6 +271,7 @@ flowchart LR
 | ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Monolith over microservices (v1)**            | Single developer, faster iteration. Code is organized by domain (`handler/`, `service/`, `worker/`) to enable future split into Kratos microservices. |
 | **Redis Pub/Sub over direct WebSocket fan-out** | Decouples broadcast from the HTTP handler. Multiple replicas subscribe to the same Redis channel, enabling horizontal scaling without shared memory.  |
+| **AI events/controls via Redis Pub/Sub + generation snapshot (owner/genID-guarded)** | Decouples WS from generation under multiple replicas: events fan out to the replica holding the user's WS, pause/resume route to the owner; the hot-path buffer stays in the owner's memory for performance. |
 | **RabbitMQ over Redis List for transcode**      | RabbitMQ provides message persistence, consumer acknowledgments, and dead-lettering — critical for video processing where data loss is unacceptable.  |
 | **GORM AutoMigrate + goose versioned migrations** | Dev: GORM AutoMigrate (V1-V19). Prod (APP_ENV=production): goose SQL migrations (V20+) with up/down rollback. |                                                    |
 | **ES optional, not mandatory**                  | Reduces onboarding friction. The search page degrades gracefully when ES is not configured.                                                           |

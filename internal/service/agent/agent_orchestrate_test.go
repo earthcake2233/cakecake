@@ -24,16 +24,11 @@ type recordingPusher struct {
 	events   []map[string]interface{}
 }
 
-func (p *recordingPusher) PushAgentMessage(_ context.Context, _ uint64, _ *dm.DmConversation, msg *dm.DmMessage) {
+func (p *recordingPusher) FormatAgentMessage(_ context.Context, _ uint64, _ *dm.DmConversation, msg *dm.DmMessage) ([]map[string]interface{}, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.messages = append(p.messages, msg)
-}
-
-func (p *recordingPusher) PushEvent(_ uint64, payload map[string]interface{}) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.events = append(p.events, payload)
+	return []map[string]interface{}{{"type": "dm_message", "message": map[string]interface{}{"id": msg.ID}}}, nil
 }
 
 func (p *recordingPusher) messageCount() int {
@@ -83,6 +78,11 @@ func newOrchestrateService(t *testing.T) (*AgentService, *gorm.DB, *recordingPus
 		},
 		Dm:     dmSvc,
 		Pusher: pusher,
+	}
+	s.EventHook = func(_ uint64, payload map[string]interface{}) {
+		pusher.mu.Lock()
+		pusher.events = append(pusher.events, payload)
+		pusher.mu.Unlock()
 	}
 	return s, db, pusher
 }

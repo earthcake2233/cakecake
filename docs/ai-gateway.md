@@ -25,9 +25,35 @@ sequenceDiagram
     V->>Go: POST .../dm/.../messages
     Go->>Go: 鉴权、落库、WS 推送用户消息
     Go-->>AI: goroutine → DeepSeek 流式请求
-    AI-->>WS: 流式 delta（agent_delta）→ PushJSON
-    AI-->>WS: 最终回复落库 → dm_message
+    AI-->>WS: 流式 delta / 工具帧 / dm_message → AgentRelay
 ```
+
+单实例下 `AgentRelay` 直接写入本地 `ChatHub`；多副本部署时事件经 Redis `agent:event` 扇出到用户 WS 所在副本，控制帧经 `agent:control` 路由到生成 owner：
+
+```mermaid
+graph TB
+    A["API 副本 A<br/>生成 owner"]
+    B["API 副本 B<br/>用户 WS"]
+    EV[("Redis<br/>agent:event 频道")]
+    CT[("Redis<br/>agent:control 频道")]
+    SNAP[("Redis<br/>mb:agent:gen:{uid} 快照")]
+
+    A -->|delta · 工具帧 · dm_message| EV
+    EV --> B
+    B -->|暂停 / 继续 / 取代| CT
+    CT --> A
+    A <-->|owner / genID / pending| SNAP
+```
+
+三个 Redis 实体都在同一个 Redis 实例上，但分属三个不同的面：
+
+- **`agent:event` —— 消息面：消息往哪送。** 它承载用户 WS 收到的整条实时事件流：流式 delta、工具调用帧（start/end/result）、继续模式、追问建议、以及最终 `dm_message`/`dm_conversation`。生成 owner 发布到频道，所有副本订阅后写入各自本地 `ChatHub`——用户 WS 落在哪台副本都能收到。
+- **`agent:control` —— 控制面：命令找谁执行。** 它只搬运暂停 / 继续 / 取代三个命令。命令由用户 WS 所在副本发布（前端点停止/继续），经频道路由到生成 owner——owner 可能跑在另一台副本上。`from` 字段让发布方忽略自己的回放。
+- **`mb:agent:gen:{uid}` —— 状态面：谁在跑、跑到哪了。** 它是跨实例的紧凑快照（TTL 24h）：owner、genID、running/paused、pause_seq、conv_id、以及暂停完成但未落库的 pending 回复。任何副本读它判断"owner 是不是我"；owner 宕机时还能从 pending 恢复回复。
+
+一句话记忆：**event = 消息往哪送；control = 命令找谁执行；快照 = 谁在跑、跑到哪了。**
+
+部署拓扑与设计理由见 [ARCHITECTURE.md](ARCHITECTURE.md#61-多实例状态外置水平扩展)。
 
 ## 运营后台配置
 
@@ -222,6 +248,7 @@ AI 回复不是一次到位的，而是一小段一小段（delta）流过来的
 | 7 | re-prompt 拼接用"空白归一化最长重叠"猜接缝 | 非流式取完整续写 → 确定性规则拼缝 → 只推用户没见过的尾部 | 拼接处重复行、围栏错乱 |
 | 8 | 回复完成后同步生成追问 chips，把落库堵住 5~15s | 先落库推送，后台生成 `agent_suggestions` 后补 | 结尾死等 |
 | 9 | 推送目标默认取 `conv.UserLow`；delta 回调用全局字段 | 显式 `humanPeerForConversation`；`onDelta` 改为 per-call 闭包 | 打字机不显示、多用户串号 |
+| 10 | 生成状态与 WS 都在单实例内存，多副本部署时停止/继续路由不到 owner | Redis Pub/Sub 事件/控制双通道 + `mb:agent:gen:{uid}` 快照（owner 路由、genID 守卫）；推送统一走事件通道 | 多实例下停止/继续失效、事件丢失 |
 
 每条原则都配单测；涉及真实模型/浏览器交互的（连点停止/继续/重新生成、追问、重新生成欢迎语、榜单卡片数量），用 puppeteer + 真实模型做端到端验证。
 
@@ -248,6 +275,8 @@ AI 回复不是一次到位的，而是一小段一小段（delta）流过来的
 - `internal/aigateway/gateway.go` — per-call delta、流式工具编排
 - `internal/service/agent/agent.go` — 暂停/继续状态机、markdown 归一化
 - `internal/service/agent/agent_orchestrate.go` — 编排（run/resume/regenerate、落库、异步建议）
+- `internal/service/agent/agent_relay.go` — 跨实例事件/控制 Redis Pub/Sub
+- `internal/service/agent/agent_snapshot.go` — 跨实例生成快照（owner/genID/pending）
 - `internal/handler/agent_direct_message.go` — 只转发 WS/HTTP 触发与事件推送适配
 - `cakecake-vue/cakecake-web/src/composables/useAgentStreaming.js` — 前端流式状态机（reactive composable）
 - `cakecake-vue/cakecake-web/src/components/cakecake/MbDmMessageItem.vue` — 消息气泡/操作区/结果卡片渲染

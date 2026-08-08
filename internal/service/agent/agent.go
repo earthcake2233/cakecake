@@ -50,6 +50,17 @@ type AgentService struct {
 	// transport seam left in the orchestration: the service decides WHAT to
 	// push, the adapter decides HOW (WebSocket formatting).
 	Pusher ReplyPusher
+	// Relay is the cross-instance Redis Pub/Sub transport for agent events and
+	// generation control commands. When nil the service falls back to pushing
+	// directly to the local ChatHub (single-process mode / unit tests).
+	Relay *AgentRelay
+	// InstanceID uniquely identifies this replica; it is stamped into the
+	// generation snapshot so pause/resume controls can be routed to the owner.
+	InstanceID string
+	// EventHook is a test/telemetry hook invoked for every published agent
+	// event after delivery. It lets unit tests observe cross-instance events
+	// without a real WebSocket connection.
+	EventHook func(uid uint64, payload map[string]interface{})
 
 	genMu     sync.Mutex
 	genStates map[uint64]*agentGenState
@@ -68,11 +79,12 @@ type DmReader interface {
 	ListMessages(ctx context.Context, convID uint64, beforeID uint64, limit int) ([]dm.DmMessage, error)
 }
 
-// ReplyPusher is the transport port for formatted agent events. Implemented by
-// the HTTP/WS adapter so the service never formats presentation DTOs.
+// ReplyPusher is the formatting port for persisted agent messages. Implemented
+// by the HTTP/WS adapter: it formats presentation DTOs and returns the WS
+// payloads; the service is responsible for delivering them (locally or via the
+// cross-instance relay).
 type ReplyPusher interface {
-	PushAgentMessage(ctx context.Context, humanID uint64, conv *dm.DmConversation, msg *dm.DmMessage)
-	PushEvent(humanID uint64, payload map[string]interface{})
+	FormatAgentMessage(ctx context.Context, humanID uint64, conv *dm.DmConversation, msg *dm.DmMessage) ([]map[string]interface{}, error)
 }
 
 func (s *AgentService) gatewayReady() bool {

@@ -27,6 +27,7 @@ func (s *AgentService) RunReply(humanID uint64, conv *dm.DmConversation, userTex
 	// Any new generation supersedes an in-flight/paused one: cancel it and
 	// drop its state so its deltas are discarded and any paused-completed
 	// reply waiting to be persisted is abandoned.
+	s.publishControl(context.Background(), humanID, map[string]interface{}{"type": "supersede", "from": s.InstanceID})
 	s.supersedeGeneration(humanID)
 	// Register the generation synchronously so a WS agent_cancel arriving
 	// right after the send can never miss the in-flight generation.
@@ -36,6 +37,7 @@ func (s *AgentService) RunReply(humanID uint64, conv *dm.DmConversation, userTex
 		cancel()
 		return
 	}
+	s.snapshotRunning(humanID, genID, conv.ID)
 	runMu := s.runLock(humanID)
 	go func() {
 		defer cancel()
@@ -96,6 +98,22 @@ func (s *AgentService) ResumeReply(uid uint64, convID uint64) {
 	if s == nil || uid == 0 {
 		return
 	}
+	// If the generation is owned by another replica, forward the control
+	// command; the owner applies the exact same resume logic locally.
+	if snap := s.readSnapshot(uid); snap != nil && snap.Owner != "" && snap.Owner != s.InstanceID {
+		s.publishControl(context.Background(), uid, map[string]interface{}{
+			"type": "resume", "conv_id": convID, "from": s.InstanceID,
+		})
+		return
+	}
+	s.resumeReplyLocal(uid, convID)
+}
+
+// resumeReplyLocal is the single-instance resume implementation (owner path).
+func (s *AgentService) resumeReplyLocal(uid uint64, convID uint64) {
+	if s == nil || uid == 0 {
+		return
+	}
 	s.resumeGeneration(uid)
 	// Fast path: the generation is still running, so continue only needs to
 	// un-pause and flush the buffered deltas.
@@ -131,6 +149,38 @@ func (s *AgentService) ResumeReply(uid uint64, convID uint64) {
 	}
 	s.pushContinueMode(uid, "reprompt")
 	s.continueReply(uid, convID, draft)
+}
+
+// handleControl applies a cross-instance control command. Only the replica
+// that owns the user's running generation acts; everyone else ignores it.
+func (s *AgentService) handleControl(uid uint64, ctrl map[string]interface{}) {
+	if s == nil || uid == 0 {
+		return
+	}
+	// Ignore controls this instance published itself: the initiating path
+	// already applied them locally (e.g. RunReply superseded before starting
+	// the new generation; applying the echoed supersede would cancel it).
+	if from, _ := ctrl["from"].(string); from != "" && from == s.InstanceID {
+		return
+	}
+	switch ctrl["type"] {
+	case "pause":
+		if s.hasRunningGeneration(uid) {
+			s.pauseGeneration(uid)
+		}
+	case "resume":
+		snap := s.readSnapshot(uid)
+		if snap == nil || snap.Owner != s.InstanceID {
+			return
+		}
+		convID := uint64(0)
+		if v, ok := ctrl["conv_id"].(float64); ok {
+			convID = uint64(v)
+		}
+		s.resumeReplyLocal(uid, convID)
+	case "supersede":
+		s.supersedeGeneration(uid)
+	}
 }
 
 // RegenerateReply re-runs the assistant reply for the last user message in the
@@ -169,6 +219,7 @@ func (s *AgentService) RegenerateReply(uid uint64, convID uint64) {
 		return
 	}
 	// Regenerate supersedes any in-flight generation (RunReply re-checks).
+	s.publishControl(context.Background(), uid, map[string]interface{}{"type": "supersede", "from": s.InstanceID})
 	s.supersedeGeneration(uid)
 	s.RunReply(uid, conv, lastUser)
 }
@@ -196,9 +247,7 @@ func (s *AgentService) regenerateWelcome(uid uint64, conv *dm.DmConversation, cu
 		}
 		return
 	}
-	if s.Pusher != nil {
-		s.Pusher.PushAgentMessage(context.Background(), uid, conv, msg)
-	}
+	s.pushAgentMessage(context.Background(), uid, conv, msg)
 }
 
 // pickDifferentWelcome picks a random pool entry different from current,
@@ -244,6 +293,7 @@ func (s *AgentService) continueReply(uid uint64, convID uint64, partial string) 
 	if s == nil || s.Dm == nil || convID == 0 || strings.TrimSpace(partial) == "" {
 		return
 	}
+	s.publishControl(context.Background(), uid, map[string]interface{}{"type": "supersede", "from": s.InstanceID})
 	s.supersedeGeneration(uid)
 	ctx, cancel := context.WithCancel(context.Background())
 	genID := s.beginGeneration(uid, cancel)
@@ -251,6 +301,7 @@ func (s *AgentService) continueReply(uid uint64, convID uint64, partial string) 
 		cancel()
 		return
 	}
+	s.snapshotRunning(uid, genID, convID)
 	runMu := s.runLock(uid)
 	go func() {
 		defer cancel()
@@ -280,9 +331,7 @@ func (s *AgentService) continueReply(uid uint64, convID uint64, partial string) 
 			}
 			return
 		}
-		if s.Pusher != nil {
-			s.Pusher.PushAgentMessage(ctx, uid, conv, msg)
-		}
+		s.pushAgentMessage(ctx, uid, conv, msg)
 		go s.attachSuggestions(uid, msg.ID, full)
 	}()
 }
@@ -357,7 +406,7 @@ func (s *AgentService) continueFromDraft(ctx context.Context, conv *dm.DmConvers
 // streamTail paces the stitched continuation out as deltas so the fallback
 // still has a typewriter feel; the client never sees the unstitched seam.
 func (s *AgentService) streamTail(humanID uint64, genID uint64, tail string) {
-	if s.ChatHub == nil || tail == "" {
+	if (s.ChatHub == nil && s.Relay == nil) || tail == "" {
 		return
 	}
 	runes := []rune(tail)
@@ -392,10 +441,26 @@ func (s *AgentService) persistAndPushReply(humanID uint64, conv *dm.DmConversati
 		}
 		return nil
 	}
-	if s.Pusher != nil {
-		s.Pusher.PushAgentMessage(ctx, humanID, conv, msg)
-	}
+	s.pushAgentMessage(ctx, humanID, conv, msg)
 	return msg
+}
+
+// pushAgentMessage formats a persisted agent message through the Pusher
+// adapter and delivers every returned payload (locally or cross-instance).
+func (s *AgentService) pushAgentMessage(ctx context.Context, humanID uint64, conv *dm.DmConversation, msg *dm.DmMessage) {
+	if s == nil || s.Pusher == nil || humanID == 0 || conv == nil || msg == nil {
+		return
+	}
+	payloads, err := s.Pusher.FormatAgentMessage(ctx, humanID, conv, msg)
+	if err != nil {
+		if s.Log != nil {
+			s.Log.Error("agent format message", zap.Error(err))
+		}
+		return
+	}
+	for _, payload := range payloads {
+		s.publishEvent(ctx, humanID, payload)
+	}
 }
 
 // attachSuggestions generates follow-up chips after the reply is already
@@ -416,13 +481,11 @@ func (s *AgentService) attachSuggestions(humanID uint64, messageID uint64, reply
 		}
 		return
 	}
-	if s.Pusher != nil {
-		s.Pusher.PushEvent(humanID, map[string]interface{}{
-			"type":        "agent_suggestions",
-			"message_id":  messageID,
-			"suggestions": sugg,
-		})
-	}
+	s.publishEvent(ctx, humanID, map[string]interface{}{
+		"type":        "agent_suggestions",
+		"message_id":  messageID,
+		"suggestions": sugg,
+	})
 }
 
 // pushFallback persists and pushes an assistant fallback message.
@@ -434,18 +497,16 @@ func (s *AgentService) pushFallback(ctx context.Context, humanID uint64, conv *d
 		}
 		return
 	}
-	if s.Pusher != nil {
-		s.Pusher.PushAgentMessage(ctx, humanID, conv, msg)
-	}
+	s.pushAgentMessage(ctx, humanID, conv, msg)
 }
 
 // pushContinueMode tells the frontend whether a continue is a seamless buffer
 // replay or a re-prompt fallback.
 func (s *AgentService) pushContinueMode(uid uint64, mode string) {
-	if s == nil || s.Pusher == nil || uid == 0 {
+	if s == nil || uid == 0 {
 		return
 	}
-	s.Pusher.PushEvent(uid, map[string]interface{}{
+	s.publishEvent(context.Background(), uid, map[string]interface{}{
 		"type": "agent_continue_mode",
 		"mode": mode,
 	})

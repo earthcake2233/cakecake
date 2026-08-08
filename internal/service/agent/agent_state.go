@@ -65,8 +65,8 @@ func (s *AgentService) deltaSender(humanID uint64, genID uint64) func(string) {
 			}
 			st.mu.Unlock()
 		}
-		if s.ChatHub != nil {
-			s.ChatHub.PushJSON(humanID, map[string]interface{}{
+		if s.ChatHub != nil || s.Relay != nil {
+			s.publishEvent(context.Background(), humanID, map[string]interface{}{
 				"type": "agent_delta",
 				"body": map[string]interface{}{
 					"content": delta,
@@ -74,6 +74,34 @@ func (s *AgentService) deltaSender(humanID uint64, genID uint64) func(string) {
 			})
 		}
 	}
+}
+
+// publishEvent delivers an agent event to the user's WebSocket connection.
+// With a relay wired it is published to Redis and every replica fans it out to
+// its local ChatHub; without one it is pushed directly (single-process mode).
+func (s *AgentService) publishEvent(ctx context.Context, uid uint64, payload interface{}) {
+	if s == nil || uid == 0 {
+		return
+	}
+	if s.Relay != nil {
+		_ = s.Relay.PublishEvent(ctx, uid, payload)
+	} else if s.ChatHub != nil {
+		s.ChatHub.PushJSON(uid, payload)
+	}
+	if s.EventHook != nil {
+		if m, ok := payload.(map[string]interface{}); ok {
+			s.EventHook(uid, m)
+		}
+	}
+}
+
+// publishControl routes a cross-instance generation control command to the
+// owner (no-op without a relay).
+func (s *AgentService) publishControl(ctx context.Context, uid uint64, payload interface{}) {
+	if s == nil || uid == 0 || s.Relay == nil {
+		return
+	}
+	_ = s.Relay.PublishControl(ctx, uid, payload)
 }
 
 // draftText returns the full text streamed so far for the user's generation.
@@ -156,6 +184,7 @@ func (s *AgentService) endGeneration(uid uint64, genID uint64) {
 	}
 	delete(s.genStates, uid)
 	s.genMu.Unlock()
+	s.clearSnapshot(uid, genID)
 	s.saveDraft(uid, st)
 	if cancel := st.finish(); cancel != nil {
 		cancel()
@@ -241,6 +270,7 @@ func (s *AgentService) supersedeGeneration(uid uint64) {
 	st.pending = nil
 	st.draft = nil
 	st.buffer = nil
+	genID := st.genID
 	if st.cond != nil {
 		st.cond.Broadcast()
 	}
@@ -251,6 +281,7 @@ func (s *AgentService) supersedeGeneration(uid uint64) {
 	if cancel != nil {
 		cancel()
 	}
+	s.clearSnapshot(uid, genID)
 }
 
 // dropCurrentGeneration marks the user's current generation as dropped (its
@@ -310,9 +341,11 @@ func (s *AgentService) storePendingReply(uid uint64, genID uint64, conv *dm.DmCo
 	st.mu.Lock()
 	st.pending = &pendingAgentReply{conv: conv, result: result}
 	st.running = false
+	curGenID := st.genID
 	cancel := st.cancel
 	st.cancel = nil
 	st.mu.Unlock()
+	s.snapshotPending(uid, curGenID, conv.ID, result)
 	if cancel != nil {
 		cancel()
 	}
@@ -342,9 +375,23 @@ func (s *AgentService) takePendingReply(uid uint64) (*dm.DmConversation, *Genera
 	return p.conv, p.result, genID, true
 }
 
-// PauseGeneration stops pushing streamed deltas; they are buffered so a later
-// resumeGeneration can flush them verbatim (byte-level continuation).
+// PauseGeneration pauses the user's generation. A generation owned locally is
+// paused in place; when it runs on another replica, the control command is
+// routed to the owner via Redis.
 func (s *AgentService) PauseGeneration(uid uint64) {
+	if s == nil || uid == 0 {
+		return
+	}
+	if s.hasRunningGeneration(uid) {
+		s.pauseGeneration(uid)
+		return
+	}
+	s.publishControl(context.Background(), uid, map[string]interface{}{"type": "pause", "from": s.InstanceID})
+}
+
+// pauseGeneration stops pushing streamed deltas; they are buffered so a later
+// resumeGeneration can flush them verbatim (byte-level continuation).
+func (s *AgentService) pauseGeneration(uid uint64) {
 	if uid == 0 {
 		return
 	}
@@ -361,7 +408,10 @@ func (s *AgentService) PauseGeneration(uid uint64) {
 	st.mu.Lock()
 	st.paused = true
 	st.pauseSeq++
+	genID := st.genID
+	pauseSeq := st.pauseSeq
 	st.mu.Unlock()
+	s.updateSnapshotPaused(uid, genID, true, pauseSeq)
 }
 
 // resumeGeneration un-pauses and flushes the buffered deltas in order.
@@ -369,7 +419,7 @@ func (s *AgentService) resumeGeneration(uid uint64) {
 	if uid == 0 {
 		return
 	}
-	if s.ChatHub == nil {
+	if s.ChatHub == nil && s.Relay == nil {
 		return
 	}
 	for {
@@ -421,7 +471,7 @@ func (s *AgentService) resumeGeneration(uid uint64) {
 				return
 			}
 			st.mu.Unlock()
-			s.ChatHub.PushJSON(uid, map[string]interface{}{
+			s.publishEvent(context.Background(), uid, map[string]interface{}{
 				"type": "agent_delta",
 				"body": map[string]interface{}{"content": d},
 			})
@@ -457,6 +507,7 @@ func (s *AgentService) resumeGeneration(uid uint64) {
 		}
 		st.paused = false
 		st.mu.Unlock()
+		s.updateSnapshotPaused(uid, st.genID, false, seq)
 		return
 	}
 }

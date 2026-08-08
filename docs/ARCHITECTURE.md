@@ -222,10 +222,34 @@ flowchart LR
 
 ### 6. AI 助手（DeepSeek）
 
-- 封装 OpenAI 兼容客户端（`internal/aigateway/deepseek.go`）
-- 用户发起私信对话；管理员后台配置 Agent 角色（名称、头像、系统提示词）
-- 消息携带对话历史作为上下文，Agent 回复插入同一对话线程
-- Temperature: 0.7，超时: 90s，未启用流式（私信场景更简单可靠）
+- OpenAI 兼容客户端（`internal/aigateway/deepseek.go`），默认模型 `deepseek-v4-flash`
+- 用户与 Agent 角色私信对话；**流式打字机** + 停止/继续/重新生成 + 追问建议 + 工具调用（站内搜索/详情/榜单）
+- 结果卡片由模型在回复末尾声明（`【展示】工具名#ID`），后端精确落卡，不再用正则从回复文本猜
+- 生成状态与编排整体收在 `internal/service/agent`（handler 只转发 WS/HTTP），详见 [ai-gateway.md](ai-gateway.md)
+
+#### 6.1 多实例状态外置（水平扩展）
+
+生成状态（暂停/缓冲/代次）与 WS 连接都是进程内资源。多副本部署时，用户的 WS 可能连到副本 A、生成却跑在副本 B，因此事件面与控制面外置到 Redis：
+
+```mermaid
+graph TB
+    A["API 副本 A<br/>生成 owner · AgentService"]
+    B["API 副本 B<br/>用户 WS · ChatHub"]
+    EV[("Redis<br/>agent:event 频道")]
+    CT[("Redis<br/>agent:control 频道")]
+    SNAP[("Redis<br/>mb:agent:gen:{uid} 快照")]
+
+    A -->|delta · 工具帧 · dm_message| EV
+    EV --> B
+    B -->|agent_cancel / agent_continue| CT
+    CT --> A
+    A <-->|owner / genID / pending| SNAP
+    B -.->|ResumeReply 读快照判断 owner| SNAP
+```
+
+- **事件面**：delta/工具帧/建议/dm 消息发布到 `agent:event`，每个副本的订阅器写入本地 `ChatHub`——用户 WS 落在哪个副本都能收到。
+- **控制面**：暂停/继续/取代发布到 `agent:control`，只有快照 owner 生效（`from` 字段忽略自我广播）；快照带 genID 守卫，旧代次不会误删新快照。
+- **性能**：热路径缓冲/回放仍在 owner 内存；owner 宕机时暂停完成的回复可从快照 pending 恢复。
 
 ---
 
@@ -247,6 +271,7 @@ flowchart LR
 | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
 | **v1 用单体而非微服务**                               | 单人开发，快速迭代。代码按领域分层（`handler/`、`service/`、`worker/`），为后续拆分为 Kratos 微服务预留空间                     |
 | **Redis Pub/Sub 做弹幕广播中继，而非 WebSocket 直发** | 解耦广播与 HTTP handler。多副本订阅同一 Redis 频道，无需共享内存即可水平扩展                                                    |
+| **AI 事件/控制走 Redis Pub/Sub + 生成快照（owner/genID 守卫）** | 多副本下 WS 与生成解耦：事件扇出到用户所在副本，暂停/继续路由到 owner；热路径缓冲留在 owner 内存保证性能                     |
 | **转码用 RabbitMQ 而非 Redis List**                   | RabbitMQ 提供消息持久化、消费确认、死信队列——视频处理不可接受数据丢失                                                           |
 | **GORM AutoMigrate + goose 版本化迁移**                | 开发环境 GORM AutoMigrate 自动建表（V1-V19），生产环境 APP_ENV=production 默认走 goose SQL 迁移（V20+），支持 up/down 回滚 |      |
 | **ES 可选而非强制依赖**                               | 降低上手门槛，未配置时搜索页优雅降级                                                                                            |
