@@ -71,8 +71,8 @@ func TestClient_DefaultModel(t *testing.T) {
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			t.Fatalf("bad request body: %v", err)
 		}
-		if req.Model != "deepseek-chat" {
-			t.Errorf("expected deepseek-chat, got %s", req.Model)
+		if req.Model != "deepseek-v4-flash" {
+			t.Errorf("expected deepseek-v4-flash, got %s", req.Model)
 		}
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"ok"}}]}`))

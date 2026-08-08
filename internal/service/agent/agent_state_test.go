@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"cakecake/internal/model/dm"
+
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -69,9 +71,9 @@ func TestResumeGeneration_ReplaysBufferInOrder(t *testing.T) {
 	hub, conn := newStateTestHub(t, 7)
 	s := &AgentService{ChatHub: hub, Log: zap.NewNop()}
 
-	s.BeginGeneration(7, 1)
+	genID := s.BeginGeneration(7, nil)
 	s.PauseGeneration(7)
-	send := s.deltaSender(7, 1)
+	send := s.deltaSender(7, genID)
 	send("你")
 	send("好")
 	send("世界")
@@ -95,9 +97,9 @@ func TestResumeGeneration_ReplaysBufferInOrder(t *testing.T) {
 func TestResumeGeneration_StopDuringReplayKeepsPaused(t *testing.T) {
 	hub, conn := newStateTestHub(t, 7)
 	s := &AgentService{ChatHub: hub, Log: zap.NewNop()}
-	s.BeginGeneration(7, 1)
+	genID := s.BeginGeneration(7, nil)
 	s.PauseGeneration(7)
-	send := s.deltaSender(7, 1)
+	send := s.deltaSender(7, genID)
 	const n = 40
 	for i := 0; i < n; i++ {
 		send(string(rune('a' + i%26)))
@@ -139,12 +141,51 @@ func TestResumeGeneration_StopDuringReplayKeepsPaused(t *testing.T) {
 	require.False(t, s.IsGenerationPaused(7))
 }
 
+func TestResumeGeneration_SupersedeDuringReplayDiscardsRest(t *testing.T) {
+	hub, conn := newStateTestHub(t, 13)
+	s := &AgentService{ChatHub: hub, Log: zap.NewNop()}
+	genID := s.BeginGeneration(13, nil)
+	s.PauseGeneration(13)
+	send := s.deltaSender(13, genID)
+	const n = 40
+	for i := 0; i < n; i++ {
+		send(string(rune('a' + i%26)))
+	}
+
+	done := make(chan struct{})
+	go func() {
+		s.ResumeGeneration(13)
+		close(done)
+	}()
+
+	_, ok := readDelta(t, conn)
+	require.True(t, ok)
+	s.SupersedeGeneration(13)
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("replay did not stop after supersede")
+	}
+
+	// Only deltas written before the supersede landed may arrive; the rest of
+	// the backlog must be discarded instead of leaked to the UI.
+	_ = conn.SetReadDeadline(time.Now().Add(300 * time.Millisecond))
+	inFlight := 0
+	for {
+		if _, _, err := conn.ReadMessage(); err != nil {
+			break
+		}
+		inFlight++
+	}
+	require.Less(t, inFlight, n-1)
+}
+
 func TestDeltaSender_DroppedGenerationDiscards(t *testing.T) {
 	hub, conn := newStateTestHub(t, 9)
 	s := &AgentService{ChatHub: hub, Log: zap.NewNop()}
-	s.BeginGeneration(9, 1)
+	genID := s.BeginGeneration(9, nil)
 	s.DropCurrentGeneration(9)
-	s.deltaSender(9, 1)("x")
+	s.deltaSender(9, genID)("x")
 
 	_ = conn.SetReadDeadline(time.Now().Add(120 * time.Millisecond))
 	_, _, err := conn.ReadMessage()
@@ -154,9 +195,9 @@ func TestDeltaSender_DroppedGenerationDiscards(t *testing.T) {
 func TestConcurrentResumes_SingleOrderedStream(t *testing.T) {
 	hub, conn := newStateTestHub(t, 11)
 	s := &AgentService{ChatHub: hub, Log: zap.NewNop()}
-	s.BeginGeneration(11, 1)
+	genID := s.BeginGeneration(11, nil)
 	s.PauseGeneration(11)
-	send := s.deltaSender(11, 1)
+	send := s.deltaSender(11, genID)
 	const n = 30
 	for i := 0; i < n; i++ {
 		send(string(rune('A' + i)))
@@ -192,19 +233,91 @@ func TestConcurrentResumes_SingleOrderedStream(t *testing.T) {
 
 func TestGenerationLifecycle(t *testing.T) {
 	s := &AgentService{}
-	s.BeginGeneration(5, 1)
-	s.BeginGeneration(5, 2) // superseded
-	s.EndGeneration(5, 1)   // must NOT clear the newer state
+	id1 := s.BeginGeneration(5, nil)
+	id2 := s.BeginGeneration(5, nil) // superseded
+	require.Greater(t, id2, id1)
+	s.EndGeneration(5, id1) // must NOT clear the newer state
 	st := s.generationState(5)
 	require.NotNil(t, st)
-	require.Equal(t, uint64(2), st.genID)
+	require.Equal(t, id2, st.genID)
 
-	s.EndGeneration(5, 2)
+	s.EndGeneration(5, id2)
 	require.Nil(t, s.generationState(5))
 
-	s.BeginGeneration(5, 3)
+	s.BeginGeneration(5, nil)
 	s.ClearGenerationState(5)
 	require.Nil(t, s.generationState(5))
+}
+
+func TestBeginGeneration_EndCancelsAndRunningFlag(t *testing.T) {
+	s := &AgentService{}
+	cancelCalls := 0
+	id1 := s.BeginGeneration(7, func() { cancelCalls++ })
+	id2 := s.BeginGeneration(7, func() { cancelCalls++ })
+	require.Greater(t, id2, id1)
+	// Starting a newer generation releases the previous one's cancel.
+	require.Equal(t, 1, cancelCalls)
+
+	require.True(t, s.HasRunningGeneration(7))
+	s.EndGeneration(7, id1) // stale id must not touch the newer state
+	require.True(t, s.HasRunningGeneration(7))
+	require.Equal(t, 1, cancelCalls)
+
+	s.EndGeneration(7, id2)
+	require.False(t, s.HasRunningGeneration(7))
+	require.Equal(t, 2, cancelCalls)
+}
+
+func TestSupersedeGeneration_CancelsAndClearsPending(t *testing.T) {
+	s := &AgentService{}
+	cancelCalls := 0
+	genID := s.BeginGeneration(7, func() { cancelCalls++ })
+	s.deltaSender(7, genID)("partial")
+	s.PauseGeneration(7)
+	s.StorePendingReply(7, genID, &dm.DmConversation{ID: 1}, &GenerateReplyResult{Content: "x"})
+	require.False(t, s.HasRunningGeneration(7))
+
+	s.SupersedeGeneration(7)
+	require.Equal(t, 1, cancelCalls)
+	require.False(t, s.HasRunningGeneration(7))
+	require.Empty(t, s.DraftText(7))
+	_, _, _, ok := s.TakePendingReply(7)
+	require.False(t, ok)
+}
+
+func TestStoreTakePendingReply_StaleGenIDIgnored(t *testing.T) {
+	s := &AgentService{}
+	conv := &dm.DmConversation{ID: 42}
+	result := &GenerateReplyResult{Content: "done"}
+
+	genID := s.BeginGeneration(7, nil)
+	s.StorePendingReply(7, genID+1, conv, result) // stale id ignored
+	_, _, _, ok := s.TakePendingReply(7)
+	require.False(t, ok)
+
+	s.StorePendingReply(7, genID, conv, result)
+	gotConv, gotResult, gotGenID, ok := s.TakePendingReply(7)
+	require.True(t, ok)
+	require.Same(t, conv, gotConv)
+	require.Same(t, result, gotResult)
+	require.Equal(t, genID, gotGenID)
+	_, _, _, ok = s.TakePendingReply(7) // consumed exactly once
+	require.False(t, ok)
+}
+
+func TestDraftText_SurvivesEndGenerationAndClearsOnNewGeneration(t *testing.T) {
+	s := &AgentService{}
+	genID := s.BeginGeneration(7, nil)
+	send := s.deltaSender(7, genID)
+	send("你")
+	send("好")
+	require.Equal(t, "你好", s.DraftText(7))
+
+	s.EndGeneration(7, genID)
+	require.Equal(t, "你好", s.DraftText(7)) // sticky draft for re-prompt fallback
+
+	s.BeginGeneration(7, nil) // a new generation invalidates the old draft
+	require.Empty(t, s.DraftText(7))
 }
 
 func TestGenerateSuggestions_NilGateway(t *testing.T) {

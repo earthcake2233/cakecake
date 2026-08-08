@@ -232,37 +232,13 @@
                 </svg>
               </button>
             </div>
-            <div
-              v-if="m.is_agent && !m.isStreaming && m.versions && m.versions.length > 1"
-              class="msg-chat-versions"
-            >
-              <button
-                type="button"
-                class="msg-chat-versions__btn"
-                :disabled="m.versionIndex <= 0"
-                @click.stop="switchVersion(m, m.versionIndex - 1)"
-              >
-                ‹
-              </button>
-              <span class="msg-chat-versions__count">
-                {{ m.versionIndex + 1 }} / {{ m.versions.length }}
-              </span>
-              <button
-                type="button"
-                class="msg-chat-versions__btn"
-                :disabled="m.versionIndex >= m.versions.length - 1"
-                @click.stop="switchVersion(m, m.versionIndex + 1)"
-              >
-                ›
-              </button>
-            </div>
-            <div v-if="m.toolActivities.length" class="msg-tool-activities">
-              <div v-for="act in m.toolActivities" :key="act.span_id" class="msg-tool-activity">
-                <span class="msg-tool-activity__status">{{ act.status === "running" ? "↻" : "✓" }}</span>
-                <span class="msg-tool-activity__name">{{ act.tool_name }}</span>
-                <span v-if="act.duration_ms" class="msg-tool-activity__dur">{{ act.duration_ms }}ms</span>
-              </div>
-            </div>
+            <AgentVersionSwitcher
+              v-if="m.is_agent && !m.isStreaming"
+              :index="m.versionIndex"
+              :count="m.versions && m.versions.length"
+              @switch="switchVersion(m, $event)"
+            />
+            <AgentToolActivities :acts="m.toolActivities" />
             <div v-if="Object.keys(m.toolResultData).length" class="msg-tool-results">
               <template v-for="(items, spanId) in m.toolResultData" :key="spanId">
                 <div v-for="(item, ii) in items" :key="ii" class="msg-result-card" @click.stop="goToItem(item)">
@@ -299,37 +275,26 @@
                 </div>
               </template>
             </div>
-            <div
-              v-if="m.is_agent && !m.isStreaming && m.id !== 'agent-draft' && suggestionsFor(m).length"
-              class="msg-chat-chips"
-            >
-              <button
-                v-for="s in suggestionsFor(m)"
-                :key="s"
-                type="button"
-                class="msg-chat-chip"
-                @click.stop="sendSuggestion(s)"
-              >
-                {{ s }}
-              </button>
-            </div>
+            <AgentSuggestionChips
+              v-if="m.is_agent && !m.isStreaming && m.id !== 'agent-draft'"
+              :suggestions="suggestionsFor(m)"
+              @pick="sendSuggestion"
+            />
           </template>
           </template>
-          <div v-if="chatAwaitingAgent && _liveToolActs.length" class="msg-tool-activities msg-tool-activities--live">
-            <div v-for="act in _liveToolActs" :key="act.span_id" class="msg-tool-activity">
-              <span class="msg-tool-activity__status">{{ act.status === "running" ? "?" : "?" }}</span>
-              <span class="msg-tool-activity__name">{{ act.tool_name }}</span>
-              <span v-if="act.duration_ms" class="msg-tool-activity__dur">{{ act.duration_ms }}ms</span>
-            </div>
-          </div>
+          <AgentToolActivities
+            v-if="agentStream.chatAwaitingAgent"
+            :acts="agentStream._liveToolActs"
+            live
+          />
           <div
-            v-if="chatAwaitingAgent && (!_agentDraftContent || _agentContinuePending)"
+            v-if="agentStream.chatAwaitingAgent && (!agentStream._agentDraftContent || agentStream._agentContinuePending)"
             class="msg-chat-loading msg-chat-loading--typing"
           >
-            {{ _agentRegenerating ? "AI 正在重新生成…" : "AI 正在输入…" }}
+            {{ agentStream._agentRegenerating ? "AI 正在重新生成…" : agentStream._agentContinueMode === "reprompt" ? "AI 正在补全回复…" : "AI 正在输入…" }}
           </div>
           <button
-            v-if="chatAwaitingAgent"
+            v-if="agentStream.chatAwaitingAgent"
             type="button"
             class="msg-chat-stop"
             @click="stopAgentReply"
@@ -337,7 +302,7 @@
             停止生成
           </button>
           <button
-            v-if="_agentStopped"
+            v-if="agentStream._agentStopped"
             type="button"
             class="msg-chat-stop msg-chat-stop--primary"
             @click="continueAgentReply"
@@ -401,7 +366,7 @@
             <button
               type="button"
               class="msg-chat-send"
-              :disabled="chatPosting || chatAwaitingAgent || !chatDraftTrimmed"
+              :disabled="chatPosting || agentStream.chatAwaitingAgent || !chatDraftTrimmed"
               @click="sendChatMessage"
             >
               发送
@@ -497,6 +462,26 @@ import MarkdownIt from "markdown-it";
 import DOMPurify from "dompurify";
 import hljs from "highlight.js";
 import "highlight.js/styles/atom-one-dark.css";
+import {
+  applyAgentDelta,
+  buildVersionGroups,
+  clearReplyTimer,
+  createAgentStreamState,
+  finalizeAgentMessage,
+  markContinueStart,
+  markRegenerate,
+  markStop,
+  resetAgentStream,
+  setContinueMode,
+  startReplyWait,
+  trackToolEnd,
+  trackToolResult,
+  trackToolStart
+} from "@/composables/useAgentStreaming";
+import { animateScrollTo, isNearBottom } from "@/composables/useChatScroll";
+import AgentToolActivities from "./AgentToolActivities.vue";
+import AgentVersionSwitcher from "./AgentVersionSwitcher.vue";
+import AgentSuggestionChips from "./AgentSuggestionChips.vue";
 
 const md = new MarkdownIt({
   html: false,
@@ -523,22 +508,13 @@ const md = new MarkdownIt({
 /** 每次向服务端请求的历史消息条数 */
 const DM_MESSAGE_PAGE_SIZE = 30;
 
-function parseApiTime(s) {
-  if (!s) return new Date();
-  const m = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/.exec(String(s));
-  if (!m) return new Date(s);
-  return new Date(
-    Number(m[1]),
-    Number(m[2]) - 1,
-    Number(m[3]),
-    Number(m[4]),
-    Number(m[5]),
-    Number(m[6])
-  );
-}
-
 export default {
   name: "MbDmChatPanel",
+  components: {
+    AgentToolActivities,
+    AgentVersionSwitcher,
+    AgentSuggestionChips
+  },
   props: {
     peerIdFromRoute: { type: Number, default: 0 }
   },
@@ -562,26 +538,16 @@ export default {
       chatLoading: false,
       chatLoadingMore: false,
       chatPosting: false,
-      chatAwaitingAgent: false,
-      _agentDraftContent: "",
-      _agentStopped: false,
-      _agentContinuePending: false,
-      _agentContinuing: false,
-      _agentRegenerating: false,
-      _agentLastAction: "",
+      agentStream: createAgentStreamState(),
       _versionSel: {},
       _copiedMsgId: null,
       _copiedTimer: null,
       _feedbackMap: {},
-      _agentReplyTimer: null,
       deletingConvId: 0,
       resettingAgent: false,
       chatDraft: "",
-      _pendingResultData: {},
-      _pendingToolActs: [],
       chatWs: null,
       _chatWsRetryTimer: null,
-      _liveToolActs: [],
       _wsReconnectAttempts: 0,
       _pendingWsControls: [],
       _userScrolledUp: false,
@@ -615,127 +581,16 @@ export default {
       return String(this.chatDraft || "").trim();
     },
     chatMessageGroups() {
-      const me = getUserId();
-      const groups = [];
-      let curLabel = "";
-      let curMsgs = [];
-      const flush = () => {
-        if (curMsgs.length) {
-          groups.push({ label: curLabel, messages: curMsgs });
-        }
-      };
       const conv = this.dmConversations.find(
         c => Number(c.id) === Number(this.selectedConvId)
       );
-      let pendingAgent = null;
-      for (const raw of this.chatMessages || []) {
-        const d = parseApiTime(raw.created_at);
-        const label = `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日 ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-        const isMine = me != null && Number(raw.sender_id) === Number(me);
-        const isAgent = raw.role === "assistant" || !!raw.is_agent;
-        const item = {
-          id: raw.id,
-          content: raw.content,
-          face: isAgent
-            ? raw.sender_avatar || (conv && conv.peer_avatar) || defaultFace
-            : raw.sender_avatar || defaultFace,
-          is_mine: isMine,
-          is_agent: isAgent,
-          toolActivities: raw.tool_activities ? JSON.parse(raw.tool_activities) : (raw._toolActivities || []),
-          toolResultData: raw.tool_result_data ? JSON.parse(raw.tool_result_data) : (raw._toolResultData || {}),
-          suggestions: raw.suggestions ? JSON.parse(raw.suggestions) : (raw._suggestions || [])
-        };
-        if (isAgent && pendingAgent) {
-          // Consecutive assistant messages are versions of the same reply:
-          // merge into the previous bubble instead of creating a new row.
-          pendingAgent.versions.push(raw.content);
-          pendingAgent.versionIds.push(raw.id);
-          pendingAgent.versionTools.push(item.toolActivities);
-          pendingAgent.versionResults.push(item.toolResultData);
-          pendingAgent.versionSuggestions.push(item.suggestions);
-          pendingAgent.face = item.face;
-          continue;
-        }
-        if (isAgent) {
-          item.groupId = String(raw.id);
-          item.versions = [raw.content];
-          item.versionIds = [raw.id];
-          item.versionTools = [item.toolActivities];
-          item.versionResults = [item.toolResultData];
-          item.versionSuggestions = [item.suggestions];
-          pendingAgent = item;
-        } else {
-          pendingAgent = null;
-        }
-        if (label !== curLabel) {
-          flush();
-          curLabel = label;
-          curMsgs = [item];
-        } else {
-          curMsgs.push(item);
-        }
-      }
-      flush();
-      // Resolve the selected version per agent bubble (after the final flush so
-      // the last time-group is included).
-      for (const grp of groups) {
-        for (const m of grp.messages) {
-          if (!m.is_agent || !m.versions || m.versions.length <= 1) continue;
-          const rawSel = this._versionSel[m.groupId];
-          const sel =
-            rawSel == null || rawSel < 0 || rawSel >= m.versions.length
-              ? m.versions.length - 1
-              : rawSel;
-          m.versionIndex = sel;
-          m.content = m.versions[sel];
-          m.id = m.versionIds[sel];
-          m.toolActivities = m.versionTools[sel];
-          m.toolResultData = m.versionResults[sel];
-          m.suggestions = m.versionSuggestions[sel];
-        }
-      }
-      const draftText = this._agentDraftContent || "";
-      let lastAgent = null;
-      for (const grp of groups) {
-        for (const m of grp.messages) {
-          if (m.is_agent) lastAgent = m;
-        }
-      }
-      // In-place rewrite only applies to regenerate; continue re-prompts a
-      // fresh reply whose draft is a separate bubble (nothing persisted yet).
-      const inPlaceDraft = this._agentRegenerating && lastAgent;
-      if ((this.chatAwaitingAgent || this._agentStopped) && draftText) {
-        if (inPlaceDraft) {
-          // Regenerate/continue: the new reply grows IN the last bubble.
-          lastAgent.content = draftText;
-          lastAgent.isStreaming = true;
-          // Hide the previous version's tool calls/result cards/suggestions
-          // while the new reply streams; the new version brings its own.
-          lastAgent.toolActivities = [];
-          lastAgent.toolResultData = {};
-          lastAgent.suggestions = [];
-        } else {
-          curMsgs.push({
-            id: "agent-draft",
-            content: draftText,
-            face: this.agentFaceForDraft(),
-            is_mine: false,
-            is_agent: true,
-            toolActivities: [],
-            toolResultData: {},
-            isStreaming: true
-          });
-        }
-      } else if (this._agentRegenerating && lastAgent) {
-        // Regenerate started but no token arrived yet: clear the old rendering
-        // so the bubble is visibly rewritten in place.
-        lastAgent.content = "";
-        lastAgent.isStreaming = true;
-        lastAgent.toolActivities = [];
-        lastAgent.toolResultData = {};
-        lastAgent.suggestions = [];
-      }
-      return groups;
+      return buildVersionGroups(
+        this.chatMessages,
+        this._versionSel,
+        this.agentStream,
+        conv,
+        () => this.agentFaceForDraft()
+      );
     }
   },
   watch: {
@@ -873,7 +728,7 @@ export default {
       return [];
     },
     sendSuggestion(text) {
-      if (!text || this.chatPosting || this.chatAwaitingAgent) return;
+      if (!text || this.chatPosting || this.agentStream.chatAwaitingAgent) return;
       this.chatDraft = text;
       void this.sendChatMessage();
     },
@@ -895,41 +750,21 @@ export default {
     stopAgentReply() {
       this.sendWsControl({ type: "agent_cancel" });
       this.clearAgentReplyTimer();
-      this.chatAwaitingAgent = false;
-      this._agentStopped = true;
-      this._agentContinuePending = false;
       // Keep the in-place rewrite flag: a paused regenerate must keep hiding
       // the previous version until the new reply is persisted, otherwise the
       // old content (and a duplicate draft bubble) would flash back.
       // _agentContinuing stays true so a paused continue can resume in place.
-      this._pendingToolActs = [];
-      this._liveToolActs = [];
-      this._pendingResultData = {};
+      markStop(this.agentStream);
     },
     continueAgentReply() {
-      const partial = this._agentDraftContent || "";
-      if (this.chatAwaitingAgent || this._agentContinuePending) return;
+      if (this.agentStream.chatAwaitingAgent || this.agentStream._agentContinuePending) return;
       const cid = Number(this.selectedConvId);
       if (!cid) return;
-      if (!partial.trim()) {
-        // Stopped before the first delta: continue == regenerate the reply.
-        this.sendWsControl({ type: "agent_regenerate", conversation_id: cid });
-        this._agentStopped = false;
-        this._agentContinuing = false;
-        this._agentRegenerating = true;
-        this._agentLastAction = "regenerate";
-        this.startAgentReplyWait();
-        return;
-      }
-      this.sendWsControl({
-        type: "agent_continue",
-        conversation_id: cid,
-        partial
-      });
-      this._agentStopped = false;
-      this._agentContinuePending = true;
-      this._agentContinuing = true;
-      this._agentLastAction = "continue";
+      // The draft lives server-side now; the backend replays its buffer or
+      // re-prompts from the draft, and tells us which mode via
+      // agent_continue_mode.
+      this.sendWsControl({ type: "agent_continue", conversation_id: cid });
+      markContinueStart(this.agentStream);
       this.startAgentReplyWait();
     },
     switchVersion(m, idx) {
@@ -940,17 +775,14 @@ export default {
       this._versionSel = { ...this._versionSel, [m.groupId]: next };
     },
     regenerateReply() {
-      if (this.chatAwaitingAgent || this.chatPosting || this._agentRegenerating) return;
+      if (this.agentStream.chatAwaitingAgent || this.chatPosting || this.agentStream._agentRegenerating) return;
       const cid = Number(this.selectedConvId);
       if (!cid) return;
       this.sendWsControl({
         type: "agent_regenerate",
         conversation_id: cid
       });
-      this._agentDraftContent = "";
-      this._agentStopped = false;
-      this._agentRegenerating = true;
-      this._agentLastAction = "regenerate";
+      markRegenerate(this.agentStream);
       this.startAgentReplyWait();
       this.$nextTick(() => {
         const msgs = this.chatMessages || [];
@@ -990,12 +822,7 @@ export default {
     async selectConversation(id) {
       const cid = Number(id);
       if (!cid) return;
-      this.clearAgentReplyTimer();
-      this.chatAwaitingAgent = false;
-      this._agentDraftContent = "";
-      this._agentStopped = false;
-      this._agentContinuing = false;
-      this._agentRegenerating = false;
+      resetAgentStream(this.agentStream);
       this._versionSel = {};
       this.closeHeadMenu();
       this.selectedConvId = cid;
@@ -1059,7 +886,7 @@ export default {
       if (!el) {
         return;
       }
-      const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+      const nearBottom = isNearBottom(el);
       this._userScrolledUp = !nearBottom;
       if (!this.chatNextCursor || this.chatLoadingMore || this.chatLoading) {
         return;
@@ -1082,10 +909,7 @@ export default {
           this.selectedPeerId = 0;
           this.selectedPeerName = "";
           this.chatMessages = [];
-          this._agentDraftContent = "";
-          this._agentStopped = false;
-          this._agentContinuing = false;
-          this._agentRegenerating = false;
+          resetAgentStream(this.agentStream);
           this._versionSel = {};
           this.chatNextCursor = "";
         }
@@ -1115,17 +939,17 @@ export default {
         isAgentReply
       ) {
         this.clearAgentReplyTimer();
-        this.chatAwaitingAgent = false;
+        this.agentStream.chatAwaitingAgent = false;
       }
       this.$nextTick(() => {
         if (isAgentReply) {
-          if (this._agentLastAction === "continue") {
+          if (this.agentStream._agentLastAction === "continue") {
             this.scrollToMessageTop(msg);
-          } else if (this._agentLastAction !== "regenerate") {
+          } else if (this.agentStream._agentLastAction !== "regenerate") {
             this.scrollChatToBottom();
           }
           // regenerate: keep the view where the in-place rewrite happened.
-          this._agentLastAction = "";
+          this.agentStream._agentLastAction = "";
         } else {
           this.scrollChatToBottom();
         }
@@ -1144,42 +968,15 @@ export default {
         el.getBoundingClientRect().top +
         el.scrollTop -
         12;
-      this.animateScrollTo(el, Math.max(0, top));
-    },
-    animateScrollTo(el, to) {
-      if (!el) return;
-      const from = el.scrollTop;
-      const delta = to - from;
-      if (Math.abs(delta) < 1) return;
-      const duration = Math.min(500, Math.max(250, Math.abs(delta) * 0.35));
-      const start = performance.now();
-      const ease = t =>
-        t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
-      const step = now => {
-        const t = Math.min(1, (now - start) / duration);
-        el.scrollTop = from + delta * ease(t);
-        if (t < 1) requestAnimationFrame(step);
-      };
-      requestAnimationFrame(step);
+      animateScrollTo(el, Math.max(0, top));
     },
     clearAgentReplyTimer() {
-      if (this._agentReplyTimer) {
-        clearTimeout(this._agentReplyTimer);
-        this._agentReplyTimer = null;
-      }
+      clearReplyTimer(this.agentStream);
     },
     startAgentReplyWait() {
-      this.clearAgentReplyTimer();
-      this.chatAwaitingAgent = true;
-      this._agentReplyTimer = setTimeout(() => {
-        this.chatAwaitingAgent = false;
-        this._agentReplyTimer = null;
-        if (this._agentContinuePending && this._agentDraftContent) {
-          this._agentContinuePending = false;
-          this._agentStopped = true;
-          ElMessage.warning("续写未完成，可重试或复制已生成内容");
-        }
-      }, 120000);
+      startReplyWait(this.agentStream, () => {
+        ElMessage.warning("续写未完成，可重试或复制已生成内容");
+      });
     },
     upsertConversation(conv) {
       this.applyConversationPatch(conv);
@@ -1242,26 +1039,24 @@ export default {
     },
     onChatWsPayload(data) {
       if (data.type === "tool_call_start" && data.body) {
-        this._pendingToolActs.push({ ...data.body, status: "running" }); this._liveToolActs.push({ ...data.body, status: "running" });
+        trackToolStart(this.agentStream, data.body);
         return;
       }
       if (data.type === "tool_call_end" && data.body) {
-        const idx = this._pendingToolActs.findIndex(t => t.span_id === data.body.span_id);
-        if (idx >= 0) {
-          this._pendingToolActs[idx] = { ...this._pendingToolActs[idx], ...data.body, status: "done" }; this._liveToolActs[idx] = { ...this._liveToolActs[idx], ...data.body, status: "done" };
-        } else {
-          this._pendingToolActs.push({ ...data.body, status: "done" }); this._liveToolActs.push({ ...data.body, status: "done" });
-        }
+        trackToolEnd(this.agentStream, data.body);
         return;
       }
       if (data.type === "tool_result_data" && data.body) {
-        this._pendingResultData[data.body.span_id] = data.body.items;
+        trackToolResult(this.agentStream, data.body.span_id, data.body.items);
+        return;
+      }
+      if (data.type === "agent_continue_mode" && data.mode) {
+        setContinueMode(this.agentStream, data.mode);
         return;
       }
       if (data.type === "agent_delta" && data.body && typeof data.body.content === "string") {
-        if (this._agentStopped) return;
-        this._agentContinuePending = false;
-        this._agentDraftContent += data.body.content;
+        if (this.agentStream._agentStopped) return;
+        applyAgentDelta(this.agentStream, data.body.content);
         this.$nextTick(() => this.scrollChatToBottom());
         return;
       }
@@ -1285,19 +1080,9 @@ export default {
       }
       if (!data || typeof data !== "object") return;
       if (data.type === "dm_message" && data.message) {
-        this._agentDraftContent = "";
-        this._agentStopped = false;
-        this._agentContinuePending = false;
-        this._agentContinuing = false;
-        this._agentRegenerating = false;
-        if (this._pendingToolActs.length) {
-          // Mark any tools still "running" as "done" (dm_message means LLM finished processing all results)
-          this._pendingToolActs.forEach(t => { if (t.status === "running") t.status = "done"; });
-          // Finalize any remaining running tools before clear
-          this._liveToolActs.forEach(t => { if (t.status === "running") t.status = "done"; });
-          this._pendingToolActs = []; this._liveToolActs = [];
-          this._pendingResultData = {};
-        }
+        // dm_message means the LLM finished processing all results: clear the
+        // streaming draft and any in-flight tool activities.
+        finalizeAgentMessage(this.agentStream);
         this.upsertConversationFromMessage(data.message);
         this.appendMessageIfNew(data.message);
       } else if (data.type === "dm_conversation" && data.conversation) {
@@ -1426,12 +1211,7 @@ export default {
         if (res && res.conversation) {
           this.applyConversationPatch(res.conversation);
         }
-        this.clearAgentReplyTimer();
-        this.chatAwaitingAgent = false;
-        this._agentDraftContent = "";
-        this._agentStopped = false;
-        this._agentContinuing = false;
-        this._agentRegenerating = false;
+        resetAgentStream(this.agentStream);
         this._versionSel = {};
         this.chatNextCursor = "";
         await this.loadChatMessages(false);
@@ -1527,7 +1307,7 @@ export default {
         !text ||
         !this.selectedConvId ||
         this.chatPosting ||
-        this.chatAwaitingAgent
+        this.agentStream.chatAwaitingAgent
       ) {
         return;
       }
@@ -1538,13 +1318,10 @@ export default {
       this.chatPosting = true;
       try {
         const msg = await mbPostDmMessage(this.selectedConvId, text);
-      this.chatDraft = "";
-      this._userScrolledUp = false;
-      this._agentDraftContent = "";
-        this._agentStopped = false;
-        this._agentRegenerating = false;
-        this._agentContinuing = false;
-        this._agentLastAction = "new";
+        this.chatDraft = "";
+        this._userScrolledUp = false;
+        resetAgentStream(this.agentStream);
+        this.agentStream._agentLastAction = "new";
         this.appendMessageIfNew(msg);
         this.upsertConversationFromMessage(msg);
         if (awaitAgent) {

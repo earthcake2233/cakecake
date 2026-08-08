@@ -161,8 +161,8 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.DemoUserPassword != "demo123456" {
 		t.Errorf("DemoUserPassword = %q; want demo123456", cfg.DemoUserPassword)
 	}
-	if cfg.DeepSeekModel != "deepseek-chat" {
-		t.Errorf("DeepSeekModel = %q; want deepseek-chat", cfg.DeepSeekModel)
+	if cfg.DeepSeekModel != "deepseek-v4-flash" {
+		t.Errorf("DeepSeekModel = %q; want deepseek-v4-flash", cfg.DeepSeekModel)
 	}
 	if cfg.DeepSeekBaseURL != "https://api.deepseek.com" {
 		t.Errorf("DeepSeekBaseURL = %q; want https://api.deepseek.com", cfg.DeepSeekBaseURL)

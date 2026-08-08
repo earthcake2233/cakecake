@@ -31,23 +31,23 @@ func (a *API) runAgentReply(humanID uint64, conv *dm.DmConversation, userText st
 	if a.Agent == nil || conv == nil {
 		return
 	}
-	// Any new generation supersedes an in-flight/paused one: cancel it and
-	// drop its state so its deltas are discarded and it cannot corrupt us.
-	a.supersedeAgentGeneration(humanID)
-	// Register the cancel synchronously so a WS agent_cancel arriving right
-	// after the send can never miss the in-flight generation.
+	// Any new generation supersedes an in-flight/paused one: the service
+	// cancels it and drops its state so its deltas are discarded and any
+	// paused-completed reply waiting to be persisted is abandoned.
+	a.Agent.SupersedeGeneration(humanID)
+	// Register the generation synchronously so a WS agent_cancel arriving
+	// right after the send can never miss the in-flight generation.
 	ctx, cancel := context.WithCancel(context.Background())
-	genID := a.tryRegisterAgentCancel(humanID, cancel)
+	genID := a.Agent.BeginGeneration(humanID, cancel)
 	if genID == 0 {
+		cancel()
 		return
 	}
 	runMu := a.agentRunLock(humanID)
 	go func() {
-		defer a.unregisterAgentCancel(humanID, genID)
 		defer cancel()
 		runMu.Lock()
 		defer runMu.Unlock()
-		a.Agent.BeginGeneration(humanID, genID)
 		if !a.Agent.CheckQuota(ctx, humanID) {
 			a.Agent.EndGeneration(humanID, genID)
 			a.pushAgentFallback(ctx, humanID, conv, "今日 AI 对话次数已达上限，请明天再试。")
@@ -55,8 +55,12 @@ func (a *API) runAgentReply(humanID uint64, conv *dm.DmConversation, userText st
 		}
 		result, err := a.Agent.GenerateReply(ctx, conv, userText)
 		if err != nil {
+			// Capture the stop decision before EndGeneration releases the
+			// cancel func: after that, ctx.Err() is always non-nil even for a
+			// regular failure.
+			stopped := errors.Is(err, context.Canceled) || ctx.Err() != nil
 			a.Agent.EndGeneration(humanID, genID)
-			if errors.Is(err, context.Canceled) || ctx.Err() != nil {
+			if stopped {
 				// User stopped generation; the frontend already cleared the
 				// streamed draft. Do not push a confusing fallback message.
 				return
@@ -77,13 +81,8 @@ func (a *API) runAgentReply(humanID uint64, conv *dm.DmConversation, userText st
 		}
 		if a.Agent.IsGenerationPaused(humanID) {
 			// Completed while paused: keep the state so a resume can flush the
-			// buffer, then persist this reply verbatim.
-			a.pendingAgentReplyMu.Lock()
-			if a.pendingAgentReplies == nil {
-				a.pendingAgentReplies = make(map[uint64]pendingAgentReply)
-			}
-			a.pendingAgentReplies[humanID] = pendingAgentReply{conv: conv, result: result, genID: genID}
-			a.pendingAgentReplyMu.Unlock()
+			// buffer, then persist this reply exactly once.
+			a.Agent.StorePendingReply(humanID, genID, conv, result)
 			return
 		}
 		a.Agent.EndGeneration(humanID, genID)
@@ -92,30 +91,6 @@ func (a *API) runAgentReply(humanID uint64, conv *dm.DmConversation, userText st
 			go a.attachAgentSuggestions(humanID, msg.ID, result.Content)
 		}
 	}()
-}
-
-type pendingAgentReply struct {
-	conv   *dm.DmConversation
-	result *serviceagent.GenerateReplyResult
-	genID  uint64
-}
-
-// supersedeAgentGeneration cancels the user's in-flight generation and drops
-// its state, so a newer generation is the only active stream for this user.
-func (a *API) supersedeAgentGeneration(uid uint64) {
-	if uid == 0 {
-		return
-	}
-	a.agentCancelMu.Lock()
-	reg, hasReg := a.agentCancels[uid]
-	delete(a.agentCancels, uid)
-	a.agentCancelMu.Unlock()
-	if hasReg && reg.cancel != nil {
-		reg.cancel()
-	}
-	if a.Agent != nil {
-		a.Agent.DropCurrentGeneration(uid)
-	}
 }
 
 // agentRunLock returns the per-user serialization lock: at most one agent
@@ -156,57 +131,6 @@ func (a *API) persistAndPushAgentReply(humanID uint64, conv *dm.DmConversation, 
 	return msg
 }
 
-// tryRegisterAgentCancel atomically checks for an existing in-flight
-// generation and registers the cancel; returns false if one is already active.
-func (a *API) tryRegisterAgentCancel(uid uint64, cancel context.CancelFunc) uint64 {
-	if uid == 0 || cancel == nil {
-		return 0
-	}
-	a.agentCancelMu.Lock()
-	defer a.agentCancelMu.Unlock()
-	if _, ok := a.agentCancels[uid]; ok {
-		return 0
-	}
-	if a.agentCancels == nil {
-		a.agentCancels = make(map[uint64]agentGenReg)
-	}
-	a.agentGenSeq++
-	a.agentCancels[uid] = agentGenReg{id: a.agentGenSeq, cancel: cancel}
-	return a.agentGenSeq
-}
-
-// unregisterAgentCancel removes the cancel entry only if it still belongs to
-// this generation (so an old goroutine never deletes a newer registration).
-func (a *API) unregisterAgentCancel(uid uint64, id uint64) {
-	if uid == 0 || id == 0 {
-		return
-	}
-	a.agentCancelMu.Lock()
-	defer a.agentCancelMu.Unlock()
-	if reg, ok := a.agentCancels[uid]; ok && reg.id == id {
-		delete(a.agentCancels, uid)
-	}
-}
-
-// agentGenReg identifies one in-flight generation (id-based, so a finished
-// goroutine can never unregister a newer registration for the same user).
-type agentGenReg struct {
-	id     uint64
-	cancel context.CancelFunc
-}
-
-// agentHasActiveGeneration reports whether the user already has an in-flight
-// agent generation (used to ignore duplicate continue/regenerate requests).
-func (a *API) agentHasActiveGeneration(uid uint64) bool {
-	if uid == 0 {
-		return false
-	}
-	a.agentCancelMu.Lock()
-	defer a.agentCancelMu.Unlock()
-	_, ok := a.agentCancels[uid]
-	return ok
-}
-
 // pauseAgentReply pauses the user's in-flight generation: the LLM stream keeps
 // running in the background and deltas are buffered for byte-level resume.
 func (a *API) pauseAgentReply(uid uint64) {
@@ -218,15 +142,17 @@ func (a *API) pauseAgentReply(uid uint64) {
 
 // resumeAgentReply resumes a paused generation: buffered deltas are flushed
 // verbatim; if it completed while paused, the full reply is persisted now.
-// Falls back to a re-prompt continuation when no paused generation exists.
-func (a *API) resumeAgentReply(uid uint64, convID uint64, partial string) {
+// Only when the generation fully ended with no reply does it fall back to a
+// re-prompt continuation from the server-side draft (never from frontend text).
+func (a *API) resumeAgentReply(uid uint64, convID uint64) {
 	if a.Agent == nil || uid == 0 {
 		return
 	}
 	a.Agent.ResumeGeneration(uid)
 	// Fast path: the generation is still running, so continue only needs to
 	// un-pause and flush the buffered deltas.
-	if a.agentHasActiveGeneration(uid) {
+	if a.Agent.HasRunningGeneration(uid) {
+		a.pushAgentContinueMode(uid, "buffer")
 		return
 	}
 	// Serialize the completed-generation path per user: a double continue (or a
@@ -235,29 +161,41 @@ func (a *API) resumeAgentReply(uid uint64, convID uint64, partial string) {
 	runMu := a.agentRunLock(uid)
 	runMu.Lock()
 	defer runMu.Unlock()
-	if a.agentHasActiveGeneration(uid) {
+	if a.Agent.HasRunningGeneration(uid) {
+		a.pushAgentContinueMode(uid, "buffer")
 		return
 	}
-	a.pendingAgentReplyMu.Lock()
-	pending, ok := a.pendingAgentReplies[uid]
+	conv, result, genID, ok := a.Agent.TakePendingReply(uid)
 	if ok {
-		delete(a.pendingAgentReplies, uid)
-	}
-	a.pendingAgentReplyMu.Unlock()
-	if ok && pending.conv != nil && pending.result != nil {
-		a.Agent.EndGeneration(uid, pending.genID)
-		msg := a.persistAndPushAgentReply(uid, pending.conv, pending.result)
-		if msg != nil && pending.result != nil {
-			go a.attachAgentSuggestions(uid, msg.ID, pending.result.Content)
+		a.pushAgentContinueMode(uid, "buffer")
+		a.Agent.EndGeneration(uid, genID)
+		msg := a.persistAndPushAgentReply(uid, conv, result)
+		if msg != nil && result != nil {
+			go a.attachAgentSuggestions(uid, msg.ID, result.Content)
 		}
 		return
 	}
 	// The reply may have already completed (the stop arrived too late). Only
 	// re-prompt when the latest user turn has no persisted assistant reply yet.
-	if strings.TrimSpace(partial) == "" || a.latestUserTurnHasAssistantReply(uid, convID) {
+	draft := a.Agent.DraftText(uid)
+	if strings.TrimSpace(draft) == "" || a.latestUserTurnHasAssistantReply(uid, convID) {
 		return
 	}
-	a.continueAgentReply(uid, convID, partial)
+	a.pushAgentContinueMode(uid, "reprompt")
+	a.continueAgentReply(uid, convID, draft)
+}
+
+// pushAgentContinueMode tells the frontend whether a continue is a seamless
+// buffer replay or a re-prompt fallback, so the UI can label the stream and
+// keep its draft state accordingly.
+func (a *API) pushAgentContinueMode(uid uint64, mode string) {
+	if uid == 0 {
+		return
+	}
+	a.dmPushEvent(uid, map[string]interface{}{
+		"type": "agent_continue_mode",
+		"mode": mode,
+	})
 }
 
 // attachAgentSuggestions generates follow-up chips after the reply is already
@@ -337,29 +275,28 @@ func (a *API) regenerateAgentReply(uid uint64, convID uint64) {
 		return
 	}
 	// Regenerate supersedes any in-flight generation (runAgentReply re-checks).
-	a.supersedeAgentGeneration(uid)
+	a.Agent.SupersedeGeneration(uid)
 	a.runAgentReply(uid, conv, lastUser)
 }
 
-// continueAgentReply resumes a user-stopped reply from the partial text.
+// continueAgentReply re-prompts the model from the server-side draft text.
 func (a *API) continueAgentReply(uid uint64, convID uint64, partial string) {
 	if a.Agent == nil || a.DmSvc == nil || convID == 0 || strings.TrimSpace(partial) == "" {
 		return
 	}
-	a.supersedeAgentGeneration(uid)
+	a.Agent.SupersedeGeneration(uid)
 	ctx, cancel := context.WithCancel(context.Background())
-	genID := a.tryRegisterAgentCancel(uid, cancel)
+	genID := a.Agent.BeginGeneration(uid, cancel)
 	if genID == 0 {
+		cancel()
 		return
 	}
 	runMu := a.agentRunLock(uid)
 	go func() {
-		defer a.unregisterAgentCancel(uid, genID)
 		defer cancel()
+		defer a.Agent.EndGeneration(uid, genID)
 		runMu.Lock()
 		defer runMu.Unlock()
-		a.Agent.BeginGeneration(uid, genID)
-		defer a.Agent.EndGeneration(uid, genID)
 		conv, err := a.DmSvc.GetConversationByID(ctx, convID)
 		if err != nil || conv == nil {
 			return

@@ -119,7 +119,7 @@ func (c *Client) completeInternal(ctx context.Context, messages []ChatMessage, t
 	}
 	model := c.Model
 	if model == "" {
-		model = "deepseek-chat"
+		model = "deepseek-v4-flash"
 	}
 	body, err := json.Marshal(chatCompletionReq{
 		Model:       model,
@@ -188,7 +188,7 @@ func (c *Client) completeInternalStream(ctx context.Context, messages []ChatMess
 	}
 	model := c.Model
 	if model == "" {
-		model = "deepseek-chat"
+		model = "deepseek-v4-flash"
 	}
 	body, err := json.Marshal(chatCompletionReq{
 		Model:       model,

@@ -5,19 +5,12 @@
   </a>
 </p>
 
-  </a>
-  </a>
-</p>
-
-  </a>
-</p>
-
 # cakecake AI 网关（消息中心助手）
 
 ## 功能
 
 - 每位登录用户在「我的消息」中自动拥有与 **cakecake AI** 的固定会话（`kind=agent`）。
-- 用户消息走现有 `POST /api/v1/dm/conversations/:id/messages`；服务端异步调用 **DeepSeek**，助手回复落库后经 **WebSocket**（`/api/v1/ws/chat`）推送。
+- 用户消息走现有 `POST /api/v1/dm/conversations/:id/messages`；服务端**流式**调用 **DeepSeek**，文本 delta 经 **WebSocket**（`/api/v1/ws/chat`）实时推送，最终回复落库后推送完整消息；支持暂停 / 继续 / 重新生成。
 - 短期上下文保存在 **Redis**（`mb:agent:hist:{conversationId}`），日配额 `mb:agent:quota:{userId}:{date}`。
 
 ## 架构
@@ -31,8 +24,9 @@ sequenceDiagram
 
     V->>Go: POST .../dm/.../messages
     Go->>Go: 鉴权、落库、WS 推送用户消息
-    Go-->>AI: goroutine → DeepSeek HTTP
-    AI-->>WS: 助手消息落库 → PushJSON
+    Go-->>AI: goroutine → DeepSeek 流式请求
+    AI-->>WS: 流式 delta（agent_delta）→ PushJSON
+    AI-->>WS: 最终回复落库 → dm_message
 ```
 
 ## 运营后台配置
@@ -50,7 +44,7 @@ sequenceDiagram
 |------|------|
 | `DEEPSEEK_API_KEY` | DeepSeek API Key（必填才启用回复） |
 | `DEEPSEEK_BASE_URL` | 默认 `https://api.deepseek.com` |
-| `DEEPSEEK_MODEL` | 默认 `deepseek-chat` |
+| `DEEPSEEK_MODEL` | DeepSeek 模型名，默认 `deepseek-v4-flash` |
 | `AGENT_BOT_USERNAME` | 系统账号用户名，默认 `minibili_ai` |
 | `AGENT_MAX_HISTORY` | Redis 上下文轮数上限 |
 | `AGENT_HISTORY_TTL` | Redis 上下文过期时间（Go duration，默认 `720h` 即 30 天） |
@@ -60,14 +54,15 @@ sequenceDiagram
 
 1. **网关职责**：鉴权、敏感词、配额、超时、模型适配，与业务 API 解耦。
 2. **复用 IM**：同一套 DM 表、分页、WS，降低前端成本。
-3. **异步回复**：用户请求快速返回，LLM 在后台 goroutine，结果 push。
-4. **可观测扩展位**：`trace_id`、Prometheus、流式首 token 延迟（当前为非流式完整回复）。
+3. **异步流式回复**：用户请求快速返回，LLM 在后台 goroutine 流式生成，delta 实时推送，最终回复落库。
+4. **可观测**：`trace_id` 贯穿后端日志与前端；流式首 token 延迟已可观测（Prometheus 指标为扩展位）。
 
 ## 相关代码
 
-- `internal/aigateway/` — DeepSeek 客户端与 Redis 上下文
-- `internal/service/agent.go` — 编排、配额、落库
-- `internal/handler/dm.go` — agent 会话分支
+- `internal/aigateway/` — DeepSeek 客户端、流式编排与 Redis 上下文
+- `internal/service/agent/agent.go` — 编排、暂停/继续状态机、配额、落库
+- `internal/handler/agent_direct_message.go` — resume/regenerate、异步建议
+- `internal/handler/direct_message_ws.go` — WS 控制帧
 - `internal/data/agent_seed.go` — 系统用户与会话初始化
 ## Tool Use / Function Calling
 
@@ -189,25 +184,49 @@ flowchart TD
 
 ## 流式 / 暂停 / 继续 / 重新生成：开发踩坑与关键技术点
 
-> 这一节记录了 AI 助手从「非流式完整回复」演进到「流式打字机 + 停止/继续 + 重新生成 + 追问建议」过程中踩过的坑。
+> 这一节记录了 AI 助手从「非流式完整回复」演进到「流式打字机 + 停止/继续 + 重新生成 + 追问建议」过程中踩过的坑，按「现象 → 为什么难 → 怎么修」重写，方便快速读懂。
+
+### 先说人话：这一整块在解决什么问题
+
+AI 回复不是一次到位的，而是一小段一小段（delta）流过来的。产品上我们要做到三件事：
+
+1. **打字机效果**：边生成边显示；
+2. **停止 ≠ 取消**：用户点"停止"只是不再展示新内容，后台模型其实还在跑；点"继续"把停住期间的内容按打字机节奏补放出来；
+3. **重新生成**：对同一句提问重新问一次模型，原地替换旧回复，而不是另起一个气泡。
+
+难在哪：流是异步的（后台在跑、前端在收）、用户可能并发操作（连点停止/继续）、网络会断线重连。三个因素一叠加，就冒出一堆"看起来正常、细看露馅"的 bug。下面按主题讲清楚。
+
+### 术语表（先记住这几个词）
+
+| 术语 | 大白话 |
+|------|--------|
+| delta | 模型流式返回的一小段文字 |
+| 暂停（pause） | 停止展示新内容，但后台 LLM 继续跑，新 delta 先放进缓冲区 |
+| 缓冲区（buffer） | 暂停期间积压的 delta；点继续时按打字机节奏回放 |
+| 继续（resume） | 先回放缓冲区内容，再恢复实时推送 |
+| 重新生成（regenerate） | 对同一句提问重新请求模型，原地替换旧回复 |
+| genID | 生成代次编号；每次重新生成 +1，用来识别并丢弃"过期"的旧流 |
+| 版本气泡 | 前端把同一句提问的多轮回复合并成一个气泡，用 `‹ n / n ›` 切换 |
 
 ### 1. 流式 delta 推送目标：DM 会话的 `UserLow/UserHigh` 陷阱
 
-DM 会话按 `(min, max)` 排序存储双方 ID（`user_low/user_high`）。当 bot 的 ID（如 14）小于用户 ID（如 18）时，`conv.UserLow` 是 **bot** 而不是用户。
+**现象**：最终消息能收到，但打字机一个字都不动；调试发现 `agent_delta` 全推给了 bot（无人连接）。
 
-曾经用 `conv.UserLow` 作为流式推送目标：`dm_message` 走的是正确的 `humanID`，所以最终消息能收到；但 `agent_delta` 全推给了 bot（无人连接），前端一个字都收不到，表现为「流式不生效、只有最后一条」。
+**为什么难**：DM 会话把双方 ID 按大小排序存在 `user_low/user_high` 两个字段里。bot 的 ID 可能比用户小（如 bot=14、用户=18），此时 `conv.UserLow` 是 **bot** 而不是用户，不能想当然。
 
-解决：新增 `humanPeerForConversation(conv, botUserID)` 显式返回「非 bot 的一方」，并配单元测试锁定。
+**怎么修**：新增 `humanPeerForConversation(conv, botUserID)`，显式算出"非 bot 的那一方"作为推送目标，并配单元测试锁死。
 
 ### 2. 全局回调 vs 按调用回调（多用户并发串号）
 
-Gateway 早期用单一字段 `OnTextDelta`，由 `setupToolCallbacks` 在每次生成前覆盖。两个用户并发生成时，后设置的闭包会覆盖前者，A 用户的 token 可能推到 B 用户。
+**现象**：A 用户看到的回复里混进了 B 用户的内容。
 
-解决：`CompleteUserTurnStream` / `CompleteUserTurnWithToolsStream` / `ContinueTurnStream` 全部改为接收 **per-call** 的 `onDelta func(string)`，每次调用持有自己的闭包（含自己的 `humanID`），彻底消除跨用户串号。
+**为什么难**：Gateway 早期只有单一字段 `OnTextDelta`，每次生成前覆盖。两个用户并发生成时，后设置的闭包覆盖前者，A 的 token 被推给了 B。
+
+**怎么修**：`CompleteUserTurnStream` / `CompleteUserTurnWithToolsStream` / `ContinueTurnStream` 全部改为接收 **per-call** 的 `onDelta func(string)`，每次调用持有自己的闭包（含自己的 `humanID`），彻底消除跨用户串号。
 
 ### 3. 暂停/继续状态机（最容易乱序露馅的部分）
 
-设计目标：点击「停止」后 **LLM 流继续在后台跑**，delta 进入缓冲；点击「继续」= 按打字机节奏回放缓冲 + 恢复实时推送。
+**设计目标**：点击"停止"后 **LLM 流继续在后台跑**，delta 进入缓冲；点击"继续"= 按打字机节奏回放缓冲 + 恢复实时推送。
 
 核心状态：
 
@@ -228,20 +247,22 @@ Gateway 早期用单一字段 `OnTextDelta`，由 `setupToolCallbacks` 在每次
 
 ### 4. 防重复落库：不要用 substring 匹配草稿
 
-曾用「最新 assistant 内容 contains 流式草稿」判断回复是否已落库。两个致命问题：
+**现象**：回复已经落库后，用户再点"继续"，又生成了一条重复回复。
+
+**为什么难**：曾用"最新 assistant 内容 contains 流式草稿"判断是否已落库，两个致命问题：
 
 1. 持久化前经过 `normalizeMarkdownFences` / `dedupeConsecutiveLines` / trim，而草稿是原始流，两者根本对不上；
 2. `ListMessages` 返回的是 DESC（新的在前），旧代码却从数组尾部往前遍历并「遇到第一条 assistant 就返回」，比对的其实是窗口里最旧的消息。
 
-结果：停止晚到（回复已落库）后再点继续，会重新请求模型生成第二条。
-
-解决：`latestUserTurnHasAssistantReply` —— 只判断「该轮用户消息之后是否已有 assistant 行」，不比较文本；配合每用户 `agentRunLock` 串行化 resume 的决策与落库，双 continue 也只落一条。
+**怎么修**：`latestUserTurnHasAssistantReply` —— 只判断"该轮用户消息之后是否已有 assistant 行"，**不比较文本**；配合每用户 `agentRunLock` 串行化 resume 的决策与落库，双 continue 也只落一条。
 
 ### 5. 追问建议异步生成（消除结尾死等）
 
-回复文本流完后，若同步再调一次 LLM 生成「追问 chips」（最长 15s），最终消息会迟迟不落库，体验是「等了好久最后才生成」。
+**现象**：回复文本流完后，消息迟迟不落库，体验是"等了好久最后才生成"。
 
-解决：回复先落库 + 推送（suggestions 为空），后台 goroutine 生成建议后：
+**为什么难**：回复完成后又**同步**调了一次 LLM 生成"追问 chips"（最长 15s），把落库堵住了。
+
+**怎么修**：回复先落库 + 推送（suggestions 为空），后台 goroutine 生成建议后：
 
 1. `UpdateMessageSuggestions(messageID, sugg)` 更新行；
 2. 通过 WS 推送新事件 `agent_suggestions {message_id, suggestions}`；
@@ -251,7 +272,9 @@ Gateway 早期用单一字段 `OnTextDelta`，由 `setupToolCallbacks` 在每次
 
 ### 6. Markdown 围栏归一化
 
-模型在停止/继续接缝处经常多吐 ````go`、多余开栅栏或重复行。落库前统一：
+**现象**：停止/继续的接缝处，模型经常多吐 ````go`、多余开栅栏或重复行，前端 markdown 渲染变乱。
+
+**怎么修**：落库前统一处理：
 
 - `normalizeMarkdownFences`：栅栏统一三个反引号、去掉接缝处多余开栅栏、末尾未闭合自动补 ` ``` `；
 - `dedupeConsecutiveLines`：去掉完全相同的连续行；
