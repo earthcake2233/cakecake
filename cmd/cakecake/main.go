@@ -25,6 +25,7 @@ import (
 	"cakecake/internal/service/danmaku"
 	"cakecake/internal/service/dm"
 	"context"
+	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
@@ -267,6 +268,17 @@ func main() {
 		ChatHub: chatHub, Log: log, RC: runtimeCfg,
 		ToolExec: &toolkit.PlatformExecutor{DB: db, ES: esc, Sens: sens},
 	}
+	// Cross-instance agent transport: events (deltas/tool frames/messages) are
+	// fanned out via Redis Pub/Sub so the user's WebSocket is reachable from
+	// any replica; control commands are routed to the generation owner.
+	agentRelay := agent.NewAgentRelay(rdb, chatHub, log, agentSvc)
+	agentSvc.Relay = agentRelay
+	agentSvc.InstanceID = fmt.Sprintf("instance-%d", os.Getpid())
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		agentRelay.RunSubscriber(ctx)
+	}()
 
 	userProv := service.NewUserProvider(db)
 	videoProv := video.NewVideoProvider(db)
