@@ -157,129 +157,18 @@
           <template v-for="(grp, gi) in chatMessageGroups" :key="'g' + gi">
             <div class="msg-chat-time">{{ grp.label }}</div>
             <template v-for="m in grp.messages" :key="m.id">
-            <div
-              class="msg-chat-row"
-              :class="{ 'msg-chat-row--mine': m.is_mine }"
-              :data-msg-id="m.id != null ? String(m.id) : ''"
-            >
-              <img
-                class="msg-chat-face"
-                :src="m.face"
-                alt=""
-                width="32"
-                height="32"
+              <MbDmMessageItem
+                :item="m"
+                :feedback-map="_feedbackMap"
+                :copied-msg-id="_copiedMsgId"
+                @copy="copyMessage"
+                @feedback="kind => setFeedback(m, kind)"
+                @regenerate="regenerateReply"
+                @switch-version="idx => switchVersion(m, idx)"
+                @pick-suggestion="sendSuggestion"
+                @open-item="goToItem"
+                @avatar-error="onAvatarError"
               />
-              <div
-                v-if="m.is_agent && m.isStreaming && !m.content"
-                class="msg-chat-bubble msg-chat-bubble--md msg-chat-bubble--streaming"
-              >
-                正在重新生成…
-              </div>
-              <div
-                v-else
-                class="msg-chat-bubble"
-                :class="{ 'msg-chat-bubble--md': m.is_agent }"
-                v-html="renderMsgContent(m)"
-              ></div>
-            </div>
-            <div
-              v-if="m.is_agent && m.id !== 'agent-draft' && !m.isStreaming"
-              class="msg-chat-actions"
-            >
-              <button
-                type="button"
-                class="msg-chat-action"
-                title="复制"
-                @click.stop="copyMessage(m)"
-              >
-                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-                  <rect x="9" y="9" width="11" height="11" rx="2" />
-                  <path d="M5 15V5a2 2 0 0 1 2-2h10" />
-                </svg>
-                <span v-if="_copiedMsgId === m.id" class="msg-chat-action__tip">已复制</span>
-              </button>
-              <button
-                type="button"
-                class="msg-chat-action"
-                :class="{ 'is-active is-active--like': feedbackOf(m) === 'like' }"
-                title="有帮助"
-                @click.stop="setFeedback(m, 'like')"
-              >
-                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M7 10v11H4a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1h3zm0 0l4-7a2 2 0 0 1 2 2v4h6a2 2 0 0 1 2 2.2l-1.2 6A2 2 0 0 1 17.8 21H7" />
-                </svg>
-              </button>
-              <button
-                type="button"
-                class="msg-chat-action"
-                :class="{ 'is-active is-active--dislike': feedbackOf(m) === 'dislike' }"
-                title="没帮助"
-                @click.stop="setFeedback(m, 'dislike')"
-              >
-                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M17 14V3h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-3zm0 0l-4 7a2 2 0 0 1-2-2v-4H5a2 2 0 0 1-2-2.2L4.2 6A2 2 0 0 1 6.2 3H17" />
-                </svg>
-              </button>
-              <button
-                type="button"
-                class="msg-chat-action"
-                title="重新生成"
-                @click.stop="regenerateReply(m)"
-              >
-                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M21 12a9 9 0 1 1-2.64-6.36" />
-                  <path d="M21 3v6h-6" />
-                </svg>
-              </button>
-            </div>
-            <AgentVersionSwitcher
-              v-if="m.is_agent && !m.isStreaming"
-              :index="m.versionIndex"
-              :count="m.versions && m.versions.length"
-              @switch="switchVersion(m, $event)"
-            />
-            <AgentToolActivities :acts="m.toolActivities" />
-            <div v-if="Object.keys(m.toolResultData).length" class="msg-tool-results">
-              <template v-for="(items, spanId) in m.toolResultData" :key="spanId">
-                <div v-for="(item, ii) in items" :key="ii" class="msg-result-card" @click.stop="goToItem(item)">
-                  <template v-if="item.cover || item.cover_url">
-                    <img class="msg-result-card__cover" :src="item.cover || item.cover_url" />
-                    <div class="msg-result-card__body">
-                      <div class="msg-result-card__title">{{ item.title }}</div>
-                      <div class="msg-result-card__meta">
-                        {{ item.author || item.uploader_name || item.uploader || "unknown" }}
-                        &middot; {{ formatPlayCount(item.play_count || item.plays || 0) }}
-                      </div>
-                    </div>
-                  </template>
-                  <template v-else-if="item.user_name && item.type">
-                    <span class="msg-result-card__badge msg-result-card__badge--danmaku">弹幕</span>
-                    <img class="msg-result-card__avatar" :src="item.user_avatar || defaultAvatarSvg" @error="onAvatarError" />
-                    <div class="msg-result-card__body">
-                      <div class="msg-result-card__content">{{ item.content }}</div>
-                      <div class="msg-result-card__meta">{{ item.user_name }} &middot; {{ formatVideoTime(item.video_time) }}</div>
-                    </div>
-                  </template>
-                  <template v-else-if="item.user_name && !item.type">
-                    <span class="msg-result-card__badge msg-result-card__badge--comment">评论</span>
-                    <img class="msg-result-card__avatar" :src="item.user_avatar || defaultAvatarSvg" @error="onAvatarError" />
-                    <div class="msg-result-card__body">
-                      <div class="msg-result-card__content">{{ item.content }}</div>
-                      <div class="msg-result-card__meta">{{ item.user_name }} &middot; {{ item.like_count || 0 }}赞</div>
-                    </div>
-                  </template>
-                  <template v-else>
-                    <div class="msg-result-card__content">{{ item.content }}</div>
-                    <div class="msg-result-card__meta">{{ item.user_name || "匿名" }}</div>
-                  </template>
-                </div>
-              </template>
-            </div>
-            <AgentSuggestionChips
-              v-if="m.is_agent && !m.isStreaming && m.id !== 'agent-draft'"
-              :suggestions="suggestionsFor(m)"
-              @pick="sendSuggestion"
-            />
           </template>
           </template>
           <AgentToolActivities
@@ -458,52 +347,10 @@ import defaultFace from "@/assets/akari.jpg";
 import gochatIllus from "@/assets/gochat.png";
 import muteIcon from "@/assets/mute.png";
 import { refreshMessageUnread } from "@/utils/messageUnread";
-import MarkdownIt from "markdown-it";
-import DOMPurify from "dompurify";
-import hljs from "highlight.js";
-import "highlight.js/styles/atom-one-dark.css";
-import {
-  applyAgentDelta,
-  buildVersionGroups,
-  clearReplyTimer,
-  createAgentStreamState,
-  finalizeAgentMessage,
-  markContinueStart,
-  markRegenerate,
-  markStop,
-  resetAgentStream,
-  setContinueMode,
-  startReplyWait,
-  trackToolEnd,
-  trackToolResult,
-  trackToolStart
-} from "@/composables/useAgentStreaming";
+import { buildVersionGroups, useAgentStreaming } from "@/composables/useAgentStreaming";
 import { animateScrollTo, isNearBottom } from "@/composables/useChatScroll";
 import AgentToolActivities from "./AgentToolActivities.vue";
-import AgentVersionSwitcher from "./AgentVersionSwitcher.vue";
-import AgentSuggestionChips from "./AgentSuggestionChips.vue";
-
-const md = new MarkdownIt({
-  html: false,
-  linkify: true,
-  breaks: true,
-  highlight(str, lang) {
-    if (lang && hljs.getLanguage(lang)) {
-      try {
-        return (
-          '<pre class="hljs"><code class="language-' +
-          lang +
-          '">' +
-          hljs.highlight(str, { language: lang, ignoreIllegals: true }).value +
-          "</code></pre>"
-        );
-      } catch (e) {
-        /* fall through to escaped plain block */
-      }
-    }
-    return "<pre class=\"hljs\"><code>" + md.utils.escapeHtml(str) + "</code></pre>";
-  }
-});
+import MbDmMessageItem from "./MbDmMessageItem.vue";
 
 /** 每次向服务端请求的历史消息条数 */
 const DM_MESSAGE_PAGE_SIZE = 30;
@@ -512,8 +359,15 @@ export default {
   name: "MbDmChatPanel",
   components: {
     AgentToolActivities,
-    AgentVersionSwitcher,
-    AgentSuggestionChips
+    MbDmMessageItem
+  },
+  setup() {
+    const stream = useAgentStreaming({
+      notifyTimeout: () => {
+        ElMessage.warning("续写未完成，可重试或复制已生成内容");
+      }
+    });
+    return { agentStream: stream.state, stream };
   },
   props: {
     peerIdFromRoute: { type: Number, default: 0 }
@@ -538,7 +392,6 @@ export default {
       chatLoading: false,
       chatLoadingMore: false,
       chatPosting: false,
-      agentStream: createAgentStreamState(),
       _versionSel: {},
       _copiedMsgId: null,
       _copiedTimer: null,
@@ -622,19 +475,6 @@ export default {
     document.removeEventListener("click", this.onDocumentClick);
   },
   methods: {
-    escapeHtmlText(str) {
-      return String(str || "")
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#39;");
-    },
-    renderMsgContent(m) {
-      if (!m || !m.content) return "";
-      if (!m.is_agent) return this.escapeHtmlText(m.content);
-      return DOMPurify.sanitize(md.render(m.content));
-    },
     async copyMessage(m) {
       if (!m || !m.content) return;
       await this.copyPlainText(m.content);
@@ -687,9 +527,6 @@ export default {
         pre.appendChild(btn);
       });
     },
-    feedbackOf(m) {
-      return (m && this._feedbackMap[String(m.id)]) || "";
-    },
     async setFeedback(m, kind) {
       if (!m || m.id == null || m.id === "agent-draft") return;
       const key = String(m.id);
@@ -720,13 +557,6 @@ export default {
         /* ignore */
       }
     },
-    suggestionsFor(m) {
-      if (!m || !m.is_agent) return [];
-      if (Array.isArray(m.suggestions) && m.suggestions.length) {
-        return m.suggestions.slice(0, 3);
-      }
-      return [];
-    },
     sendSuggestion(text) {
       if (!text || this.chatPosting || this.agentStream.chatAwaitingAgent) return;
       this.chatDraft = text;
@@ -749,12 +579,11 @@ export default {
     },
     stopAgentReply() {
       this.sendWsControl({ type: "agent_cancel" });
-      this.clearAgentReplyTimer();
       // Keep the in-place rewrite flag: a paused regenerate must keep hiding
       // the previous version until the new reply is persisted, otherwise the
       // old content (and a duplicate draft bubble) would flash back.
       // _agentContinuing stays true so a paused continue can resume in place.
-      markStop(this.agentStream);
+      this.stream.stop();
     },
     continueAgentReply() {
       if (this.agentStream.chatAwaitingAgent || this.agentStream._agentContinuePending) return;
@@ -764,8 +593,8 @@ export default {
       // re-prompts from the draft, and tells us which mode via
       // agent_continue_mode.
       this.sendWsControl({ type: "agent_continue", conversation_id: cid });
-      markContinueStart(this.agentStream);
-      this.startAgentReplyWait();
+      this.stream.startContinue();
+      this.stream.startWait();
     },
     switchVersion(m, idx) {
       if (!m || !m.groupId || !m.versions) return;
@@ -782,8 +611,8 @@ export default {
         type: "agent_regenerate",
         conversation_id: cid
       });
-      markRegenerate(this.agentStream);
-      this.startAgentReplyWait();
+      this.stream.startRegenerate();
+      this.stream.startWait();
       this.$nextTick(() => {
         const msgs = this.chatMessages || [];
         for (let i = msgs.length - 1; i >= 0; i--) {
@@ -822,7 +651,7 @@ export default {
     async selectConversation(id) {
       const cid = Number(id);
       if (!cid) return;
-      resetAgentStream(this.agentStream);
+      this.stream.reset();
       this._versionSel = {};
       this.closeHeadMenu();
       this.selectedConvId = cid;
@@ -909,7 +738,7 @@ export default {
           this.selectedPeerId = 0;
           this.selectedPeerName = "";
           this.chatMessages = [];
-          resetAgentStream(this.agentStream);
+          this.stream.reset();
           this._versionSel = {};
           this.chatNextCursor = "";
         }
@@ -945,6 +774,22 @@ export default {
         if (isAgentReply) {
           if (this.agentStream._agentLastAction === "continue") {
             this.scrollToMessageTop(msg);
+          } else if (this.agentStream._agentLastAction === "new") {
+            // Stream finished: land on the last question row (the reply's
+            // first sentence is right below it) with a smooth upward move,
+            // instead of staying glued to the answer's tail.
+            this._userScrolledUp = false;
+            const lastUser = [...this.chatMessages]
+              .reverse()
+              .find(
+                m =>
+                  String(m.role) === "user" && Number(m.id) < Number(msg.id)
+              );
+            if (lastUser) {
+              this.scrollToMessageTop(lastUser);
+            } else {
+              this.scrollToMessageTop(msg);
+            }
           } else if (this.agentStream._agentLastAction !== "regenerate") {
             this.scrollChatToBottom();
           }
@@ -971,12 +816,10 @@ export default {
       animateScrollTo(el, Math.max(0, top));
     },
     clearAgentReplyTimer() {
-      clearReplyTimer(this.agentStream);
+      this.stream.clearWait();
     },
     startAgentReplyWait() {
-      startReplyWait(this.agentStream, () => {
-        ElMessage.warning("续写未完成，可重试或复制已生成内容");
-      });
+      this.stream.startWait();
     },
     upsertConversation(conv) {
       this.applyConversationPatch(conv);
@@ -1039,24 +882,24 @@ export default {
     },
     onChatWsPayload(data) {
       if (data.type === "tool_call_start" && data.body) {
-        trackToolStart(this.agentStream, data.body);
+        this.stream.onToolStart(data.body);
         return;
       }
       if (data.type === "tool_call_end" && data.body) {
-        trackToolEnd(this.agentStream, data.body);
+        this.stream.onToolEnd(data.body);
         return;
       }
       if (data.type === "tool_result_data" && data.body) {
-        trackToolResult(this.agentStream, data.body.span_id, data.body.items);
+        this.stream.onToolResult(data.body.span_id, data.body.items);
         return;
       }
       if (data.type === "agent_continue_mode" && data.mode) {
-        setContinueMode(this.agentStream, data.mode);
+        this.stream.setMode(data.mode);
         return;
       }
       if (data.type === "agent_delta" && data.body && typeof data.body.content === "string") {
         if (this.agentStream._agentStopped) return;
-        applyAgentDelta(this.agentStream, data.body.content);
+        this.stream.onDelta(data.body.content);
         this.$nextTick(() => this.scrollChatToBottom());
         return;
       }
@@ -1082,7 +925,7 @@ export default {
       if (data.type === "dm_message" && data.message) {
         // dm_message means the LLM finished processing all results: clear the
         // streaming draft and any in-flight tool activities.
-        finalizeAgentMessage(this.agentStream);
+        this.stream.onFinalMessage();
         this.upsertConversationFromMessage(data.message);
         this.appendMessageIfNew(data.message);
       } else if (data.type === "dm_conversation" && data.conversation) {
@@ -1211,7 +1054,7 @@ export default {
         if (res && res.conversation) {
           this.applyConversationPatch(res.conversation);
         }
-        resetAgentStream(this.agentStream);
+        this.stream.reset();
         this._versionSel = {};
         this.chatNextCursor = "";
         await this.loadChatMessages(false);
@@ -1261,17 +1104,6 @@ export default {
       if (!path) return;
       this.$router.push({ path: path, query: q }).catch(function(e) {});
     },
-    formatVideoTime(sec) {
-      if (sec == null || sec === undefined) return "";
-      var m = Math.floor(sec / 60);
-      var s = Math.floor(sec % 60);
-      return m + ":" + String(s).padStart(2, "0");
-    },
-    formatPlayCount(n) {
-      if (n >= 10000) return (n / 10000).toFixed(1) + "万";
-      if (n >= 1000) return (n / 1000).toFixed(1) + "千";
-      return String(n);
-    },
     stripPreviewMd(s) {
       return String(s || "")
         .replace(/```[\s\S]*?```/g, " ")
@@ -1320,7 +1152,7 @@ export default {
         const msg = await mbPostDmMessage(this.selectedConvId, text);
         this.chatDraft = "";
         this._userScrolledUp = false;
-        resetAgentStream(this.agentStream);
+        this.stream.reset();
         this.agentStream._agentLastAction = "new";
         this.appendMessageIfNew(msg);
         this.upsertConversationFromMessage(msg);
