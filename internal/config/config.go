@@ -233,7 +233,7 @@ func Load() *C {
 
 		DeepSeekAPIKey:      strings.TrimSpace(os.Getenv("DEEPSEEK_API_KEY")),
 		DeepSeekBaseURL:     strings.TrimRight(strings.TrimSpace(getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com")), "/"),
-		DeepSeekModel:       getenv("DEEPSEEK_MODEL", "deepseek-chat"),
+		DeepSeekModel:       getenv("DEEPSEEK_MODEL", "deepseek-v4-flash"),
 		AgentBotUsername:    getenv("AGENT_BOT_USERNAME", "minibili_ai"),
 		AgentEnabled:        parseBoolEnv("AGENT_ENABLED", strings.TrimSpace(os.Getenv("DEEPSEEK_API_KEY")) != ""),
 		AgentMaxHistory:     atoi(os.Getenv("AGENT_MAX_HISTORY"), 20),

@@ -5,19 +5,12 @@
   <strong><img src="https://img.shields.io/badge/🇬🇧English-00a1d6?style=flat-square" alt="English"></strong>
 </p>
 
-  </a>
-  </a>
-</p>
-
-  </a>
-</p>
-
 # cakecake AI Gateway (Message Center Assistant)
 
 ## Features
 
 - Every logged-in user automatically gets a fixed **cakecake AI** conversation (`kind=agent`) in "My Messages."
-- User messages go through existing `POST /api/v1/dm/conversations/:id/messages`; server asynchronously calls **DeepSeek**, assistant reply is persisted then pushed via **WebSocket** (`/api/v1/ws/chat`).
+- User messages go through existing `POST /api/v1/dm/conversations/:id/messages`; server **streams** **DeepSeek**, text deltas are pushed in real time via **WebSocket** (`/api/v1/ws/chat`), and the final reply is persisted then pushed as a full message; supports pause / continue / regenerate.
 - Short-term context stored in **Redis** (`mb:agent:hist:{conversationId}`), daily quota `mb:agent:quota:{userId}:{date}`.
 
 ## Architecture
@@ -31,8 +24,9 @@ sequenceDiagram
 
     V->>Go: POST .../dm/.../messages
     Go->>Go: Auth, persist, WS push user message
-    Go-->>AI: goroutine -> DeepSeek HTTP
-    AI-->>WS: Assistant message persisted -> PushJSON
+    Go-->>AI: goroutine -> DeepSeek streaming request
+    AI-->>WS: Stream deltas (agent_delta) -> PushJSON
+    AI-->>WS: Final reply persisted -> dm_message
 ```
 
 ## Admin Configuration
@@ -50,7 +44,7 @@ Login to admin panel -> **AI Roles** (`/admin/agent`):
 |----------|-------------|
 | `DEEPSEEK_API_KEY` | DeepSeek API Key (required for replies) |
 | `DEEPSEEK_BASE_URL` | Default `https://api.deepseek.com` |
-| `DEEPSEEK_MODEL` | Default `deepseek-chat` |
+| `DEEPSEEK_MODEL` | DeepSeek model name, default `deepseek-v4-flash` |
 | `AGENT_BOT_USERNAME` | System account username, default `minibili_ai` |
 | `AGENT_MAX_HISTORY` | Redis context round limit |
 | `AGENT_HISTORY_TTL` | Redis context expiry (Go duration, default `720h` = 30 days) |
@@ -60,14 +54,15 @@ Login to admin panel -> **AI Roles** (`/admin/agent`):
 
 1. **Gateway responsibilities**: Auth, sensitive words, quotas, timeouts, model adaptation -- decoupled from business APIs.
 2. **Reuses IM**: Same DM tables, pagination, WS -- reducing frontend costs.
-3. **Async replies**: User requests return quickly; LLM runs in background goroutine, results pushed.
-4. **Observability extensions**: `trace_id`, Prometheus, streaming first-token latency (currently non-streaming full reply).
+3. **Async streaming replies**: User requests return quickly; LLM streams in a background goroutine, deltas are pushed in real time, final reply persisted.
+4. **Observability**: `trace_id` spans backend logs and frontend; streaming first-token latency is now observable (Prometheus metrics remain an extension point).
 
 ## Related Code
 
-- `internal/aigateway/` -- DeepSeek client & Redis context
-- `internal/service/agent.go` -- Orchestration, quotas, persistence
-- `internal/handler/dm.go` -- Agent conversation branch
+- `internal/aigateway/` -- DeepSeek client, streaming orchestration & Redis context
+- `internal/service/agent/agent.go` -- Orchestration, pause/continue state machine, quotas, persistence
+- `internal/handler/agent_direct_message.go` -- resume/regenerate, async suggestions
+- `internal/handler/direct_message_ws.go` -- WS control frames
 - `internal/data/agent_seed.go` -- System user & conversation initialization
 
 ## Tool Use / Function Calling
@@ -181,25 +176,49 @@ Each tool can be independently enabled/disabled via RuntimeConfig, key format: `
 
 ## Streaming / Pause / Continue / Regenerate: Pitfalls & Key Technical Points
 
-> This section records the pitfalls encountered while evolving the assistant from a non-streaming full reply into a streaming typewriter with pause/continue, regenerate, and follow-up suggestions.
+> This section records the pitfalls encountered while evolving the assistant from a non-streaming full reply into a streaming typewriter with pause/continue, regenerate, and follow-up suggestions. It is reorganized as "symptom → why it's hard → how we fixed it" so it is easier to follow.
+
+### The Big Picture (Plain English)
+
+An AI reply doesn't arrive all at once; it streams in small pieces (deltas). The product requires three things:
+
+1. **Typewriter effect**: show text as it is generated;
+2. **Stop ≠ cancel**: clicking "stop" only hides new content; the backend LLM keeps running. Clicking "continue" replays the buffered text at typewriter pace, then resumes live output;
+3. **Regenerate**: ask the model again for the same user question and replace the old reply in place instead of creating a new bubble.
+
+Why it's hard: the stream is asynchronous (the backend generates while the frontend receives), users can act concurrently (rapid stop/continue), and the WebSocket can drop and reconnect. Combined, these produce bugs that look fine at first glance but leak in edge cases.
+
+### Glossary
+
+| Term | Plain-English meaning |
+|------|-----------------------|
+| delta | A small piece of text emitted by the model during streaming |
+| pause | Stop showing new content; the backend LLM keeps running and new deltas go into a buffer |
+| buffer | Deltas accumulated while paused; replayed at typewriter pace on continue |
+| resume (continue) | Replay the buffer first, then resume live deltas |
+| regenerate | Re-ask the model for the same turn and replace the old reply in place |
+| genID | Generation counter; incremented on each regenerate, used to discard stale streams |
+| version bubble | Frontend merges multiple replies for the same question into one bubble with a `‹ n / n ›` switcher |
 
 ### 1. Delta Push Target: the DM `UserLow/UserHigh` Trap
 
-DM conversations store both participant IDs sorted as `(min, max)` in `user_low/user_high`. When the bot ID (e.g. 14) is smaller than the user ID (e.g. 18), `conv.UserLow` is the **bot**, not the user.
+**Symptom**: the final message arrives, but the typewriter never moves; debugging shows every `agent_delta` was pushed to the bot (nobody connected).
 
-We once used `conv.UserLow` as the streaming push target: `dm_message` used the correct `humanID`, so the final message arrived, but every `agent_delta` was pushed to the bot (no connection) — the frontend received zero streaming text and only the final message.
+**Why it's hard**: DM conversations store both participant IDs sorted as `(min, max)` in `user_low/user_high`. The bot ID can be smaller than the user's (e.g. bot=14, user=18), so `conv.UserLow` is the **bot**, not the user.
 
-Fix: `humanPeerForConversation(conv, botUserID)` explicitly returns the non-bot participant, covered by a unit test.
+**Fix**: `humanPeerForConversation(conv, botUserID)` explicitly returns the non-bot participant and is locked down by a unit test.
 
 ### 2. Global Callback vs Per-Call Callback (Cross-User Mixup)
 
-The gateway initially exposed a single `OnTextDelta` field overwritten before each generation. When two users generated concurrently, the later closure replaced the earlier one, and user A's tokens could be pushed to user B.
+**Symptom**: user A's reply contains fragments from user B.
 
-Fix: `CompleteUserTurnStream` / `CompleteUserTurnWithToolsStream` / `ContinueTurnStream` now accept a **per-call** `onDelta func(string)`; every call holds its own closure (with its own `humanID`), eliminating cross-user mixups.
+**Why it's hard**: the gateway originally exposed a single `OnTextDelta` field overwritten before each generation. With two concurrent generations, the later closure replaced the earlier one.
+
+**Fix**: `CompleteUserTurnStream` / `CompleteUserTurnWithToolsStream` / `ContinueTurnStream` now accept a **per-call** `onDelta func(string)`; every call holds its own closure (including its own `humanID`).
 
 ### 3. Pause/Resume State Machine (The Most Leak-Prone Part)
 
-Design goal: clicking “stop” keeps the LLM stream running in the background and buffers deltas; clicking “continue” replays the buffer at typewriter pace and then resumes live deltas.
+**Design goal**: clicking "stop" keeps the LLM stream running in the background and buffers deltas; clicking "continue" replays the buffer at typewriter pace and then resumes live deltas.
 
 Core state:
 
@@ -220,20 +239,22 @@ Three pitfalls hit:
 
 ### 4. Avoiding Duplicate Rows: Never Substring-Match the Draft
 
-We used to check whether the latest assistant content "contains" the streamed draft. Two fatal flaws:
+**Symptom**: after the reply was already persisted, clicking "continue" created a second reply.
+
+**Why it's hard**: we used to check whether the latest assistant content "contains" the streamed draft. Two fatal flaws:
 
 1. Persisted content is normalized (`normalizeMarkdownFences` / `dedupeConsecutiveLines` / trim) while the draft is the raw stream — they do not match;
 2. `ListMessages` returns DESC (newest first), but the old code iterated from the tail and returned on the first assistant found — effectively comparing against the **oldest** message in the window.
 
-Result: when the reply was already persisted and the user clicked continue late, the model was re-prompted and a second row was created.
-
-Fix: `latestUserTurnHasAssistantReply` — only check whether an assistant row exists after the latest user message, with no text comparison; combined with a per-user `agentRunLock` that serializes the resume decision and persistence, so even a double continue persists exactly one row.
+**Fix**: `latestUserTurnHasAssistantReply` — only check whether an assistant row exists after the latest user message, with **no text comparison**; combined with a per-user `agentRunLock` that serializes the resume decision and persistence, so even a double continue persists exactly one row.
 
 ### 5. Async Follow-Up Suggestions (Eliminating the End Dead-Wait)
 
-After the reply text finished streaming, a synchronous second LLM call generated suggestion chips (up to 15s), delaying the final message — the UI appeared to “finish much later”.
+**Symptom**: after the reply text finished streaming, the final message took a long time to appear ("it finally generated after a long wait").
 
-Fix: persist and push the reply immediately (empty suggestions), then in a background goroutine:
+**Why it's hard**: a **synchronous** second LLM call generated suggestion chips (up to 15s) and blocked persistence of the final message.
+
+**Fix**: persist and push the reply immediately (empty suggestions), then in a background goroutine:
 
 1. `UpdateMessageSuggestions(messageID, sugg)` updates the row;
 2. Push a new WS event `agent_suggestions {message_id, suggestions}`;
@@ -243,7 +264,9 @@ Measured: the gap from stream end to persisted row dropped from 5–15s to ~100m
 
 ### 6. Markdown Fence Normalization
 
-At stop/continue seams the model often emits extra ````go`, duplicate open fences, or repeated lines. Before persistence:
+**Symptom**: at stop/continue seams the model often emits extra ````go`, duplicate open fences, or repeated lines, breaking frontend markdown rendering.
+
+**Fix**: normalize before persistence:
 
 - `normalizeMarkdownFences`: unify fences to three backticks, drop seam artifacts (language-tagged fence while already inside a block), append a closing fence if unclosed;
 - `dedupeConsecutiveLines`: remove exact consecutive duplicate lines;
