@@ -117,7 +117,7 @@ func TestResumeAgentReply_NoOpWhenReplyAlreadyPersisted(t *testing.T) {
 	seedDmMessage(t, db, conv.ID, 18, "user", "hi")
 	seedDmMessage(t, db, conv.ID, 14, "assistant", "already done")
 
-	api.resumeAgentReply(18, conv.ID, "hi partial")
+	api.resumeAgentReply(18, conv.ID)
 	time.Sleep(50 * time.Millisecond)
 	require.Equal(t, 1, countAssistantAfter(t, db, conv.ID, 0))
 }
@@ -127,18 +127,11 @@ func TestResumeAgentReply_PendingPathPersistsOnce(t *testing.T) {
 	conv, _ := seedAgentConvForHandler(t, db, 18, 14)
 	seedDmMessage(t, db, conv.ID, 18, "user", "hi")
 
-	api.pendingAgentReplyMu.Lock()
-	if api.pendingAgentReplies == nil {
-		api.pendingAgentReplies = make(map[uint64]pendingAgentReply)
-	}
-	api.pendingAgentReplies[18] = pendingAgentReply{
-		conv:   conv,
-		result: &serviceagent.GenerateReplyResult{Content: "待落库回复"},
-		genID:  1,
-	}
-	api.pendingAgentReplyMu.Unlock()
+	genID := agentSvc.BeginGeneration(18, nil)
+	agentSvc.PauseGeneration(18)
+	agentSvc.StorePendingReply(18, genID, conv, &serviceagent.GenerateReplyResult{Content: "待落库回复"})
 
-	api.resumeAgentReply(18, conv.ID, "hi partial")
+	api.resumeAgentReply(18, conv.ID)
 
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
@@ -216,28 +209,15 @@ func TestAttachAgentSuggestions_NoGateway(t *testing.T) {
 	require.True(t, true)
 }
 
-func TestAgentCancelRegistryAndLocks(t *testing.T) {
+func TestAgentRunLockAndNoopControls(t *testing.T) {
 	api, _, _ := newAgentHandlerAPI(t)
-	cancel := func() {}
-
-	genID := api.tryRegisterAgentCancel(18, cancel)
-	require.NotZero(t, genID)
-	require.True(t, api.agentHasActiveGeneration(18))
-	require.Zero(t, api.tryRegisterAgentCancel(18, cancel)) // already active
-
-	api.unregisterAgentCancel(18, genID)
-	require.False(t, api.agentHasActiveGeneration(18))
-
-	api.unregisterAgentCancel(18, genID) // idempotent
-
 	mu1 := api.agentRunLock(18)
 	mu2 := api.agentRunLock(18)
 	mu3 := api.agentRunLock(19)
 	require.Same(t, mu1, mu2)
 	require.NotSame(t, mu1, mu3)
 
-	api.supersedeAgentGeneration(18)
 	api.pauseAgentReply(18) // Agent non-nil; no-op when no generation state
-	api.continueAgentReply(18, 0, "  ")
+	api.continueAgentReply(18, 0, "")
 	require.True(t, true)
 }

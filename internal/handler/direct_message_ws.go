@@ -49,7 +49,6 @@ func (a *API) ServeChat(c *gin.Context) {
 		var req struct {
 			Type           string `json:"type"`
 			ConversationID uint64 `json:"conversation_id"`
-			Partial        string `json:"partial"`
 		}
 		if err := json.Unmarshal(data, &req); err != nil {
 			continue
@@ -60,7 +59,7 @@ func (a *API) ServeChat(c *gin.Context) {
 		case "agent_regenerate":
 			a.regenerateAgentReply(uid, req.ConversationID)
 		case "agent_continue":
-			go a.resumeAgentReply(uid, req.ConversationID, req.Partial)
+			go a.resumeAgentReply(uid, req.ConversationID)
 		}
 	}
 }
