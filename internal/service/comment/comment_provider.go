@@ -73,6 +73,8 @@ type CommentProviderImpl struct {
 	db *gorm.DB
 }
 
+var _ CommentProvider = (*CommentProviderImpl)(nil)
+
 // NewCommentProvider creates a gorm-backed CommentProvider implementation.
 func NewCommentProvider(db *gorm.DB) *CommentProviderImpl {
 	return &CommentProviderImpl{db: db}

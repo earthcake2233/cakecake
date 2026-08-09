@@ -17,6 +17,8 @@ type VideoProviderImpl struct {
 	db *gorm.DB
 }
 
+var _ VideoProvider = (*VideoProviderImpl)(nil)
+
 // NewVideoProvider creates a gorm-backed VideoProvider implementation.
 func NewVideoProvider(db *gorm.DB) *VideoProviderImpl {
 	return &VideoProviderImpl{db: db}

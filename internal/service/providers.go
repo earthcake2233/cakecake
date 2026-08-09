@@ -13,6 +13,8 @@ type ArticleProviderImpl struct {
 	db *gorm.DB
 }
 
+var _ ArticleProvider = (*ArticleProviderImpl)(nil)
+
 // NewArticleProvider creates a gorm-backed ArticleProvider implementation.
 func NewArticleProvider(db *gorm.DB) *ArticleProviderImpl {
 	return &ArticleProviderImpl{db: db}
@@ -52,6 +54,8 @@ func (p *ArticleProviderImpl) IncrCommentCount(ctx context.Context, id uint64, d
 type DynamicProviderImpl struct {
 	db *gorm.DB
 }
+
+var _ DynamicProvider = (*DynamicProviderImpl)(nil)
 
 // NewDynamicProvider creates a gorm-backed DynamicProvider implementation.
 func NewDynamicProvider(db *gorm.DB) *DynamicProviderImpl {

@@ -27,6 +27,8 @@ type PlayCountStoreImpl struct {
 	db *gorm.DB
 }
 
+var _ PlayCountStore = (*PlayCountStoreImpl)(nil)
+
 // NewPlayCountStore creates a gorm-backed play-count store.
 func NewPlayCountStore(db *gorm.DB) *PlayCountStoreImpl {
 	return &PlayCountStoreImpl{db: db}

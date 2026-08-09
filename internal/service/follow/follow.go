@@ -54,6 +54,8 @@ type FollowStoreImpl struct {
 	db *gorm.DB
 }
 
+var _ FollowStore = (*FollowStoreImpl)(nil)
+
 // NewFollowStore creates a gorm-backed FollowStore implementation.
 func NewFollowStore(db *gorm.DB) *FollowStoreImpl {
 	return &FollowStoreImpl{db: db}

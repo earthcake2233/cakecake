@@ -40,6 +40,8 @@ type HotSearchProviderImpl struct {
 	db *gorm.DB
 }
 
+var _ HotSearchProvider = (*HotSearchProviderImpl)(nil)
+
 // NewHotSearchProvider creates a gorm-backed HotSearchProvider implementation.
 func NewHotSearchProvider(db *gorm.DB) *HotSearchProviderImpl {
 	return &HotSearchProviderImpl{db: db}

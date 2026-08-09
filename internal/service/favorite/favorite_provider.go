@@ -52,6 +52,8 @@ type FavoriteStoreImpl struct {
 	db *gorm.DB
 }
 
+var _ FavoriteStore = (*FavoriteStoreImpl)(nil)
+
 // NewFavoriteStore creates a gorm-backed FavoriteStore implementation.
 func NewFavoriteStore(db *gorm.DB) *FavoriteStoreImpl {
 	return &FavoriteStoreImpl{db: db}

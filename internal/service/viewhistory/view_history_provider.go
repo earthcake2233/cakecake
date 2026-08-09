@@ -42,6 +42,8 @@ type ViewHistoryStoreImpl struct {
 	db *gorm.DB
 }
 
+var _ ViewHistoryStore = (*ViewHistoryStoreImpl)(nil)
+
 // NewViewHistoryStore creates a gorm-backed ViewHistoryStore implementation.
 func NewViewHistoryStore(db *gorm.DB) *ViewHistoryStoreImpl {
 	return &ViewHistoryStoreImpl{db: db}

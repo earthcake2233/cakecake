@@ -30,6 +30,8 @@ type AdminProviderImpl struct {
 	db *gorm.DB
 }
 
+var _ AdminProvider = (*AdminProviderImpl)(nil)
+
 // NewAdminProvider creates a gorm-backed admin provider.
 func NewAdminProvider(db *gorm.DB) *AdminProviderImpl {
 	return &AdminProviderImpl{db: db}

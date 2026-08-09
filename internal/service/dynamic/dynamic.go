@@ -44,6 +44,8 @@ type DynamicStoreImpl struct {
 	db *gorm.DB
 }
 
+var _ DynamicStore = (*DynamicStoreImpl)(nil)
+
 // NewDynamicStore creates a gorm-backed DynamicStore implementation.
 func NewDynamicStore(db *gorm.DB) *DynamicStoreImpl {
 	return &DynamicStoreImpl{db: db}

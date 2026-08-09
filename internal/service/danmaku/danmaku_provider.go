@@ -31,6 +31,8 @@ type DanmakuStoreImpl struct {
 	db *gorm.DB
 }
 
+var _ DanmakuStore = (*DanmakuStoreImpl)(nil)
+
 // NewDanmakuStore creates a gorm-backed DanmakuStore implementation.
 func NewDanmakuStore(db *gorm.DB) *DanmakuStoreImpl {
 	return &DanmakuStoreImpl{db: db}

@@ -30,6 +30,8 @@ type DailyRewardStoreImpl struct {
 	db *gorm.DB
 }
 
+var _ DailyRewardStore = (*DailyRewardStoreImpl)(nil)
+
 // NewDailyRewardStore creates a gorm-backed daily-reward store.
 func NewDailyRewardStore(db *gorm.DB) *DailyRewardStoreImpl {
 	return &DailyRewardStoreImpl{db: db}

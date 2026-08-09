@@ -57,6 +57,8 @@ type CreatorCommentProviderImpl struct {
 	db *gorm.DB
 }
 
+var _ CreatorCommentProvider = (*CreatorCommentProviderImpl)(nil)
+
 // NewCreatorCommentProvider creates a gorm-backed creator comment store.
 func NewCreatorCommentProvider(db *gorm.DB) *CreatorCommentProviderImpl {
 	return &CreatorCommentProviderImpl{db: db}

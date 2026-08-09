@@ -34,6 +34,8 @@ type BannerStoreImpl struct {
 	db *gorm.DB
 }
 
+var _ BannerStore = (*BannerStoreImpl)(nil)
+
 // NewBannerStore creates a gorm-backed BannerStore implementation.
 func NewBannerStore(db *gorm.DB) *BannerStoreImpl {
 	return &BannerStoreImpl{db: db}
