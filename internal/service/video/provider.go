@@ -5,6 +5,7 @@ import (
 	"cakecake/internal/model/video"
 	"cakecake/internal/pkg/cursor"
 	"cakecake/internal/search"
+	"cakecake/internal/service/queryutil"
 	"context"
 	"time"
 
@@ -53,11 +54,7 @@ func (p *VideoProviderImpl) GetVideoAuthor(ctx context.Context, id uint64) (uint
 
 // GetVideoByID loads a full video row by id.
 func (p *VideoProviderImpl) GetVideoByID(ctx context.Context, id uint64) (*video.Video, error) {
-	var v video.Video
-	if err := p.db.WithContext(ctx).First(&v, id).Error; err != nil {
-		return nil, err
-	}
-	return &v, nil
+	return queryutil.FirstByID[video.Video](ctx, p.db, id)
 }
 
 // GetVideoByUser loads a video by id and owner.
@@ -166,17 +163,16 @@ func (p *VideoProviderImpl) ListPublishedVideos(ctx context.Context, opts VideoL
 
 // ListUserVideos pages a user's videos, optionally filtered by status.
 func (p *VideoProviderImpl) ListUserVideos(ctx context.Context, uid uint64, status string, page, pageSize int) ([]video.Video, int64, error) {
-	q := p.db.WithContext(ctx).Model(&video.Video{}).Where("user_id = ?", uid)
-	if status != "" {
-		q = q.Where("status = ?", status)
+	base := func() *gorm.DB {
+		q := p.db.WithContext(ctx).Model(&video.Video{}).Where("user_id = ?", uid)
+		if status != "" {
+			q = q.Where("status = ?", status)
+		}
+		return q
 	}
-	var total int64
-	if err := q.Count(&total).Error; err != nil {
-		return nil, 0, err
-	}
-	offset := (page - 1) * pageSize
 	var list []video.Video
-	if err := q.Order("id DESC").Offset(offset).Limit(pageSize).Find(&list).Error; err != nil {
+	total, err := queryutil.ListPage(base, page, pageSize, "id DESC", &list)
+	if err != nil {
 		return nil, 0, err
 	}
 	return list, total, nil
@@ -184,18 +180,21 @@ func (p *VideoProviderImpl) ListUserVideos(ctx context.Context, uid uint64, stat
 
 // ListUserVideosAdvanced pages a user's videos with multi-status/title filters.
 func (p *VideoProviderImpl) ListUserVideosAdvanced(ctx context.Context, f MyVideoFilter) (*MyVideoPageResult, error) {
-	q := p.db.WithContext(ctx).Model(&video.Video{}).Where("user_id = ?", f.UserID)
-	if f.Status != "" {
-		q = q.Where("status = ?", f.Status)
+	base := func() *gorm.DB {
+		q := p.db.WithContext(ctx).Model(&video.Video{}).Where("user_id = ?", f.UserID)
+		if f.Status != "" {
+			q = q.Where("status = ?", f.Status)
+		}
+		if len(f.Statuses) > 0 {
+			q = q.Where("status IN ?", f.Statuses)
+		}
+		if f.TitleQ != "" {
+			q = q.Where("title LIKE ?", "%"+f.TitleQ+"%")
+		}
+		return q
 	}
-	if len(f.Statuses) > 0 {
-		q = q.Where("status IN ?", f.Statuses)
-	}
-	if f.TitleQ != "" {
-		q = q.Where("title LIKE ?", "%"+f.TitleQ+"%")
-	}
-	var total int64
-	if err := q.Count(&total).Error; err != nil {
+	total, err := queryutil.Count(base)
+	if err != nil {
 		return nil, err
 	}
 	totalPages := int((total + int64(f.PageSize) - 1) / int64(f.PageSize))
@@ -205,7 +204,6 @@ func (p *VideoProviderImpl) ListUserVideosAdvanced(ctx context.Context, f MyVide
 	if f.Page > totalPages {
 		f.Page = totalPages
 	}
-	offset := (f.Page - 1) * f.PageSize
 	var orderClause string
 	switch f.SortKey {
 	case "reply":
@@ -216,7 +214,7 @@ func (p *VideoProviderImpl) ListUserVideosAdvanced(ctx context.Context, f MyVide
 		orderClause = "id DESC"
 	}
 	var list []video.Video
-	if err := q.Order(orderClause).Offset(offset).Limit(f.PageSize).Find(&list).Error; err != nil {
+	if err := queryutil.FindPage(base, f.Page, f.PageSize, orderClause, &list); err != nil {
 		return nil, err
 	}
 	return &MyVideoPageResult{Videos: list, Total: total, TotalPages: totalPages}, nil
@@ -237,14 +235,12 @@ func (p *VideoProviderImpl) ListUserPublishedVideosCursor(ctx context.Context, u
 
 // ListDrafts pages a user's draft videos.
 func (p *VideoProviderImpl) ListDrafts(ctx context.Context, uid uint64, page, pageSize int) ([]video.Video, int64, error) {
-	q := p.db.WithContext(ctx).Model(&video.Video{}).Where("user_id = ? AND status = 'draft'", uid)
-	var total int64
-	if err := q.Count(&total).Error; err != nil {
-		return nil, 0, err
+	base := func() *gorm.DB {
+		return p.db.WithContext(ctx).Model(&video.Video{}).Where("user_id = ? AND status = 'draft'", uid)
 	}
-	offset := (page - 1) * pageSize
 	var list []video.Video
-	if err := q.Order("updated_at DESC, id DESC").Offset(offset).Limit(pageSize).Find(&list).Error; err != nil {
+	total, err := queryutil.ListPage(base, page, pageSize, "updated_at DESC, id DESC", &list)
+	if err != nil {
 		return nil, 0, err
 	}
 	return list, total, nil

@@ -2,6 +2,7 @@ package comment
 
 import (
 	"cakecake/internal/model/comment"
+	"cakecake/internal/service/queryutil"
 	"context"
 
 	"gorm.io/gorm"
@@ -176,29 +177,17 @@ func (p *CommentProviderImpl) CreateDynamicComment(ctx context.Context, cm *comm
 
 // GetVideoComment loads a video comment by id.
 func (p *CommentProviderImpl) GetVideoComment(ctx context.Context, id uint64) (*comment.Comment, error) {
-	var cm comment.Comment
-	if err := p.db.WithContext(ctx).First(&cm, id).Error; err != nil {
-		return nil, err
-	}
-	return &cm, nil
+	return queryutil.FirstByID[comment.Comment](ctx, p.db, id)
 }
 
 // GetArticleComment loads an article comment by id.
 func (p *CommentProviderImpl) GetArticleComment(ctx context.Context, id uint64) (*comment.ArticleComment, error) {
-	var cm comment.ArticleComment
-	if err := p.db.WithContext(ctx).First(&cm, id).Error; err != nil {
-		return nil, err
-	}
-	return &cm, nil
+	return queryutil.FirstByID[comment.ArticleComment](ctx, p.db, id)
 }
 
 // GetDynamicComment loads a dynamic comment by id.
 func (p *CommentProviderImpl) GetDynamicComment(ctx context.Context, id uint64) (*comment.DynamicComment, error) {
-	var cm comment.DynamicComment
-	if err := p.db.WithContext(ctx).First(&cm, id).Error; err != nil {
-		return nil, err
-	}
-	return &cm, nil
+	return queryutil.FirstByID[comment.DynamicComment](ctx, p.db, id)
 }
 
 // GetCommentParent returns the target media id and level of a parent comment.
