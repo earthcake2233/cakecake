@@ -33,22 +33,22 @@ type pendingSnap struct {
 	Suggestions    string `json:"suggestions,omitempty"`
 }
 
-func (s *AgentService) writeSnapshot(uid uint64, snap *genSnapshot) {
-	if s == nil || s.Redis == nil || uid == 0 || snap == nil {
+func (g *AgentGenerationService) writeSnapshot(uid uint64, snap *genSnapshot) {
+	if g.svc == nil || g.svc.Redis == nil || uid == 0 || snap == nil {
 		return
 	}
 	b, err := json.Marshal(snap)
 	if err != nil {
 		return
 	}
-	_ = s.Redis.Set(context.Background(), data.AgentGenSnapshotKey(uid), b, agentSnapshotTTL).Err()
+	_ = g.svc.Redis.Set(context.Background(), data.AgentGenSnapshotKey(uid), b, agentSnapshotTTL).Err()
 }
 
-func (s *AgentService) readSnapshot(uid uint64) *genSnapshot {
-	if s == nil || s.Redis == nil || uid == 0 {
+func (g *AgentGenerationService) readSnapshot(uid uint64) *genSnapshot {
+	if g.svc == nil || g.svc.Redis == nil || uid == 0 {
 		return nil
 	}
-	raw, err := s.Redis.Get(context.Background(), data.AgentGenSnapshotKey(uid)).Bytes()
+	raw, err := g.svc.Redis.Get(context.Background(), data.AgentGenSnapshotKey(uid)).Bytes()
 	if err != nil {
 		return nil
 	}
@@ -61,40 +61,40 @@ func (s *AgentService) readSnapshot(uid uint64) *genSnapshot {
 
 // clearSnapshot removes the snapshot only when it still belongs to genID (a
 // finished generation can never clear a newer generation's snapshot).
-func (s *AgentService) clearSnapshot(uid uint64, genID uint64) {
-	if s == nil || s.Redis == nil || uid == 0 || genID == 0 {
+func (g *AgentGenerationService) clearSnapshot(uid uint64, genID uint64) {
+	if g.svc == nil || g.svc.Redis == nil || uid == 0 || genID == 0 {
 		return
 	}
-	snap := s.readSnapshot(uid)
+	snap := g.svc.readSnapshot(uid)
 	if snap == nil || snap.GenID != genID {
 		return
 	}
-	_ = s.Redis.Del(context.Background(), data.AgentGenSnapshotKey(uid)).Err()
+	_ = g.svc.Redis.Del(context.Background(), data.AgentGenSnapshotKey(uid)).Err()
 }
 
 // updateSnapshotPaused mirrors a local pause/resume change into the snapshot
 // (guarded by generation id).
-func (s *AgentService) updateSnapshotPaused(uid uint64, genID uint64, paused bool, pauseSeq uint64) {
-	if s == nil || s.Redis == nil || uid == 0 || genID == 0 {
+func (g *AgentGenerationService) updateSnapshotPaused(uid uint64, genID uint64, paused bool, pauseSeq uint64) {
+	if g.svc == nil || g.svc.Redis == nil || uid == 0 || genID == 0 {
 		return
 	}
-	snap := s.readSnapshot(uid)
+	snap := g.svc.readSnapshot(uid)
 	if snap == nil || snap.GenID != genID {
 		return
 	}
 	snap.Paused = paused
 	snap.PauseSeq = pauseSeq
-	s.writeSnapshot(uid, snap)
+	g.svc.writeSnapshot(uid, snap)
 }
 
 // snapshotRunning marks the snapshot as a running generation owned by this
 // instance (called right after beginGeneration on the owner).
-func (s *AgentService) snapshotRunning(uid uint64, genID uint64, convID uint64) {
-	if s == nil || s.Redis == nil || uid == 0 || genID == 0 {
+func (g *AgentGenerationService) snapshotRunning(uid uint64, genID uint64, convID uint64) {
+	if g.svc == nil || g.svc.Redis == nil || uid == 0 || genID == 0 {
 		return
 	}
-	s.writeSnapshot(uid, &genSnapshot{
-		Owner:   s.InstanceID,
+	g.svc.writeSnapshot(uid, &genSnapshot{
+		Owner:   g.svc.InstanceID,
 		GenID:   genID,
 		Running: true,
 		ConvID:  convID,
@@ -103,11 +103,11 @@ func (s *AgentService) snapshotRunning(uid uint64, genID uint64, convID uint64) 
 
 // snapshotPending marks the snapshot as finished-while-paused with the reply
 // serialized, so a remote replica can recover it.
-func (s *AgentService) snapshotPending(uid uint64, genID uint64, convID uint64, result *GenerateReplyResult) {
-	if s == nil || s.Redis == nil || uid == 0 || genID == 0 || result == nil {
+func (g *AgentGenerationService) snapshotPending(uid uint64, genID uint64, convID uint64, result *GenerateReplyResult) {
+	if g.svc == nil || g.svc.Redis == nil || uid == 0 || genID == 0 || result == nil {
 		return
 	}
-	snap := s.readSnapshot(uid)
+	snap := g.svc.readSnapshot(uid)
 	if snap == nil || snap.GenID != genID {
 		return
 	}
@@ -124,5 +124,5 @@ func (s *AgentService) snapshotPending(uid uint64, genID uint64, convID uint64, 
 			snap.Pending.Suggestions = string(b)
 		}
 	}
-	s.writeSnapshot(uid, snap)
+	g.svc.writeSnapshot(uid, snap)
 }

@@ -86,36 +86,36 @@ type ReplyPusher interface {
 	FormatAgentMessage(ctx context.Context, humanID uint64, conv *dm.DmConversation, msg *dm.DmMessage) ([]map[string]interface{}, error)
 }
 
-func (s *AgentService) gatewayReady() bool {
+func (g *AgentGenerationService) gatewayReady() bool {
 	enabled := false
-	if s.RC != nil {
-		enabled = s.RC.GetBool("agent_enabled", s.Cfg != nil && s.Cfg.AgentEnabled)
+	if g.svc.RC != nil {
+		enabled = g.svc.RC.GetBool("agent_enabled", g.svc.Cfg != nil && g.svc.Cfg.AgentEnabled)
 	}
-	if !enabled && s.Cfg != nil {
-		enabled = s.Cfg.AgentEnabled
+	if !enabled && g.svc.Cfg != nil {
+		enabled = g.svc.Cfg.AgentEnabled
 	}
-	return s != nil && enabled && s.Gateway != nil && s.Gateway.LLM != nil &&
-		s.Cfg != nil && strings.TrimSpace(s.Cfg.DeepSeekAPIKey) != ""
+	return g.svc != nil && enabled && g.svc.Gateway != nil && g.svc.Gateway.LLM != nil &&
+		g.svc.Cfg != nil && strings.TrimSpace(g.svc.Cfg.DeepSeekAPIKey) != ""
 }
 
-func (s *AgentService) quotaKey(userID uint64) string {
+func (g *AgentGenerationService) quotaKey(userID uint64) string {
 	day := time.Now().Format("20060102")
 	return fmt.Sprintf("mb:agent:quota:%d:%s", userID, day)
 }
 
 // CheckQuota reports whether the user still has daily agent quota (true when unconfigured).
-func (s *AgentService) CheckQuota(ctx context.Context, userID uint64) bool {
-	if s == nil || s.Redis == nil || s.Cfg == nil {
+func (g *AgentGenerationService) CheckQuota(ctx context.Context, userID uint64) bool {
+	if g.svc == nil || g.svc.Redis == nil || g.svc.Cfg == nil {
 		return true
 	}
-	quota := s.Cfg.AgentDailyQuota
-	if s.RC != nil {
-		quota = s.RC.GetInt("agent_daily_quota", quota)
+	quota := g.svc.Cfg.AgentDailyQuota
+	if g.svc.RC != nil {
+		quota = g.svc.RC.GetInt("agent_daily_quota", quota)
 	}
 	if quota <= 0 {
 		return true
 	}
-	n, err := s.Redis.Get(ctx, s.quotaKey(userID)).Int()
+	n, err := g.svc.Redis.Get(ctx, g.svc.quotaKey(userID)).Int()
 	if err == redis.Nil {
 		return true
 	}
@@ -123,58 +123,58 @@ func (s *AgentService) CheckQuota(ctx context.Context, userID uint64) bool {
 }
 
 // IncrQuota increments the user's daily agent quota counter.
-func (s *AgentService) IncrQuota(ctx context.Context, userID uint64) {
-	if s == nil || s.Redis == nil {
+func (g *AgentGenerationService) IncrQuota(ctx context.Context, userID uint64) {
+	if g.svc == nil || g.svc.Redis == nil {
 		return
 	}
-	key := s.quotaKey(userID)
-	pipe := s.Redis.Pipeline()
+	key := g.svc.quotaKey(userID)
+	pipe := g.svc.Redis.Pipeline()
 	pipe.Incr(ctx, key)
 	pipe.Expire(ctx, key, 48*time.Hour)
 	_, _ = pipe.Exec(ctx)
 }
 
 // EnsureForUser ensures agent conversations exist for a human user.
-func (s *AgentService) EnsureForUser(humanID uint64) error {
-	if s == nil || s.Store == nil || humanID == 0 {
+func (p *AgentProfileService) EnsureForUser(humanID uint64) error {
+	if p.svc == nil || p.svc.Store == nil || humanID == 0 {
 		return nil
 	}
-	return s.Store.EnsureAllAgentConversationsForUser(humanID)
+	return p.svc.Store.EnsureAllAgentConversationsForUser(humanID)
 }
 
 // IsAgentConversation reports whether a conversation belongs to an agent.
-func (s *AgentService) IsAgentConversation(conv *dm.DmConversation) bool {
+func (p *AgentProfileService) IsAgentConversation(conv *dm.DmConversation) bool {
 	return conv != nil && conv.Kind == dm.DmKindAgent
 }
 
 // IsBotUser reports whether a user id belongs to an agent bot.
-func (s *AgentService) IsBotUser(uid uint64) bool {
-	if s == nil || s.Store == nil || uid == 0 {
+func (p *AgentProfileService) IsBotUser(uid uint64) bool {
+	if p.svc == nil || p.svc.Store == nil || uid == 0 {
 		return false
 	}
-	_, err := s.Store.GetAgentProfileByBotUserID(uid)
+	_, err := p.svc.Store.GetAgentProfileByBotUserID(uid)
 	return err == nil
 }
 
-func (s *AgentService) profileForConversation(conv *dm.DmConversation) (*agent.AgentProfile, error) {
-	if s == nil || s.Store == nil || conv == nil {
+func (p *AgentProfileService) profileForConversation(conv *dm.DmConversation) (*agent.AgentProfile, error) {
+	if p.svc == nil || p.svc.Store == nil || conv == nil {
 		return nil, fmt.Errorf("invalid conversation")
 	}
 	if conv.AgentProfileID > 0 {
-		return s.Store.GetAgentProfile(conv.AgentProfileID)
+		return p.svc.Store.GetAgentProfile(conv.AgentProfileID)
 	}
-	if p, err := s.Store.GetAgentProfileByBotUserID(conv.UserLow); err == nil {
+	if p, err := p.svc.Store.GetAgentProfileByBotUserID(conv.UserLow); err == nil {
 		return p, nil
 	}
-	return s.Store.GetAgentProfileByBotUserID(conv.UserHigh)
+	return p.svc.Store.GetAgentProfileByBotUserID(conv.UserHigh)
 }
 
 // PostAssistantMessage persists an assistant reply and updates the conversation.
-func (s *AgentService) PostAssistantMessage(conv *dm.DmConversation, humanID uint64, content string, extra ...string) (*dm.DmMessage, error) {
-	if s == nil || s.Store == nil || conv == nil {
+func (g *AgentGenerationService) PostAssistantMessage(conv *dm.DmConversation, humanID uint64, content string, extra ...string) (*dm.DmMessage, error) {
+	if g.svc == nil || g.svc.Store == nil || conv == nil {
 		return nil, fmt.Errorf("agent service not ready")
 	}
-	profile, err := s.profileForConversation(conv)
+	profile, err := g.svc.profileForConversation(conv)
 	if err != nil {
 		return nil, err
 	}
@@ -216,23 +216,23 @@ func (s *AgentService) PostAssistantMessage(conv *dm.DmConversation, humanID uin
 		r := []rune(preview)
 		preview = string(r[:80]) + "..."
 	}
-	if err := s.Store.PostAssistantMessageTx(&msg, conv, humanID, now, preview); err != nil {
+	if err := g.svc.Store.PostAssistantMessageTx(&msg, conv, humanID, now, preview); err != nil {
 		return nil, err
 	}
-	_ = s.Store.ReloadConversation(conv)
+	_ = g.svc.Store.ReloadConversation(conv)
 	return &msg, nil
 }
 
-func (s *AgentService) applyDynamicGatewayConfig() {
-	if s.Gateway == nil || s.RC == nil {
+func (g *AgentGenerationService) applyDynamicGatewayConfig() {
+	if g.svc.Gateway == nil || g.svc.RC == nil {
 		return
 	}
-	if v := s.RC.GetInt("agent_max_history", s.Gateway.MaxHistory); v > 0 {
-		s.Gateway.MaxHistory = v
+	if v := g.svc.RC.GetInt("agent_max_history", g.svc.Gateway.MaxHistory); v > 0 {
+		g.svc.Gateway.MaxHistory = v
 	}
-	if v := s.RC.Get("agent_history_ttl", ""); v != "" {
+	if v := g.svc.RC.Get("agent_history_ttl", ""); v != "" {
 		if d, err := time.ParseDuration(v); err == nil && d > 0 {
-			s.Gateway.HistoryTTL = d
+			g.svc.Gateway.HistoryTTL = d
 		}
 	}
 }
@@ -256,12 +256,12 @@ func humanPeerForConversation(conv *dm.DmConversation, botUserID uint64) uint64 
 }
 
 // GenerateReply produces an AI reply (with tool calls) for a user message.
-func (s *AgentService) GenerateReply(ctx context.Context, conv *dm.DmConversation, userText string) (*GenerateReplyResult, error) {
-	if !s.gatewayReady() {
+func (g *AgentGenerationService) GenerateReply(ctx context.Context, conv *dm.DmConversation, userText string) (*GenerateReplyResult, error) {
+	if !g.svc.gatewayReady() {
 		return nil, fmt.Errorf("ai assistant is not configured")
 	}
-	s.applyDynamicGatewayConfig()
-	profile, err := s.profileForConversation(conv)
+	g.svc.applyDynamicGatewayConfig()
+	profile, err := g.svc.profileForConversation(conv)
 	if err != nil {
 		return nil, fmt.Errorf("ai assistant profile missing")
 	}
@@ -272,41 +272,41 @@ func (s *AgentService) GenerateReply(ctx context.Context, conv *dm.DmConversatio
 	if humanID == 0 {
 		return nil, fmt.Errorf("agent conversation has no human participant")
 	}
-	if s.Sens != nil {
-		if err := s.Sens.Check(userText); err != nil {
+	if g.svc.Sens != nil {
+		if err := g.svc.Sens.Check(userText); err != nil {
 			return nil, fmt.Errorf("message contains sensitive words")
 		}
 	}
 	if strings.TrimSpace(profile.SystemPrompt) == "" {
 		return nil, fmt.Errorf("empty system prompt")
 	}
-	restore := s.agentSystemPrompt(profile)
+	restore := g.svc.agentSystemPrompt(profile)
 	defer restore()
 
-	ctx, cancel := context.WithTimeout(ctx, s.agentReplyTimeout())
+	ctx, cancel := context.WithTimeout(ctx, g.svc.agentReplyTimeout())
 	defer cancel()
 
 	var coll *toolActivityCollector
 	var reply string
-	genID := s.currentGenID(humanID)
-	if s.ToolExec != nil && len(toolkit.DefineTools(s.enabledTools())) > 0 {
+	genID := g.svc.currentGenID(humanID)
+	if g.svc.ToolExec != nil && len(toolkit.DefineTools(g.svc.enabledTools())) > 0 {
 		traceID := generateTraceID()
-		s.setupToolCallbacks(traceID, humanID)
-		defer s.clearToolCallbacks()
-		coll = installToolCollectors(s.Gateway)
-		tools := toolkit.DefineTools(s.enabledTools())
-		s.Gateway.ToolExec = s.ToolExec
-		reply, err = s.Gateway.CompleteUserTurnWithToolsStream(ctx, conv.ID, userText, tools, traceID, s.deltaSender(humanID, genID))
+		g.svc.setupToolCallbacks(traceID, humanID)
+		defer g.svc.clearToolCallbacks()
+		coll = installToolCollectors(g.svc.Gateway)
+		tools := toolkit.DefineTools(g.svc.enabledTools())
+		g.svc.Gateway.ToolExec = g.svc.ToolExec
+		reply, err = g.svc.Gateway.CompleteUserTurnWithToolsStream(ctx, conv.ID, userText, tools, traceID, g.svc.deltaSender(humanID, genID))
 	} else {
-		s.setupToolCallbacks("", humanID)
-		defer s.clearToolCallbacks()
-		reply, err = s.Gateway.CompleteUserTurnStream(ctx, conv.ID, userText, s.deltaSender(humanID, genID))
+		g.svc.setupToolCallbacks("", humanID)
+		defer g.svc.clearToolCallbacks()
+		reply, err = g.svc.Gateway.CompleteUserTurnStream(ctx, conv.ID, userText, g.svc.deltaSender(humanID, genID))
 	}
 	if err != nil {
 		return nil, err
 	}
-	if s.Sens != nil {
-		if err := s.Sens.Check(reply); err != nil {
+	if g.svc.Sens != nil {
+		if err := g.svc.Sens.Check(reply); err != nil {
 			return &GenerateReplyResult{Content: "抱歉，AI 助手暂时无法回复，请稍后再试。"}, nil
 		}
 	}
@@ -320,21 +320,21 @@ func (s *AgentService) GenerateReply(ctx context.Context, conv *dm.DmConversatio
 // GenerateSuggestions asks the model for follow-up question chips based on a
 // finished reply. Callers run it after the reply is persisted so the message
 // can be shown immediately instead of waiting for a second LLM round trip.
-func (s *AgentService) GenerateSuggestions(ctx context.Context, reply string) []string {
-	return s.generateSuggestions(ctx, reply)
+func (g *AgentGenerationService) GenerateSuggestions(ctx context.Context, reply string) []string {
+	return g.svc.generateSuggestions(ctx, reply)
 }
 
 // UpdateMessageSuggestions persists follow-up chips on an assistant message.
-func (s *AgentService) UpdateMessageSuggestions(ctx context.Context, messageID uint64, suggestions []string) error {
-	if s == nil || s.Store == nil {
+func (g *AgentGenerationService) UpdateMessageSuggestions(ctx context.Context, messageID uint64, suggestions []string) error {
+	if g.svc == nil || g.svc.Store == nil {
 		return fmt.Errorf("agent service not ready")
 	}
-	return s.Store.UpdateMessageSuggestions(ctx, messageID, suggestions)
+	return g.svc.Store.UpdateMessageSuggestions(ctx, messageID, suggestions)
 }
 
 // returns nil on any error or unparseable output.
-func (s *AgentService) generateSuggestions(ctx context.Context, reply string) []string {
-	if s.Gateway == nil || s.Gateway.LLM == nil || strings.TrimSpace(reply) == "" {
+func (g *AgentGenerationService) generateSuggestions(ctx context.Context, reply string) []string {
+	if g.svc.Gateway == nil || g.svc.Gateway.LLM == nil || strings.TrimSpace(reply) == "" {
 		return nil
 	}
 	r := []rune(reply)
@@ -347,7 +347,7 @@ func (s *AgentService) generateSuggestions(ctx context.Context, reply string) []
 	}
 	ctx2, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
-	out, err := s.Gateway.LLM.Complete(ctx2, msgs)
+	out, err := g.svc.Gateway.LLM.Complete(ctx2, msgs)
 	if err != nil || strings.TrimSpace(out) == "" {
 		return nil
 	}
@@ -379,13 +379,13 @@ func parseSuggestionsJSON(raw string) []string {
 }
 
 // agentReplyTimeout resolves the effective LLM request timeout (runtime config first).
-func (s *AgentService) agentReplyTimeout() time.Duration {
+func (g *AgentGenerationService) agentReplyTimeout() time.Duration {
 	timeout := 90 * time.Second
-	if s.Cfg != nil && s.Cfg.AgentRequestTimeout > 0 {
-		timeout = s.Cfg.AgentRequestTimeout
+	if g.svc.Cfg != nil && g.svc.Cfg.AgentRequestTimeout > 0 {
+		timeout = g.svc.Cfg.AgentRequestTimeout
 	}
-	if s.RC != nil {
-		if v := s.RC.Get("agent_request_timeout", ""); v != "" {
+	if g.svc.RC != nil {
+		if v := g.svc.RC.Get("agent_request_timeout", ""); v != "" {
 			if d, err := time.ParseDuration(v); err == nil && d > 0 {
 				timeout = d
 			}
@@ -395,19 +395,19 @@ func (s *AgentService) agentReplyTimeout() time.Duration {
 }
 
 // agentSystemPrompt swaps in the effective system prompt, returning a restore func.
-func (s *AgentService) agentSystemPrompt(profile *agent.AgentProfile) func() {
-	globalPrompt := s.Store.GetGlobalSystemPrompt()
-	prev := s.Gateway.SystemPrompt
-	s.Gateway.SystemPrompt = globalPrompt + "\n\n" + strings.TrimSpace(profile.SystemPrompt)
-	return func() { s.Gateway.SystemPrompt = prev }
+func (g *AgentGenerationService) agentSystemPrompt(profile *agent.AgentProfile) func() {
+	globalPrompt := g.svc.Store.GetGlobalSystemPrompt()
+	prev := g.svc.Gateway.SystemPrompt
+	g.svc.Gateway.SystemPrompt = globalPrompt + "\n\n" + strings.TrimSpace(profile.SystemPrompt)
+	return func() { g.svc.Gateway.SystemPrompt = prev }
 }
 
 // ResetConversation clears an agent conversation and posts a fresh opening message.
-func (s *AgentService) ResetConversation(ctx context.Context, conv *dm.DmConversation, humanID uint64) (*dm.DmMessage, error) {
-	if s == nil || s.Store == nil || conv == nil || humanID == 0 {
+func (g *AgentGenerationService) ResetConversation(ctx context.Context, conv *dm.DmConversation, humanID uint64) (*dm.DmMessage, error) {
+	if g.svc == nil || g.svc.Store == nil || conv == nil || humanID == 0 {
 		return nil, fmt.Errorf("agent service not ready")
 	}
-	profile, err := s.profileForConversation(conv)
+	profile, err := g.svc.profileForConversation(conv)
 	if err != nil {
 		return nil, err
 	}
@@ -425,12 +425,12 @@ func (s *AgentService) ResetConversation(ctx context.Context, conv *dm.DmConvers
 		Content:        welcome,
 		CreatedAt:      now,
 	}
-	if err := s.Store.ResetConversationTx(conv, &msg, humanID, now, preview); err != nil {
+	if err := g.svc.Store.ResetConversationTx(conv, &msg, humanID, now, preview); err != nil {
 		return nil, err
 	}
-	if s.Gateway != nil {
-		s.Gateway.ClearHistory(ctx, conv.ID)
+	if g.svc.Gateway != nil {
+		g.svc.Gateway.ClearHistory(ctx, conv.ID)
 	}
-	_ = s.Store.ReloadConversation(conv)
+	_ = g.svc.Store.ReloadConversation(conv)
 	return &msg, nil
 }
