@@ -5,6 +5,7 @@ import (
 	"cakecake/internal/pkg/dailyreward"
 	"cakecake/internal/pkg/usercoin"
 	"cakecake/internal/search"
+	"cakecake/internal/service/queryutil"
 	"context"
 	"time"
 
@@ -63,11 +64,7 @@ func (p *ArticleStoreImpl) CreateArticle(ctx context.Context, art *article.Artic
 
 // GetArticleByID loads an article by id.
 func (p *ArticleStoreImpl) GetArticleByID(ctx context.Context, id uint64) (*article.Article, error) {
-	var a article.Article
-	if err := p.db.WithContext(ctx).First(&a, id).Error; err != nil {
-		return nil, err
-	}
-	return &a, nil
+	return queryutil.FirstByID[article.Article](ctx, p.db, id)
 }
 
 // GetPublishedArticle loads an article that is published.

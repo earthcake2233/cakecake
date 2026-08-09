@@ -5,6 +5,7 @@ import (
 	"cakecake/internal/model/extra"
 	"cakecake/internal/model/user"
 	"cakecake/internal/model/video"
+	"cakecake/internal/service/queryutil"
 	"context"
 	"time"
 
@@ -143,11 +144,12 @@ func (p *ViewHistoryStoreImpl) DeleteArticleViewHistoryByID(ctx context.Context,
 
 // ListViewHistory pages a user's video view-history rows.
 func (p *ViewHistoryStoreImpl) ListViewHistory(ctx context.Context, userID uint64, page, pageSize int) ([]extra.VideoViewHistory, int64, error) {
-	var total int64
-	_ = p.db.WithContext(ctx).Model(&extra.VideoViewHistory{}).Where("user_id = ?", userID).Count(&total).Error
-	offset := (page - 1) * pageSize
+	base := func() *gorm.DB {
+		return p.db.WithContext(ctx).Model(&extra.VideoViewHistory{}).Where("user_id = ?", userID)
+	}
 	var list []extra.VideoViewHistory
-	if err := p.db.WithContext(ctx).Where("user_id = ?", userID).Order("updated_at DESC").Offset(offset).Limit(pageSize).Find(&list).Error; err != nil {
+	total, err := queryutil.ListPage(base, page, pageSize, "updated_at DESC", &list)
+	if err != nil {
 		return nil, 0, err
 	}
 	return list, total, nil
@@ -187,50 +189,17 @@ func (p *ViewHistoryStoreImpl) ListArticleViewHistory(ctx context.Context, userI
 
 // BatchFetchVideosByIDs loads video rows by ids for history enrichment.
 func (p *ViewHistoryStoreImpl) BatchFetchVideosByIDs(ctx context.Context, ids []uint64) (map[uint64]video.Video, error) {
-	result := make(map[uint64]video.Video, len(ids))
-	if len(ids) == 0 {
-		return result, nil
-	}
-	var list []video.Video
-	if err := p.db.WithContext(ctx).Where("id IN ?", ids).Find(&list).Error; err != nil {
-		return nil, err
-	}
-	for i := range list {
-		result[list[i].ID] = list[i]
-	}
-	return result, nil
+	return queryutil.FetchByIDs(ctx, p.db, ids, func(v video.Video) uint64 { return v.ID })
 }
 
 // BatchFetchArticlesByIDs loads article rows by ids for history enrichment.
 func (p *ViewHistoryStoreImpl) BatchFetchArticlesByIDs(ctx context.Context, ids []uint64) (map[uint64]article.Article, error) {
-	result := make(map[uint64]article.Article, len(ids))
-	if len(ids) == 0 {
-		return result, nil
-	}
-	var list []article.Article
-	if err := p.db.WithContext(ctx).Where("id IN ?", ids).Find(&list).Error; err != nil {
-		return nil, err
-	}
-	for i := range list {
-		result[list[i].ID] = list[i]
-	}
-	return result, nil
+	return queryutil.FetchByIDs(ctx, p.db, ids, func(a article.Article) uint64 { return a.ID })
 }
 
 // BatchFetchUsersByIDs loads user rows by ids for history enrichment.
 func (p *ViewHistoryStoreImpl) BatchFetchUsersByIDs(ctx context.Context, ids []uint64) (map[uint64]user.User, error) {
-	result := make(map[uint64]user.User, len(ids))
-	if len(ids) == 0 {
-		return result, nil
-	}
-	var list []user.User
-	if err := p.db.WithContext(ctx).Where("id IN ?", ids).Find(&list).Error; err != nil {
-		return nil, err
-	}
-	for i := range list {
-		result[list[i].ID] = list[i]
-	}
-	return result, nil
+	return queryutil.FetchByIDs(ctx, p.db, ids, func(u user.User) uint64 { return u.ID })
 }
 
 // DeleteViewHistoryEntry removes one of the user's view-history rows.

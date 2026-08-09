@@ -6,6 +6,7 @@ import (
 	"cakecake/internal/model/dynamic"
 	"cakecake/internal/model/user"
 	"cakecake/internal/model/video"
+	"cakecake/internal/service/queryutil"
 	"context"
 	"fmt"
 
@@ -252,82 +253,27 @@ func (p *CreatorCommentProviderImpl) ListCreatorVideoComments(ctx context.Contex
 
 // BatchFetchVideos returns a map of video id to Video for the given ids.
 func (p *CreatorCommentProviderImpl) BatchFetchVideos(ctx context.Context, ids []uint64) (map[uint64]video.Video, error) {
-	result := make(map[uint64]video.Video, len(ids))
-	if len(ids) == 0 {
-		return result, nil
-	}
-	var list []video.Video
-	if err := p.db.WithContext(ctx).Where("id IN ?", ids).Find(&list).Error; err != nil {
-		return nil, err
-	}
-	for i := range list {
-		result[list[i].ID] = list[i]
-	}
-	return result, nil
+	return queryutil.FetchByIDs(ctx, p.db, ids, func(v video.Video) uint64 { return v.ID })
 }
 
 // BatchFetchUsers returns a map of user id to User for the given ids.
 func (p *CreatorCommentProviderImpl) BatchFetchUsers(ctx context.Context, ids []uint64) (map[uint64]user.User, error) {
-	result := make(map[uint64]user.User, len(ids))
-	if len(ids) == 0 {
-		return result, nil
-	}
-	var list []user.User
-	if err := p.db.WithContext(ctx).Where("id IN ?", ids).Find(&list).Error; err != nil {
-		return nil, err
-	}
-	for i := range list {
-		result[list[i].ID] = list[i]
-	}
-	return result, nil
+	return queryutil.FetchByIDs(ctx, p.db, ids, func(u user.User) uint64 { return u.ID })
 }
 
 // BatchFetchComments returns a map of comment id to Comment for the given ids.
 func (p *CreatorCommentProviderImpl) BatchFetchComments(ctx context.Context, ids []uint64) (map[uint64]comment.Comment, error) {
-	result := make(map[uint64]comment.Comment, len(ids))
-	if len(ids) == 0 {
-		return result, nil
-	}
-	var list []comment.Comment
-	if err := p.db.WithContext(ctx).Where("id IN ?", ids).Find(&list).Error; err != nil {
-		return nil, err
-	}
-	for i := range list {
-		result[list[i].ID] = list[i]
-	}
-	return result, nil
+	return queryutil.FetchByIDs(ctx, p.db, ids, func(c comment.Comment) uint64 { return c.ID })
 }
 
 // BatchFetchArticleComments returns a map of comment id to ArticleComment for the given ids.
 func (p *CreatorCommentProviderImpl) BatchFetchArticleComments(ctx context.Context, ids []uint64) (map[uint64]comment.ArticleComment, error) {
-	result := make(map[uint64]comment.ArticleComment, len(ids))
-	if len(ids) == 0 {
-		return result, nil
-	}
-	var list []comment.ArticleComment
-	if err := p.db.WithContext(ctx).Where("id IN ?", ids).Find(&list).Error; err != nil {
-		return nil, err
-	}
-	for i := range list {
-		result[list[i].ID] = list[i]
-	}
-	return result, nil
+	return queryutil.FetchByIDs(ctx, p.db, ids, func(c comment.ArticleComment) uint64 { return c.ID })
 }
 
 // BatchFetchDynamicComments returns a map of comment id to DynamicComment for the given ids.
 func (p *CreatorCommentProviderImpl) BatchFetchDynamicComments(ctx context.Context, ids []uint64) (map[uint64]comment.DynamicComment, error) {
-	result := make(map[uint64]comment.DynamicComment, len(ids))
-	if len(ids) == 0 {
-		return result, nil
-	}
-	var list []comment.DynamicComment
-	if err := p.db.WithContext(ctx).Where("id IN ?", ids).Find(&list).Error; err != nil {
-		return nil, err
-	}
-	for i := range list {
-		result[list[i].ID] = list[i]
-	}
-	return result, nil
+	return queryutil.FetchByIDs(ctx, p.db, ids, func(c comment.DynamicComment) uint64 { return c.ID })
 }
 
 // BatchFetchUserLikesForComments returns a map of comment id to liked-by-user status.
@@ -380,113 +326,32 @@ func (p *CreatorCommentProviderImpl) BatchFetchUserLikesForDynamicComments(ctx c
 
 // CommentReplyCounts returns reply count per parent comment id.
 func (p *CreatorCommentProviderImpl) CommentReplyCounts(ctx context.Context, ids []uint64) map[uint64]uint64 {
-	out := make(map[uint64]uint64, len(ids))
-	if len(ids) == 0 {
-		return out
-	}
-	type row struct {
-		ParentID uint64
-		C        int64
-	}
-	var rows []row
-	_ = p.db.WithContext(ctx).Model(&comment.Comment{}).
-		Select("parent_id, COUNT(*) AS c").
-		Where("parent_id IN ?", ids).
-		Group("parent_id").
-		Scan(&rows).Error
-	for _, r := range rows {
-		if r.C > 0 {
-			out[r.ParentID] = uint64(r.C)
-		}
-	}
-	return out
+	return queryutil.CountByParentID[comment.Comment](ctx, p.db, ids)
 }
 
 // ArticleCommentReplyCounts returns reply count per parent article comment id.
 func (p *CreatorCommentProviderImpl) ArticleCommentReplyCounts(ctx context.Context, ids []uint64) map[uint64]uint64 {
-	out := make(map[uint64]uint64, len(ids))
-	if len(ids) == 0 {
-		return out
-	}
-	type row struct {
-		ParentID uint64
-		C        int64
-	}
-	var rows []row
-	_ = p.db.WithContext(ctx).Model(&comment.ArticleComment{}).
-		Select("parent_id, COUNT(*) AS c").
-		Where("parent_id IN ?", ids).
-		Group("parent_id").
-		Scan(&rows).Error
-	for _, r := range rows {
-		if r.C > 0 {
-			out[r.ParentID] = uint64(r.C)
-		}
-	}
-	return out
+	return queryutil.CountByParentID[comment.ArticleComment](ctx, p.db, ids)
 }
 
 // DynamicCommentReplyCounts returns reply count per parent dynamic comment id.
 func (p *CreatorCommentProviderImpl) DynamicCommentReplyCounts(ctx context.Context, ids []uint64) map[uint64]uint64 {
-	out := make(map[uint64]uint64, len(ids))
-	if len(ids) == 0 {
-		return out
-	}
-	type row struct {
-		ParentID uint64
-		C        int64
-	}
-	var rows []row
-	_ = p.db.WithContext(ctx).Model(&comment.DynamicComment{}).
-		Select("parent_id, COUNT(*) AS c").
-		Where("parent_id IN ?", ids).
-		Group("parent_id").
-		Scan(&rows).Error
-	for _, r := range rows {
-		if r.C > 0 {
-			out[r.ParentID] = uint64(r.C)
-		}
-	}
-	return out
+	return queryutil.CountByParentID[comment.DynamicComment](ctx, p.db, ids)
 }
 
 // CheckVideoOwnership checks if a video with the given id belongs to the given user.
 func (p *CreatorCommentProviderImpl) CheckVideoOwnership(ctx context.Context, videoID, userID uint64) (bool, error) {
-	var owned video.Video
-	err := p.db.WithContext(ctx).Where("id = ? AND user_id = ?", videoID, userID).First(&owned).Error
-	if err == gorm.ErrRecordNotFound {
-		return false, nil
-	}
-	if err != nil {
-		return false, err
-	}
-	return true, nil
+	return queryutil.ExistsByOwner[video.Video](ctx, p.db, videoID, userID)
 }
 
 // CheckArticleOwnership checks if an article with the given id belongs to the given user.
 func (p *CreatorCommentProviderImpl) CheckArticleOwnership(ctx context.Context, articleID, userID uint64) (bool, error) {
-	var owned article.Article
-	err := p.db.WithContext(ctx).Where("id = ? AND user_id = ?", articleID, userID).First(&owned).Error
-	if err == gorm.ErrRecordNotFound {
-		return false, nil
-	}
-	if err != nil {
-		return false, err
-	}
-	return true, nil
+	return queryutil.ExistsByOwner[article.Article](ctx, p.db, articleID, userID)
 }
 
 // CheckDynamicOwnership checks if a dynamic with the given id belongs to the given user.
 func (p *CreatorCommentProviderImpl) CheckDynamicOwnership(ctx context.Context, dynamicID, userID uint64) (bool, error) {
-	var owned dynamic.UserDynamic
-	err := p.db.WithContext(ctx).Where("id = ? AND user_id = ?", dynamicID, userID).First(&owned).Error
-	if err == gorm.ErrRecordNotFound {
-		return false, nil
-	}
-	if err != nil {
-		return false, err
-	}
-	return true, nil
+	return queryutil.ExistsByOwner[dynamic.UserDynamic](ctx, p.db, dynamicID, userID)
 }
 
 // CreatorArticleCommentQuery holds filter params for listing article comments.
