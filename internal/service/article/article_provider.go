@@ -49,6 +49,8 @@ type ArticleStoreImpl struct {
 	db *gorm.DB
 }
 
+var _ ArticleStore = (*ArticleStoreImpl)(nil)
+
 // NewArticleStore creates a gorm-backed ArticleStore implementation.
 func NewArticleStore(db *gorm.DB) *ArticleStoreImpl {
 	return &ArticleStoreImpl{db: db}

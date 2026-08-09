@@ -46,6 +46,8 @@ type DmStoreImpl struct {
 	db *gorm.DB
 }
 
+var _ DmStore = (*DmStoreImpl)(nil)
+
 // NewDmStore creates a gorm-backed DmStore implementation.
 func NewDmStore(db *gorm.DB) *DmStoreImpl {
 	return &DmStoreImpl{db: db}

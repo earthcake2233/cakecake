@@ -39,6 +39,8 @@ type SearchStoreImpl struct {
 	db *gorm.DB
 }
 
+var _ SearchStore = (*SearchStoreImpl)(nil)
+
 // NewSearchStore creates a gorm-backed SearchStore implementation.
 func NewSearchStore(db *gorm.DB) *SearchStoreImpl {
 	return &SearchStoreImpl{db: db}

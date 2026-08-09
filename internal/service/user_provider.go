@@ -16,6 +16,8 @@ type UserProviderImpl struct {
 	db *gorm.DB
 }
 
+var _ UserProvider = (*UserProviderImpl)(nil)
+
 // NewUserProvider creates a gorm-backed UserProvider implementation.
 func NewUserProvider(db *gorm.DB) *UserProviderImpl {
 	return &UserProviderImpl{db: db}

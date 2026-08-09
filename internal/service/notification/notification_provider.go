@@ -35,6 +35,8 @@ type NotificationStoreImpl struct {
 	db *gorm.DB
 }
 
+var _ NotificationStore = (*NotificationStoreImpl)(nil)
+
 // NewNotificationStore creates a gorm-backed NotificationStore implementation.
 func NewNotificationStore(db *gorm.DB) *NotificationStoreImpl {
 	return &NotificationStoreImpl{db: db}

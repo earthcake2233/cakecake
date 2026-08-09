@@ -48,6 +48,8 @@ type AgentStoreImpl struct {
 	db *gorm.DB
 }
 
+var _ AgentStore = (*AgentStoreImpl)(nil)
+
 // NewAgentStore creates a gorm-backed AgentStore implementation.
 func NewAgentStore(db *gorm.DB) *AgentStoreImpl {
 	return &AgentStoreImpl{db: db}

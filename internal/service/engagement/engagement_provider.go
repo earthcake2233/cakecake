@@ -41,6 +41,8 @@ type EngagementStoreImpl struct {
 	db *gorm.DB
 }
 
+var _ EngagementStore = (*EngagementStoreImpl)(nil)
+
 // NewEngagementStore creates a gorm-backed EngagementStore implementation.
 func NewEngagementStore(db *gorm.DB) *EngagementStoreImpl {
 	return &EngagementStoreImpl{db: db}
