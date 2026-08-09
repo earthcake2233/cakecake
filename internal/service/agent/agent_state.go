@@ -44,12 +44,12 @@ type pendingAgentReply struct {
 // the human user's ChatHub connection and honors pause/drop generation state.
 // Each LLM call gets its own closure (capturing its own genID), so concurrent
 // users and superseded generations never cross-wire or leak late deltas.
-func (s *AgentService) deltaSender(humanID uint64, genID uint64) func(string) {
+func (g *AgentGenerationService) deltaSender(humanID uint64, genID uint64) func(string) {
 	return func(delta string) {
 		if delta == "" {
 			return
 		}
-		if st := s.generationState(humanID); st != nil {
+		if st := g.svc.generationState(humanID); st != nil {
 			st.mu.Lock()
 			if st.dropped || st.genID != genID {
 				st.mu.Unlock()
@@ -65,8 +65,8 @@ func (s *AgentService) deltaSender(humanID uint64, genID uint64) func(string) {
 			}
 			st.mu.Unlock()
 		}
-		if s.ChatHub != nil || s.Relay != nil {
-			s.publishEvent(context.Background(), humanID, map[string]interface{}{
+		if g.svc.ChatHub != nil || g.svc.Relay != nil {
+			g.svc.publishEvent(context.Background(), humanID, map[string]interface{}{
 				"type": "agent_delta",
 				"body": map[string]interface{}{
 					"content": delta,
@@ -79,51 +79,51 @@ func (s *AgentService) deltaSender(humanID uint64, genID uint64) func(string) {
 // publishEvent delivers an agent event to the user's WebSocket connection.
 // With a relay wired it is published to Redis and every replica fans it out to
 // its local ChatHub; without one it is pushed directly (single-process mode).
-func (s *AgentService) publishEvent(ctx context.Context, uid uint64, payload interface{}) {
-	if s == nil || uid == 0 {
+func (g *AgentGenerationService) publishEvent(ctx context.Context, uid uint64, payload interface{}) {
+	if g.svc == nil || uid == 0 {
 		return
 	}
-	if s.Relay != nil {
-		_ = s.Relay.PublishEvent(ctx, uid, payload)
-	} else if s.ChatHub != nil {
-		s.ChatHub.PushJSON(uid, payload)
+	if g.svc.Relay != nil {
+		_ = g.svc.Relay.PublishEvent(ctx, uid, payload)
+	} else if g.svc.ChatHub != nil {
+		g.svc.ChatHub.PushJSON(uid, payload)
 	}
-	if s.EventHook != nil {
+	if g.svc.EventHook != nil {
 		if m, ok := payload.(map[string]interface{}); ok {
-			s.EventHook(uid, m)
+			g.svc.EventHook(uid, m)
 		}
 	}
 }
 
 // publishControl routes a cross-instance generation control command to the
 // owner (no-op without a relay).
-func (s *AgentService) publishControl(ctx context.Context, uid uint64, payload interface{}) {
-	if s == nil || uid == 0 || s.Relay == nil {
+func (g *AgentGenerationService) publishControl(ctx context.Context, uid uint64, payload interface{}) {
+	if g.svc == nil || uid == 0 || g.svc.Relay == nil {
 		return
 	}
-	_ = s.Relay.PublishControl(ctx, uid, payload)
+	_ = g.svc.Relay.PublishControl(ctx, uid, payload)
 }
 
 // draftText returns the full text streamed so far for the user's generation.
 // It survives endGeneration (copied to the sticky last-draft slot) so a
 // re-prompt fallback can continue from the exact server-side draft.
-func (s *AgentService) draftText(uid uint64) string {
+func (g *AgentGenerationService) draftText(uid uint64) string {
 	if uid == 0 {
 		return ""
 	}
-	if st := s.generationState(uid); st != nil {
+	if st := g.svc.generationState(uid); st != nil {
 		st.mu.Lock()
 		defer st.mu.Unlock()
 		return strings.Join(st.draft, "")
 	}
-	s.draftMu.Lock()
-	defer s.draftMu.Unlock()
-	return s.lastDraft[uid]
+	g.svc.draftMu.Lock()
+	defer g.svc.draftMu.Unlock()
+	return g.svc.lastDraft[uid]
 }
 
 // currentGenID returns the generation id registered for the user, or 0.
-func (s *AgentService) currentGenID(uid uint64) uint64 {
-	st := s.generationState(uid)
+func (g *AgentGenerationService) currentGenID(uid uint64) uint64 {
+	st := g.svc.generationState(uid)
 	if st == nil {
 		return 0
 	}
@@ -132,60 +132,60 @@ func (s *AgentService) currentGenID(uid uint64) uint64 {
 	return st.genID
 }
 
-func (s *AgentService) generationState(uid uint64) *agentGenState {
+func (g *AgentGenerationService) generationState(uid uint64) *agentGenState {
 	if uid == 0 {
 		return nil
 	}
-	s.genMu.Lock()
-	defer s.genMu.Unlock()
-	if s.genStates == nil {
+	g.svc.genMu.Lock()
+	defer g.svc.genMu.Unlock()
+	if g.svc.genStates == nil {
 		return nil
 	}
-	return s.genStates[uid]
+	return g.svc.genStates[uid]
 }
 
 // beginGeneration registers a new generation state before the LLM call and
 // returns its generation id. The cancel func is owned by the state: it is
 // invoked when the generation is superseded, ended, or finished while paused,
 // and supersedes any previous generation state for the user.
-func (s *AgentService) beginGeneration(uid uint64, cancel context.CancelFunc) uint64 {
+func (g *AgentGenerationService) beginGeneration(uid uint64, cancel context.CancelFunc) uint64 {
 	if uid == 0 {
 		return 0
 	}
-	s.genMu.Lock()
-	if s.genStates == nil {
-		s.genStates = make(map[uint64]*agentGenState)
+	g.svc.genMu.Lock()
+	if g.svc.genStates == nil {
+		g.svc.genStates = make(map[uint64]*agentGenState)
 	}
-	s.genSeq++
-	old := s.genStates[uid]
-	s.genStates[uid] = &agentGenState{genID: s.genSeq, cancel: cancel, running: true}
-	s.genMu.Unlock()
+	g.svc.genSeq++
+	old := g.svc.genStates[uid]
+	g.svc.genStates[uid] = &agentGenState{genID: g.svc.genSeq, cancel: cancel, running: true}
+	g.svc.genMu.Unlock()
 	if old != nil {
 		if oldCancel := old.finish(); oldCancel != nil {
 			oldCancel()
 		}
 	}
-	s.clearDraft(uid)
-	return s.genSeq
+	g.svc.clearDraft(uid)
+	return g.svc.genSeq
 }
 
 // endGeneration removes the generation state only if it still belongs to the
 // given generation id (a finished goroutine can never clear a newer state).
 // The attached cancel is invoked so request resources are released.
-func (s *AgentService) endGeneration(uid uint64, genID uint64) {
+func (g *AgentGenerationService) endGeneration(uid uint64, genID uint64) {
 	if uid == 0 {
 		return
 	}
-	s.genMu.Lock()
-	st, ok := s.genStates[uid]
+	g.svc.genMu.Lock()
+	st, ok := g.svc.genStates[uid]
 	if !ok || st.genID != genID {
-		s.genMu.Unlock()
+		g.svc.genMu.Unlock()
 		return
 	}
-	delete(s.genStates, uid)
-	s.genMu.Unlock()
-	s.clearSnapshot(uid, genID)
-	s.saveDraft(uid, st)
+	delete(g.svc.genStates, uid)
+	g.svc.genMu.Unlock()
+	g.svc.clearSnapshot(uid, genID)
+	g.svc.saveDraft(uid, st)
 	if cancel := st.finish(); cancel != nil {
 		cancel()
 	}
@@ -221,7 +221,7 @@ func (st *agentGenState) ensureCond() {
 // saveDraft copies the generation's accumulated draft into the sticky
 // last-draft slot so a re-prompt fallback can continue from it after the
 // generation state is gone.
-func (s *AgentService) saveDraft(uid uint64, st *agentGenState) {
+func (g *AgentGenerationService) saveDraft(uid uint64, st *agentGenState) {
 	if st == nil {
 		return
 	}
@@ -231,36 +231,36 @@ func (s *AgentService) saveDraft(uid uint64, st *agentGenState) {
 	if draft == "" {
 		return
 	}
-	s.draftMu.Lock()
-	defer s.draftMu.Unlock()
-	if s.lastDraft == nil {
-		s.lastDraft = make(map[uint64]string)
+	g.svc.draftMu.Lock()
+	defer g.svc.draftMu.Unlock()
+	if g.svc.lastDraft == nil {
+		g.svc.lastDraft = make(map[uint64]string)
 	}
-	s.lastDraft[uid] = draft
+	g.svc.lastDraft[uid] = draft
 }
 
 // clearDraft removes the sticky last-draft slot for the user (a new generation
 // or a supersede invalidates any previous draft).
-func (s *AgentService) clearDraft(uid uint64) {
-	s.draftMu.Lock()
-	delete(s.lastDraft, uid)
-	s.draftMu.Unlock()
+func (g *AgentGenerationService) clearDraft(uid uint64) {
+	g.svc.draftMu.Lock()
+	delete(g.svc.lastDraft, uid)
+	g.svc.draftMu.Unlock()
 }
 
 // supersedeGeneration cancels and drops the user's current generation,
 // discarding its buffered deltas and any paused-completed reply that has not
 // been persisted yet. The dropped state stays registered so late deltas from
 // the old stream are still recognized and discarded.
-func (s *AgentService) supersedeGeneration(uid uint64) {
+func (g *AgentGenerationService) supersedeGeneration(uid uint64) {
 	if uid == 0 {
 		return
 	}
-	s.genMu.Lock()
-	if s.genStates == nil {
-		s.genStates = make(map[uint64]*agentGenState)
+	g.svc.genMu.Lock()
+	if g.svc.genStates == nil {
+		g.svc.genStates = make(map[uint64]*agentGenState)
 	}
-	st := s.genStates[uid]
-	s.genMu.Unlock()
+	st := g.svc.genStates[uid]
+	g.svc.genMu.Unlock()
 	if st == nil {
 		return
 	}
@@ -277,30 +277,30 @@ func (s *AgentService) supersedeGeneration(uid uint64) {
 	cancel := st.cancel
 	st.cancel = nil
 	st.mu.Unlock()
-	s.clearDraft(uid)
+	g.svc.clearDraft(uid)
 	if cancel != nil {
 		cancel()
 	}
-	s.clearSnapshot(uid, genID)
+	g.svc.clearSnapshot(uid, genID)
 }
 
 // dropCurrentGeneration marks the user's current generation as dropped (its
 // buffered/live deltas are discarded). The state stays registered so late
 // deltas from the old stream are still recognized and dropped.
-func (s *AgentService) dropCurrentGeneration(uid uint64) {
+func (g *AgentGenerationService) dropCurrentGeneration(uid uint64) {
 	if uid == 0 {
 		return
 	}
-	s.genMu.Lock()
-	if s.genStates == nil {
-		s.genStates = make(map[uint64]*agentGenState)
+	g.svc.genMu.Lock()
+	if g.svc.genStates == nil {
+		g.svc.genStates = make(map[uint64]*agentGenState)
 	}
-	st := s.genStates[uid]
+	st := g.svc.genStates[uid]
 	if st == nil {
 		st = &agentGenState{}
-		s.genStates[uid] = st
+		g.svc.genStates[uid] = st
 	}
-	s.genMu.Unlock()
+	g.svc.genMu.Unlock()
 	st.mu.Lock()
 	st.dropped = true
 	if st.cond != nil {
@@ -312,11 +312,11 @@ func (s *AgentService) dropCurrentGeneration(uid uint64) {
 // hasRunningGeneration reports whether a generation goroutine is still active
 // for the user (used by resume to decide whether buffered deltas are enough or
 // a completed reply needs to be persisted).
-func (s *AgentService) hasRunningGeneration(uid uint64) bool {
+func (g *AgentGenerationService) hasRunningGeneration(uid uint64) bool {
 	if uid == 0 {
 		return false
 	}
-	st := s.generationState(uid)
+	st := g.svc.generationState(uid)
 	if st == nil {
 		return false
 	}
@@ -328,13 +328,13 @@ func (s *AgentService) hasRunningGeneration(uid uint64) bool {
 // storePendingReply records a reply that completed while the user had paused
 // the stream. The generation is marked finished (its cancel is released) but
 // its state stays registered so a resume can flush buffered deltas first.
-func (s *AgentService) storePendingReply(uid uint64, genID uint64, conv *dm.DmConversation, result *GenerateReplyResult) {
+func (g *AgentGenerationService) storePendingReply(uid uint64, genID uint64, conv *dm.DmConversation, result *GenerateReplyResult) {
 	if uid == 0 || genID == 0 || conv == nil || result == nil {
 		return
 	}
-	s.genMu.Lock()
-	st := s.genStates[uid]
-	s.genMu.Unlock()
+	g.svc.genMu.Lock()
+	st := g.svc.genStates[uid]
+	g.svc.genMu.Unlock()
 	if st == nil || st.genID != genID {
 		return
 	}
@@ -345,7 +345,7 @@ func (s *AgentService) storePendingReply(uid uint64, genID uint64, conv *dm.DmCo
 	cancel := st.cancel
 	st.cancel = nil
 	st.mu.Unlock()
-	s.snapshotPending(uid, curGenID, conv.ID, result)
+	g.svc.snapshotPending(uid, curGenID, conv.ID, result)
 	if cancel != nil {
 		cancel()
 	}
@@ -353,13 +353,13 @@ func (s *AgentService) storePendingReply(uid uint64, genID uint64, conv *dm.DmCo
 
 // takePendingReply consumes the user's paused-completed reply, returning the
 // conversation, result and generation id. The second call returns false.
-func (s *AgentService) takePendingReply(uid uint64) (*dm.DmConversation, *GenerateReplyResult, uint64, bool) {
+func (g *AgentGenerationService) takePendingReply(uid uint64) (*dm.DmConversation, *GenerateReplyResult, uint64, bool) {
 	if uid == 0 {
 		return nil, nil, 0, false
 	}
-	s.genMu.Lock()
-	st := s.genStates[uid]
-	s.genMu.Unlock()
+	g.svc.genMu.Lock()
+	st := g.svc.genStates[uid]
+	g.svc.genMu.Unlock()
 	if st == nil {
 		return nil, nil, 0, false
 	}
@@ -378,52 +378,52 @@ func (s *AgentService) takePendingReply(uid uint64) (*dm.DmConversation, *Genera
 // PauseGeneration pauses the user's generation. A generation owned locally is
 // paused in place; when it runs on another replica, the control command is
 // routed to the owner via Redis.
-func (s *AgentService) PauseGeneration(uid uint64) {
-	if s == nil || uid == 0 {
+func (g *AgentGenerationService) PauseGeneration(uid uint64) {
+	if g.svc == nil || uid == 0 {
 		return
 	}
-	if s.hasRunningGeneration(uid) {
-		s.pauseGeneration(uid)
+	if g.svc.hasRunningGeneration(uid) {
+		g.svc.pauseGeneration(uid)
 		return
 	}
-	s.publishControl(context.Background(), uid, map[string]interface{}{"type": "pause", "from": s.InstanceID})
+	g.svc.publishControl(context.Background(), uid, map[string]interface{}{"type": "pause", "from": g.svc.InstanceID})
 }
 
 // pauseGeneration stops pushing streamed deltas; they are buffered so a later
 // resumeGeneration can flush them verbatim (byte-level continuation).
-func (s *AgentService) pauseGeneration(uid uint64) {
+func (g *AgentGenerationService) pauseGeneration(uid uint64) {
 	if uid == 0 {
 		return
 	}
-	s.genMu.Lock()
-	if s.genStates == nil {
-		s.genStates = make(map[uint64]*agentGenState)
+	g.svc.genMu.Lock()
+	if g.svc.genStates == nil {
+		g.svc.genStates = make(map[uint64]*agentGenState)
 	}
-	st := s.genStates[uid]
+	st := g.svc.genStates[uid]
 	if st == nil {
 		st = &agentGenState{}
-		s.genStates[uid] = st
+		g.svc.genStates[uid] = st
 	}
-	s.genMu.Unlock()
+	g.svc.genMu.Unlock()
 	st.mu.Lock()
 	st.paused = true
 	st.pauseSeq++
 	genID := st.genID
 	pauseSeq := st.pauseSeq
 	st.mu.Unlock()
-	s.updateSnapshotPaused(uid, genID, true, pauseSeq)
+	g.svc.updateSnapshotPaused(uid, genID, true, pauseSeq)
 }
 
 // resumeGeneration un-pauses and flushes the buffered deltas in order.
-func (s *AgentService) resumeGeneration(uid uint64) {
+func (g *AgentGenerationService) resumeGeneration(uid uint64) {
 	if uid == 0 {
 		return
 	}
-	if s.ChatHub == nil && s.Relay == nil {
+	if g.svc.ChatHub == nil && g.svc.Relay == nil {
 		return
 	}
 	for {
-		st := s.generationState(uid)
+		st := g.svc.generationState(uid)
 		if st == nil {
 			return
 		}
@@ -471,7 +471,7 @@ func (s *AgentService) resumeGeneration(uid uint64) {
 				return
 			}
 			st.mu.Unlock()
-			s.publishEvent(context.Background(), uid, map[string]interface{}{
+			g.svc.publishEvent(context.Background(), uid, map[string]interface{}{
 				"type": "agent_delta",
 				"body": map[string]interface{}{"content": d},
 			})
@@ -507,14 +507,14 @@ func (s *AgentService) resumeGeneration(uid uint64) {
 		}
 		st.paused = false
 		st.mu.Unlock()
-		s.updateSnapshotPaused(uid, st.genID, false, seq)
+		g.svc.updateSnapshotPaused(uid, st.genID, false, seq)
 		return
 	}
 }
 
 // isGenerationPaused reports whether the user's generation is paused.
-func (s *AgentService) isGenerationPaused(uid uint64) bool {
-	st := s.generationState(uid)
+func (g *AgentGenerationService) isGenerationPaused(uid uint64) bool {
+	st := g.svc.generationState(uid)
 	if st == nil {
 		return false
 	}
@@ -524,12 +524,12 @@ func (s *AgentService) isGenerationPaused(uid uint64) bool {
 }
 
 // clearGenerationState removes the user's pause/buffer state.
-func (s *AgentService) clearGenerationState(uid uint64) {
+func (g *AgentGenerationService) clearGenerationState(uid uint64) {
 	if uid == 0 {
 		return
 	}
-	s.genMu.Lock()
-	defer s.genMu.Unlock()
-	delete(s.genStates, uid)
-	s.clearDraft(uid)
+	g.svc.genMu.Lock()
+	defer g.svc.genMu.Unlock()
+	delete(g.svc.genStates, uid)
+	g.svc.clearDraft(uid)
 }

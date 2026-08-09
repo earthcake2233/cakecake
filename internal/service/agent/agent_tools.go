@@ -16,13 +16,13 @@ import (
 )
 
 // enabledTools builds the tool enabled map from RuntimeConfig.
-func (s *AgentService) enabledTools() map[string]bool {
+func (g *AgentGenerationService) enabledTools() map[string]bool {
 	m := make(map[string]bool)
 	for _, name := range toolkit.AllToolNames() {
 		enabled := true
-		if s.RC != nil {
+		if g.svc.RC != nil {
 			key := "tool_" + name + "_enabled"
-			enabled = s.RC.GetBool(key, true)
+			enabled = g.svc.RC.GetBool(key, true)
 		}
 		m[name] = enabled
 	}
@@ -38,14 +38,14 @@ func generateTraceID() string {
 	return hex.EncodeToString(b)
 }
 
-func (s *AgentService) setupToolCallbacks(traceID string, humanID uint64) {
-	if s.Gateway == nil || s.ChatHub == nil {
+func (g *AgentGenerationService) setupToolCallbacks(traceID string, humanID uint64) {
+	if g.svc.Gateway == nil || g.svc.ChatHub == nil {
 		return
 	}
-	s.Gateway.OnToolCallStart = func(tid, spanID, parentSpanID, toolName string, argsJSON json.RawMessage) {
+	g.svc.Gateway.OnToolCallStart = func(tid, spanID, parentSpanID, toolName string, argsJSON json.RawMessage) {
 		var args interface{}
-		if err := json.Unmarshal(argsJSON, &args); err != nil && s.Log != nil {
-			s.Log.Warn("agent: parse tool call args failed", zap.String("tool", toolName), zap.Error(err))
+		if err := json.Unmarshal(argsJSON, &args); err != nil && g.svc.Log != nil {
+			g.svc.Log.Warn("agent: parse tool call args failed", zap.String("tool", toolName), zap.Error(err))
 		}
 		payload := map[string]interface{}{
 			"trace_id":       tid,
@@ -55,12 +55,12 @@ func (s *AgentService) setupToolCallbacks(traceID string, humanID uint64) {
 			"arguments":      args,
 			"started_at":     time.Now().Format(time.RFC3339),
 		}
-		s.ChatHub.PushJSON(humanID, map[string]interface{}{
+		g.svc.ChatHub.PushJSON(humanID, map[string]interface{}{
 			"type": "tool_call_start",
 			"body": payload,
 		})
 	}
-	s.Gateway.OnToolCallEnd = func(tid, spanID, toolName string, durationMs int64, resultSummary string) {
+	g.svc.Gateway.OnToolCallEnd = func(tid, spanID, toolName string, durationMs int64, resultSummary string) {
 		payload := map[string]interface{}{
 			"trace_id":       tid,
 			"span_id":        spanID,
@@ -68,30 +68,30 @@ func (s *AgentService) setupToolCallbacks(traceID string, humanID uint64) {
 			"duration_ms":    durationMs,
 			"result_summary": resultSummary,
 		}
-		s.ChatHub.PushJSON(humanID, map[string]interface{}{
+		g.svc.ChatHub.PushJSON(humanID, map[string]interface{}{
 			"type": "tool_call_end",
 			"body": payload,
 		})
 	}
-	s.Gateway.OnToolResultData = func(tid, spanID, toolName string, items json.RawMessage) {
+	g.svc.Gateway.OnToolResultData = func(tid, spanID, toolName string, items json.RawMessage) {
 		payload := map[string]interface{}{
 			"trace_id":  tid,
 			"span_id":   spanID,
 			"tool_name": toolName,
 			"items":     items,
 		}
-		s.ChatHub.PushJSON(humanID, map[string]interface{}{
+		g.svc.ChatHub.PushJSON(humanID, map[string]interface{}{
 			"type": "tool_result_data",
 			"body": payload,
 		})
 	}
 }
 
-func (s *AgentService) clearToolCallbacks() {
-	if s.Gateway != nil {
-		s.Gateway.OnToolCallStart = nil
-		s.Gateway.OnToolCallEnd = nil
-		s.Gateway.OnToolResultData = nil
+func (g *AgentGenerationService) clearToolCallbacks() {
+	if g.svc.Gateway != nil {
+		g.svc.Gateway.OnToolCallStart = nil
+		g.svc.Gateway.OnToolCallEnd = nil
+		g.svc.Gateway.OnToolResultData = nil
 	}
 }
 

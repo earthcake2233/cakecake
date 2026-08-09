@@ -8,9 +8,6 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
-	"go.uber.org/zap"
-
-	"cakecake/internal/logger"
 )
 
 const defaultSystemPrompt = `你是 cakecake 站内 AI 助手。帮助用户了解本站功能。
@@ -67,40 +64,6 @@ func chatMsgToEntry(m ChatMessage) historyEntry {
 
 func entryToChatMsg(e historyEntry) ChatMessage {
 	return ChatMessage(e)
-}
-
-func (g *Gateway) historyKey(conversationID uint64) string {
-	p := g.HistoryPrefix
-	if p == "" {
-		p = "mb:agent:hist:"
-	}
-	return fmt.Sprintf("%s%d", p, conversationID)
-}
-
-// PersistHistory stores full message history for a conversation (used by
-// callers that assemble history outside the standard turn methods).
-func (g *Gateway) PersistHistory(ctx context.Context, conversationID uint64, msgs []ChatMessage) {
-	g.persistHistory(ctx, conversationID, msgs)
-}
-
-// BuildMessages loads ALL history (including tool messages) and appends user turn.
-func (g *Gateway) BuildMessages(ctx context.Context, conversationID uint64, userText string) ([]ChatMessage, error) {
-	msgs := []ChatMessage{{Role: "system", Content: g.systemPrompt()}}
-	if g.Redis != nil && conversationID > 0 {
-		raw, err := g.Redis.Get(ctx, g.historyKey(conversationID)).Bytes()
-		if err == nil && len(raw) > 0 {
-			var hist []historyEntry
-			if json.Unmarshal(raw, &hist) == nil {
-				for _, h := range hist {
-					if h.Role == "user" || h.Role == "assistant" || h.Role == "tool" {
-						msgs = append(msgs, entryToChatMsg(h))
-					}
-				}
-			}
-		}
-	}
-	msgs = append(msgs, ChatMessage{Role: "user", Content: userText})
-	return msgs, nil
 }
 
 // CompleteUserTurn is the simple text-only version (no tools).
@@ -299,117 +262,6 @@ func (g *Gateway) CompleteUserTurnWithToolsStream(
 	return "抱歉，操作超时，请稍后重试或简化问题。", nil
 }
 
-func (g *Gateway) executeToolCalls(ctx context.Context, calls []ToolCall, traceID string, round int) []ChatMessage {
-	type result struct {
-		msg ChatMessage
-	}
-	ch := make(chan result, len(calls))
-
-	for i, call := range calls {
-		go func(idx int, tc ToolCall) {
-			spanID := fmt.Sprintf("%s-r%d-t%d", traceID, round, idx)
-			parentSpanID := traceID
-
-			if g.OnToolCallStart != nil {
-				var raw json.RawMessage
-				if err := json.Unmarshal([]byte(tc.Function.Arguments), &raw); err != nil && logger.L != nil {
-					logger.L.Warn("aigateway: parse tool call args failed", zap.String("tool", tc.Function.Name), zap.Error(err))
-				}
-				g.OnToolCallStart(traceID, spanID, parentSpanID, tc.Function.Name, raw)
-			}
-
-			start := time.Now()
-			var res string
-			if g.ToolExec != nil {
-				r, err := g.ToolExec.Execute(ctx, tc.Function.Name, json.RawMessage(tc.Function.Arguments))
-				if err != nil {
-					res = fmt.Sprintf(`{"error": "%s"}`, err.Error())
-				} else {
-					res = r
-				}
-			} else {
-				res = `{"error": "tool executor not available"}`
-			}
-			duration := time.Since(start).Milliseconds()
-
-			if g.OnToolCallEnd != nil {
-				summary := res
-				if len(summary) > 80 {
-					summary = summary[:80] + "..."
-				}
-				g.OnToolCallEnd(traceID, spanID, tc.Function.Name, duration, summary)
-			}
-
-			if g.OnToolResultData != nil && res != "" {
-				var parsed map[string]json.RawMessage
-				if json.Unmarshal([]byte(res), &parsed) == nil {
-					if items, ok := parsed["items"]; ok && len(items) > 0 && items[0] == '[' {
-						g.OnToolResultData(traceID, spanID, tc.Function.Name, items)
-					}
-				}
-			}
-
-			ch <- result{
-				msg: ChatMessage{
-					Role:       "tool",
-					ToolCallID: tc.ID,
-					Content:    res,
-				},
-			}
-		}(i, call)
-	}
-
-	msgs := make([]ChatMessage, 0, len(calls))
-	for i := 0; i < len(calls); i++ {
-		r := <-ch
-		msgs = append(msgs, r.msg)
-	}
-	return msgs
-}
-
-// persistHistory stores the full message sequence to Redis.
-func (g *Gateway) persistHistory(ctx context.Context, conversationID uint64, msgs []ChatMessage) {
-	if g.Redis == nil || conversationID == 0 {
-		return
-	}
-	hist := make([]historyEntry, 0, len(msgs))
-	for _, m := range msgs {
-		if m.Role == "system" {
-			continue
-		}
-		hist = append(hist, chatMsgToEntry(m))
-	}
-	max := g.MaxHistory
-	if max <= 0 {
-		max = 20
-	}
-	// Estimate: each "turn" = user msg + assistant + tool calls + tool results
-	// Keep roughly max*8 entries to accommodate tool messages
-	cap := max * 8
-	if len(hist) > cap {
-		hist = hist[len(hist)-cap:]
-	}
-	if b, e := json.Marshal(hist); e == nil {
-		ttl := g.historyTTL()
-		_ = g.Redis.Set(ctx, g.historyKey(conversationID), b, ttl).Err()
-	}
-}
-
-// ClearHistory removes short-term LLM memory for a conversation.
-func (g *Gateway) ClearHistory(ctx context.Context, conversationID uint64) {
-	if g == nil || g.Redis == nil || conversationID == 0 {
-		return
-	}
-	_ = g.Redis.Del(ctx, g.historyKey(conversationID)).Err()
-}
-
-func (g *Gateway) historyTTL() time.Duration {
-	if g != nil && g.HistoryTTL > 0 {
-		return g.HistoryTTL
-	}
-	return 30 * 24 * time.Hour
-}
-
 func (g *Gateway) systemPrompt() string {
 	if g != nil && strings.TrimSpace(g.SystemPrompt) != "" {
 		return g.SystemPrompt
@@ -423,4 +275,34 @@ func (m ChatMessage) FinishReason() string {
 		return "tool_calls"
 	}
 	return "stop"
+}
+func (g *Gateway) historyKey(conversationID uint64) string {
+	return (&HistoryStore{gw: g}).historyKey(conversationID)
+}
+
+// PersistHistory stores full message history for a conversation.
+func (g *Gateway) PersistHistory(ctx context.Context, conversationID uint64, msgs []ChatMessage) {
+	(&HistoryStore{gw: g}).PersistHistory(ctx, conversationID, msgs)
+}
+
+// BuildMessages loads ALL history (including tool messages) and appends user turn.
+func (g *Gateway) BuildMessages(ctx context.Context, conversationID uint64, userText string) ([]ChatMessage, error) {
+	return (&HistoryStore{gw: g}).BuildMessages(ctx, conversationID, userText)
+}
+
+func (g *Gateway) executeToolCalls(ctx context.Context, calls []ToolCall, traceID string, round int) []ChatMessage {
+	return (&ToolRunner{gw: g}).executeToolCalls(ctx, calls, traceID, round)
+}
+
+func (g *Gateway) persistHistory(ctx context.Context, conversationID uint64, msgs []ChatMessage) {
+	(&HistoryStore{gw: g}).persistHistory(ctx, conversationID, msgs)
+}
+
+// ClearHistory removes short-term LLM memory for a conversation.
+func (g *Gateway) ClearHistory(ctx context.Context, conversationID uint64) {
+	(&HistoryStore{gw: g}).ClearHistory(ctx, conversationID)
+}
+
+func (g *Gateway) historyTTL() time.Duration {
+	return (&HistoryStore{gw: g}).historyTTL()
 }

@@ -91,6 +91,11 @@ jobs:
             exit 1
           fi
 
+      - name: Check dependency directions
+        # Layering guard: handler->data, service->handler, client->gorm and
+        # model->service/data are forbidden (see scripts/check_deps.sh).
+        run: bash scripts/check_deps.sh
+
       - name: Run Go tests with coverage
         env:
           RABBITMQ_URL: amqp://guest:guest@localhost:5672/
