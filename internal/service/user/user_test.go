@@ -2,6 +2,7 @@ package user
 
 import (
 	"cakecake/internal/model/user"
+	"cakecake/internal/pkg/dbtx"
 	"cakecake/internal/service"
 	"cakecake/internal/service/servicetest"
 	"context"
@@ -126,7 +127,7 @@ func TestUserService_DeletionAndPrivacy(t *testing.T) {
 
 	// FinalizeDeletion commits the callback transaction.
 	committed := false
-	require.NoError(t, s.FinalizeDeletion(ctx, 1, func(tx *gorm.DB) error {
+	require.NoError(t, s.FinalizeDeletion(ctx, 1, func(tx dbtx.Tx) error {
 		committed = true
 		return nil
 	}))

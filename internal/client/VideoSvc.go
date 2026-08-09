@@ -4,15 +4,15 @@ package client
 
 import (
 	video "cakecake/internal/model/video"
+	dbtx "cakecake/internal/pkg/dbtx"
 	servicevideo "cakecake/internal/service/video"
 	context "context"
-	gorm "gorm.io/gorm"
 )
 
 // VideoSvc is the client-side contract for cakecake/internal/service/video.VideoService.
 // Local implementation: servicevideo.VideoService (see the assertion below). A future gRPC client must implement this interface.
 type VideoSvc interface {
-	AdminDeleteVideoCascade(ctx context.Context, id uint64, fn func(tx *gorm.DB) error) error
+	AdminDeleteVideoCascade(ctx context.Context, id uint64, fn func(tx dbtx.Tx) error) error
 	AdminListVideos(ctx context.Context, statuses []string, titleQ string, page int, pageSize int) (*servicevideo.AdminListVideosResult, error)
 	AdminUpdateVideo(ctx context.Context, id uint64, updates map[string]interface{}) error
 	CountMyVideosByStatus(uid uint64) map[string]int64
@@ -20,7 +20,7 @@ type VideoSvc interface {
 	CountZoneVideos(zoneParent string) int64
 	CreateVideoRecord(ctx context.Context, v *video.Video) error
 	DeleteVideoByID(ctx context.Context, id uint64) error
-	DeleteVideoWithCascade(ctx context.Context, id uint64, fn func(tx *gorm.DB) error) error
+	DeleteVideoWithCascade(ctx context.Context, id uint64, fn func(tx dbtx.Tx) error) error
 	EnqueueTranscode(ctx context.Context, videoID uint64, rawPath string, coverPath string) error
 	FFprobeExe() string
 	GetPublishedVideo(ctx context.Context, id uint64) (*video.Video, error)

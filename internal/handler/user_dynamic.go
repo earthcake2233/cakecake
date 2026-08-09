@@ -14,10 +14,11 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"cakecake/internal/pkg/dbtx"
+
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
-	"gorm.io/gorm"
 
 	"cakecake/internal/errcode"
 	"cakecake/internal/middleware"
@@ -443,7 +444,7 @@ func (a *API) ToggleDynamicLike(c *gin.Context) {
 	}
 }
 
-func deleteUserDynamicCascade(tx *gorm.DB, id uint64) error {
+func deleteUserDynamicCascade(tx dbtx.Tx, id uint64) error {
 	var cids []uint64
 	_ = tx.Model(&comment.DynamicComment{}).Where("dynamic_id = ?", id).Pluck("id", &cids).Error
 	if len(cids) > 0 {

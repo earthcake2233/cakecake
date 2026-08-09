@@ -9,9 +9,10 @@ import (
 	"strings"
 	"time"
 
+	"cakecake/internal/pkg/dbtx"
+
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
-	"gorm.io/gorm"
 
 	"cakecake/internal/errcode"
 	"cakecake/internal/middleware"
@@ -263,7 +264,7 @@ func (a *API) AdminDeleteArticle(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	if err := a.ArticleSvc.AdminDeleteArticleCascade(c.Request.Context(), id, func(tx *gorm.DB) error {
+	if err := a.ArticleSvc.AdminDeleteArticleCascade(c.Request.Context(), id, func(tx dbtx.Tx) error {
 		return deleteArticleCascade(tx, id)
 	}); err != nil {
 		a.Log.Error("admin delete article", zap.Error(err), zap.Uint64("article_id", id))

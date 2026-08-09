@@ -4,15 +4,15 @@ package client
 
 import (
 	article "cakecake/internal/model/article"
+	dbtx "cakecake/internal/pkg/dbtx"
 	servicearticle "cakecake/internal/service/article"
 	context "context"
-	gorm "gorm.io/gorm"
 )
 
 // ArticleSvc is the client-side contract for cakecake/internal/service/article.ArticleService.
 // Local implementation: servicearticle.ArticleService (see the assertion below). A future gRPC client must implement this interface.
 type ArticleSvc interface {
-	AdminDeleteArticleCascade(ctx context.Context, id uint64, fn func(tx *gorm.DB) error) error
+	AdminDeleteArticleCascade(ctx context.Context, id uint64, fn func(tx dbtx.Tx) error) error
 	AdminListArticles(ctx context.Context, statuses []string, titleQ string, page int, pageSize int) (*servicearticle.AdminListArticlesResult, error)
 	AdminUpdateArticle(ctx context.Context, id uint64, updates map[string]interface{}) error
 	BatchArticleEngagementByViewer(ctx context.Context, viewerID uint64, articleIDs []uint64) map[uint64]*servicearticle.ArticleEngagement

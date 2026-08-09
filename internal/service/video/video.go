@@ -2,6 +2,7 @@ package video
 
 import (
 	"cakecake/internal/model/video"
+	"cakecake/internal/pkg/dbtx"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -126,12 +127,12 @@ func (s *VideoService) UpdateVideo(ctx context.Context, v *video.Video, updates 
 }
 
 // DeleteVideoWithCascade removes a video and its related data in a transaction.
-func (s *VideoService) DeleteVideoWithCascade(ctx context.Context, id uint64, fn func(tx *gorm.DB) error) error {
+func (s *VideoService) DeleteVideoWithCascade(ctx context.Context, id uint64, fn func(tx dbtx.Tx) error) error {
 	if fn != nil {
 		return s.videos.WithTx(ctx, fn)
 	}
 	// default: just delete the video record inside a transaction
-	return s.videos.WithTx(ctx, func(tx *gorm.DB) error {
+	return s.videos.WithTx(ctx, func(tx dbtx.Tx) error {
 		return tx.Delete(&video.Video{}, id).Error
 	})
 }
@@ -218,7 +219,7 @@ func (s *VideoService) AdminUpdateVideo(ctx context.Context, id uint64, updates 
 }
 
 // AdminDeleteVideoCascade deletes a video and cascades to related data within a transaction.
-func (s *VideoService) AdminDeleteVideoCascade(ctx context.Context, id uint64, fn func(tx *gorm.DB) error) error {
+func (s *VideoService) AdminDeleteVideoCascade(ctx context.Context, id uint64, fn func(tx dbtx.Tx) error) error {
 	return s.videos.AdminDeleteVideoCascade(ctx, id, fn)
 }
 

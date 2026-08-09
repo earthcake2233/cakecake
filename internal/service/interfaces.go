@@ -2,10 +2,9 @@ package service
 
 import (
 	"cakecake/internal/model/user"
+	"cakecake/internal/pkg/dbtx"
 	"context"
 	"time"
-
-	"gorm.io/gorm"
 )
 
 // Domain interfaces for Phase 1 microservice preparation
@@ -52,7 +51,7 @@ type UserProvider interface {
 	// MarkLogin records a daily login for a user.
 	MarkLogin(ctx context.Context, userID uint64) error
 	// WithTx runs fn inside a database transaction (Phase 1 monolith seam).
-	WithTx(ctx context.Context, fn func(tx *gorm.DB) error) error
+	WithTx(ctx context.Context, fn func(tx dbtx.Tx) error) error
 }
 
 // UserInfo is the cross-domain user data.

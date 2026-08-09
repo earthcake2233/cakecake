@@ -4,9 +4,9 @@ package client
 
 import (
 	user "cakecake/internal/model/user"
+	dbtx "cakecake/internal/pkg/dbtx"
 	serviceuser "cakecake/internal/service/user"
 	context "context"
-	gorm "gorm.io/gorm"
 	time "time"
 )
 
@@ -15,7 +15,7 @@ import (
 type UserSvc interface {
 	BatchGetUsers(ctx context.Context, userIDs []uint64) map[uint64]*user.User
 	EnsureCakeID(ctx context.Context, u *user.User) error
-	FinalizeDeletion(ctx context.Context, uid uint64, fn func(tx *gorm.DB) error) error
+	FinalizeDeletion(ctx context.Context, uid uint64, fn func(tx dbtx.Tx) error) error
 	GetMe(ctx context.Context, userID uint64) (*serviceuser.UserProfile, error)
 	GetPasswordHash(ctx context.Context, userID uint64) (string, error)
 	GetPrivacySettings(ctx context.Context, userID uint64) (*user.User, error)

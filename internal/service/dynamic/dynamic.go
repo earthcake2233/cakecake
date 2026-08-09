@@ -3,6 +3,7 @@ package dynamic
 import (
 	"cakecake/internal/model/comment"
 	"cakecake/internal/model/dynamic"
+	"cakecake/internal/pkg/dbtx"
 	"context"
 
 	"github.com/redis/go-redis/v9"
@@ -36,7 +37,7 @@ type DynamicStore interface {
 	ListUserDynamicsCursor(ctx context.Context, userID uint64, cursorID uint64, limit int) ([]dynamic.UserDynamic, error)
 	ListMyDynamicsAdvanced(ctx context.Context, f MyDynamicFilter) (*MyDynamicPageResult, error)
 	AdminListDynamics(ctx context.Context, q string, page, pageSize int) (*AdminListDynamicsResult, error)
-	AdminDeleteDynamicCascade(ctx context.Context, id uint64, fn func(tx *gorm.DB) error) error
+	AdminDeleteDynamicCascade(ctx context.Context, id uint64, fn func(tx dbtx.Tx) error) error
 }
 
 // DynamicStoreImpl implements DynamicStore using *gorm.DB (Phase 1 monolith).
@@ -252,7 +253,7 @@ func (p *DynamicStoreImpl) AdminListDynamics(ctx context.Context, q string, page
 }
 
 // AdminDeleteDynamicCascade deletes a dynamic within a transaction with a custom function.
-func (p *DynamicStoreImpl) AdminDeleteDynamicCascade(ctx context.Context, id uint64, fn func(tx *gorm.DB) error) error {
+func (p *DynamicStoreImpl) AdminDeleteDynamicCascade(ctx context.Context, id uint64, fn func(tx dbtx.Tx) error) error {
 	return p.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		return fn(tx)
 	})
@@ -319,6 +320,6 @@ func (s *DynamicService) AdminListDynamics(ctx context.Context, q string, page, 
 }
 
 // AdminDeleteDynamicCascade deletes a dynamic within a transaction with a custom function.
-func (s *DynamicService) AdminDeleteDynamicCascade(ctx context.Context, id uint64, fn func(tx *gorm.DB) error) error {
+func (s *DynamicService) AdminDeleteDynamicCascade(ctx context.Context, id uint64, fn func(tx dbtx.Tx) error) error {
 	return s.store.AdminDeleteDynamicCascade(ctx, id, fn)
 }

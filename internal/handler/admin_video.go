@@ -9,9 +9,10 @@ import (
 	"strings"
 	"time"
 
+	"cakecake/internal/pkg/dbtx"
+
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
-	"gorm.io/gorm"
 
 	"cakecake/internal/errcode"
 	"cakecake/internal/middleware"
@@ -266,7 +267,7 @@ func (a *API) AdminDeleteVideo(c *gin.Context) {
 		return
 	}
 	removeVideoDraftFiles(*v)
-	if err := a.VideoSvc.AdminDeleteVideoCascade(c.Request.Context(), id, func(tx *gorm.DB) error {
+	if err := a.VideoSvc.AdminDeleteVideoCascade(c.Request.Context(), id, func(tx dbtx.Tx) error {
 		return deleteVideoCascade(tx, id)
 	}); err != nil {
 		a.Log.Error("admin delete video", zap.Error(err), zap.Uint64("video_id", id))

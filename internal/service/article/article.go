@@ -4,6 +4,7 @@ import (
 	"cakecake/internal/model/article"
 	"cakecake/internal/model/comment"
 	"cakecake/internal/model/extra"
+	"cakecake/internal/pkg/dbtx"
 	"context"
 	"errors"
 	"fmt"
@@ -330,6 +331,6 @@ func (s *ArticleService) AdminListArticles(ctx context.Context, statuses []strin
 }
 
 // AdminDeleteArticleCascade deletes an article within a transaction with a custom function.
-func (s *ArticleService) AdminDeleteArticleCascade(ctx context.Context, id uint64, fn func(tx *gorm.DB) error) error {
+func (s *ArticleService) AdminDeleteArticleCascade(ctx context.Context, id uint64, fn func(tx dbtx.Tx) error) error {
 	return s.store.AdminDeleteArticleCascade(ctx, id, fn)
 }

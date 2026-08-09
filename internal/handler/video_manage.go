@@ -18,10 +18,11 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"cakecake/internal/pkg/dbtx"
+
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
-	"gorm.io/gorm"
 )
 
 func manuscriptVideoStatusToDB(st string) string {
@@ -375,7 +376,7 @@ type videoPlaybackResponse struct {
 }
 
 // deleteVideoCascade removes one video and its comments, likes, danmaku (same package as account deletion).
-func deleteVideoCascade(tx *gorm.DB, videoID uint64) error {
+func deleteVideoCascade(tx dbtx.Tx, videoID uint64) error {
 	var cids []uint64
 	if err := tx.Model(&comment.Comment{}).Where("video_id = ?", videoID).Pluck("id", &cids).Error; err != nil {
 		return err

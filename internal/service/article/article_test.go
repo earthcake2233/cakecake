@@ -3,6 +3,7 @@ package article
 import (
 	"cakecake/internal/model/article"
 	"cakecake/internal/model/comment"
+	"cakecake/internal/pkg/dbtx"
 	"cakecake/internal/service/servicetest"
 	"context"
 	"testing"
@@ -171,7 +172,7 @@ func TestArticleService_AdminAndDelete(t *testing.T) {
 
 	// Admin delete cascade callback.
 	called := false
-	require.NoError(t, s.AdminDeleteArticleCascade(ctx, 11, func(tx *gorm.DB) error {
+	require.NoError(t, s.AdminDeleteArticleCascade(ctx, 11, func(tx dbtx.Tx) error {
 		called = true
 		return nil
 	}))
