@@ -79,6 +79,11 @@ func (s *AgentService) GetGlobalSystemPrompt(ctx context.Context) string {
 	return (&AgentProfileService{svc: s}).GetGlobalSystemPrompt(ctx)
 }
 
+// UpdateGlobalSystemPrompt delegates to the corresponding domain service.
+func (s *AgentService) UpdateGlobalSystemPrompt(ctx context.Context, prompt string) error {
+	return (&AgentProfileService{svc: s}).UpdateGlobalSystemPrompt(ctx, prompt)
+}
+
 // ProfileCount delegates to the corresponding domain service.
 func (s *AgentService) ProfileCount(ctx context.Context) (int64, error) {
 	return (&AgentProfileService{svc: s}).ProfileCount(ctx)

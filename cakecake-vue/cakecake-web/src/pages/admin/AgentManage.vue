@@ -38,6 +38,28 @@
       title="未配置 DEEPSEEK_API_KEY，用户发消息后将收到未配置提示。"
     />
 
+    <section class="ai-global-prompt" v-if="settingsLoaded">
+      <div class="ai-global-prompt__head">
+        <div>
+          <h4>通用提示词（全局层）</h4>
+          <p class="ai-global-prompt__tip">
+            作用于所有角色，各角色的「角色人设」在其之上叠加；保存后从下一次回复开始生效，不会被服务重启覆盖。
+          </p>
+        </div>
+        <el-button type="primary" :loading="globalSaving" @click="saveGlobalPrompt">
+          保存通用提示词
+        </el-button>
+      </div>
+      <el-input
+        v-model="globalPrompt"
+        type="textarea"
+        :rows="8"
+        maxlength="12000"
+        show-word-limit
+        placeholder="所有角色共用的 DeepSeek system 提示词"
+      />
+    </section>
+
     <div class="ai-hub__toolbar">
       <span class="ai-hub__toolbar-hint">最多 {{ maxProfiles }} 个角色</span>
       <el-button
@@ -237,7 +259,9 @@
 import {
   adminCreateAgentProfile,
   adminDeleteAgentProfile,
+  adminGetAgentSettings,
   adminListAgentProfiles,
+  adminPutAgentSettings,
   adminUpdateAgentProfile,
   adminUploadAgentProfileAvatar
 } from "@/api/admin";
@@ -266,8 +290,12 @@ export default {
       avatarCropVisible: false,
       avatarCropSrc: "",
       avatarCropFileName: "agent-avatar.jpg",
-      _avatarCropObjectUrl: null,
-      form: this.emptyForm()
+      avatarCropObjectUrl: null,
+      form: this.emptyForm(),
+      globalPrompt: "",
+      globalSaving: false,
+      settingsLoaded: false,
+      settings: null
     };
   },
   computed: {
@@ -321,10 +349,41 @@ export default {
         this.profiles = d.items || [];
         this.maxProfiles = d.max_profiles || 12;
         this.deepseekConfigured = d.deepseek_configured !== false;
+        try {
+          const sbody = await adminGetAgentSettings();
+          const sd = (sbody && sbody.data) || {};
+          this.settings = sd;
+          this.globalPrompt = String(sd.global_system_prompt || "").trim();
+          this.settingsLoaded = true;
+        } catch (e) {
+          // Global prompt is a secondary section; profile list still works.
+        }
       } catch (e) {
         ElMessage.error((e && e.message) || "加载失败");
       } finally {
         this.loading = false;
+      }
+    },
+    async saveGlobalPrompt() {
+      const text = String(this.globalPrompt || "").trim();
+      if (text.length < 10) {
+        ElMessage.warning("通用提示词至少 10 个字");
+        return;
+      }
+      if (text.length > 12000) {
+        ElMessage.warning("通用提示词不能超过 12000 字");
+        return;
+      }
+      this.globalSaving = true;
+      try {
+        // Only the global field is submitted: a stale page snapshot of the
+        // role fields must never overwrite unsaved role edits.
+        await adminPutAgentSettings({ global_system_prompt: text });
+        ElMessage.success("通用提示词已保存，从下一次回复开始生效");
+      } catch (e) {
+        ElMessage.error((e && e.message) || "保存失败");
+      } finally {
+        this.globalSaving = false;
       }
     },
     openCreate() {
@@ -484,9 +543,9 @@ export default {
       }
     },
     closeAvatarCrop() {
-      if (this._avatarCropObjectUrl) {
-        URL.revokeObjectURL(this._avatarCropObjectUrl);
-        this._avatarCropObjectUrl = null;
+      if (this.avatarCropObjectUrl) {
+        URL.revokeObjectURL(this.avatarCropObjectUrl);
+        this.avatarCropObjectUrl = null;
       }
       this.avatarCropVisible = false;
       this.avatarCropSrc = "";
@@ -520,7 +579,7 @@ export default {
       }
       this.closeAvatarCrop();
       const url = URL.createObjectURL(file);
-      this._avatarCropObjectUrl = url;
+      this.avatarCropObjectUrl = url;
       this.avatarCropSrc = url;
       this.avatarCropFileName = name || "agent-avatar.jpg";
       this.avatarCropVisible = true;
@@ -819,5 +878,29 @@ export default {
 }
 .adm-upload__input {
   display: none;
+}
+.ai-global-prompt {
+  margin: 16px 0;
+  padding: 16px;
+  border: 1px solid var(--el-border-color, #e4e7ed);
+  border-radius: 10px;
+  background: #fff;
+}
+.ai-global-prompt__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+.ai-global-prompt__head h4 {
+  margin: 0 0 4px;
+  font-size: 15px;
+}
+.ai-global-prompt__tip {
+  margin: 0;
+  font-size: 12px;
+  color: #909399;
+  line-height: 1.6;
 }
 </style>

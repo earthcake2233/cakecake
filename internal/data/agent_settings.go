@@ -7,6 +7,7 @@ import (
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 const defaultAgentDisplayName = "cakecake AI"
@@ -30,6 +31,9 @@ const defaultAgentSystemPrompt = `你是 cakecake 站内 AI 助手。帮助用�
 - 不确定时诚实说不知道`
 
 // EnsureDefaultAgentSettings creates the singleton settings row when missing.
+// The code constant is the DEFAULT for fresh environments only: once the row
+// exists, the database is the single source of truth (admin edits must never
+// be reverted by a startup sync).
 func EnsureDefaultAgentSettings(db *gorm.DB, lg *zap.Logger) error {
 	if db == nil {
 		return nil
@@ -37,14 +41,7 @@ func EnsureDefaultAgentSettings(db *gorm.DB, lg *zap.Logger) error {
 	var st agent.AgentSettings
 	err := db.First(&st, agent.AgentSettingsRowID).Error
 	if err == nil {
-		// Always sync global prompt from code constant on startup
-		st.SystemPrompt = defaultAgentSystemPrompt
-		if err := db.Model(&st).Update("system_prompt", st.SystemPrompt).Error; err != nil && lg != nil {
-			lg.Warn("sync agent_settings system_prompt failed", zap.Error(err))
-		}
-		if lg != nil {
-			lg.Info("synced agent_settings system_prompt from code constant")
-		}
+		// Row already exists: keep whatever is stored (admin edits persist).
 		return nil
 	}
 	if err != gorm.ErrRecordNotFound {
@@ -115,4 +112,30 @@ func GetGlobalSystemPrompt(db *gorm.DB) string {
 		return v
 	}
 	return defaultAgentSystemPrompt
+}
+
+// UpdateGlobalAgentSettings overwrites the global (all-role) system prompt via
+// an INSERT ... ON CONFLICT(id) DO UPDATE upsert.
+//
+// It must NOT use RowsAffected to detect a missing row: MySQL (without
+// clientFoundRows) reports 0 affected rows when the new value equals the
+// stored one, which would wrongly trigger a duplicate Create and a primary-key
+// conflict. On insert the defaults are seeded; on conflict only system_prompt
+// is updated so the other settings are preserved.
+func UpdateGlobalAgentSettings(db *gorm.DB, systemPrompt string) error {
+	if db == nil {
+		return gorm.ErrRecordNotFound
+	}
+	prompt := strings.TrimSpace(systemPrompt)
+	return db.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "id"}},
+		DoUpdates: clause.AssignmentColumns([]string{"system_prompt"}),
+	}).Create(&agent.AgentSettings{
+		ID:               agent.AgentSettingsRowID,
+		DisplayName:      defaultAgentDisplayName,
+		Sign:             defaultAgentSign,
+		SystemPrompt:     prompt,
+		WelcomeMessage:   defaultAgentWelcome,
+		AssistantEnabled: true,
+	}).Error
 }
