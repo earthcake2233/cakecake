@@ -22,7 +22,6 @@ import (
 	"cakecake/internal/ws"
 )
 
-// AgentService runs AI assistant replies for agent DM threads.
 // GenerateReplyResult holds the AI reply along with tool call metadata for persistence.
 type GenerateReplyResult struct {
 	Content        string          `json:"content"`
@@ -403,7 +402,6 @@ func (s *AgentService) agentSystemPrompt(profile *agent.AgentProfile) func() {
 	return func() { s.Gateway.SystemPrompt = prev }
 }
 
-// toolActivityCollector captures tool calls/results so they can be persisted.
 // ResetConversation clears an agent conversation and posts a fresh opening message.
 func (s *AgentService) ResetConversation(ctx context.Context, conv *dm.DmConversation, humanID uint64) (*dm.DmMessage, error) {
 	if s == nil || s.Store == nil || conv == nil || humanID == 0 {

@@ -184,7 +184,7 @@ func (s *VideoService) ListUserPublishedVideosCursor(ctx context.Context, uid ui
 	return s.videos.ListUserPublishedVideosCursor(ctx, uid, cursorID, limit)
 }
 
-// ListMyVideosAdvanced lists user videos with advanced filtering (title search, custom sort, multi-status).
+// MyVideoFilter filters the caller's videos by status.
 type MyVideoFilter struct {
 	UserID   uint64
 	Status   string   // single status

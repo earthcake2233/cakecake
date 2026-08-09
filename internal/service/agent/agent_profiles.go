@@ -23,6 +23,7 @@ func (s *AgentService) NormalizeSlug(slug string) (string, error) {
 	return data.NormalizeAgentSlug(slug)
 }
 
+// ReloadProfiles reloads agent profiles (no-op; profiles are ensured lazily).
 func (s *AgentService) ReloadProfiles() {}
 
 // ListAgentProfiles returns all agent profiles.

@@ -19,7 +19,7 @@ const (
 	prefixHotSearchDed = "hotsearch:dedup:"
 	prefixHotSearchNew = "hotsearch:badge:new:"
 
-	// HotSearchDedupTTL: the same user/IP searching the same term within the window counts only once.
+	// HotSearchDedupTTL is the dedup window: the same user/IP searching the same term counts once.
 	HotSearchDedupTTL = 10 * time.Minute
 	hotSearchNewTTL   = 48 * time.Hour
 )

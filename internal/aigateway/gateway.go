@@ -25,7 +25,7 @@ const defaultSystemPrompt = `你是 cakecake 站内 AI 助手。帮助用户了�
 
 const maxToolIterations = 5
 
-// Progress callbacks for front-end tool call display.
+// ToolCallStartCB is a progress callback for front-end tool call display.
 type ToolCallStartCB func(traceID, spanID, parentSpanID, toolName string, argsJSON json.RawMessage)
 
 // ToolCallEndCB is invoked when a tool call finishes.

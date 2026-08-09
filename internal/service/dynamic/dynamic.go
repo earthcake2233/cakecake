@@ -175,7 +175,7 @@ func (p *DynamicStoreImpl) ListUserDynamicsCursor(ctx context.Context, userID ui
 	return list, nil
 }
 
-// ListMyDynamicsAdvanced lists user dynamics with advanced filtering (title search, custom sort).
+// MyDynamicFilter filters dynamics by owner, title and sort key.
 type MyDynamicFilter struct {
 	UserID   uint64
 	TitleQ   string

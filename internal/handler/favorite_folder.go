@@ -539,6 +539,7 @@ func (a *API) validateFolderOwnedByUser(ctx context.Context, uid, folderID uint6
 	return err == nil && f.UserID == uid
 }
 
+// ClearInvalidFavoritesInFolder removes favorite references to deleted videos.
 // @Summary      Clear invalid favorites in folder
 // @Description  Remove references to deleted videos from a folder
 // @Tags         Favorites
