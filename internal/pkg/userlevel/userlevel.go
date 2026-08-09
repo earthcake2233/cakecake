@@ -3,7 +3,8 @@ package userlevel
 // MaxLevel is the highest user level (Lv6).
 const MaxLevel = 6
 
-// Thresholds[i] is the minimum total experience required to reach level i+1.
+// Thresholds holds the minimum total experience required to reach each level.
+// Thresholds[i] is the minimum total experience for level i+1.
 // Lv1: 0, Lv2: 20, Lv3: 150, Lv4: 450, Lv5: 1080, Lv6: 2880.
 var Thresholds = []uint64{0, 20, 150, 450, 1080, 2880}
 

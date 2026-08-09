@@ -124,7 +124,6 @@ func (s *HotSearchService) QuickOpCreateOrUpdate(ctx context.Context, opType, ke
 	return &op, true, nil
 }
 
-// ReorderItems persists drag order and updates pin_rank for pin/manual ops.
 // ReorderItem represents one entry in a reorder request.
 type ReorderItem struct {
 	Keyword string

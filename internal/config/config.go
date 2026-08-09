@@ -247,7 +247,6 @@ func Load() *C {
 	}
 }
 
-// OSSObjectURL builds the browser-accessible URL for an object key.
 // MarshalLogObject implements zapcore.ObjectMarshaler for safe zap.Any logging.
 func (c *C) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	enc.AddString("app_env", c.AppEnv)

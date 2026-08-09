@@ -10,7 +10,7 @@ import (
 const (
 	// DefaultCoinTenths is the initial balance for new users (23.0 coins).
 	DefaultCoinTenths int64 = 230
-	// TenthsPerCoin: balance is stored in 0.1-coin units (10 tenths = 1 coin).
+	// TenthsPerCoin is the number of 0.1-coin units per coin (10).
 	TenthsPerCoin int64 = 10
 	// DailyLoginCoinTenths is the daily login grant (1 coin).
 	DailyLoginCoinTenths int64 = 10

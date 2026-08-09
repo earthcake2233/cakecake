@@ -100,6 +100,7 @@ func (s *AgentStoreImpl) SetMessageFeedback(ctx context.Context, messageID uint6
 	}).Error
 }
 
+// ListAgentFeedbacks returns feedback rows ordered by newest first.
 func (s *AgentStoreImpl) ListAgentFeedbacks(ctx context.Context, limit int, offset int) ([]agent.AgentFeedback, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 50
@@ -125,6 +126,7 @@ type AgentFeedbackRow struct {
 	MessageContent string `gorm:"column:message_content" json:"message_content"`
 }
 
+// ListAgentFeedbacksWithContent joins feedback rows with assistant message content.
 func (s *AgentStoreImpl) ListAgentFeedbacksWithContent(ctx context.Context, limit int, offset int) ([]AgentFeedbackRow, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 50
@@ -147,28 +149,28 @@ func (s *AgentStoreImpl) ListAgentFeedbacksWithContent(ctx context.Context, limi
 }
 
 // EnsureAllAgentConversationsForUser ensures threads exist for each enabled profile.
-func (p *AgentStoreImpl) EnsureAllAgentConversationsForUser(humanID uint64) error {
-	return data.EnsureAllAgentConversationsForUser(p.db, humanID)
+func (s *AgentStoreImpl) EnsureAllAgentConversationsForUser(humanID uint64) error {
+	return data.EnsureAllAgentConversationsForUser(s.db, humanID)
 }
 
 // GetAgentProfileByBotUserID loads the profile for a bot user id.
-func (p *AgentStoreImpl) GetAgentProfileByBotUserID(botUserID uint64) (*agent.AgentProfile, error) {
-	return data.GetAgentProfileByBotUserID(p.db, botUserID)
+func (s *AgentStoreImpl) GetAgentProfileByBotUserID(botUserID uint64) (*agent.AgentProfile, error) {
+	return data.GetAgentProfileByBotUserID(s.db, botUserID)
 }
 
 // GetAgentProfile loads a profile by id.
-func (p *AgentStoreImpl) GetAgentProfile(id uint64) (*agent.AgentProfile, error) {
-	return data.GetAgentProfile(p.db, id)
+func (s *AgentStoreImpl) GetAgentProfile(id uint64) (*agent.AgentProfile, error) {
+	return data.GetAgentProfile(s.db, id)
 }
 
 // GetGlobalSystemPrompt returns the global agent system prompt.
-func (p *AgentStoreImpl) GetGlobalSystemPrompt() string {
-	return data.GetGlobalSystemPrompt(p.db)
+func (s *AgentStoreImpl) GetGlobalSystemPrompt() string {
+	return data.GetGlobalSystemPrompt(s.db)
 }
 
 // PostAssistantMessageTx persists an assistant message and updates conversation state atomically.
-func (p *AgentStoreImpl) PostAssistantMessageTx(msg *dm.DmMessage, conv *dm.DmConversation, humanID uint64, now time.Time, preview string) error {
-	return p.db.Transaction(func(tx *gorm.DB) error {
+func (s *AgentStoreImpl) PostAssistantMessageTx(msg *dm.DmMessage, conv *dm.DmConversation, humanID uint64, now time.Time, preview string) error {
+	return s.db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(msg).Error; err != nil {
 			return err
 		}
@@ -188,8 +190,8 @@ func (p *AgentStoreImpl) PostAssistantMessageTx(msg *dm.DmMessage, conv *dm.DmCo
 }
 
 // ResetConversationTx clears conversation history, writes the opening message, and resets state atomically.
-func (p *AgentStoreImpl) ResetConversationTx(conv *dm.DmConversation, msg *dm.DmMessage, humanID uint64, now time.Time, preview string) error {
-	return p.db.Transaction(func(tx *gorm.DB) error {
+func (s *AgentStoreImpl) ResetConversationTx(conv *dm.DmConversation, msg *dm.DmMessage, humanID uint64, now time.Time, preview string) error {
+	return s.db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Where("conversation_id = ?", conv.ID).Delete(&dm.DmMessage{}).Error; err != nil {
 			return err
 		}
@@ -212,74 +214,74 @@ func (p *AgentStoreImpl) ResetConversationTx(conv *dm.DmConversation, msg *dm.Dm
 }
 
 // ReloadConversation refreshes a conversation row from the database.
-func (p *AgentStoreImpl) ReloadConversation(conv *dm.DmConversation) error {
-	return p.db.First(conv, conv.ID).Error
+func (s *AgentStoreImpl) ReloadConversation(conv *dm.DmConversation) error {
+	return s.db.First(conv, conv.ID).Error
 }
 
 // ListAgentProfiles lists all agent profiles.
-func (p *AgentStoreImpl) ListAgentProfiles(ctx context.Context) ([]agent.AgentProfile, error) {
+func (s *AgentStoreImpl) ListAgentProfiles(ctx context.Context) ([]agent.AgentProfile, error) {
 	var rows []agent.AgentProfile
-	if err := p.db.WithContext(ctx).Order("id ASC").Find(&rows).Error; err != nil {
+	if err := s.db.WithContext(ctx).Order("id ASC").Find(&rows).Error; err != nil {
 		return nil, err
 	}
 	return rows, nil
 }
 
 // CreateAgentProfile inserts an agent profile.
-func (p *AgentStoreImpl) CreateAgentProfile(ctx context.Context, profile *agent.AgentProfile) error {
-	return p.db.WithContext(ctx).Create(profile).Error
+func (s *AgentStoreImpl) CreateAgentProfile(ctx context.Context, profile *agent.AgentProfile) error {
+	return s.db.WithContext(ctx).Create(profile).Error
 }
 
 // UpdateAgentProfile applies partial updates to an agent profile.
-func (p *AgentStoreImpl) UpdateAgentProfile(ctx context.Context, id uint64, updates map[string]interface{}) error {
-	return p.db.WithContext(ctx).Model(&agent.AgentProfile{}).Where("id = ?", id).Updates(updates).Error
+func (s *AgentStoreImpl) UpdateAgentProfile(ctx context.Context, id uint64, updates map[string]interface{}) error {
+	return s.db.WithContext(ctx).Model(&agent.AgentProfile{}).Where("id = ?", id).Updates(updates).Error
 }
 
 // DeleteAgentProfile removes an agent profile by id.
-func (p *AgentStoreImpl) DeleteAgentProfile(ctx context.Context, id uint64) error {
-	return p.db.WithContext(ctx).Delete(&agent.AgentProfile{}, id).Error
+func (s *AgentStoreImpl) DeleteAgentProfile(ctx context.Context, id uint64) error {
+	return s.db.WithContext(ctx).Delete(&agent.AgentProfile{}, id).Error
 }
 
 // CountActiveAgentProfiles counts enabled profiles.
-func (p *AgentStoreImpl) CountActiveAgentProfiles(ctx context.Context) (int64, error) {
+func (s *AgentStoreImpl) CountActiveAgentProfiles(ctx context.Context) (int64, error) {
 	var cnt int64
-	err := p.db.WithContext(ctx).Model(&agent.AgentProfile{}).Where("enabled = ?", true).Count(&cnt).Error
+	err := s.db.WithContext(ctx).Model(&agent.AgentProfile{}).Where("enabled = ?", true).Count(&cnt).Error
 	return cnt, err
 }
 
 // CheckAgentSlugExists reports whether a profile slug is taken.
-func (p *AgentStoreImpl) CheckAgentSlugExists(ctx context.Context, slug string) (bool, error) {
+func (s *AgentStoreImpl) CheckAgentSlugExists(ctx context.Context, slug string) (bool, error) {
 	var cnt int64
-	err := p.db.WithContext(ctx).Model(&agent.AgentProfile{}).Where("slug = ?", slug).Count(&cnt).Error
+	err := s.db.WithContext(ctx).Model(&agent.AgentProfile{}).Where("slug = ?", slug).Count(&cnt).Error
 	return cnt > 0, err
 }
 
 // UpdateAgentAvatar sets a profile's avatar URL.
-func (p *AgentStoreImpl) UpdateAgentAvatar(ctx context.Context, id uint64, avatarURL string) error {
-	return p.db.WithContext(ctx).Model(&agent.AgentProfile{}).Where("id = ?", id).Update("avatar_url", avatarURL).Error
+func (s *AgentStoreImpl) UpdateAgentAvatar(ctx context.Context, id uint64, avatarURL string) error {
+	return s.db.WithContext(ctx).Model(&agent.AgentProfile{}).Where("id = ?", id).Update("avatar_url", avatarURL).Error
 }
 
 // ProfileCount counts all agent profiles.
-func (p *AgentStoreImpl) ProfileCount(ctx context.Context) (int64, error) {
-	return data.ProfileCount(p.db)
+func (s *AgentStoreImpl) ProfileCount(ctx context.Context) (int64, error) {
+	return data.ProfileCount(s.db)
 }
 
 // CreateAgentBotUser creates the bot user backing a profile.
-func (p *AgentStoreImpl) CreateAgentBotUser(ctx context.Context, slug, displayName, sign, avatarURL string) (uint64, error) {
-	return data.CreateAgentBotUser(p.db, slug, displayName, sign, avatarURL)
+func (s *AgentStoreImpl) CreateAgentBotUser(ctx context.Context, slug, displayName, sign, avatarURL string) (uint64, error) {
+	return data.CreateAgentBotUser(s.db, slug, displayName, sign, avatarURL)
 }
 
 // RenameAgentProfileSlug renames a profile's slug.
-func (p *AgentStoreImpl) RenameAgentProfileSlug(ctx context.Context, profile *agent.AgentProfile, newSlug string) error {
-	return data.RenameAgentProfileSlug(p.db, profile, newSlug)
+func (s *AgentStoreImpl) RenameAgentProfileSlug(ctx context.Context, profile *agent.AgentProfile, newSlug string) error {
+	return data.RenameAgentProfileSlug(s.db, profile, newSlug)
 }
 
 // SyncAgentProfile mirrors profile display fields to the bot user row.
-func (p *AgentStoreImpl) SyncAgentProfile(ctx context.Context, profile *agent.AgentProfile) error {
-	return data.SyncAgentProfile(p.db, profile)
+func (s *AgentStoreImpl) SyncAgentProfile(ctx context.Context, profile *agent.AgentProfile) error {
+	return data.SyncAgentProfile(s.db, profile)
 }
 
 // EnsureAgentProfiles runs the startup migration that guarantees a default profile.
-func (p *AgentStoreImpl) EnsureAgentProfiles(cfg *config.C, log *zap.Logger) error {
-	return data.EnsureAgentProfiles(p.db, cfg, log)
+func (s *AgentStoreImpl) EnsureAgentProfiles(cfg *config.C, log *zap.Logger) error {
+	return data.EnsureAgentProfiles(s.db, cfg, log)
 }

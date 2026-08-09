@@ -95,6 +95,7 @@ func (s *AgentService) clearToolCallbacks() {
 	}
 }
 
+// toolActivityCollector captures tool calls/results so they can be persisted.
 type toolActivityCollector struct {
 	mu      sync.Mutex
 	acts    []map[string]interface{}
