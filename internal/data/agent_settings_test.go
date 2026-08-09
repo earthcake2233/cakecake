@@ -39,11 +39,46 @@ func TestEnsureDefaultAgentSettings_Creates(t *testing.T) {
 func TestEnsureDefaultAgentSettings_AlreadyExists(t *testing.T) {
 	db := newAgentSettingsDB(t)
 	require.NoError(t, EnsureDefaultAgentSettings(db, zap.NewNop()))
+	// Admin edits the global prompt; a restart must NOT revert it.
+	require.NoError(t, UpdateGlobalAgentSettings(db, "custom global prompt"))
 	require.NoError(t, EnsureDefaultAgentSettings(db, zap.NewNop()))
 
 	var count int64
 	db.Model(&agent.AgentSettings{}).Count(&count)
 	assert.Equal(t, int64(1), count)
+	var st agent.AgentSettings
+	require.NoError(t, db.First(&st, agent.AgentSettingsRowID).Error)
+	assert.Equal(t, "custom global prompt", st.SystemPrompt)
+}
+
+func TestUpdateGlobalAgentSettings(t *testing.T) {
+	db := newAgentSettingsDB(t)
+	require.NoError(t, EnsureDefaultAgentSettings(db, zap.NewNop()))
+	require.NoError(t, UpdateGlobalAgentSettings(db, "  新的全局提示词  "))
+
+	var st agent.AgentSettings
+	require.NoError(t, db.First(&st, agent.AgentSettingsRowID).Error)
+	assert.Equal(t, "新的全局提示词", st.SystemPrompt)
+
+	require.Error(t, UpdateGlobalAgentSettings(nil, "x"))
+}
+
+// Regression: MySQL reports 0 affected rows when the new value equals the
+// stored one. The upsert must never misread that as "row missing" and attempt
+// a duplicate Create (primary-key conflict).
+func TestUpdateGlobalAgentSettings_SameValueTwice(t *testing.T) {
+	db := newAgentSettingsDB(t)
+	require.NoError(t, EnsureDefaultAgentSettings(db, zap.NewNop()))
+	require.NoError(t, UpdateGlobalAgentSettings(db, "unchanged prompt"))
+	require.NoError(t, UpdateGlobalAgentSettings(db, "unchanged prompt"))
+
+	var count int64
+	require.NoError(t, db.Model(&agent.AgentSettings{}).Count(&count).Error)
+	require.Equal(t, int64(1), count)
+
+	var st agent.AgentSettings
+	require.NoError(t, db.First(&st, agent.AgentSettingsRowID).Error)
+	assert.Equal(t, "unchanged prompt", st.SystemPrompt)
 }
 
 func TestEnsureDefaultAgentSettings_NilDB(t *testing.T) {

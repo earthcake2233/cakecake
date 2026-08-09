@@ -40,6 +40,7 @@ type Agent interface {
 	RenameAgentProfileSlug(ctx context.Context, p *agent.AgentProfile, newSlug string) error
 	SyncAgentProfile(ctx context.Context, p *agent.AgentProfile) error
 	UnmarshalWelcomeList(raw json.RawMessage, fallback []string) ([]string, error)
+	UpdateGlobalSystemPrompt(ctx context.Context, prompt string) error
 	UpdateAgentAvatar(ctx context.Context, id uint64, avatarURL string) error
 	UpdateAgentProfile(ctx context.Context, id uint64, updates map[string]interface{}) error
 }

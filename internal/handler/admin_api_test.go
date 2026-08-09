@@ -146,6 +146,19 @@ func TestAdminEndpoints(t *testing.T) {
 	covOK(t, covReq(t, r, "GET", "/api/v1/admin/agent-profiles", at, nil), http.StatusOK)
 	covOK(t, covReq(t, r, "GET", "/api/v1/admin/agent-settings", at, nil), http.StatusOK)
 	covOK(t, covReq(t, r, "PUT", "/api/v1/admin/agent-settings", at, map[string]any{"system_prompt": "Please be nice to users.", "display_name": "Assistant", "welcome_message": "Hi!"}), http.StatusOK)
+	// Global-only update must not touch (or require) profile fields.
+	covOK(t, covReq(t, r, "PUT", "/api/v1/admin/agent-settings", at, map[string]any{"global_system_prompt": "Global prompt for all roles."}), http.StatusOK)
+	gs := covReq(t, r, "GET", "/api/v1/admin/agent-settings", at, nil)
+	covOK(t, gs, http.StatusOK)
+	var gsOut struct {
+		Data struct {
+			GlobalSystemPrompt string `json:"global_system_prompt"`
+			SystemPrompt       string `json:"system_prompt"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(gs.Body.Bytes(), &gsOut))
+	require.Equal(t, "Global prompt for all roles.", gsOut.Data.GlobalSystemPrompt)
+	require.Equal(t, "Please be nice to users.", gsOut.Data.SystemPrompt)
 	apw2 := covReq(t, r, "POST", "/api/v1/admin/agent-profiles", at, map[string]any{"slug": "assistant2", "display_name": "Assistant 2", "sign": "hi", "system_prompt": "Please help users with their questions.", "welcome_messages": []string{"Hello!"}})
 	covOK(t, apw2, http.StatusOK)
 	covOK(t, covReq(t, r, "PUT", "/api/v1/admin/agent-profiles/"+u64s(apOut.Data.ID), at, map[string]any{"display_name": "Renamed", "system_prompt": "Please be helpful and concise.", "welcome_messages": []string{"Hey!"}}), http.StatusOK)

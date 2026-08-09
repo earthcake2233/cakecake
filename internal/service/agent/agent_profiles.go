@@ -76,6 +76,11 @@ func (ps *AgentProfileService) GetGlobalSystemPrompt(ctx context.Context) string
 	return ps.svc.Store.GetGlobalSystemPrompt()
 }
 
+// UpdateGlobalSystemPrompt persists the global (all-role) system prompt.
+func (ps *AgentProfileService) UpdateGlobalSystemPrompt(ctx context.Context, prompt string) error {
+	return ps.svc.Store.UpdateGlobalSystemPrompt(ctx, prompt)
+}
+
 // ProfileCount returns total number of agent profiles.
 func (ps *AgentProfileService) ProfileCount(ctx context.Context) (int64, error) {
 	return ps.svc.Store.ProfileCount(ctx)

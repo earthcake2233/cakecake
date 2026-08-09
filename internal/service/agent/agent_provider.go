@@ -22,6 +22,7 @@ type AgentStore interface {
 	GetAgentProfileByBotUserID(botUserID uint64) (*agent.AgentProfile, error)
 	GetAgentProfile(id uint64) (*agent.AgentProfile, error)
 	GetGlobalSystemPrompt() string
+	UpdateGlobalSystemPrompt(ctx context.Context, prompt string) error
 	PostAssistantMessageTx(msg *dm.DmMessage, conv *dm.DmConversation, humanID uint64, now time.Time, preview string) error
 	ResetConversationTx(conv *dm.DmConversation, msg *dm.DmMessage, humanID uint64, now time.Time, preview string) error
 	ReloadConversation(conv *dm.DmConversation) error
@@ -168,6 +169,11 @@ func (s *AgentStoreImpl) GetAgentProfile(id uint64) (*agent.AgentProfile, error)
 // GetGlobalSystemPrompt returns the global agent system prompt.
 func (s *AgentStoreImpl) GetGlobalSystemPrompt() string {
 	return data.GetGlobalSystemPrompt(s.db)
+}
+
+// UpdateGlobalSystemPrompt persists the global (all-role) system prompt.
+func (s *AgentStoreImpl) UpdateGlobalSystemPrompt(ctx context.Context, prompt string) error {
+	return data.UpdateGlobalAgentSettings(s.db.WithContext(ctx), prompt)
 }
 
 // PostAssistantMessageTx persists an assistant message and updates conversation state atomically.

@@ -55,6 +55,7 @@ type adminAgentSettingsResponse struct {
 	AvatarURL          string `json:"avatar_url"`
 	Sign               string `json:"sign"`
 	SystemPrompt       string `json:"system_prompt"`
+	GlobalSystemPrompt string `json:"global_system_prompt"`
 	WelcomeMessage     string `json:"welcome_message"`
 	AssistantEnabled   bool   `json:"assistant_enabled"`
 	BotUserID          uint64 `json:"bot_user_id"`
@@ -394,6 +395,7 @@ func (a *API) AdminGetAgentSettings(c *gin.Context) {
 		AvatarURL:          p.AvatarURL,
 		Sign:               p.Sign,
 		SystemPrompt:       p.SystemPrompt,
+		GlobalSystemPrompt: a.Agent.GetGlobalSystemPrompt(ctx),
 		WelcomeMessage:     welcomeOne,
 		AssistantEnabled:   p.Enabled,
 		BotUserID:          p.BotUserID,
@@ -405,60 +407,84 @@ func (a *API) AdminGetAgentSettings(c *gin.Context) {
 // AdminPutAgentSettings updates the global agent settings.
 func (a *API) AdminPutAgentSettings(c *gin.Context) {
 	ctx := c.Request.Context()
-	list, _ := a.Agent.ListAgentProfiles(ctx)
-	if len(list) == 0 {
-		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
-		return
-	}
-	c.Params = append(c.Params, gin.Param{Key: "id", Value: strconv.FormatUint(list[0].ID, 10)})
 	var req adminAgentSettingsReq
 	if err := c.ShouldBindJSON(&req); err != nil {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	welcomeRaw, _ := json.Marshal([]string{strings.TrimSpace(req.WelcomeMessage)})
-	write := adminAgentProfileWriteReq{
-		DisplayName:     req.DisplayName,
-		AvatarURL:       req.AvatarURL,
-		Sign:            req.Sign,
-		SystemPrompt:    req.SystemPrompt,
-		WelcomeMessages: welcomeRaw,
+	// The admin UI saves the shared prompt independently from role fields.
+	// When ONLY global_system_prompt is provided, skip the profile path so a
+	// stale page snapshot can never overwrite unsaved role edits.
+	globalOnly := req.GlobalSystemPrompt != nil &&
+		strings.TrimSpace(req.DisplayName) == "" &&
+		strings.TrimSpace(req.SystemPrompt) == "" &&
+		strings.TrimSpace(req.WelcomeMessage) == "" &&
+		strings.TrimSpace(req.AvatarURL) == "" &&
+		strings.TrimSpace(req.Sign) == "" &&
+		req.AssistantEnabled == nil
+	if !globalOnly {
+		list, _ := a.Agent.ListAgentProfiles(ctx)
+		if len(list) == 0 {
+			resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
+			return
+		}
+		c.Params = append(c.Params, gin.Param{Key: "id", Value: strconv.FormatUint(list[0].ID, 10)})
+		welcomeRaw, _ := json.Marshal([]string{strings.TrimSpace(req.WelcomeMessage)})
+		write := adminAgentProfileWriteReq{
+			DisplayName:     req.DisplayName,
+			AvatarURL:       req.AvatarURL,
+			Sign:            req.Sign,
+			SystemPrompt:    req.SystemPrompt,
+			WelcomeMessages: welcomeRaw,
+		}
+		if req.AssistantEnabled != nil {
+			write.Enabled = req.AssistantEnabled
+		}
+		_, welcomeJSON, code := a.validateAgentProfileWrite(&write, false)
+		if code != 0 {
+			resp.Err(c, http.StatusBadRequest, code)
+			return
+		}
+		p := list[0]
+		updates := map[string]interface{}{
+			"display_name":          strings.TrimSpace(req.DisplayName),
+			"avatar_url":            strings.TrimSpace(req.AvatarURL),
+			"sign":                  strings.TrimSpace(req.Sign),
+			"system_prompt":         strings.TrimSpace(req.SystemPrompt),
+			"welcome_messages_json": welcomeJSON,
+		}
+		if req.AssistantEnabled != nil {
+			updates["enabled"] = *req.AssistantEnabled
+		}
+		if err := a.Agent.UpdateAgentProfile(ctx, p.ID, updates); err != nil {
+			resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
+			return
+		}
+		p2, _ := a.Agent.GetAgentProfile(ctx, p.ID)
+		_ = a.Agent.SyncAgentProfile(ctx, p2)
 	}
-	if req.AssistantEnabled != nil {
-		write.Enabled = req.AssistantEnabled
+	if req.GlobalSystemPrompt != nil {
+		globalPrompt := strings.TrimSpace(*req.GlobalSystemPrompt)
+		if utf8.RuneCountInString(globalPrompt) > 12000 {
+			resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
+			return
+		}
+		if err := a.Agent.UpdateGlobalSystemPrompt(ctx, globalPrompt); err != nil {
+			resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
+			return
+		}
 	}
-	_, welcomeJSON, code := a.validateAgentProfileWrite(&write, false)
-	if code != 0 {
-		resp.Err(c, http.StatusBadRequest, code)
-		return
-	}
-	p := list[0]
-	updates := map[string]interface{}{
-		"display_name":          strings.TrimSpace(req.DisplayName),
-		"avatar_url":            strings.TrimSpace(req.AvatarURL),
-		"sign":                  strings.TrimSpace(req.Sign),
-		"system_prompt":         strings.TrimSpace(req.SystemPrompt),
-		"welcome_messages_json": welcomeJSON,
-	}
-	if req.AssistantEnabled != nil {
-		updates["enabled"] = *req.AssistantEnabled
-	}
-	if err := a.Agent.UpdateAgentProfile(ctx, p.ID, updates); err != nil {
-		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
-		return
-	}
-	p2, _ := a.Agent.GetAgentProfile(ctx, p.ID)
-	_ = a.Agent.SyncAgentProfile(ctx, p2)
 	a.AdminGetAgentSettings(c)
 }
 
 type adminAgentSettingsReq struct {
-	DisplayName      string `json:"display_name"`
-	AvatarURL        string `json:"avatar_url"`
-	Sign             string `json:"sign"`
-	SystemPrompt     string `json:"system_prompt"`
-	WelcomeMessage   string `json:"welcome_message"`
-	AssistantEnabled *bool  `json:"assistant_enabled"`
+	DisplayName        string  `json:"display_name"`
+	AvatarURL          string  `json:"avatar_url"`
+	Sign               string  `json:"sign"`
+	SystemPrompt       string  `json:"system_prompt"`
+	GlobalSystemPrompt *string `json:"global_system_prompt"`
+	WelcomeMessage     string  `json:"welcome_message"`
+	AssistantEnabled   *bool   `json:"assistant_enabled"`
 }
 
 // AdminUploadAgentAvatar uploads/replaces the agent avatar.
