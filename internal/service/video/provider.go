@@ -4,6 +4,7 @@ import (
 	"cakecake/internal/model/user"
 	"cakecake/internal/model/video"
 	"cakecake/internal/pkg/cursor"
+	"cakecake/internal/pkg/dbtx"
 	"cakecake/internal/search"
 	"cakecake/internal/service/queryutil"
 	"context"
@@ -349,15 +350,17 @@ func (p *VideoProviderImpl) PublishVideo(ctx context.Context, esc *search.Client
 }
 
 // AdminDeleteVideoCascade runs the cascade delete callback inside a transaction.
-func (p *VideoProviderImpl) AdminDeleteVideoCascade(ctx context.Context, id uint64, fn func(tx *gorm.DB) error) error {
+func (p *VideoProviderImpl) AdminDeleteVideoCascade(ctx context.Context, id uint64, fn func(tx dbtx.Tx) error) error {
 	return p.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		return fn(tx)
 	})
 }
 
 // WithTx runs fn inside a transaction.
-func (p *VideoProviderImpl) WithTx(ctx context.Context, fn func(tx *gorm.DB) error) error {
-	return p.db.WithContext(ctx).Transaction(fn)
+func (p *VideoProviderImpl) WithTx(ctx context.Context, fn func(tx dbtx.Tx) error) error {
+	return p.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		return fn(tx)
+	})
 }
 
 // AdminListVideos pages all videos for the admin panel with status/title filters.

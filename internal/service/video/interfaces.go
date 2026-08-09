@@ -2,12 +2,12 @@ package video
 
 import (
 	"cakecake/internal/model/video"
+	"cakecake/internal/pkg/dbtx"
 	"cakecake/internal/search"
 	"context"
 	"time"
 
 	"go.uber.org/zap"
-	"gorm.io/gorm"
 )
 
 // VideoProvider is the video domain boundary.
@@ -54,9 +54,9 @@ type VideoProvider interface {
 	// PublishVideo marks a video published and (re)indexes search. Monolith-phase flow.
 	PublishVideo(ctx context.Context, esc *search.Client, log *zap.Logger, videoID uint64, adminID *uint64) error
 	// AdminDeleteVideoCascade runs the cascade-delete callback inside a transaction.
-	AdminDeleteVideoCascade(ctx context.Context, id uint64, fn func(tx *gorm.DB) error) error
+	AdminDeleteVideoCascade(ctx context.Context, id uint64, fn func(tx dbtx.Tx) error) error
 	// WithTx runs fn inside a database transaction (Phase 1 monolith seam).
-	WithTx(ctx context.Context, fn func(tx *gorm.DB) error) error
+	WithTx(ctx context.Context, fn func(tx dbtx.Tx) error) error
 
 	// AdminListVideos returns paginated videos with status/title filters for the admin panel.
 	AdminListVideos(ctx context.Context, statuses []string, titleQ string, page, pageSize int) (*AdminListVideosResult, error)

@@ -2,6 +2,7 @@ package user
 
 import (
 	"cakecake/internal/model/user"
+	"cakecake/internal/pkg/dbtx"
 	"cakecake/internal/service"
 	"context"
 	"strings"
@@ -171,6 +172,6 @@ func (s *UserService) ListCoinLedger(ctx context.Context, userID uint64, since t
 }
 
 // FinalizeDeletion performs the final account anonymization within a transaction.
-func (s *UserService) FinalizeDeletion(ctx context.Context, uid uint64, fn func(tx *gorm.DB) error) error {
+func (s *UserService) FinalizeDeletion(ctx context.Context, uid uint64, fn func(tx dbtx.Tx) error) error {
 	return s.users.WithTx(ctx, fn)
 }

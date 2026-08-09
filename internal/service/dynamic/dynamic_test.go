@@ -3,6 +3,7 @@ package dynamic
 import (
 	"cakecake/internal/model/comment"
 	"cakecake/internal/model/dynamic"
+	"cakecake/internal/pkg/dbtx"
 	"cakecake/internal/service/servicetest"
 	"context"
 	"testing"
@@ -141,7 +142,7 @@ func TestDynamicService_AdvancedAndAdmin(t *testing.T) {
 	require.Equal(t, int64(3), adminRes.Total)
 
 	called := false
-	require.NoError(t, s.AdminDeleteDynamicCascade(ctx, 1, func(tx *gorm.DB) error {
+	require.NoError(t, s.AdminDeleteDynamicCascade(ctx, 1, func(tx dbtx.Tx) error {
 		called = true
 		return nil
 	}))

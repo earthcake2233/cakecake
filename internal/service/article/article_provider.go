@@ -3,6 +3,7 @@ package article
 import (
 	"cakecake/internal/model/article"
 	"cakecake/internal/pkg/dailyreward"
+	"cakecake/internal/pkg/dbtx"
 	"cakecake/internal/pkg/usercoin"
 	"cakecake/internal/search"
 	"cakecake/internal/service/queryutil"
@@ -41,7 +42,7 @@ type ArticleStore interface {
 	GrantCoinExp(uid uint64, before, after int) error
 	CountByStatus(ctx context.Context, status string) (int64, error)
 	AdminListArticles(ctx context.Context, statuses []string, titleQ string, page, pageSize int) (*AdminListArticlesResult, error)
-	AdminDeleteArticleCascade(ctx context.Context, id uint64, fn func(tx *gorm.DB) error) error
+	AdminDeleteArticleCascade(ctx context.Context, id uint64, fn func(tx dbtx.Tx) error) error
 	PublishArticle(ctx context.Context, esc *search.Client, log *zap.Logger, articleID uint64, adminID *uint64) error
 }
 
@@ -460,7 +461,7 @@ func (p *ArticleStoreImpl) PublishArticle(ctx context.Context, esc *search.Clien
 }
 
 // AdminDeleteArticleCascade runs the cascade delete callback inside a transaction.
-func (p *ArticleStoreImpl) AdminDeleteArticleCascade(ctx context.Context, id uint64, fn func(tx *gorm.DB) error) error {
+func (p *ArticleStoreImpl) AdminDeleteArticleCascade(ctx context.Context, id uint64, fn func(tx dbtx.Tx) error) error {
 	return p.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := fn(tx); err != nil {
 			return err

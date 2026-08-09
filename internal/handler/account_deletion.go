@@ -11,11 +11,12 @@ import (
 	"strings"
 	"time"
 
+	"cakecake/internal/pkg/dbtx"
+
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 	"golang.org/x/crypto/bcrypt"
-	"gorm.io/gorm"
 
 	"cakecake/internal/errcode"
 	"cakecake/internal/middleware"
@@ -34,7 +35,7 @@ func deletionCoolingDays() int {
 	return 7 + int(n.Int64())
 }
 
-func deleteOwnedVideosAndRelated(tx *gorm.DB, uid uint64) ([]video.Video, error) {
+func deleteOwnedVideosAndRelated(tx dbtx.Tx, uid uint64) ([]video.Video, error) {
 	var videos []video.Video
 	if err := tx.Where("user_id = ?", uid).Find(&videos).Error; err != nil {
 		return nil, err
@@ -47,7 +48,7 @@ func deleteOwnedVideosAndRelated(tx *gorm.DB, uid uint64) ([]video.Video, error)
 	return videos, nil
 }
 
-func finalizeUserAnonymization(tx *gorm.DB, uid uint64) ([]video.Video, error) {
+func finalizeUserAnonymization(tx dbtx.Tx, uid uint64) ([]video.Video, error) {
 	if err := tx.Where("recipient_id = ?", uid).Delete(&notification.Notification{}).Error; err != nil {
 		return nil, err
 	}
@@ -97,7 +98,7 @@ func maybeFinalizeAccountDeletion(ctx context.Context, a *API, uid uint64) error
 		return nil
 	}
 	var removedVideos []video.Video
-	err = a.UserSvc.FinalizeDeletion(ctx, uid, func(tx *gorm.DB) error {
+	err = a.UserSvc.FinalizeDeletion(ctx, uid, func(tx dbtx.Tx) error {
 		var innerErr error
 		removedVideos, innerErr = finalizeUserAnonymization(tx, uid)
 		return innerErr

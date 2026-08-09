@@ -4,15 +4,15 @@ package client
 
 import (
 	dynamic "cakecake/internal/model/dynamic"
+	dbtx "cakecake/internal/pkg/dbtx"
 	servicedynamic "cakecake/internal/service/dynamic"
 	context "context"
-	gorm "gorm.io/gorm"
 )
 
 // DynamicSvc is the client-side contract for cakecake/internal/service/dynamic.DynamicService.
 // Local implementation: servicedynamic.DynamicService (see the assertion below). A future gRPC client must implement this interface.
 type DynamicSvc interface {
-	AdminDeleteDynamicCascade(ctx context.Context, id uint64, fn func(tx *gorm.DB) error) error
+	AdminDeleteDynamicCascade(ctx context.Context, id uint64, fn func(tx dbtx.Tx) error) error
 	AdminListDynamics(ctx context.Context, q string, page int, pageSize int) (*servicedynamic.AdminListDynamicsResult, error)
 	BatchCheckLiked(ctx context.Context, viewerID uint64, dynamicIDs []uint64) map[uint64]bool
 	CountUserDynamics(ctx context.Context, userID uint64) (int64, error)

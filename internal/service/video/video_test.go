@@ -2,6 +2,7 @@ package video
 
 import (
 	"cakecake/internal/model/video"
+	"cakecake/internal/pkg/dbtx"
 	"cakecake/internal/service/servicetest"
 	"context"
 	"testing"
@@ -129,7 +130,7 @@ func TestVideoService_MyVideosAndLike(t *testing.T) {
 
 	// Delete cascade with custom fn.
 	called := false
-	require.NoError(t, s.DeleteVideoWithCascade(ctx, 11, func(tx *gorm.DB) error {
+	require.NoError(t, s.DeleteVideoWithCascade(ctx, 11, func(tx dbtx.Tx) error {
 		called = true
 		return nil
 	}))
@@ -150,7 +151,7 @@ func TestVideoService_AdminList(t *testing.T) {
 	require.Equal(t, int64(1), adminRes.Total)
 	require.Zero(t, adminRes.PendingCount)
 	called := false
-	require.NoError(t, s.AdminDeleteVideoCascade(ctx, 10, func(tx *gorm.DB) error {
+	require.NoError(t, s.AdminDeleteVideoCascade(ctx, 10, func(tx dbtx.Tx) error {
 		called = true
 		return nil
 	}))

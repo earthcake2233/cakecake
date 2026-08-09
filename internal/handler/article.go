@@ -19,10 +19,11 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"cakecake/internal/pkg/dbtx"
+
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
-	"gorm.io/gorm"
 )
 
 const (
@@ -434,7 +435,7 @@ func (a *API) ListMyArticles(c *gin.Context) {
 }
 
 // deleteArticleCascade removes one article and related engagement rows.
-func deleteArticleCascade(tx *gorm.DB, articleID uint64) error {
+func deleteArticleCascade(tx dbtx.Tx, articleID uint64) error {
 	var cids []uint64
 	if err := tx.Model(&comment.ArticleComment{}).Where("article_id = ?", articleID).Pluck("id", &cids).Error; err != nil {
 		return err

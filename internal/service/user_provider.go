@@ -3,6 +3,7 @@ package service
 import (
 	"cakecake/internal/model/user"
 	"cakecake/internal/pkg/dailyreward"
+	"cakecake/internal/pkg/dbtx"
 	"context"
 	"time"
 
@@ -227,6 +228,8 @@ func (p *UserProviderImpl) MarkLogin(ctx context.Context, userID uint64) error {
 }
 
 // WithTx runs fn inside a transaction.
-func (p *UserProviderImpl) WithTx(ctx context.Context, fn func(tx *gorm.DB) error) error {
-	return p.db.WithContext(ctx).Transaction(fn)
+func (p *UserProviderImpl) WithTx(ctx context.Context, fn func(tx dbtx.Tx) error) error {
+	return p.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		return fn(tx)
+	})
 }

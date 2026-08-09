@@ -9,9 +9,10 @@ import (
 	"strconv"
 	"strings"
 
+	"cakecake/internal/pkg/dbtx"
+
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
-	"gorm.io/gorm"
 
 	"cakecake/internal/errcode"
 	"cakecake/internal/middleware"
@@ -148,7 +149,7 @@ func (a *API) AdminDeleteDynamic(c *gin.Context) {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
-	if err := a.DynamicSvc.AdminDeleteDynamicCascade(c.Request.Context(), id, func(tx *gorm.DB) error {
+	if err := a.DynamicSvc.AdminDeleteDynamicCascade(c.Request.Context(), id, func(tx dbtx.Tx) error {
 		return deleteUserDynamicCascade(tx, id)
 	}); err != nil {
 		a.Log.Error("admin delete dynamic", zap.Error(err), zap.Uint64("dynamic_id", id))
