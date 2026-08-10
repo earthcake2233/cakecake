@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/require"
@@ -16,15 +15,19 @@ import (
 	"gorm.io/gorm"
 )
 
-// newConcurrentDB opens a named in-memory SQLite database with a shared cache
-// so parallel GORM connections observe the same data (plain ":memory:" would
-// give every connection its own private database).
+// newConcurrentDB opens an in-memory SQLite database and caps the pool at one
+// connection. SQLite serializes writers per connection, so concurrent
+// goroutines queue at the connection boundary instead of deadlocking on
+// shared-cache locks. MySQL (the production dialect) is exercised by the row
+// lock in ToggleVideoLike; SQLite cannot emulate SELECT ... FOR UPDATE.
 func newConcurrentDB(t *testing.T) *gorm.DB {
 	t.Helper()
-	dsn := fmt.Sprintf("file:like_conc_%d?mode=memory&cache=shared", time.Now().UnixNano())
-	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
 	require.NoError(t, data.AutoMigrateAll(db, zap.NewNop()))
+	sqlDB, err := db.DB()
+	require.NoError(t, err)
+	sqlDB.SetMaxOpenConns(1)
 	return db
 }
 

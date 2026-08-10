@@ -8,6 +8,7 @@ import (
 	"cakecake/internal/search"
 	"cakecake/internal/service/queryutil"
 	"context"
+	"strings"
 	"time"
 
 	"go.uber.org/zap"
@@ -293,35 +294,75 @@ func (p *VideoProviderImpl) CountByStatus(ctx context.Context, status string) (i
 	return cnt, err
 }
 
-// ToggleVideoLike toggles a video like (Phase 1: no-op stub, likes live in handler).
+// ToggleVideoLike toggles a video like atomically: the read-check-write
+// sequence and the like_count adjustment run in one transaction, with a row
+// lock on MySQL serializing concurrent toggles for the same video.
 func (p *VideoProviderImpl) ToggleVideoLike(ctx context.Context, userID, videoID uint64) (bool, error) {
-	// Atomic upsert: concurrent toggles for the same user cannot create
-	// duplicate like rows or race into a 500 (unique index violation).
-	lk := video.VideoLike{UserID: userID, VideoID: videoID}
-	res := p.db.WithContext(ctx).
-		Clauses(clause.OnConflict{
-			Columns:   []clause.Column{{Name: "user_id"}, {Name: "video_id"}},
-			DoNothing: true,
-		}).
-		Create(&lk)
-	if res.Error != nil {
-		return false, res.Error
-	}
-	if res.RowsAffected == 1 {
-		_ = p.db.WithContext(ctx).Model(&video.Video{}).Where("id = ?", videoID).
-			UpdateColumn("like_count", gorm.Expr("like_count + ?", 1)).Error
-		return true, nil
-	}
-	// The row already exists (possibly inserted by a concurrent toggle), so
-	// this toggle removes it.
-	if err := p.db.WithContext(ctx).
-		Where("user_id = ? AND video_id = ?", userID, videoID).
-		Delete(&video.VideoLike{}).Error; err != nil {
-		return false, err
-	}
-	_ = p.db.WithContext(ctx).Model(&video.Video{}).Where("id = ?", videoID).
+	var liked bool
+	err := p.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// MySQL: lock the video row so concurrent toggles serialize on one
+		// lock owner. SQLite has no SELECT ... FOR UPDATE; writers are
+		// serialized and the unique-constraint race is handled below.
+		if p.db.Dialector.Name() == "mysql" {
+			var locked video.Video
+			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+				First(&locked, videoID).Error; err != nil {
+				return err
+			}
+		}
+
+		var n int64
+		if err := tx.Model(&video.VideoLike{}).
+			Where("user_id = ? AND video_id = ?", userID, videoID).
+			Count(&n).Error; err != nil {
+			return err
+		}
+
+		if n == 0 {
+			lk := video.VideoLike{UserID: userID, VideoID: videoID}
+			if err := tx.Create(&lk).Error; err != nil {
+				// A concurrent toggle created the row first (SQLite has no
+				// row lock): this toggle removes that like instead.
+				if isUniqueViolation(err) {
+					if derr := tx.Where("user_id = ? AND video_id = ?", userID, videoID).
+						Delete(&video.VideoLike{}).Error; derr != nil {
+						return derr
+					}
+					liked = false
+					return decrVideoLikeCount(tx, videoID)
+				}
+				return err
+			}
+			liked = true
+			return incrVideoLikeCount(tx, videoID)
+		}
+
+		if err := tx.Where("user_id = ? AND video_id = ?", userID, videoID).
+			Delete(&video.VideoLike{}).Error; err != nil {
+			return err
+		}
+		liked = false
+		return decrVideoLikeCount(tx, videoID)
+	})
+	return liked, err
+}
+
+func incrVideoLikeCount(db *gorm.DB, videoID uint64) error {
+	return db.Model(&video.Video{}).Where("id = ?", videoID).
+		UpdateColumn("like_count", gorm.Expr("like_count + ?", 1)).Error
+}
+
+func decrVideoLikeCount(db *gorm.DB, videoID uint64) error {
+	return db.Model(&video.Video{}).Where("id = ?", videoID).
 		UpdateColumn("like_count", gorm.Expr("CASE WHEN like_count - ? < 0 THEN 0 ELSE like_count - ? END", 1, 1)).Error
-	return false, nil
+}
+
+func isUniqueViolation(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "unique constraint") || strings.Contains(msg, "duplicate entry")
 }
 
 // PublishVideo marks a video published, stamps review metadata, and indexes it in Elasticsearch.
