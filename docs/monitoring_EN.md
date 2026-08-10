@@ -48,6 +48,12 @@ Backend metrics (`cakecake_*`):
 > Note: `cakecake_*` are in-process counters and reset when the backend
 > restarts; use a persistent ledger or OTel when long-term accounting is needed.
 
+> Cost basis: `cakecake_llm_cost_usd_total` is estimated with DeepSeek
+> V4-Flash official pricing (2026-08: CNY 0.02 / 1 / 2 per million tokens for
+> cache-hit input, cache-miss input, and output), converted to USD at roughly
+> 7.14 CNY/USD. When the cache split is not reported, all prompt tokens are
+> conservatively priced as cache miss. This is an estimate, not an official bill.
+
 ## 3. Local Quick Start
 
 ```bash

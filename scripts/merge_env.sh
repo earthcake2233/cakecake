@@ -5,6 +5,8 @@
 #   - keys already present in the target (including empty values) are NEVER
 #     overwritten;
 #   - keys present only in the template are appended with the template value;
+#   - duplicate active keys in the target are deduplicated (first occurrence
+#     wins, so values are never rewritten);
 #   - the previous target is kept as <target>.prev;
 #   - target permissions stay 0600.
 #
@@ -26,7 +28,47 @@ tmp=$(mktemp "${TARGET}.merge.XXXXXX")
 trap 'rm -f "$tmp"' EXIT
 chmod 600 "$tmp"
 
-cp -a "$TARGET" "$tmp"
+seen=()
+removed=0
+
+append_key() {
+  local key=$1 line=$2
+  for k in "${seen[@]:-}"; do
+    if [ "$k" = "$key" ]; then
+      return 1
+    fi
+  done
+  seen+=("$key")
+  printf '%s\n' "$line" >> "$tmp"
+  return 0
+}
+
+# Copy the target verbatim except duplicate active keys (first one wins).
+while IFS= read -r line || [ -n "$line" ]; do
+  case "$line" in
+    '' | '#'*)
+      printf '%s\n' "$line" >> "$tmp"
+      continue
+      ;;
+    *=*)
+      key=${line%%=*}
+      case "$key" in
+        '' | *[!A-Za-z0-9_]*)
+          printf '%s\n' "$line" >> "$tmp"
+          continue
+          ;;
+      esac
+      if append_key "$key" "$line"; then
+        :
+      else
+        removed=$((removed + 1))
+      fi
+      ;;
+    *)
+      printf '%s\n' "$line" >> "$tmp"
+      ;;
+  esac
+done < "$TARGET"
 
 added=()
 while IFS= read -r line || [ -n "$line" ]; do
@@ -37,15 +79,14 @@ while IFS= read -r line || [ -n "$line" ]; do
       case "$key" in
         '' | *[!A-Za-z0-9_]*) continue ;;
       esac
-      if ! grep -qE "^[#]?${key}=" "$TARGET"; then
-        printf '%s\n' "$line" >> "$tmp"
+      if append_key "$key" "$line"; then
         added+=("$key")
       fi
       ;;
   esac
 done < "$TEMPLATE"
 
-if [ ${#added[@]} -eq 0 ]; then
+if [ ${#added[@]} -eq 0 ] && [ "$removed" -eq 0 ]; then
   echo "env merge: no changes (${TARGET} already up to date)"
   exit 0
 fi
@@ -55,4 +96,5 @@ mv "$tmp" "$TARGET"
 chmod 600 "$TARGET"
 
 echo "env merge: added ${#added[@]} key(s): ${added[*]}"
+[ "$removed" -gt 0 ] && echo "env merge: removed ${removed} duplicate line(s) (first value kept)"
 echo "env merge: backup written to ${TARGET}.prev"
