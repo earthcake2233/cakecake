@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="docs/ai-gateway.md">
+  <a href="ai-gateway.md">
     <img src="https://img.shields.io/badge/🇨🇳中文-999999?style=flat-square" alt="中文">
   </a>
   <strong><img src="https://img.shields.io/badge/🇬🇧English-00a1d6?style=flat-square" alt="English"></strong>
@@ -81,7 +81,21 @@ Login to admin panel -> **AI Roles** (`/admin/agent`):
 1. **Gateway responsibilities**: Auth, sensitive words, quotas, timeouts, model adaptation -- decoupled from business APIs.
 2. **Reuses IM**: Same DM tables, pagination, WS -- reducing frontend costs.
 3. **Async streaming replies**: User requests return quickly; LLM streams in a background goroutine, deltas are pushed in real time, final reply persisted.
-4. **Observability**: `trace_id` spans backend logs and frontend; streaming first-token latency is now observable (Prometheus metrics remain an extension point).
+4. **Observability**: `trace_id` spans backend logs and frontend; `GET /metrics` exposes Prometheus metrics: first-token latency, token usage and per-user/per-day estimated cost, tool call count/duration/failure rate, LLM request error rate, and pause/continue/regenerate counters.
+
+## Prometheus Metrics (GET /metrics)
+
+| Metric | Meaning |
+| --- | --- |
+| `cakecake_llm_requests_total{status}` | LLM request success/failure count |
+| `cakecake_llm_first_token_seconds` | Streaming first-token latency histogram |
+| `cakecake_llm_tokens_total{type}` | prompt / completion token usage |
+| `cakecake_llm_cost_usd_total{user,date}` | Estimated cost per user/day (in-memory counter, reset on restart) |
+| `cakecake_agent_tool_calls_total{tool,status}` | Tool call count and failure rate |
+| `cakecake_agent_tool_call_seconds{tool}` | Tool call duration |
+| `cakecake_agent_controls_total{type}` | pause / continue / regenerate counters |
+
+> The full stack (Prometheus + Alertmanager + Grafana dashboard) and security baseline live in [monitoring_EN.md](./monitoring_EN.md); protect `/metrics` with `METRICS_TOKEN` in production.
 
 ## Related Code
 

@@ -97,7 +97,7 @@ curl -fsSL https://raw.githubusercontent.com/earthcake2233/cakecake/main/scripts
 ```bash
 git clone --depth 1 git@github.com:earthcake2233/cakecake.git
 cd cakecake
-cp .env.example .env
+python3 scripts/init_env.py   # 自动生成 .env 随机密钥；无 Python 时：cp .env.example .env 并手工填写必填密钥
 docker compose up -d
 ```
 
@@ -141,7 +141,7 @@ docker compose up -d
 **1. 后端**（仓库根目录）
 
 ```bash
-cp .env.example .env          # 填写 JWT_SECRET、MYSQL_DSN、REDIS_*、RABBITMQ_URL、OSS_* 等
+python3 scripts/init_env.py   # 自动生成 .env 随机密钥并填充 MYSQL_DSN；已有 .env 用 --refresh 只补缺失
 go mod tidy
 go build -o ./bin/cakecake ./cmd/cakecake/
 ./bin/cakecake               # 默认 :8080；健康检查 GET /api/v1/health

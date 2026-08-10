@@ -1,6 +1,6 @@
 <p align="center">
   <strong><img src="https://img.shields.io/badge/🇨🇳中文-00a1d6?style=flat-square" alt="中文"></strong>
-  <a href="docs/ai-gateway_EN.md">
+  <a href="ai-gateway_EN.md">
     <img src="https://img.shields.io/badge/🇬🇧English-999999?style=flat-square" alt="English">
   </a>
 </p>
@@ -81,7 +81,21 @@ graph TB
 1. **网关职责**：鉴权、敏感词、配额、超时、模型适配，与业务 API 解耦。
 2. **复用 IM**：同一套 DM 表、分页、WS，降低前端成本。
 3. **异步流式回复**：用户请求快速返回，LLM 在后台 goroutine 流式生成，delta 实时推送，最终回复落库。
-4. **可观测**：`trace_id` 贯穿后端日志与前端；流式首 token 延迟已可观测（Prometheus 指标为扩展位）。
+4. **可观测**：`trace_id` 贯穿后端日志与前端；`GET /metrics` 暴露 Prometheus 指标：首 token 延迟、token 用量与按用户/日估算成本、工具调用次数/耗时/失败率、LLM 请求错误率、暂停/继续/重新生成次数。
+
+## Prometheus 指标（GET /metrics）
+
+| 指标 | 含义 |
+| --- | --- |
+| `cakecake_llm_requests_total{status}` | LLM 请求成功/失败次数 |
+| `cakecake_llm_first_token_seconds` | 流式首 token 延迟直方图 |
+| `cakecake_llm_tokens_total{type}` | prompt / completion token 用量 |
+| `cakecake_llm_cost_usd_total{user,date}` | 按用户/日估算成本（内存计数，重启清零） |
+| `cakecake_agent_tool_calls_total{tool,status}` | 工具调用次数与失败率 |
+| `cakecake_agent_tool_call_seconds{tool}` | 工具调用耗时 |
+| `cakecake_agent_controls_total{type}` | 暂停 / 继续 / 重新生成次数 |
+
+> 监控栈（Prometheus + Alertmanager + Grafana 看板）与安全基线见 [monitoring.md](./monitoring.md)；生产环境用 `METRICS_TOKEN` 保护 `/metrics`。
 
 ## 相关代码
 
