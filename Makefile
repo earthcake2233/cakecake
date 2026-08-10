@@ -7,7 +7,7 @@ SHELL := cmd.exe
 .SHELLFLAGS := /c
 endif
 
-.PHONY: all test test-backend test-frontend coverage coverage-backend coverage-frontend doc-check compose-up compose-down compose-check install-hooks clean help fmt fmt-check
+.PHONY: all test test-backend test-frontend coverage coverage-backend coverage-frontend check-bare-srve doc-check compose-up compose-down compose-check install-hooks clean help fmt fmt-check
 
 GO = go
 NPM = npm
@@ -19,6 +19,9 @@ all: test
 
 test-backend:
 	$(GO) test -tags=integration -count=1 -timeout 150s ./internal/...
+
+check-bare-srve:
+	python3 scripts/check_bare_srve.py
 
 coverage-backend:
 	$(GO) test -tags=integration -cover -coverprofile=coverage.out -covermode=count -count=1 -timeout 150s ./internal/...

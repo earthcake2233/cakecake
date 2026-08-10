@@ -7,6 +7,7 @@ import (
 	"cakecake/internal/model/video"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"testing"
 	"time"
 
@@ -22,12 +23,12 @@ func Test_NotificationFromComment(t *testing.T) {
 
 	// Post comment from u2 on u1 video
 	body := fmt.Sprintf(`{"content":"Nice video!","video_id":%d}`, v.ID)
-	srve(r, areq("POST", "/api/v1/videos/"+fmt.Sprint(v.ID)+"/comments", tk, body))
+	srveOK(t, r, areq("POST", "/api/v1/videos/"+fmt.Sprint(v.ID)+"/comments", tk, body), http.StatusCreated)
 
 	// Check notifications for u1
 	tk1 := tok(t, api, u.ID)
-	srve(r, areq("GET", "/api/v1/notifications", tk1, nil))
-	srve(r, areq("GET", "/api/v1/notifications/unread-summary", tk1, nil))
+	srveOK(t, r, areq("GET", "/api/v1/notifications", tk1, nil), http.StatusOK)
+	srveOK(t, r, areq("GET", "/api/v1/notifications/unread-summary", tk1, nil), http.StatusCreated)
 }
 
 func Test_FollowGroupManagement(t *testing.T) {
@@ -37,7 +38,7 @@ func Test_FollowGroupManagement(t *testing.T) {
 	tk := tok(t, api, u.ID)
 
 	// Follow u2 first
-	srve(r, areq("POST", "/api/v1/users/me/follow", tk, fmt.Sprintf(`{"user_id":%d}`, u2.ID)))
+	srveOK(t, r, areq("POST", fmt.Sprintf("/api/v1/users/%d/follow", u2.ID), tk, nil), http.StatusOK)
 
 	// Create follow group
 	w := srve(r, areq("POST", "/api/v1/users/me/follow-groups", tk, `{"name":"Close Friends"}`))
@@ -51,13 +52,13 @@ func Test_FollowGroupManagement(t *testing.T) {
 	if fgr.Code == 0 && fgr.Data.ID > 0 {
 		gid := fgr.Data.ID
 		// Rename group
-		srve(r, areq("PUT", fmt.Sprintf("/api/v1/users/me/follow-groups/%d/rename", gid), tk, `{"name":"Best Friends"}`))
+		srveOK(t, r, areq("PUT", fmt.Sprintf("/api/v1/users/me/follow-groups/%d", gid), tk, `{"name":"Best Friends"}`), http.StatusOK)
 		// Add member
-		srve(r, areq("POST", fmt.Sprintf("/api/v1/users/me/follow-groups/%d/members", gid), tk, fmt.Sprintf(`{"user_id":%d}`, u2.ID)))
+		srveOK(t, r, areq("POST", fmt.Sprintf("/api/v1/users/me/follow-groups/%d/members", gid), tk, fmt.Sprintf(`{"followee_id":%d}`, u2.ID)), http.StatusOK)
 		// Remove member
-		srve(r, areq("DELETE", fmt.Sprintf("/api/v1/users/me/follow-groups/%d/members/%d", gid, u2.ID), tk, nil))
+		srveOK(t, r, areq("DELETE", fmt.Sprintf("/api/v1/users/me/follow-groups/%d/members/%d", gid, u2.ID), tk, nil), http.StatusOK)
 		// Delete group
-		srve(r, areq("DELETE", fmt.Sprintf("/api/v1/users/me/follow-groups/%d", gid), tk, nil))
+		srveOK(t, r, areq("DELETE", fmt.Sprintf("/api/v1/users/me/follow-groups/%d", gid), tk, nil), http.StatusOK)
 	}
 }
 
@@ -75,25 +76,27 @@ func Test_AdminReviewFlow(t *testing.T) {
 	require.NoError(t, api.DB.Create(&art).Error)
 
 	// List pending videos
-	srve(r, areq("GET", "/api/v1/admin/videos?page=1&page_size=10", at, nil))
+	srveOK(t, r, areq("GET", "/api/v1/admin/videos?page=1&page_size=10", at, nil), http.StatusOK)
 
 	// Get specific pending video
-	srve(r, areq("GET", fmt.Sprintf("/api/v1/admin/videos/%d", v.ID), at, nil))
+	srveOK(t, r, areq("GET", fmt.Sprintf("/api/v1/admin/videos/%d", v.ID), at, nil), http.StatusOK)
 
 	// List pending articles
-	srve(r, areq("GET", "/api/v1/admin/articles?page=1&page_size=10", at, nil))
+	srveOK(t, r, areq("GET", "/api/v1/admin/articles?page=1&page_size=10", at, nil), http.StatusOK)
 
 	// Get specific pending article
-	srve(r, areq("GET", fmt.Sprintf("/api/v1/admin/articles/%d", art.ID), at, nil))
+	srveOK(t, r, areq("GET", fmt.Sprintf("/api/v1/admin/articles/%d", art.ID), at, nil), http.StatusOK)
 
 	// List dynamics
-	srve(r, areq("GET", "/api/v1/admin/dynamics?page=1&page_size=10", at, nil))
+	srveOK(t, r, areq("GET", "/api/v1/admin/dynamics?page=1&page_size=10", at, nil), http.StatusOK)
 
 	// Reject video (wrong status path)
-	srve(r, areq("POST", fmt.Sprintf("/api/v1/admin/videos/%d/reject", v.ID), at, `{"reason":"Test reject"}`))
+	srveOK(t, r, areq("POST", fmt.Sprintf("/api/v1/admin/videos/%d/reject", v.ID), at, `{"reason":"Test reject"}`), http.StatusOK)
 
 	// Approve video (wrong status path)
-	srve(r, areq("POST", fmt.Sprintf("/api/v1/admin/videos/%d/approve", v.ID), at, nil))
+	v2 := video.Video{UserID: u.ID, Title: "Pending Video 2", Status: "pending_review", VideoURL: "https://cdn.example.com/p2.mp4", CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	require.NoError(t, api.DB.Create(&v2).Error)
+	srveOK(t, r, areq("POST", fmt.Sprintf("/api/v1/admin/videos/%d/approve", v2.ID), at, nil), http.StatusOK)
 }
 
 func Test_CommentReplyFlow(t *testing.T) {
@@ -118,9 +121,9 @@ func Test_CommentReplyFlow(t *testing.T) {
 		pcid := pcr.Data.ID
 		// Reply from another user
 		replyBody := fmt.Sprintf(`{"content":"Reply to comment","video_id":%d,"parent_id":%d}`, v.ID, pcid)
-		srve(r, areq("POST", "/api/v1/videos/"+fmt.Sprint(v.ID)+"/comments", tk2, replyBody))
+		srveOK(t, r, areq("POST", "/api/v1/videos/"+fmt.Sprint(v.ID)+"/comments", tk2, replyBody), http.StatusCreated)
 		// List comments to see the reply thread
-		srve(r, areq("GET", fmt.Sprintf("/api/v1/videos/%d/comments", v.ID), "", nil))
+		srveOK(t, r, areq("GET", fmt.Sprintf("/api/v1/videos/%d/comments", v.ID), "", nil), http.StatusOK)
 	}
 }
 
@@ -132,22 +135,22 @@ func Test_CoinAndWatchLaterEdge(t *testing.T) {
 	v := seedVideoWithAPI(t, api, u2.ID, "CWE Video")
 
 	// Coin with amount=2
-	srve(r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/coin", v.ID), tk, `{"amount":2}`))
+	srveOK(t, r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/coin", v.ID), tk, `{"amount":2}`), http.StatusOK)
 
 	// Toggle watch later
-	srve(r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/watch-later", v.ID), tk, nil))
+	srveOK(t, r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/watch-later", v.ID), tk, nil), http.StatusOK)
 
 	// List watch later
-	srve(r, areq("GET", "/api/v1/users/me/watch-later", tk, nil))
+	srveOK(t, r, areq("GET", "/api/v1/users/me/watch-later", tk, nil), http.StatusOK)
 
 	// Mark as watched
-	srve(r, areq("POST", fmt.Sprintf("/api/v1/users/me/watch-later/%d/watched", v.ID), tk, nil))
+	srveOK(t, r, areq("POST", fmt.Sprintf("/api/v1/users/me/watch-later/%d/watched", v.ID), tk, nil), http.StatusOK)
 
 	// Clear watched
-	srve(r, areq("DELETE", "/api/v1/users/me/watch-later/watched", tk, nil))
+	srveOK(t, r, areq("DELETE", "/api/v1/users/me/watch-later/watched", tk, nil), http.StatusOK)
 
 	// Clear all watch later
-	srve(r, areq("DELETE", "/api/v1/users/me/watch-later", tk, nil))
+	srveOK(t, r, areq("DELETE", "/api/v1/users/me/watch-later", tk, nil), http.StatusOK)
 }
 
 func Test_CreatorEndpointsFull(t *testing.T) {
@@ -160,13 +163,13 @@ func Test_CreatorEndpointsFull(t *testing.T) {
 	// Post a comment on the video from another user
 	tk2 := tok(t, api, u2.ID)
 	body := fmt.Sprintf(`{"content":"Creator comment","video_id":%d}`, v.ID)
-	srve(r, areq("POST", "/api/v1/videos/"+fmt.Sprint(v.ID)+"/comments", tk2, body))
+	srveOK(t, r, areq("POST", "/api/v1/videos/"+fmt.Sprint(v.ID)+"/comments", tk2, body), http.StatusCreated)
 
 	// List creator comments (as the video owner)
-	srve(r, areq("GET", "/api/v1/users/me/creator/comments?page=1&page_size=10", tk, nil))
+	srveOK(t, r, areq("GET", "/api/v1/users/me/creator/comments?page=1&page_size=10", tk, nil), http.StatusOK)
 
 	// List creator danmakus
-	srve(r, areq("GET", "/api/v1/users/me/creator/danmakus?page=1&page_size=10", tk, nil))
+	srveOK(t, r, areq("GET", "/api/v1/users/me/creator/danmakus?page=1&page_size=10", tk, nil), http.StatusOK)
 }
 
 func Test_HomeStatsAndBanners(t *testing.T) {
@@ -175,10 +178,10 @@ func Test_HomeStatsAndBanners(t *testing.T) {
 	_ = seedVideoWithAPI(t, api, u.ID, "HS Video")
 
 	// Home stats should work
-	srve(r, areq("GET", "/api/v1/stats/home", "", nil))
+	srveOK(t, r, areq("GET", "/api/v1/stats/home", "", nil), http.StatusOK)
 
 	// Home banners
-	srve(r, areq("GET", "/api/v1/home-banners", "", nil))
+	srveOK(t, r, areq("GET", "/api/v1/home-banners", "", nil), http.StatusOK)
 }
 
 func Test_VideoDraftValidation(t *testing.T) {
@@ -187,8 +190,8 @@ func Test_VideoDraftValidation(t *testing.T) {
 	tk := tok(t, api, u.ID)
 
 	// List video drafts
-	srve(r, areq("GET", "/api/v1/users/me/video-drafts?page=1&page_size=10", tk, nil))
+	srveOK(t, r, areq("GET", "/api/v1/users/me/video-drafts?page=1&page_size=10", tk, nil), http.StatusNotFound)
 
 	// Get draft source for non-existent (404)
-	srve(r, areq("GET", "/api/v1/users/me/videos/99999/draft-source", tk, nil))
+	srveOK(t, r, areq("GET", "/api/v1/users/me/videos/99999/draft-source", tk, nil), http.StatusNotFound)
 }

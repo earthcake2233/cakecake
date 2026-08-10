@@ -50,9 +50,9 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(cakecake_llm_requests_total[1m])) by (status)",
+          "expr": "sum(rate(cakecake_llm_requests_total{instance=~\"$instance\"}[1m])) by (status, instance)",
           "interval": "15s",
-          "legendFormat": "{{status}}",
+          "legendFormat": "{{instance}} · {{status}}",
           "refId": "A"
         }
       ],
@@ -119,9 +119,9 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(cakecake_llm_requests_total{status=\"error\"}[5m])) / clamp_min(sum(rate(cakecake_llm_requests_total[5m])), 1e-6) * 100",
+          "expr": "sum(rate(cakecake_llm_requests_total{status=\"error\",instance=~\"$instance\"}[5m])) by (instance) / clamp_min(sum(rate(cakecake_llm_requests_total{instance=~\"$instance\"}[5m])) by (instance), 1e-6) * 100",
           "interval": "15s",
-          "legendFormat": "error rate",
+          "legendFormat": "{{instance}}",
           "refId": "A"
         }
       ],
@@ -170,21 +170,21 @@
       },
       "targets": [
         {
-          "expr": "histogram_quantile(0.5, sum(rate(cakecake_llm_first_token_seconds_bucket[5m])) by (le))",
+          "expr": "histogram_quantile(0.5, sum(rate(cakecake_llm_first_token_seconds_bucket{instance=~\"$instance\"}[5m])) by (le, instance))",
           "interval": "15s",
-          "legendFormat": "p50",
+          "legendFormat": "p50 {{instance}}",
           "refId": "A"
         },
         {
-          "expr": "histogram_quantile(0.95, sum(rate(cakecake_llm_first_token_seconds_bucket[5m])) by (le))",
+          "expr": "histogram_quantile(0.95, sum(rate(cakecake_llm_first_token_seconds_bucket{instance=~\"$instance\"}[5m])) by (le, instance))",
           "interval": "15s",
-          "legendFormat": "p95",
+          "legendFormat": "p95 {{instance}}",
           "refId": "B"
         },
         {
-          "expr": "histogram_quantile(0.99, sum(rate(cakecake_llm_first_token_seconds_bucket[5m])) by (le))",
+          "expr": "histogram_quantile(0.99, sum(rate(cakecake_llm_first_token_seconds_bucket{instance=~\"$instance\"}[5m])) by (le, instance))",
           "interval": "15s",
-          "legendFormat": "p99",
+          "legendFormat": "p99 {{instance}}",
           "refId": "C"
         }
       ],
@@ -233,9 +233,9 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(cakecake_llm_tokens_total[1m])) by (type)",
+          "expr": "sum(rate(cakecake_llm_tokens_total{instance=~\"$instance\"}[1m])) by (type, instance)",
           "interval": "15s",
-          "legendFormat": "{{type}}",
+          "legendFormat": "{{instance}} · {{type}}",
           "refId": "A"
         }
       ],
@@ -284,9 +284,9 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(cakecake_agent_tool_calls_total[1m])) by (tool, status)",
+          "expr": "sum(rate(cakecake_agent_tool_calls_total{instance=~\"$instance\"}[1m])) by (tool, status, instance)",
           "interval": "15s",
-          "legendFormat": "{{tool}} / {{status}}",
+          "legendFormat": "{{instance}} · {{tool}} / {{status}}",
           "refId": "A"
         }
       ],
@@ -353,9 +353,9 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(cakecake_agent_tool_calls_total{status=\"error\"}[5m])) by (tool) / clamp_min(sum(rate(cakecake_agent_tool_calls_total[5m])) by (tool), 1e-6) * 100",
+          "expr": "sum(rate(cakecake_agent_tool_calls_total{status=\"error\",instance=~\"$instance\"}[5m])) by (tool, instance) / clamp_min(sum(rate(cakecake_agent_tool_calls_total{instance=~\"$instance\"}[5m])) by (tool, instance), 1e-6) * 100",
           "interval": "15s",
-          "legendFormat": "{{tool}}",
+          "legendFormat": "{{instance}} · {{tool}}",
           "refId": "A"
         }
       ],
@@ -404,9 +404,9 @@
       },
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, sum(rate(cakecake_agent_tool_call_seconds_bucket[5m])) by (le, tool))",
+          "expr": "histogram_quantile(0.95, sum(rate(cakecake_agent_tool_call_seconds_bucket{instance=~\"$instance\"}[5m])) by (le, tool, instance))",
           "interval": "15s",
-          "legendFormat": "{{tool}}",
+          "legendFormat": "{{instance}} · {{tool}}",
           "refId": "A"
         }
       ],
@@ -449,9 +449,9 @@
       },
       "targets": [
         {
-          "expr": "sum(increase(cakecake_agent_controls_total[24h])) by (type)",
+          "expr": "sum(increase(cakecake_agent_controls_total{instance=~\"$instance\"}[24h])) by (type, instance)",
           "interval": "15s",
-          "legendFormat": "{{type}}",
+          "legendFormat": "{{instance}} · {{type}}",
           "refId": "A"
         }
       ],
@@ -494,9 +494,9 @@
       },
       "targets": [
         {
-          "expr": "topk(10, sum(increase(cakecake_llm_cost_usd_total[24h])) by (user))",
+          "expr": "topk(10, sum(increase(cakecake_llm_cost_usd_total{instance=~\"$instance\"}[24h])) by (user, instance))",
           "interval": "15s",
-          "legendFormat": "user {{user}}",
+          "legendFormat": "{{instance}} · user {{user}}",
           "refId": "A"
         }
       ],
@@ -545,9 +545,9 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(cakecake_llm_cost_usd_total[5m]))",
+          "expr": "sum(rate(cakecake_llm_cost_usd_total{instance=~\"$instance\"}[5m])) by (instance)",
           "interval": "15s",
-          "legendFormat": "$/s",
+          "legendFormat": "{{instance}} $/s",
           "refId": "A"
         }
       ],
@@ -595,9 +595,9 @@
       },
       "targets": [
         {
-          "expr": "go_memstats_alloc_bytes",
+          "expr": "go_memstats_alloc_bytes{instance=~\"$instance\"}",
           "interval": "15s",
-          "legendFormat": "alloc",
+          "legendFormat": "{{instance}} alloc",
           "refId": "A"
         }
       ],
@@ -645,9 +645,9 @@
       },
       "targets": [
         {
-          "expr": "go_goroutines",
+          "expr": "go_goroutines{instance=~\"$instance\"}",
           "interval": "15s",
-          "legendFormat": "goroutines",
+          "legendFormat": "{{instance}}",
           "refId": "A"
         }
       ],
@@ -663,7 +663,35 @@
     "llm"
   ],
   "templating": {
-    "list": []
+    "list": [
+      {
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "definition": "label_values(up{job=~\"cakecake-backend.*\"}, instance)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Instance",
+        "multi": true,
+        "name": "instance",
+        "options": [],
+        "query": {
+          "query": "label_values(up{job=~\"cakecake-backend.*\"}, instance)",
+          "refId": "StandardVariableQuery"
+        },
+        "refresh": 2,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      }
+    ]
   },
   "time": {
     "from": "now-6h",

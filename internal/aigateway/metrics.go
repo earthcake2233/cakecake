@@ -47,25 +47,41 @@ var (
 	}, []string{"type"})
 )
 
-// Estimated USD cost per million tokens; tunable for the deployed model
-// (defaults approximate DeepSeek v4-flash pricing).
+// Estimated USD cost per million tokens based on DeepSeek V4-Flash official
+// regular pricing (2026-08):
+//   - input, cache hit:  $0.0028 / 1M
+//   - input, cache miss: $0.14   / 1M
+//   - output:            $0.28   / 1M
+//
+// Source: https://api-docs.deepseek.com/quick_start/pricing/
 const (
-	costUSDPerMillionPrompt     = 0.2
-	costUSDPerMillionCompletion = 0.8
+	costUSDPerMillionPromptCacheHit  = 0.0028
+	costUSDPerMillionPromptCacheMiss = 0.14
+	costUSDPerMillionCompletion      = 0.28
 )
 
 // Usage is an OpenAI-compatible token usage block.
 type Usage struct {
-	PromptTokens     int64 `json:"prompt_tokens"`
-	CompletionTokens int64 `json:"completion_tokens"`
-	TotalTokens      int64 `json:"total_tokens"`
+	PromptTokens          int64 `json:"prompt_tokens"`
+	CompletionTokens      int64 `json:"completion_tokens"`
+	TotalTokens           int64 `json:"total_tokens"`
+	PromptCacheHitTokens  int64 `json:"prompt_cache_hit_tokens"`
+	PromptCacheMissTokens int64 `json:"prompt_cache_miss_tokens"`
 }
 
 func (u *Usage) costUSD() float64 {
 	if u == nil {
 		return 0
 	}
-	return float64(u.PromptTokens)/1e6*costUSDPerMillionPrompt +
+	hit := u.PromptCacheHitTokens
+	miss := u.PromptCacheMissTokens
+	if hit == 0 && miss == 0 {
+		// Provider did not report the cache split; conservatively treat all
+		// prompt tokens as cache miss.
+		miss = u.PromptTokens
+	}
+	return float64(hit)/1e6*costUSDPerMillionPromptCacheHit +
+		float64(miss)/1e6*costUSDPerMillionPromptCacheMiss +
 		float64(u.CompletionTokens)/1e6*costUSDPerMillionCompletion
 }
 

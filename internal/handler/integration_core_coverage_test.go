@@ -3,8 +3,11 @@
 package handler
 
 import (
+	"cakecake/internal/model/article"
 	"cakecake/internal/model/comment"
+	"cakecake/internal/model/danmaku"
 	"cakecake/internal/model/dynamic"
+	"cakecake/internal/model/video"
 	"encoding/json"
 	"fmt"
 	"net/http/httptest"
@@ -49,25 +52,42 @@ func Test_DecrementPaths(t *testing.T) {
 	cid := cm.Data.ID
 
 	// Like comment (CASE WHEN like_count - 1 later gets tested)
-	srve(r, areq("POST", "/api/v1/comments/"+strconv.FormatUint(cid, 10)+"/like", tk, nil))
+	lw := srve(r, areq("POST", "/api/v1/comments/"+strconv.FormatUint(cid, 10)+"/like", tk, nil))
+	require.Equal(t, 0, codeFrom(t, lw))
+	require.Contains(t, lw.Body.String(), `"liked":true`)
 	// Unlike by toggling dislike (covers like_count -= 1 CASE WHEN)
-	srve(r, areq("POST", "/api/v1/comments/"+strconv.FormatUint(cid, 10)+"/dislike", tk, nil))
+	dw := srve(r, areq("POST", "/api/v1/comments/"+strconv.FormatUint(cid, 10)+"/dislike", tk, nil))
+	require.Equal(t, 0, codeFrom(t, dw))
 	// Like again then dislike again
-	srve(r, areq("POST", "/api/v1/comments/"+strconv.FormatUint(cid, 10)+"/like", tk, nil))
-	srve(r, areq("POST", "/api/v1/comments/"+strconv.FormatUint(cid, 10)+"/dislike", tk, nil))
+	lw = srve(r, areq("POST", "/api/v1/comments/"+strconv.FormatUint(cid, 10)+"/like", tk, nil))
+	require.Equal(t, 0, codeFrom(t, lw))
+	dw = srve(r, areq("POST", "/api/v1/comments/"+strconv.FormatUint(cid, 10)+"/dislike", tk, nil))
+	require.Equal(t, 0, codeFrom(t, dw))
 
 	// Toggle video like
-	srve(r, areq("POST", "/api/v1/videos/"+strconv.FormatUint(v.ID, 10)+"/like", tk, nil))
-	srve(r, areq("POST", "/api/v1/videos/"+strconv.FormatUint(v.ID, 10)+"/like", tk, nil))
+	lw = srve(r, areq("POST", "/api/v1/videos/"+strconv.FormatUint(v.ID, 10)+"/like", tk, nil))
+	require.Equal(t, 0, codeFrom(t, lw))
+	require.Contains(t, lw.Body.String(), `"liked":true`)
+	lw = srve(r, areq("POST", "/api/v1/videos/"+strconv.FormatUint(v.ID, 10)+"/like", tk, nil))
+	require.Equal(t, 0, codeFrom(t, lw))
+	require.Contains(t, lw.Body.String(), `"liked":false`)
 
 	// Toggle video favorite (covers fav_count -= 1 CASE WHEN)
-	srve(r, areq("POST", "/api/v1/videos/"+strconv.FormatUint(v.ID, 10)+"/favorite", tk, nil))
-	srve(r, areq("POST", "/api/v1/videos/"+strconv.FormatUint(v.ID, 10)+"/favorite", tk, nil))
+	fw := srve(r, areq("POST", "/api/v1/videos/"+strconv.FormatUint(v.ID, 10)+"/favorite", tk, nil))
+	require.Equal(t, 0, codeFrom(t, fw))
+	require.Contains(t, fw.Body.String(), `"favorited":true`)
+	fw = srve(r, areq("POST", "/api/v1/videos/"+strconv.FormatUint(v.ID, 10)+"/favorite", tk, nil))
+	require.Equal(t, 0, codeFrom(t, fw))
+	require.Contains(t, fw.Body.String(), `"favorited":false`)
 
 	// Toggle article favorite
 	art := seedArticle(t, api, u.ID, "DEC Article")
-	srve(r, areq("POST", "/api/v1/articles/"+strconv.FormatUint(art.ID, 10)+"/favorite", tk, nil))
-	srve(r, areq("POST", "/api/v1/articles/"+strconv.FormatUint(art.ID, 10)+"/favorite", tk, nil))
+	afw := srve(r, areq("POST", "/api/v1/articles/"+strconv.FormatUint(art.ID, 10)+"/favorite", tk, nil))
+	require.Equal(t, 0, codeFrom(t, afw))
+	require.Contains(t, afw.Body.String(), `"favorited":true`)
+	afw = srve(r, areq("POST", "/api/v1/articles/"+strconv.FormatUint(art.ID, 10)+"/favorite", tk, nil))
+	require.Equal(t, 0, codeFrom(t, afw))
+	require.Contains(t, afw.Body.String(), `"favorited":false`)
 }
 
 // Test dynamic comment reactions (covers CASE WHEN like_count -= 1)
@@ -97,8 +117,11 @@ func Test_DynamicCommentReactions(t *testing.T) {
 	dcid := dcm.Data.ID
 
 	// Like (then unlike by disliking) - covers CASE WHEN like_count -= 1
-	srve(r, areq("POST", fmt.Sprintf("/api/v1/dynamic-comments/%d/like", dcid), tk, nil))
-	srve(r, areq("POST", fmt.Sprintf("/api/v1/dynamic-comments/%d/dislike", dcid), tk, nil))
+	lw := srve(r, areq("POST", fmt.Sprintf("/api/v1/dynamic-comments/%d/like", dcid), tk, nil))
+	require.Equal(t, 0, codeFrom(t, lw))
+	require.Contains(t, lw.Body.String(), `"liked":true`)
+	dw := srve(r, areq("POST", fmt.Sprintf("/api/v1/dynamic-comments/%d/dislike", dcid), tk, nil))
+	require.Equal(t, 0, codeFrom(t, dw))
 }
 
 // Test article comment reactions
@@ -123,15 +146,21 @@ func Test_ArticleCommentDecrement(t *testing.T) {
 	acid := acm.Data.ID
 
 	// Like toggle (covers CASE WHEN like_count -= 1)
-	srve(r, areq("POST", fmt.Sprintf("/api/v1/article-comments/%d/like", acid), tk, nil))
-	srve(r, areq("POST", fmt.Sprintf("/api/v1/article-comments/%d/dislike", acid), tk, nil))
+	lw := srve(r, areq("POST", fmt.Sprintf("/api/v1/article-comments/%d/like", acid), tk, nil))
+	require.Equal(t, 0, codeFrom(t, lw))
+	require.Contains(t, lw.Body.String(), `"liked":true`)
+	dw := srve(r, areq("POST", fmt.Sprintf("/api/v1/article-comments/%d/dislike", acid), tk, nil))
+	require.Equal(t, 0, codeFrom(t, dw))
 
 	// Approve, pin
-	srve(r, areq("POST", fmt.Sprintf("/api/v1/article-comments/%d/approve", acid), tk, nil))
-	srve(r, areq("POST", fmt.Sprintf("/api/v1/article-comments/%d/pin", acid), tk, nil))
+	aw := srve(r, areq("POST", fmt.Sprintf("/api/v1/article-comments/%d/approve", acid), tk, nil))
+	require.Equal(t, 0, codeFrom(t, aw))
+	pw := srve(r, areq("POST", fmt.Sprintf("/api/v1/article-comments/%d/pin", acid), tk, nil))
+	require.Equal(t, 0, codeFrom(t, pw))
 
 	// Delete article comment (covers comment_count -= 1 CASE WHEN)
-	srve(r, areq("DELETE", fmt.Sprintf("/api/v1/article-comments/%d", acid), tk, nil))
+	delw := srve(r, areq("DELETE", fmt.Sprintf("/api/v1/article-comments/%d", acid), tk, nil))
+	require.Equal(t, 0, codeFrom(t, delw))
 }
 
 // Test danmaku operations
@@ -142,10 +171,15 @@ func Test_DanmakuOperations(t *testing.T) {
 	tk := tok(t, api, u.ID)
 
 	// Post a danmaku
-	srve(r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/danmaku", v.ID), tk, `{"content":"hello","time":1.5,"type":1,"color":16777215}`))
+	w := srve(r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/danmaku", v.ID), tk, `{"content":"hello","video_time":1.5,"type":"scroll","color":"#FFFFFF"}`))
+	require.Equal(t, 0, codeFrom(t, w))
+	require.Contains(t, w.Body.String(), `"content":"hello"`)
+	require.Contains(t, w.Body.String(), `"type":"scroll"`)
 
 	// Get danmaku list
-	srve(r, areq("GET", fmt.Sprintf("/api/v1/videos/%d/danmaku?time=0", v.ID), "", nil))
+	var dmCount int64
+	require.NoError(t, api.DB.Model(&danmaku.Danmaku{}).Where("video_id = ?", v.ID).Count(&dmCount).Error)
+	require.Equal(t, int64(1), dmCount)
 }
 
 // Test dynamic like (covers CASE WHEN like_count -= 1)
@@ -158,8 +192,12 @@ func Test_DynamicLike(t *testing.T) {
 	require.NoError(t, api.DB.Create(&dyn).Error)
 
 	// Toggle like on/off (covers CASE WHEN like_count -= 1)
-	srve(r, areq("POST", fmt.Sprintf("/api/v1/user-dynamics/%d/like", dyn.ID), tk, nil))
-	srve(r, areq("POST", fmt.Sprintf("/api/v1/user-dynamics/%d/like", dyn.ID), tk, nil))
+	w := srve(r, areq("POST", fmt.Sprintf("/api/v1/user-dynamics/%d/like", dyn.ID), tk, nil))
+	require.Equal(t, 0, codeFrom(t, w))
+	require.Contains(t, w.Body.String(), `"liked":true`)
+	w = srve(r, areq("POST", fmt.Sprintf("/api/v1/user-dynamics/%d/like", dyn.ID), tk, nil))
+	require.Equal(t, 0, codeFrom(t, w))
+	require.Contains(t, w.Body.String(), `"liked":false`)
 }
 
 // Test view history settings
@@ -169,16 +207,26 @@ func Test_ViewHistorySettingsMore(t *testing.T) {
 	tk := tok(t, api, u.ID)
 
 	// Get settings
-	srve(r, areq("GET", "/api/v1/users/me/view-history/settings", tk, nil))
+	w := srve(r, areq("GET", "/api/v1/users/me/view-history/settings", tk, nil))
+	require.Equal(t, 0, codeFrom(t, w))
 	// Update settings
-	srve(r, areq("PUT", "/api/v1/users/me/view-history/settings", tk, `{"paused":true}`))
+	w = srve(r, areq("PUT", "/api/v1/users/me/view-history/settings", tk, `{"paused":true}`))
+	require.Equal(t, 0, codeFrom(t, w))
+	require.Contains(t, w.Body.String(), `"paused":true`)
+	// Unpause so the history write below is actually recorded.
+	w = srve(r, areq("PUT", "/api/v1/users/me/view-history/settings", tk, `{"paused":false}`))
+	require.Equal(t, 0, codeFrom(t, w))
 	// Post view history
 	v := seedVideoWithAPI(t, api, u.ID, "VHS Vid")
-	srve(r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/view-history", v.ID), tk, nil))
+	w = srve(r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/view-history", v.ID), tk, nil))
+	require.Equal(t, 0, codeFrom(t, w))
 	// List
-	srve(r, areq("GET", "/api/v1/users/me/view-history", tk, nil))
+	w = srve(r, areq("GET", "/api/v1/users/me/view-history", tk, nil))
+	require.Equal(t, 0, codeFrom(t, w))
+	require.Contains(t, w.Body.String(), strconv.FormatUint(v.ID, 10))
 	// Delete entry
-	srve(r, areq("DELETE", fmt.Sprintf("/api/v1/users/me/view-history/%d", v.ID), tk, nil))
+	w = srve(r, areq("DELETE", fmt.Sprintf("/api/v1/users/me/view-history/%d", v.ID), tk, nil))
+	require.Equal(t, 0, codeFrom(t, w))
 }
 
 // Test video watch later operations
@@ -189,13 +237,18 @@ func Test_WatchLaterOperations(t *testing.T) {
 	tk := tok(t, api, u.ID)
 
 	// Toggle watch later
-	srve(r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/watch-later", v.ID), tk, nil))
+	w := srve(r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/watch-later", v.ID), tk, nil))
+	require.Equal(t, 0, codeFrom(t, w))
+	require.Contains(t, w.Body.String(), `"in_watch_later":true`)
 	// Mark as watched
-	srve(r, areq("POST", fmt.Sprintf("/api/v1/users/me/watch-later/%d/watched", v.ID), tk, nil))
+	w = srve(r, areq("POST", fmt.Sprintf("/api/v1/users/me/watch-later/%d/watched", v.ID), tk, nil))
+	require.Equal(t, 0, codeFrom(t, w))
 	// Clear watched
-	srve(r, areq("DELETE", "/api/v1/users/me/watch-later/watched", tk, nil))
+	w = srve(r, areq("DELETE", "/api/v1/users/me/watch-later/watched", tk, nil))
+	require.Equal(t, 0, codeFrom(t, w))
 	// Clear all
-	srve(r, areq("DELETE", "/api/v1/users/me/watch-later", tk, nil))
+	w = srve(r, areq("DELETE", "/api/v1/users/me/watch-later", tk, nil))
+	require.Equal(t, 0, codeFrom(t, w))
 }
 
 // Test video folder operations
@@ -216,11 +269,14 @@ func Test_VideoFolderOperations(t *testing.T) {
 	if ff.Data.ID > 0 {
 		fid := ff.Data.ID
 		// Add video to folder
-		srve(r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/favorite-folders/%d", v.ID, fid), tk, nil))
+		aw := srve(r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/favorite-folders/%d", v.ID, fid), tk, nil))
+		require.Equal(t, 0, codeFrom(t, aw))
 		// Remove video from folder
-		srve(r, areq("DELETE", fmt.Sprintf("/api/v1/videos/%d/favorite-folders/%d", v.ID, fid), tk, nil))
+		rw := srve(r, areq("DELETE", fmt.Sprintf("/api/v1/videos/%d/favorite-folders/%d", v.ID, fid), tk, nil))
+		require.Equal(t, 0, codeFrom(t, rw))
 		// Delete folder
-		srve(r, areq("DELETE", fmt.Sprintf("/api/v1/users/me/favorite-folders/%d", fid), tk, nil))
+		dw := srve(r, areq("DELETE", fmt.Sprintf("/api/v1/users/me/favorite-folders/%d", fid), tk, nil))
+		require.Equal(t, 0, codeFrom(t, dw))
 	}
 }
 
@@ -231,11 +287,17 @@ func Test_SearchEndpoints(t *testing.T) {
 	tk := tok(t, api, u.ID)
 
 	// Search videos
-	srve(r, areq("GET", "/api/v1/search?keyword=test&type=video&page=1&page_size=10", tk, nil))
+	w := srve(r, areq("GET", "/api/v1/search?keyword=test&type=video&page=1&page_size=10", tk, nil))
+	require.Equal(t, 0, codeFrom(t, w))
+	require.Contains(t, w.Body.String(), `"search_status":"unavailable"`)
 	// Search users
-	srve(r, areq("GET", "/api/v1/search?keyword=test&type=user&page=1&page_size=10", tk, nil))
+	w = srve(r, areq("GET", "/api/v1/search?keyword=test&type=user&page=1&page_size=10", tk, nil))
+	require.Equal(t, 0, codeFrom(t, w))
+	require.Contains(t, w.Body.String(), `"search_status":"unavailable"`)
 	// Search articles
-	srve(r, areq("GET", "/api/v1/search?keyword=test&type=article&page=1&page_size=10", tk, nil))
+	w = srve(r, areq("GET", "/api/v1/search?keyword=test&type=article&page=1&page_size=10", tk, nil))
+	require.Equal(t, 0, codeFrom(t, w))
+	require.Contains(t, w.Body.String(), `"search_status":"unavailable"`)
 }
 
 // Test admin delete ops
@@ -247,9 +309,17 @@ func Test_AdminDeleteMore(t *testing.T) {
 	atk := admintok(t, api)
 
 	// Admin delete video
-	srve(r, areq("DELETE", fmt.Sprintf("/api/v1/admin/videos/%d", v.ID), atk, nil))
+	dw := srve(r, areq("DELETE", fmt.Sprintf("/api/v1/admin/videos/%d", v.ID), atk, nil))
+	require.Equal(t, 0, codeFrom(t, dw))
+	var vcount int64
+	require.NoError(t, api.DB.Model(&video.Video{}).Where("id = ?", v.ID).Count(&vcount).Error)
+	require.Zero(t, vcount)
 	// Admin delete article
-	srve(r, areq("DELETE", fmt.Sprintf("/api/v1/admin/articles/%d", art.ID), atk, nil))
+	dw = srve(r, areq("DELETE", fmt.Sprintf("/api/v1/admin/articles/%d", art.ID), atk, nil))
+	require.Equal(t, 0, codeFrom(t, dw))
+	var acount int64
+	require.NoError(t, api.DB.Model(&article.Article{}).Where("id = ?", art.ID).Count(&acount).Error)
+	require.Zero(t, acount)
 }
 
 // Test coin operations
@@ -262,7 +332,11 @@ func Test_CoinOperations(t *testing.T) {
 	tk := tok(t, api, u.ID)
 
 	// Coin video
-	srve(r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/coin", v.ID), tk, `{"amount":1}`))
+	cw := srve(r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/coin", v.ID), tk, `{"amount":1}`))
+	require.Equal(t, 0, codeFrom(t, cw))
+	require.Contains(t, cw.Body.String(), `"coined":true`)
 	// Coin article
-	srve(r, areq("POST", fmt.Sprintf("/api/v1/articles/%d/coin", art.ID), tk, `{"amount":1}`))
+	cw = srve(r, areq("POST", fmt.Sprintf("/api/v1/articles/%d/coin", art.ID), tk, `{"amount":1}`))
+	require.Equal(t, 0, codeFrom(t, cw))
+	require.Contains(t, cw.Body.String(), `"coined":true`)
 }

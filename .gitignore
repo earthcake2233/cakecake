@@ -106,3 +106,12 @@ coverage
 # Coverage check temp files
 cover_check
 cover_full_check
+
+# Broken coverage-generation scripts (removed from tracking)
+scripts/gen_cover_test.py
+scripts/_gen_cover.py
+scripts/integration_admin_notfound_test.py
+
+# Python caches
+__pycache__/
+*.pyc

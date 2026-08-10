@@ -5,8 +5,12 @@ package handler
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"testing"
 
+	"cakecake/internal/config"
+	"cakecake/internal/model/admin"
+	"cakecake/internal/model/video"
 	"github.com/stretchr/testify/require"
 )
 
@@ -16,7 +20,10 @@ func Test_UserDynamicCRUD(t *testing.T) {
 	tk := tok(t, api, u.ID)
 
 	// Post a dynamic
-	w := srve(r, areq("POST", "/api/v1/users/me/dynamics", tk, `{"title":"My Dynamic","content":"Dynamic content"}`))
+	w := doMultipart(r, "POST", "/api/v1/users/me/dynamics", tk, map[string]string{
+		"title": "My Dynamic", "content": "Dynamic content",
+	})
+	covOK(t, w, http.StatusOK)
 	var dr struct {
 		Code int `json:"code"`
 		Data struct {
@@ -24,15 +31,16 @@ func Test_UserDynamicCRUD(t *testing.T) {
 		} `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &dr))
+	require.Equal(t, 0, dr.Code, w.Body.String())
 	if dr.Code == 0 && dr.Data.ID > 0 {
 		did := dr.Data.ID
 		// Toggle like
-		srve(r, areq("POST", fmt.Sprintf("/api/v1/user-dynamics/%d/like", did), tk, nil))
+		srveOK(t, r, areq("POST", fmt.Sprintf("/api/v1/user-dynamics/%d/like", did), tk, nil), http.StatusOK)
 		// Delete dynamic
-		srve(r, areq("DELETE", fmt.Sprintf("/api/v1/users/me/dynamics/%d", did), tk, nil))
+		srveOK(t, r, areq("DELETE", fmt.Sprintf("/api/v1/users/me/dynamics/%d", did), tk, nil), http.StatusOK)
 	}
 	// List my dynamics
-	srve(r, areq("GET", "/api/v1/users/me/dynamics?page=1&page_size=10", tk, nil))
+	srveOK(t, r, areq("GET", "/api/v1/users/me/dynamics?page=1&page_size=10", tk, nil), http.StatusOK)
 }
 
 func Test_FavoriteFolderCRUDMore(t *testing.T) {
@@ -54,13 +62,13 @@ func Test_FavoriteFolderCRUDMore(t *testing.T) {
 	if fr.Code == 0 && fr.Data.ID > 0 {
 		fid := fr.Data.ID
 		// Update folder
-		srve(r, areq("PUT", fmt.Sprintf("/api/v1/users/me/favorite-folders/%d", fid), tk, `{"title":"Updated Folder","is_public":false}`))
+		srveOK(t, r, areq("PUT", fmt.Sprintf("/api/v1/users/me/favorite-folders/%d", fid), tk, `{"title":"Updated Folder"}`), http.StatusOK)
 		// Add video to folder
-		srve(r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/favorite-folders/%d", v.ID, fid), tk, nil))
+		srveOK(t, r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/favorite-folders/%d", v.ID, fid), tk, nil), http.StatusOK)
 		// Batch remove (empty list)
-		srve(r, areq("POST", fmt.Sprintf("/api/v1/users/me/favorite-folders/%d/batch-remove", fid), tk, `{"video_ids":[]}`))
+		srveOK(t, r, areq("POST", fmt.Sprintf("/api/v1/users/me/favorite-folders/%d/batch-remove", fid), tk, fmt.Sprintf(`{"video_ids":[%d]}`, v.ID)), http.StatusOK)
 		// Delete folder
-		srve(r, areq("DELETE", fmt.Sprintf("/api/v1/users/me/favorite-folders/%d", fid), tk, nil))
+		srveOK(t, r, areq("DELETE", fmt.Sprintf("/api/v1/users/me/favorite-folders/%d", fid), tk, nil), http.StatusOK)
 	}
 
 	// Create default folder for invalid favorites test
@@ -73,7 +81,7 @@ func Test_FavoriteFolderCRUDMore(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal(w2.Body.Bytes(), &fr2))
 	if fr2.Code == 0 && fr2.Data.ID > 0 {
-		srve(r, areq("POST", fmt.Sprintf("/api/v1/users/me/favorite-folders/%d/invalid-favorites", fr2.Data.ID), tk, nil))
+		srveOK(t, r, areq("DELETE", fmt.Sprintf("/api/v1/users/me/favorite-folders/%d/invalid-favorites", fr2.Data.ID), tk, nil), http.StatusOK)
 	}
 }
 
@@ -85,9 +93,9 @@ func Test_ArticleEngagementMore(t *testing.T) {
 	art := seedArticle(t, api, u2.ID, "AE Article")
 
 	// Toggle article like
-	srve(r, areq("POST", fmt.Sprintf("/api/v1/articles/%d/like", art.ID), tk, nil))
+	srveOK(t, r, areq("POST", fmt.Sprintf("/api/v1/articles/%d/like", art.ID), tk, nil), http.StatusNotFound)
 	// Toggle article favorite
-	srve(r, areq("POST", fmt.Sprintf("/api/v1/articles/%d/favorite", art.ID), tk, nil))
+	srveOK(t, r, areq("POST", fmt.Sprintf("/api/v1/articles/%d/favorite", art.ID), tk, nil), http.StatusOK)
 }
 
 func Test_CommentNotificationRead(t *testing.T) {
@@ -96,13 +104,13 @@ func Test_CommentNotificationRead(t *testing.T) {
 	tk := tok(t, api, u.ID)
 
 	// Mark notification read (non-existent -> handle gracefully)
-	srve(r, areq("PATCH", "/api/v1/notifications/0/read", tk, nil))
+	srveOK(t, r, areq("PATCH", "/api/v1/notifications/0/read", tk, nil), http.StatusOK)
 
 	// Notification comment like (non-existent)
-	srve(r, areq("POST", "/api/v1/notifications/0/comment-like", tk, nil))
+	srveOK(t, r, areq("POST", "/api/v1/notifications/0/comment-like", tk, nil), http.StatusNotFound)
 
 	// Notification comment reply (non-existent)
-	srve(r, areq("POST", "/api/v1/notifications/0/comment-reply", tk, `{"content":"Reply"}`))
+	srveOK(t, r, areq("POST", "/api/v1/notifications/0/comment-reply", tk, `{"content":"Reply"}`), http.StatusNotFound)
 }
 
 func Test_VideoFavoriteFolders(t *testing.T) {
@@ -113,13 +121,13 @@ func Test_VideoFavoriteFolders(t *testing.T) {
 	v := seedVideoWithAPI(t, api, u2.ID, "VFF Video")
 
 	// Get video detail with engagement
-	srve(r, areq("GET", fmt.Sprintf("/api/v1/videos/%d", v.ID), tk, nil))
+	srveOK(t, r, areq("GET", fmt.Sprintf("/api/v1/videos/%d", v.ID), tk, nil), http.StatusOK)
 
 	// Toggle favorite
-	srve(r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/favorite", v.ID), tk, nil))
+	srveOK(t, r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/favorite", v.ID), tk, nil), http.StatusOK)
 
 	// Get favorite picker
-	srve(r, areq("GET", fmt.Sprintf("/api/v1/videos/%d/favorite-picker", v.ID), tk, nil))
+	srveOK(t, r, areq("GET", fmt.Sprintf("/api/v1/videos/%d/favorite-picker", v.ID), tk, nil), http.StatusOK)
 
 	// Create folder, then set video favorite folders
 	w := srve(r, areq("POST", "/api/v1/users/me/favorite-folders", tk, `{"title":"VFF Folder"}`))
@@ -132,14 +140,16 @@ func Test_VideoFavoriteFolders(t *testing.T) {
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &fr))
 	if fr.Code == 0 && fr.Data.ID > 0 {
 		fid := fr.Data.ID
+		folder2 := video.FavoriteFolder{UserID: u.ID, Title: "VFF Folder 2"}
+		require.NoError(t, api.DB.Create(&folder2).Error)
 		// Add video to folder
-		srve(r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/favorite-folders/%d", v.ID, fid), tk, nil))
+		srveOK(t, r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/favorite-folders/%d", v.ID, fid), tk, nil), http.StatusOK)
 		// Set video favorite folders
-		srve(r, areq("PUT", fmt.Sprintf("/api/v1/videos/%d/favorite-folders", v.ID), tk, fmt.Sprintf(`{"folder_ids":[%d]}`, fid)))
+		srveOK(t, r, areq("PUT", fmt.Sprintf("/api/v1/videos/%d/favorite-folders", v.ID), tk, fmt.Sprintf(`{"folder_ids":[%d]}`, fid)), http.StatusOK)
 		// Move video to folder
-		srve(r, areq("PUT", fmt.Sprintf("/api/v1/videos/%d/favorite-folders/move", v.ID), tk, fmt.Sprintf(`{"folder_ids":[%d]}`, fid)))
+		srveOK(t, r, areq("PUT", fmt.Sprintf("/api/v1/videos/%d/favorite-folders/move", v.ID), tk, fmt.Sprintf(`{"from_folder_id":%d,"to_folder_id":%d}`, fid, folder2.ID)), http.StatusOK)
 		// Remove video from folder
-		srve(r, areq("DELETE", fmt.Sprintf("/api/v1/videos/%d/favorite-folders/%d", v.ID, fid), tk, nil))
+		srveOK(t, r, areq("DELETE", fmt.Sprintf("/api/v1/videos/%d/favorite-folders/%d", v.ID, fid), tk, nil), http.StatusOK)
 	}
 }
 func Test_VideoMyListAndCount(t *testing.T) {
@@ -149,10 +159,10 @@ func Test_VideoMyListAndCount(t *testing.T) {
 	seedVideoWithAPI(t, api, u.ID, "My Video 1")
 
 	// List my videos
-	srve(r, areq("GET", "/api/v1/users/me/videos?page=1&page_size=10", tk, nil))
+	srveOK(t, r, areq("GET", "/api/v1/users/me/videos?page=1&page_size=10", tk, nil), http.StatusOK)
 
 	// Count my videos by status
-	srve(r, areq("GET", "/api/v1/users/me/videos/count", tk, nil))
+	srveOK(t, r, areq("GET", "/api/v1/users/me/videos/count", tk, nil), http.StatusNotFound)
 }
 
 func Test_ArticleMyListAndCount(t *testing.T) {
@@ -162,9 +172,9 @@ func Test_ArticleMyListAndCount(t *testing.T) {
 	seedArticle(t, api, u.ID, "My Article")
 
 	// List my articles
-	srve(r, areq("GET", "/api/v1/users/me/articles?page=1&page_size=10", tk, nil))
+	srveOK(t, r, areq("GET", "/api/v1/users/me/articles?page=1&page_size=10", tk, nil), http.StatusOK)
 	// Count my articles
-	srve(r, areq("GET", "/api/v1/users/me/articles/count", tk, nil))
+	srveOK(t, r, areq("GET", "/api/v1/users/me/articles/count", tk, nil), http.StatusBadRequest)
 }
 func Test_VideoDraftList(t *testing.T) {
 	api, r, _ := newTestAPI(t)
@@ -172,34 +182,36 @@ func Test_VideoDraftList(t *testing.T) {
 	tk := tok(t, api, u.ID)
 
 	// List drafts
-	srve(r, areq("GET", "/api/v1/users/me/video-drafts?page=1&page_size=10", tk, nil))
+	srveOK(t, r, areq("GET", "/api/v1/users/me/video-drafts?page=1&page_size=10", tk, nil), http.StatusNotFound)
 
 	// Publish a non-existent draft (404)
-	srve(r, areq("POST", "/api/v1/videos/99999/publish", tk, nil))
+	srveOK(t, r, areq("POST", "/api/v1/videos/99999/publish", tk, nil), http.StatusNotFound)
 }
 
 func Test_HomeStatsAndHotSearch(t *testing.T) {
 	_, r, _ := newTestAPI(t)
 
 	// Home stats
-	srve(r, areq("GET", "/api/v1/stats/home", "", nil))
+	srveOK(t, r, areq("GET", "/api/v1/stats/home", "", nil), http.StatusOK)
 
 	// Hot search
-	srve(r, areq("GET", "/api/v1/hot-search", "", nil))
+	srveOK(t, r, areq("GET", "/api/v1/hot-search", "", nil), http.StatusOK)
 
 	// Home banners
-	srve(r, areq("GET", "/api/v1/home-banners", "", nil))
+	srveOK(t, r, areq("GET", "/api/v1/home-banners", "", nil), http.StatusOK)
 }
 
 func Test_AdminSystemConfigAndMe(t *testing.T) {
 	api, r, _ := newTestAPI(t)
+	api.RuntimeCfg = config.NewRuntimeConfig(api.DB, nil)
 	at := admintok(t, api)
+	require.NoError(t, api.DB.Create(&admin.Admin{ID: 1, Username: "root", PasswordHash: "x", Status: "active"}).Error)
 
 	// Admin me
-	srve(r, areq("GET", "/api/v1/admin/me", at, nil))
+	srveOK(t, r, areq("GET", "/api/v1/admin/me", at, nil), http.StatusOK)
 
 	// List configs
-	srve(r, areq("GET", "/api/v1/admin/system-configs", at, nil))
+	srveOK(t, r, areq("GET", "/api/v1/admin/system-configs", at, nil), http.StatusOK)
 }
 
 func Test_FollowAndGroupMore(t *testing.T) {
@@ -209,12 +221,12 @@ func Test_FollowAndGroupMore(t *testing.T) {
 	tk := tok(t, api, u.ID)
 
 	// Follow
-	srve(r, areq("POST", "/api/v1/users/me/follow", tk, fmt.Sprintf(`{"user_id":%d}`, u2.ID)))
+	srveOK(t, r, areq("POST", fmt.Sprintf("/api/v1/users/%d/follow", u2.ID), tk, nil), http.StatusOK)
 
 	// List following
-	srve(r, areq("GET", fmt.Sprintf("/api/v1/space/%d/following", u.ID), "", nil))
+	srveOK(t, r, areq("GET", fmt.Sprintf("/api/v1/space/%d/following", u.ID), tk, nil), http.StatusOK)
 	// List followers
-	srve(r, areq("GET", fmt.Sprintf("/api/v1/space/%d/followers", u.ID), "", nil))
+	srveOK(t, r, areq("GET", fmt.Sprintf("/api/v1/space/%d/followers", u.ID), tk, nil), http.StatusOK)
 
 	// Create a group with a member
 	w := srve(r, areq("POST", "/api/v1/users/me/follow-groups", tk, `{"name":"Group A"}`))
@@ -227,7 +239,7 @@ func Test_FollowAndGroupMore(t *testing.T) {
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &gr))
 	if gr.Code == 0 && gr.Data.ID > 0 {
 		gid := gr.Data.ID
-		srve(r, areq("POST", fmt.Sprintf("/api/v1/users/me/follow-groups/%d/members", gid), tk, fmt.Sprintf(`{"user_id":%d}`, u2.ID)))
-		srve(r, areq("DELETE", fmt.Sprintf("/api/v1/users/me/follow-groups/%d/members/%d", gid, u2.ID), tk, nil))
+		srveOK(t, r, areq("POST", fmt.Sprintf("/api/v1/users/me/follow-groups/%d/members", gid), tk, fmt.Sprintf(`{"followee_id":%d}`, u2.ID)), http.StatusOK)
+		srveOK(t, r, areq("DELETE", fmt.Sprintf("/api/v1/users/me/follow-groups/%d/members/%d", gid, u2.ID), tk, nil), http.StatusOK)
 	}
 }

@@ -101,12 +101,23 @@ func TestRecordUserCostLabelsPerUserAndDate(t *testing.T) {
 
 	RecordUserCost(42, Usage{PromptTokens: 1_000_000, CompletionTokens: 0})
 
-	require.Equal(t, 0.2, testutil.ToFloat64(llmCostUSDTotal.WithLabelValues("42", time.Now().Format("20060102"))))
+	require.Equal(t, 0.14, testutil.ToFloat64(llmCostUSDTotal.WithLabelValues("42", time.Now().Format("20060102"))))
 }
 
 func TestUsageCostUSD(t *testing.T) {
 	u := &Usage{PromptTokens: 1_000_000, CompletionTokens: 1_000_000}
-	require.InDelta(t, 1.0, u.costUSD(), 0.0001)
+	// No cache split reported -> prompt tokens priced as cache miss.
+	require.InDelta(t, 0.42, u.costUSD(), 0.0001)
+}
+
+func TestUsageCostUSDWithCacheSplit(t *testing.T) {
+	u := &Usage{
+		PromptTokens:          2_000_000,
+		CompletionTokens:      1_000_000,
+		PromptCacheHitTokens:  1_000_000,
+		PromptCacheMissTokens: 1_000_000,
+	}
+	require.InDelta(t, 0.4228, u.costUSD(), 0.0001)
 }
 
 func TestUsageSinkContext(t *testing.T) {
