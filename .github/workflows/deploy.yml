@@ -84,6 +84,8 @@ jobs:
           cp cakecake-linux release/cakecake
           cp -a cakecake-vue/cakecake-web/dist/. release/dist/
           cp -a migrations/. release/migrations/
+          cp deploy/env.production.example release/env.production.example
+          cp scripts/merge_env.sh release/merge_env.sh
           tar czf minibili-release.tar.gz -C release .
 
       - name: Upload bundle to server
@@ -124,6 +126,13 @@ jobs:
             cp -a "$WORK/dist/." /opt/minibili/www/
             mkdir -p /opt/minibili/migrations
             cp -a "$WORK/migrations/." /opt/minibili/migrations/
+            # 保持服务器 .env 为仓库最新模板：已有键值一律不覆盖，只补新增键
+            if [ -f /opt/minibili/.env ]; then
+              bash "$WORK/merge_env.sh" /opt/minibili/.env "$WORK/env.production.example"
+            else
+              echo "ERROR: /opt/minibili/.env is missing; initialize it per deploy/DEPLOY.md first" >&2
+              exit 1
+            fi
             rm -rf "$WORK" /tmp/minibili-release.tar.gz
             systemctl restart minibili
             # Wait up to 30s for the app to listen (startup can take a few seconds)

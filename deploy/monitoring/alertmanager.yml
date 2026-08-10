@@ -1,0 +1,32 @@
+# Alertmanager routing for CakeCake platform alerts.
+# Replace ALERTMANAGER_WEBHOOK_URL with your team's endpoint (Feishu/DingTalk/Slack
+# webhook proxy, Opsgenie, etc.) before production use.
+global:
+  resolve_timeout: 5m
+
+route:
+  group_by: ["alertname", "job", "severity"]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  receiver: default
+  routes:
+    - matchers:
+        - severity="critical"
+      receiver: default
+      repeat_interval: 1h
+
+receivers:
+  - name: default
+    webhook_configs:
+      # Alertmanager does not expand env vars in config; replace this
+      # placeholder with your real Feishu/DingTalk/Slack/Opsgenie webhook URL.
+      - url: "http://127.0.0.1:9999/webhook"
+        send_resolved: true
+
+inhibit_rules:
+  - source_matchers:
+      - severity="critical"
+    target_matchers:
+      - severity="warning"
+    equal: ["alertname", "job"]

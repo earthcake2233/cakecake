@@ -1,10 +1,11 @@
 # cakecake Docker Compose (V1: one-command local experience)
 #
 # Usage:
-#   cp .env.example .env            # optional; defaults work without it
+#   python3 scripts/init_env.py     # generate .env with strong random secrets (required)
 #   docker compose up -d            # pulls published images & starts MySQL/Redis/RabbitMQ/ES + backend + frontend
 #   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build  # build from source
 #   open http://localhost:8888
+#   monitoring: Prometheus http://localhost:9090, Alertmanager http://localhost:9093, Grafana http://localhost:3000 (credentials from .env)
 #
 # Maintenance contract (guarded by CI .github/workflows/compose-check.yml):
 #   1) new env vars must be added to .env.example too (check_compose_env.py fails otherwise);
@@ -22,7 +23,7 @@ services:
     container_name: cakecake-mysql
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-cakecake_dev}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD in .env (python3 scripts/init_env.py)}
       MYSQL_DATABASE: ${MYSQL_DATABASE:-cakecake}
       TZ: Asia/Shanghai
     command:
@@ -107,10 +108,10 @@ services:
       APP_ENV: development
       DB_AUTO_MIGRATE: "1"
       HTTP_ADDR: ":8080"
-      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env (python3 scripts/init_env.py)}
       # Container-network DSN: do NOT reuse the local-dev MYSQL_DSN (127.0.0.1 points to the container itself).
-      # When customizing MYSQL_ROOT_PASSWORD / MYSQL_DATABASE, update COMPOSE_MYSQL_DSN accordingly.
-      MYSQL_DSN: ${COMPOSE_MYSQL_DSN:-root:cakecake_dev@tcp(mysql:3306)/cakecake?charset=utf8mb4&parseTime=True&loc=Local}
+      # Derived from MYSQL_ROOT_PASSWORD / MYSQL_DATABASE; keep the password URL-safe (hex recommended).
+      MYSQL_DSN: root:${MYSQL_ROOT_PASSWORD}@tcp(mysql:3306)/${MYSQL_DATABASE:-cakecake}?charset=utf8mb4&parseTime=True&loc=Local
       REDIS_ADDR: redis:6379
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       REDIS_DB: ${REDIS_DB:-0}
@@ -129,7 +130,7 @@ services:
       IP2REGION_V4_XDB: ${IP2REGION_V4_XDB:-./configs/ip2region_v4.xdb}
       IP2REGION_DEV_CLIENT_IP: ${IP2REGION_DEV_CLIENT_IP:-}
       ADMIN_SEED_USERNAME: ${ADMIN_SEED_USERNAME:-admin}
-      ADMIN_SEED_PASSWORD: ${ADMIN_SEED_PASSWORD:-change-me-admin}
+      ADMIN_SEED_PASSWORD: ${ADMIN_SEED_PASSWORD:?set ADMIN_SEED_PASSWORD in .env (python3 scripts/init_env.py)}
       VIDEO_REVIEW_REQUIRED: ${VIDEO_REVIEW_REQUIRED:-true}
       ARTICLE_REVIEW_REQUIRED: ${ARTICLE_REVIEW_REQUIRED:-true}
       VIDEO_UPLOAD_DISABLED: ${VIDEO_UPLOAD_DISABLED:-true}
@@ -143,6 +144,7 @@ services:
       AGENT_HISTORY_TTL: ${AGENT_HISTORY_TTL:-720h}
       AGENT_DAILY_QUOTA: ${AGENT_DAILY_QUOTA:-80}
       AGENT_REQUEST_TIMEOUT: ${AGENT_REQUEST_TIMEOUT:-90s}
+      METRICS_TOKEN: ${METRICS_TOKEN:?set METRICS_TOKEN in .env (python3 scripts/init_env.py)}
       SHUTDOWN_TIMEOUT: ${SHUTDOWN_TIMEOUT:-30s}
       RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-false}
       RATE_LIMIT_RATE: ${RATE_LIMIT_RATE:-20}
@@ -162,6 +164,65 @@ services:
       timeout: 5s
       retries: 12
       start_period: 30s
+
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    container_name: cakecake-prometheus
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_started
+    environment:
+      PROMETHEUS_ENV: ${APP_ENV:-development}
+      PROMETHEUS_CLUSTER: ${PROMETHEUS_CLUSTER:-default}
+    secrets:
+      - metrics_token
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-15d}
+      - --web.enable-lifecycle
+    ports:
+      - "127.0.0.1:${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./deploy/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./deploy/monitoring/rules:/etc/prometheus/rules:ro
+      - prometheus_data:/prometheus
+
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: cakecake-alertmanager
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+      - --web.external-url=http://127.0.0.1:${ALERTMANAGER_PORT:-9093}
+    ports:
+      - "127.0.0.1:${ALERTMANAGER_PORT:-9093}:9093"
+    volumes:
+      - ./deploy/monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager_data:/alertmanager
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    container_name: cakecake-grafana
+    restart: unless-stopped
+    depends_on:
+      prometheus:
+        condition: service_started
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD in .env (python3 scripts/init_env.py)}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_SERVER_ROOT_URL: http://127.0.0.1:${GRAFANA_PORT:-3000}
+      TZ: Asia/Shanghai
+    ports:
+      - "127.0.0.1:${GRAFANA_PORT:-3000}:3000"
+    volumes:
+      - ./deploy/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./deploy/monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
 
   web:
     image: earthcake/cakecake-web:latest
@@ -183,3 +244,10 @@ volumes:
   redis_data:
   rabbitmq_data:
   es_data:
+  prometheus_data:
+  alertmanager_data:
+  grafana_data:
+
+secrets:
+  metrics_token:
+    file: .secrets/metrics_token

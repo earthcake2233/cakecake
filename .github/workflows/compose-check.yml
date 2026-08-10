@@ -13,6 +13,7 @@ on:
       - "Dockerfile"
       - "cakecake-vue/cakecake-web/Dockerfile"
       - "deploy/nginx-compose.conf"
+      - "deploy/monitoring/**"
       - ".dockerignore"
       - "scripts/check_compose_env.py"
       - "internal/data/demo_seed*.go"
@@ -27,6 +28,7 @@ on:
       - "Dockerfile"
       - "cakecake-vue/cakecake-web/Dockerfile"
       - "deploy/nginx-compose.conf"
+      - "deploy/monitoring/**"
       - ".dockerignore"
       - "scripts/check_compose_env.py"
       - "internal/data/demo_seed*.go"
@@ -49,6 +51,9 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      - name: Generate .env with random secrets
+        run: python3 scripts/init_env.py
+
       - name: Validate compose file
         run: docker compose config --quiet
 
@@ -57,6 +62,25 @@ jobs:
 
       - name: Env drift check (.env.example <-> compose)
         run: python3 scripts/check_compose_env.py
+
+      - name: Validate monitoring configs
+        run: |
+          mkdir -p /tmp/cakecake-ci-secrets
+          printf 'ci-token' > /tmp/cakecake-ci-secrets/metrics_token
+          printf 'ci-token' > /tmp/cakecake-ci-secrets/metrics_token_cloud
+          docker run --rm \
+            -e METRICS_TOKEN=ci-token \
+            -e PROMETHEUS_ENV=ci \
+            -e PROMETHEUS_CLUSTER=ci \
+            -v "$PWD/deploy/monitoring:/etc/prometheus:ro" \
+            -v /tmp/cakecake-ci-secrets:/run/secrets:ro \
+            prom/prometheus:v2.53.0 \
+            promtool check config /etc/prometheus/prometheus.yml
+          docker run --rm \
+            -v "$PWD/deploy/monitoring:/etc/alertmanager:ro" \
+            prom/alertmanager:v0.27.0 \
+            amtool check-config /etc/alertmanager/alertmanager.yml
+          python3 -m json.tool deploy/monitoring/grafana/dashboards/cakecake-ai-gateway.json >/dev/null
 
   compose-smoke:
     if: github.event_name != 'pull_request'
@@ -80,7 +104,9 @@ jobs:
           RABBITMQ_PORT: 15672
           RABBITMQ_MGMT_PORT: 15673
           ES_PORT: 19200
-        run: docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
+        run: |
+          python3 scripts/init_env.py
+          docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
 
       - name: Wait for frontend to serve
         run: |
@@ -111,6 +137,20 @@ jobs:
           curl -fsS "http://127.0.0.1:18080/api/v1/videos?limit=3" | grep -Eq '"code"[^0-9]*0'
           curl -fsS "http://127.0.0.1:18080/api/v1/videos?limit=3" | grep -q '"items"'
           curl -fsS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:18080/ | grep -q '^200$'
+
+      - name: Check monitoring stack is up and dashboard provisioned
+        run: |
+          ok=0
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:9090/-/healthy >/dev/null 2>&1 && curl -fsS http://127.0.0.1:3000/api/health >/dev/null 2>&1; then
+              ok=1
+              break
+            fi
+            sleep 5
+          done
+          [ "$ok" = "1" ] || { echo "monitoring stack never became ready"; exit 1; }
+          curl -fsS -H "Authorization: Basic $(printf 'admin:admin' | base64)" \
+            "http://127.0.0.1:3000/api/search?query=CakeCake" | grep -q '"title":"CakeCake AI Gateway"'
 
       - name: Scan backend image (Trivy)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0

@@ -1,0 +1,55 @@
+# Host-mode Prometheus configuration: scrapes a backend running on the Docker
+# host (e.g. `air` / `go run`) via host.docker.internal instead of a compose
+# service named `backend`.
+global:
+  scrape_interval: 15s
+  scrape_timeout: 10s
+  evaluation_interval: 15s
+  external_labels:
+    environment: ${PROMETHEUS_ENV}
+    cluster: ${PROMETHEUS_CLUSTER}
+
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - alertmanager:9093
+
+scrape_configs:
+  - job_name: cakecake-backend
+    metrics_path: /metrics
+    scheme: http
+    static_configs:
+      - targets:
+          - host.docker.internal:8080
+        labels:
+          service: cakecake-backend
+    authorization:
+      type: Bearer
+      credentials_file: /run/secrets/metrics_token
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: host:8080
+
+  # 云服务器生产后端（第 1 条方案：监控留本地，只通过 HTTPS 抓云上 /metrics）
+  # 域名按你的生产环境修改；鉴权由后端 METRICS_TOKEN 强制，token 经 Docker secret 提供。
+  - job_name: cakecake-backend-cloud
+    metrics_path: /metrics
+    scheme: https
+    static_configs:
+      - targets:
+          - chengzisoft.top
+        labels:
+          service: cakecake-backend
+          environment: production
+    authorization:
+      type: Bearer
+      credentials_file: /run/secrets/metrics_token_cloud
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: cloud
