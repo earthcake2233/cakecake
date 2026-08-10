@@ -14,6 +14,7 @@ import (
 	"gorm.io/gorm"
 
 	"cakecake/internal/data"
+	"cakecake/internal/errcode"
 	"cakecake/internal/pkg/sensitive"
 )
 
@@ -62,14 +63,14 @@ func (s *DanmakuService) PostDanmaku(ctx context.Context, videoID, userID uint64
 		return nil, service.ErrInternalError
 	}
 	if !okSet {
-		return nil, &service.SvcError{Code: 40025, Msg: "danmaku cooldown"}
+		return nil, &service.SvcError{Code: errcode.CodeDanmakuCooldown, Msg: "danmaku cooldown"}
 	}
 
 	// Sensitive content check
 	if err := s.sens.Check(content); err != nil {
 		s.rdb.Del(ctx, key)
 		if _, ok := err.(sensitive.ErrBlocked); ok {
-			return nil, &service.SvcError{Code: 40022, Msg: "danmaku sensitive"}
+			return nil, &service.SvcError{Code: errcode.CodeDanmakuSensitive, Msg: "danmaku sensitive"}
 		}
 		s.log.Error("sensitive check", zap.Error(err))
 		return nil, service.ErrInternalError

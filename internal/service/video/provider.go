@@ -12,6 +12,7 @@ import (
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // VideoProviderImpl implements VideoProvider using *gorm.DB.
@@ -294,21 +295,28 @@ func (p *VideoProviderImpl) CountByStatus(ctx context.Context, status string) (i
 
 // ToggleVideoLike toggles a video like (Phase 1: no-op stub, likes live in handler).
 func (p *VideoProviderImpl) ToggleVideoLike(ctx context.Context, userID, videoID uint64) (bool, error) {
-	var like video.VideoLike
-	res := p.db.WithContext(ctx).Where("user_id = ? AND video_id = ?", userID, videoID).Limit(1).Find(&like)
+	// Atomic upsert: concurrent toggles for the same user cannot create
+	// duplicate like rows or race into a 500 (unique index violation).
+	lk := video.VideoLike{UserID: userID, VideoID: videoID}
+	res := p.db.WithContext(ctx).
+		Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "user_id"}, {Name: "video_id"}},
+			DoNothing: true,
+		}).
+		Create(&lk)
 	if res.Error != nil {
 		return false, res.Error
 	}
-	if res.RowsAffected == 0 {
-		lk := video.VideoLike{UserID: userID, VideoID: videoID}
-		if err := p.db.WithContext(ctx).Create(&lk).Error; err != nil {
-			return false, err
-		}
+	if res.RowsAffected == 1 {
 		_ = p.db.WithContext(ctx).Model(&video.Video{}).Where("id = ?", videoID).
 			UpdateColumn("like_count", gorm.Expr("like_count + ?", 1)).Error
 		return true, nil
 	}
-	if err := p.db.WithContext(ctx).Delete(&like).Error; err != nil {
+	// The row already exists (possibly inserted by a concurrent toggle), so
+	// this toggle removes it.
+	if err := p.db.WithContext(ctx).
+		Where("user_id = ? AND video_id = ?", userID, videoID).
+		Delete(&video.VideoLike{}).Error; err != nil {
 		return false, err
 	}
 	_ = p.db.WithContext(ctx).Model(&video.Video{}).Where("id = ?", videoID).

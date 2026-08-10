@@ -3,6 +3,7 @@ package search
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"path"
@@ -97,16 +98,32 @@ func TestEnsureIndices_AlreadyExist(t *testing.T) {
 }
 
 func TestSearchAll_Basic(t *testing.T) {
+	var lastBody string
+	var lastPath string
 	srv := newMockESServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "_search") {
+			raw, _ := io.ReadAll(r.Body)
+			lastBody = string(raw)
+			lastPath = r.URL.Path
 			resp := map[string]interface{}{
 				"hits": map[string]interface{}{
 					"hits": []interface{}{
 						map[string]interface{}{
 							"_source": map[string]interface{}{
-								"video_id":  float64(1),
-								"title":     "Test Video",
-								"user_name": "tester",
+								"id":            float64(1),
+								"user_id":       float64(42),
+								"title":         "Test Video",
+								"description":   "<em>golang</em> rocks",
+								"uploader":      "tester",
+								"cover_url":     "https://cdn.example.com/cover.jpg",
+								"play_count":    float64(100),
+								"danmaku_count": float64(7),
+								"duration_sec":  float64(61),
+								"zone":          "Tech-Code",
+								"created_at":    "2026-01-02T03:04:05+08:00",
+							},
+							"highlight": map[string]interface{}{
+								"description": []string{"<em>golang</em> rocks"},
 							},
 						},
 					},
@@ -124,6 +141,19 @@ func TestSearchAll_Basic(t *testing.T) {
 	result, err := c.SearchAll(context.TODO(), SearchParams{Keyword: "test", Page: 1, PageSize: 10})
 	require.NoError(t, err)
 	require.NotNil(t, result)
+	require.Len(t, result.Result.Video, 1)
+	hit := result.Result.Video[0]
+	require.Equal(t, uint64(1), hit.Aid)
+	require.Equal(t, "Test Video", hit.Title)
+	require.Equal(t, "tester", hit.Author)
+	require.Equal(t, uint64(42), hit.Mid)
+	require.Equal(t, "golang rocks", hit.Description)
+	require.Equal(t, "01:01", hit.Duration)
+	require.Equal(t, uint64(100), hit.Play)
+	require.Equal(t, "TechCode", hit.TypeName)
+	require.Equal(t, 1, result.TopTlist.Video)
+	require.Contains(t, lastPath, "/_search")
+	require.Contains(t, lastBody, `"test"`)
 }
 
 func TestSearchAll_EmptyKeyword(t *testing.T) {

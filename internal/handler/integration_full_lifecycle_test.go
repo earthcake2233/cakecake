@@ -7,6 +7,7 @@ import (
 	"cakecake/internal/model/video"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"testing"
 	"time"
 
@@ -25,23 +26,36 @@ func Test_FullVideoLifecycle(t *testing.T) {
 	require.NoError(t, api.DB.Create(&v).Error)
 
 	// Like video
-	srve(r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/like", v.ID), tk, nil))
+	w := covReq(t, r, "POST", fmt.Sprintf("/api/v1/videos/%d/like", v.ID), tk, nil)
+	covOK(t, w, http.StatusOK)
+	require.Contains(t, w.Body.String(), `"liked":true`)
 
 	// Favorite video
-	srve(r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/favorite", v.ID), tk, nil))
+	w = covReq(t, r, "POST", fmt.Sprintf("/api/v1/videos/%d/favorite", v.ID), tk, nil)
+	covOK(t, w, http.StatusOK)
+	require.Contains(t, w.Body.String(), `"favorited":true`)
 
 	// Coin video
-	srve(r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/coin", v.ID), tk, `{"amount":1}`))
+	w = covReq(t, r, "POST", fmt.Sprintf("/api/v1/videos/%d/coin", v.ID), tk, map[string]any{"amount": 1})
+	covOK(t, w, http.StatusOK)
+	require.Contains(t, w.Body.String(), `"coined":true`)
 
 	// Watch later
-	srve(r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/watch-later", v.ID), tk, nil))
+	w = covReq(t, r, "POST", fmt.Sprintf("/api/v1/videos/%d/watch-later", v.ID), tk, nil)
+	covOK(t, w, http.StatusOK)
+	require.Contains(t, w.Body.String(), `"in_watch_later":true`)
 
 	// Post danmaku
-	srve(r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/danmaku", v.ID), tk, `{"content":"Great vid","type":0,"color":16777215,"progress":10.5}`))
+	w = covReq(t, r, "POST", fmt.Sprintf("/api/v1/videos/%d/danmaku", v.ID), tk, map[string]any{
+		"content": "Great vid", "type": "scroll", "color": "#FFFFFF", "video_time": 10.5,
+	})
+	covOK(t, w, http.StatusOK)
+	require.Contains(t, w.Body.String(), `"content":"Great vid"`)
 
 	// Post comment
 	body := fmt.Sprintf(`{"content":"Nice video!","video_id":%d}`, v.ID)
-	w := srve(r, areq("POST", "/api/v1/videos/"+fmt.Sprint(v.ID)+"/comments", tk, body))
+	w = covReq(t, r, "POST", "/api/v1/videos/"+fmt.Sprint(v.ID)+"/comments", tk, body)
+	covOK(t, w, http.StatusCreated)
 	var cr struct {
 		Code int `json:"code"`
 		Data struct {
@@ -52,11 +66,14 @@ func Test_FullVideoLifecycle(t *testing.T) {
 	if cr.Code == 0 && cr.Data.ID > 0 {
 		cid := cr.Data.ID
 		// Like comment
-		srve(r, areq("POST", fmt.Sprintf("/api/v1/comments/%d/like", cid), tk2, nil))
+		cw := covReq(t, r, "POST", fmt.Sprintf("/api/v1/comments/%d/like", cid), tk2, nil)
+		covOK(t, cw, http.StatusOK)
 		// Dislike comment
-		srve(r, areq("POST", fmt.Sprintf("/api/v1/comments/%d/dislike", cid), tk2, nil))
+		cw = covReq(t, r, "POST", fmt.Sprintf("/api/v1/comments/%d/dislike", cid), tk2, nil)
+		covOK(t, cw, http.StatusOK)
 		// Pin comment
-		srve(r, areq("POST", fmt.Sprintf("/api/v1/comments/%d/pin", cid), tk, nil))
+		cw = covReq(t, r, "POST", fmt.Sprintf("/api/v1/comments/%d/pin", cid), tk2, nil)
+		covOK(t, cw, http.StatusOK)
 	}
 }
 
@@ -70,16 +87,17 @@ func Test_FullArticleLifecycle(t *testing.T) {
 	require.NoError(t, api.DB.Create(&art).Error)
 
 	// Post view
-	srve(r, areq("POST", fmt.Sprintf("/api/v1/articles/%d/view", art.ID), tk, nil))
-
-	// Toggle article like
-	srve(r, areq("POST", fmt.Sprintf("/api/v1/articles/%d/like", art.ID), tk, nil))
+	w := covReq(t, r, "POST", fmt.Sprintf("/api/v1/articles/%d/view", art.ID), tk, nil)
+	covOK(t, w, http.StatusOK)
 
 	// Toggle article favorite
-	srve(r, areq("POST", fmt.Sprintf("/api/v1/articles/%d/favorite", art.ID), tk, nil))
+	w = covReq(t, r, "POST", fmt.Sprintf("/api/v1/articles/%d/favorite", art.ID), tk, nil)
+	covOK(t, w, http.StatusOK)
+	require.Contains(t, w.Body.String(), `"favorited":true`)
 
 	// Post article comment
-	w := srve(r, areq("POST", fmt.Sprintf("/api/v1/articles/%d/comments", art.ID), tk, fmt.Sprintf(`{"content":"Great article!","article_id":%d}`, art.ID)))
+	w = covReq(t, r, "POST", fmt.Sprintf("/api/v1/articles/%d/comments", art.ID), tk, fmt.Sprintf(`{"content":"Great article!","article_id":%d}`, art.ID))
+	covOK(t, w, http.StatusCreated)
 	var acr struct {
 		Code int `json:"code"`
 		Data struct {
@@ -90,11 +108,14 @@ func Test_FullArticleLifecycle(t *testing.T) {
 	if acr.Code == 0 && acr.Data.ID > 0 {
 		cid := acr.Data.ID
 		// Like article comment
-		srve(r, areq("POST", fmt.Sprintf("/api/v1/article-comments/%d/like", cid), tk, nil))
+		cw := covReq(t, r, "POST", fmt.Sprintf("/api/v1/article-comments/%d/like", cid), tk, nil)
+		covOK(t, cw, http.StatusOK)
 		// Pin article comment
-		srve(r, areq("POST", fmt.Sprintf("/api/v1/article-comments/%d/pin", cid), tk, nil))
+		cw = covReq(t, r, "POST", fmt.Sprintf("/api/v1/article-comments/%d/pin", cid), tk, nil)
+		covOK(t, cw, http.StatusOK)
 		// Approve article comment
-		srve(r, areq("POST", fmt.Sprintf("/api/v1/article-comments/%d/approve", cid), tk, nil))
+		cw = covReq(t, r, "POST", fmt.Sprintf("/api/v1/article-comments/%d/approve", cid), tk, nil)
+		covOK(t, cw, http.StatusOK)
 	}
 }
 
@@ -103,18 +124,28 @@ func Test_UserFollowFullCycle(t *testing.T) {
 	u := seedUser(t, api, "uff1", "UFF1", 10)
 	u2 := seedUser(t, api, "uff2", "UFF2", 10)
 	tk := tok(t, api, u.ID)
+	tk2 := tok(t, api, u2.ID)
+	followPath := fmt.Sprintf("/api/v1/users/%d/follow", u2.ID)
 
 	// Follow user
-	srve(r, areq("POST", "/api/v1/users/me/follow", tk, fmt.Sprintf(`{"user_id":%d}`, u2.ID)))
+	w := covReq(t, r, "POST", followPath, tk, nil)
+	covOK(t, w, http.StatusOK)
+	require.Contains(t, w.Body.String(), `"followed":true`)
 
 	// Check following list
-	srve(r, areq("GET", fmt.Sprintf("/api/v1/space/%d/following", u.ID), "", nil))
+	w = covReq(t, r, "GET", fmt.Sprintf("/api/v1/space/%d/following", u.ID), tk, nil)
+	covOK(t, w, http.StatusOK)
+	require.Contains(t, w.Body.String(), u2.Nickname)
 
 	// Check followers list
-	srve(r, areq("GET", fmt.Sprintf("/api/v1/space/%d/followers", u2.ID), "", nil))
+	w = covReq(t, r, "GET", fmt.Sprintf("/api/v1/space/%d/followers", u2.ID), tk2, nil)
+	covOK(t, w, http.StatusOK)
+	require.Contains(t, w.Body.String(), u.Nickname)
 
-	// Unfollow
-	srve(r, areq("POST", "/api/v1/users/me/unfollow", tk, fmt.Sprintf(`{"user_id":%d}`, u2.ID)))
+	// Toggle again -> unfollow.
+	w = covReq(t, r, "POST", followPath, tk, nil)
+	covOK(t, w, http.StatusOK)
+	require.Contains(t, w.Body.String(), `"followed":false`)
 }
 
 func Test_DmConversationFull(t *testing.T) {
@@ -125,7 +156,8 @@ func Test_DmConversationFull(t *testing.T) {
 	tk2 := tok(t, api, u2.ID)
 
 	// Create conversation
-	w := srve(r, areq("POST", "/api/v1/dm/conversations", tk, fmt.Sprintf(`{"user_id":%d}`, u2.ID)))
+	w := covReq(t, r, "POST", "/api/v1/dm/conversations", tk, map[string]any{"peer_id": u2.ID})
+	covOK(t, w, http.StatusOK)
 	var dcr struct {
 		Code int `json:"code"`
 		Data struct {
@@ -136,15 +168,22 @@ func Test_DmConversationFull(t *testing.T) {
 	if dcr.Code == 0 && dcr.Data.ID > 0 {
 		cid := dcr.Data.ID
 		// Post message from user 1
-		srve(r, areq("POST", fmt.Sprintf("/api/v1/dm/conversations/%d/messages", cid), tk, `{"content":"Hello from U1"}`))
+		mw := covReq(t, r, "POST", fmt.Sprintf("/api/v1/dm/conversations/%d/messages", cid), tk, map[string]any{"content": "Hello from U1"})
+		covOK(t, mw, http.StatusOK)
 		// Post message from user 2
-		srve(r, areq("POST", fmt.Sprintf("/api/v1/dm/conversations/%d/messages", cid), tk2, `{"content":"Reply from U2"}`))
+		mw = covReq(t, r, "POST", fmt.Sprintf("/api/v1/dm/conversations/%d/messages", cid), tk2, map[string]any{"content": "Reply from U2"})
+		covOK(t, mw, http.StatusOK)
 		// List messages
-		srve(r, areq("GET", fmt.Sprintf("/api/v1/dm/conversations/%d/messages", cid), tk, nil))
+		lw := covReq(t, r, "GET", fmt.Sprintf("/api/v1/dm/conversations/%d/messages", cid), tk, nil)
+		covOK(t, lw, http.StatusOK)
+		require.Contains(t, lw.Body.String(), "Hello from U1")
+		require.Contains(t, lw.Body.String(), "Reply from U2")
 		// List conversations
-		srve(r, areq("GET", "/api/v1/dm/conversations", tk, nil))
+		cw := covReq(t, r, "GET", "/api/v1/dm/conversations", tk, nil)
+		covOK(t, cw, http.StatusOK)
 		// Delete conversation
-		srve(r, areq("DELETE", fmt.Sprintf("/api/v1/dm/conversations/%d", cid), tk, nil))
+		dw := covReq(t, r, "DELETE", fmt.Sprintf("/api/v1/dm/conversations/%d", cid), tk, nil)
+		covOK(t, dw, http.StatusOK)
 	}
 }
 
@@ -167,17 +206,24 @@ func Test_FavoriteFolderLifecycle(t *testing.T) {
 	if ffr.Code == 0 && ffr.Data.ID > 0 {
 		fid := ffr.Data.ID
 		// List my folders
-		srve(r, areq("GET", "/api/v1/users/me/favorite-folders", tk, nil))
+		lw := covReq(t, r, "GET", "/api/v1/users/me/favorite-folders", tk, nil)
+		covOK(t, lw, http.StatusOK)
 		// Add video to folder
-		srve(r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/favorite-folders/%d", v.ID, fid), tk, nil))
+		aw := covReq(t, r, "POST", fmt.Sprintf("/api/v1/videos/%d/favorite-folders/%d", v.ID, fid), tk, nil)
+		covOK(t, aw, http.StatusOK)
 		// List favorites in folder
-		srve(r, areq("GET", "/api/v1/users/me/favorites?folder_id="+fmt.Sprint(fid), tk, nil))
+		fw := covReq(t, r, "GET", "/api/v1/users/me/favorites?folder_id="+fmt.Sprint(fid), tk, nil)
+		covOK(t, fw, http.StatusOK)
+		require.Contains(t, fw.Body.String(), v.Title)
 		// Update folder
-		srve(r, areq("PUT", fmt.Sprintf("/api/v1/users/me/favorite-folders/%d", fid), tk, `{"title":"Updated Collection"}`))
+		uw := covReq(t, r, "PUT", fmt.Sprintf("/api/v1/users/me/favorite-folders/%d", fid), tk, map[string]any{"title": "Updated Collection"})
+		covOK(t, uw, http.StatusOK)
 		// Clear invalid favorites
-		srve(r, areq("POST", fmt.Sprintf("/api/v1/users/me/favorite-folders/%d/invalid-favorites", fid), tk, nil))
+		cw := covReq(t, r, "DELETE", fmt.Sprintf("/api/v1/users/me/favorite-folders/%d/invalid-favorites", fid), tk, nil)
+		covOK(t, cw, http.StatusOK)
 		// Delete folder
-		srve(r, areq("DELETE", fmt.Sprintf("/api/v1/users/me/favorite-folders/%d", fid), tk, nil))
+		dw := covReq(t, r, "DELETE", fmt.Sprintf("/api/v1/users/me/favorite-folders/%d", fid), tk, nil)
+		covOK(t, dw, http.StatusOK)
 	}
 }
 
@@ -187,29 +233,43 @@ func Test_SpaceEndpointsFull(t *testing.T) {
 	u2 := seedUser(t, api, "sef2", "SEF2", 100)
 	v := seedVideoWithAPI(t, api, u.ID, "SEF Video")
 	_ = seedArticle(t, api, u.ID, "SEF Article")
+	tk := tok(t, api, u.ID)
 
 	// Get user space
-	srve(r, areq("GET", fmt.Sprintf("/api/v1/space/%d", u.ID), "", nil))
+	w := covReq(t, r, "GET", fmt.Sprintf("/api/v1/space/%d", u.ID), "", nil)
+	covOK(t, w, http.StatusOK)
+	require.Contains(t, w.Body.String(), u.Nickname)
 
 	// Space videos
-	srve(r, areq("GET", fmt.Sprintf("/api/v1/space/%d/videos", u.ID), "", nil))
+	w = covReq(t, r, "GET", fmt.Sprintf("/api/v1/space/%d/videos", u.ID), "", nil)
+	covOK(t, w, http.StatusOK)
+	require.Contains(t, w.Body.String(), v.Title)
 
 	// Space articles
-	srve(r, areq("GET", fmt.Sprintf("/api/v1/space/%d/articles", u.ID), "", nil))
+	w = covReq(t, r, "GET", fmt.Sprintf("/api/v1/space/%d/articles", u.ID), "", nil)
+	covOK(t, w, http.StatusOK)
+	require.Contains(t, w.Body.String(), "SEF Article")
 
 	// Space favorites
-	srve(r, areq("GET", fmt.Sprintf("/api/v1/space/%d/favorites", u.ID), "", nil))
+	w = covReq(t, r, "GET", fmt.Sprintf("/api/v1/space/%d/favorites", u.ID), "", nil)
+	covOK(t, w, http.StatusOK)
 
 	// Space favorite folders
-	srve(r, areq("GET", fmt.Sprintf("/api/v1/space/%d/favorite-folders", u.ID), "", nil))
+	w = covReq(t, r, "GET", fmt.Sprintf("/api/v1/space/%d/favorite-folders", u.ID), "", nil)
+	covOK(t, w, http.StatusOK)
 
 	// Space article favorites
-	srve(r, areq("GET", fmt.Sprintf("/api/v1/space/%d/article-favorites", u.ID), "", nil))
+	w = covReq(t, r, "GET", fmt.Sprintf("/api/v1/space/%d/article-favorites", u.ID), "", nil)
+	covOK(t, w, http.StatusOK)
 
 	// Post coin from another user to create coin record
-	tk2 := tok(t, api, u2.ID)
-	srve(r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/coin", v.ID), tk2, `{"amount":1}`))
+	coinVideo := seedVideoWithAPI(t, api, u2.ID, "SEF Coin Video")
+	w = covReq(t, r, "POST", fmt.Sprintf("/api/v1/videos/%d/coin", coinVideo.ID), tk, map[string]any{"amount": 1})
+	covOK(t, w, http.StatusOK)
+	require.Contains(t, w.Body.String(), `"coined":true`)
 
 	// Space recent coins
-	srve(r, areq("GET", fmt.Sprintf("/api/v1/space/%d/recent-coins", u.ID), "", nil))
+	w = covReq(t, r, "GET", fmt.Sprintf("/api/v1/space/%d/recent-coins", u.ID), tk, nil)
+	covOK(t, w, http.StatusOK)
+	require.Contains(t, w.Body.String(), "SEF Coin Video")
 }

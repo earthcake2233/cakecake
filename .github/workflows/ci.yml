@@ -96,6 +96,12 @@ jobs:
         # model->service/data are forbidden (see scripts/check_deps.sh).
         run: bash scripts/check_deps.sh
 
+      - name: Check handler tests never call srve without assertions
+        # Bare srve() smoke calls inflate coverage without verifying behavior.
+        # The baseline is tracked in scripts/bare_srve_baseline.txt and must
+        # only go down (see scripts/check_bare_srve.py --update).
+        run: python3 scripts/check_bare_srve.py
+
       - name: Run Go tests with coverage
         env:
           RABBITMQ_URL: amqp://guest:guest@localhost:5672/

@@ -114,7 +114,7 @@ func (a *API) PostDanmaku(c *gin.Context) {
 			httpStatus = http.StatusNotFound
 		case 40304:
 			httpStatus = http.StatusForbidden
-		case 40001, 40022, 40025:
+		case 40001, 40004, 40005, 40022, 40025:
 			httpStatus = http.StatusBadRequest
 		}
 		resp.Err(c, httpStatus, code)

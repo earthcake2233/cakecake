@@ -79,6 +79,23 @@ func srve(r *gin.Engine, req *http.Request) *httptest.ResponseRecorder {
 	return w
 }
 
+// srveOK executes a request and asserts both the HTTP status and, for 2xx
+// responses, the standard API envelope {code:0}. It is the assertion-aware
+// replacement for bare srve() smoke calls.
+func srveOK(t *testing.T, r *gin.Engine, req *http.Request, want int) *httptest.ResponseRecorder {
+	t.Helper()
+	w := srve(r, req)
+	require.Equal(t, want, w.Code, w.Body.String())
+	if want >= 200 && want < 300 {
+		var env struct {
+			Code int `json:"code"`
+		}
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &env), w.Body.String())
+		require.Equal(t, 0, env.Code, w.Body.String())
+	}
+	return w
+}
+
 // ==================== video_engagement.go ====================
 
 func Test_VideoEngagement(t *testing.T) {
@@ -87,11 +104,83 @@ func Test_VideoEngagement(t *testing.T) {
 	u2 := seedUser(t, api, "ve2", "VEng2", 100)
 	v := seedVideoWithAPI(t, api, u2.ID, "VE Video")
 	tk := tok(t, api, u.ID)
-	srve(r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/like", v.ID), tk, nil))
-	srve(r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/like", v.ID), tk, nil))
-	srve(r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/favorite", v.ID), tk, nil))
-	srve(r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/coin", v.ID), tk, `{"coins":1}`))
-	srve(r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/watch-later", v.ID), tk, nil))
+	likePath := fmt.Sprintf("/api/v1/videos/%d/like", v.ID)
+
+	// Like on -> body says liked=true and the video row is incremented.
+	w := covReq(t, r, "POST", likePath, tk, nil)
+	covOK(t, w, http.StatusOK)
+	var likeResp struct {
+		Code int `json:"code"`
+		Data struct {
+			Liked bool `json:"liked"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &likeResp))
+	require.Equal(t, 0, likeResp.Code)
+	require.True(t, likeResp.Data.Liked)
+	var dbVideo video.Video
+	require.NoError(t, api.DB.First(&dbVideo, v.ID).Error)
+	require.Equal(t, uint64(1), dbVideo.LikeCount)
+
+	// Toggle off -> liked=false and count returns to zero.
+	w = covReq(t, r, "POST", likePath, tk, nil)
+	covOK(t, w, http.StatusOK)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &likeResp))
+	require.False(t, likeResp.Data.Liked)
+	require.NoError(t, api.DB.First(&dbVideo, v.ID).Error)
+	require.Zero(t, dbVideo.LikeCount)
+
+	// Favorite on -> favorited=true with fav_count=1, and a favorite row exists.
+	favPath := fmt.Sprintf("/api/v1/videos/%d/favorite", v.ID)
+	w = covReq(t, r, "POST", favPath, tk, nil)
+	covOK(t, w, http.StatusOK)
+	var favResp struct {
+		Code int `json:"code"`
+		Data struct {
+			Favorited bool   `json:"favorited"`
+			FavCount  uint64 `json:"fav_count"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &favResp))
+	require.Equal(t, 0, favResp.Code)
+	require.True(t, favResp.Data.Favorited)
+	require.Equal(t, uint64(1), favResp.Data.FavCount)
+
+	// Coin -> body carries the new coin count and user balance is debited.
+	w = covReq(t, r, "POST", fmt.Sprintf("/api/v1/videos/%d/coin", v.ID), tk, map[string]any{"amount": 1})
+	covOK(t, w, http.StatusOK)
+	var coinResp struct {
+		Code int `json:"code"`
+		Data struct {
+			Coined      bool    `json:"coined"`
+			CoinCount   uint64  `json:"coin_count"`
+			Amount      int     `json:"amount"`
+			CoinBalance float64 `json:"coin_balance"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &coinResp))
+	require.Equal(t, 0, coinResp.Code)
+	require.True(t, coinResp.Data.Coined)
+	require.Equal(t, uint64(1), coinResp.Data.CoinCount)
+	require.Equal(t, 1, coinResp.Data.Amount)
+	require.Equal(t, float64(99), coinResp.Data.CoinBalance)
+
+	// Watch later -> in_watch_later=true, then toggle off.
+	watchPath := fmt.Sprintf("/api/v1/videos/%d/watch-later", v.ID)
+	w = covReq(t, r, "POST", watchPath, tk, nil)
+	covOK(t, w, http.StatusOK)
+	var watchResp struct {
+		Code int `json:"code"`
+		Data struct {
+			InWatchLater bool `json:"in_watch_later"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &watchResp))
+	require.True(t, watchResp.Data.InWatchLater)
+	w = covReq(t, r, "POST", watchPath, tk, nil)
+	covOK(t, w, http.StatusOK)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &watchResp))
+	require.False(t, watchResp.Data.InWatchLater)
 }
 
 func Test_CommentCRUD(t *testing.T) {

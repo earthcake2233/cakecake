@@ -63,7 +63,7 @@ func TestDanmakuService_PostDanmaku(t *testing.T) {
 
 	// Sensitive content blocked.
 	_, err = s.PostDanmaku(ctx, 10, 1, "contains badword", "", "scroll", "", 1.0)
-	require.Equal(t, 40022, err.(*service.SvcError).Code)
+	require.Equal(t, 40005, err.(*service.SvcError).Code)
 
 	// Success.
 	res, err := s.PostDanmaku(ctx, 10, 1, "hello", "#fff", "scroll", "small", 2.5)
@@ -73,7 +73,7 @@ func TestDanmakuService_PostDanmaku(t *testing.T) {
 
 	// Cooldown blocks second post within TTL.
 	_, err = s.PostDanmaku(ctx, 10, 1, "again", "", "scroll", "", 2.5)
-	require.Equal(t, 40025, err.(*service.SvcError).Code)
+	require.Equal(t, 40004, err.(*service.SvcError).Code)
 
 	// Cleanup the cooldown key so the next test file instance is unaffected.
 	_ = s.rdb.Del(ctx, "danmaku:cooldown:1:10").Err()
