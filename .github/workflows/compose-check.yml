@@ -74,12 +74,14 @@ jobs:
             -e PROMETHEUS_CLUSTER=ci \
             -v "$PWD/deploy/monitoring:/etc/prometheus:ro" \
             -v /tmp/cakecake-ci-secrets:/run/secrets:ro \
+            --entrypoint /bin/promtool \
             prom/prometheus:v2.53.0 \
-            promtool check config /etc/prometheus/prometheus.yml
+            check config /etc/prometheus/prometheus.yml
           docker run --rm \
             -v "$PWD/deploy/monitoring:/etc/alertmanager:ro" \
+            --entrypoint /bin/amtool \
             prom/alertmanager:v0.27.0 \
-            amtool check-config /etc/alertmanager/alertmanager.yml
+            check-config /etc/alertmanager/alertmanager.yml
           python3 -m json.tool deploy/monitoring/grafana/dashboards/cakecake-ai-gateway.json >/dev/null
 
   compose-smoke:
