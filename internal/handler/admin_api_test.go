@@ -2,6 +2,7 @@ package handler
 
 import (
 	"bytes"
+	"cakecake/internal/aigateway"
 	"cakecake/internal/config"
 	"cakecake/internal/model/admin"
 	"cakecake/internal/model/article"
@@ -159,6 +160,12 @@ func TestAdminEndpoints(t *testing.T) {
 	require.NoError(t, json.Unmarshal(gs.Body.Bytes(), &gsOut))
 	require.Equal(t, "Global prompt for all roles.", gsOut.Data.GlobalSystemPrompt)
 	require.Equal(t, "Please be nice to users.", gsOut.Data.SystemPrompt)
+	// Trigger one LLM request observation so the (otherwise zero-sample)
+	// counter family is emitted by the default registry.
+	aigateway.RecordLLMRequest("ok")
+	mw := covReq(t, r, "GET", "/metrics", "", nil)
+	covOK(t, mw, http.StatusOK)
+	require.Contains(t, mw.Body.String(), "cakecake_llm_requests_total")
 	apw2 := covReq(t, r, "POST", "/api/v1/admin/agent-profiles", at, map[string]any{"slug": "assistant2", "display_name": "Assistant 2", "sign": "hi", "system_prompt": "Please help users with their questions.", "welcome_messages": []string{"Hello!"}})
 	covOK(t, apw2, http.StatusOK)
 	covOK(t, covReq(t, r, "PUT", "/api/v1/admin/agent-profiles/"+u64s(apOut.Data.ID), at, map[string]any{"display_name": "Renamed", "system_prompt": "Please be helpful and concise.", "welcome_messages": []string{"Hey!"}}), http.StatusOK)

@@ -37,6 +37,11 @@ func (g *AgentGenerationService) RunReply(humanID uint64, conv *dm.DmConversatio
 	// Register the generation synchronously so a WS agent_cancel arriving
 	// right after the send can never miss the in-flight generation.
 	ctx, cancel := context.WithCancel(context.Background())
+	traceID := generateTraceID()
+	ctx = withTraceID(ctx, traceID)
+	ctx = aigateway.WithUsageSink(ctx, &aigateway.UsageSink{
+		OnUsage: func(u aigateway.Usage) { aigateway.RecordUserCost(humanID, u) },
+	})
 	genID := g.svc.beginGeneration(humanID, cancel)
 	if genID == 0 {
 		cancel()
@@ -66,7 +71,7 @@ func (g *AgentGenerationService) RunReply(humanID uint64, conv *dm.DmConversatio
 				return
 			}
 			if g.svc.Log != nil {
-				g.svc.Log.Warn("agent generate", zap.Uint64("conv", conv.ID), zap.Error(err))
+				g.svc.Log.Warn("agent generate", zap.String("trace_id", traceID), zap.Uint64("conv", conv.ID), zap.Error(err))
 			}
 			msg := "AI 助手暂时不可用，请稍后再试。"
 			if strings.Contains(err.Error(), "sensitive") {
@@ -88,7 +93,7 @@ func (g *AgentGenerationService) RunReply(humanID uint64, conv *dm.DmConversatio
 			return
 		}
 		g.svc.endGeneration(humanID, genID)
-		msg := g.svc.persistAndPushReply(humanID, conv, result)
+		msg := g.persistAndPushReply(ctx, humanID, conv, result)
 		if msg != nil && result != nil {
 			go g.svc.attachSuggestions(humanID, msg.ID, result.Content)
 		}
@@ -119,6 +124,7 @@ func (g *AgentGenerationService) resumeReplyLocal(uid uint64, convID uint64) {
 	if g.svc == nil || uid == 0 {
 		return
 	}
+	aigateway.IncAgentControl("continue")
 	g.svc.resumeGeneration(uid)
 	// Fast path: the generation is still running, so continue only needs to
 	// un-pause and flush the buffered deltas.
@@ -140,7 +146,7 @@ func (g *AgentGenerationService) resumeReplyLocal(uid uint64, convID uint64) {
 	if ok {
 		g.svc.pushContinueMode(uid, "buffer")
 		g.svc.endGeneration(uid, genID)
-		msg := g.svc.persistAndPushReply(uid, conv, result)
+		msg := g.persistAndPushReply(context.Background(), uid, conv, result)
 		if msg != nil && result != nil {
 			go g.svc.attachSuggestions(uid, msg.ID, result.Content)
 		}
@@ -194,6 +200,7 @@ func (g *AgentGenerationService) RegenerateReply(uid uint64, convID uint64) {
 	if g.svc == nil || g.svc.Dm == nil || convID == 0 {
 		return
 	}
+	aigateway.IncAgentControl("regenerate")
 	ctx := context.Background()
 	conv, err := g.svc.Dm.GetConversationByID(ctx, convID)
 	if err != nil || conv == nil {
@@ -236,6 +243,7 @@ func (g *AgentGenerationService) regenerateWelcome(uid uint64, conv *dm.DmConver
 	if g.svc == nil || conv == nil {
 		return
 	}
+	traceID := generateTraceID()
 	profile, err := g.svc.profileForConversation(conv)
 	if err != nil || profile == nil {
 		return
@@ -248,7 +256,8 @@ func (g *AgentGenerationService) regenerateWelcome(uid uint64, conv *dm.DmConver
 	msg, err := g.svc.PostAssistantMessage(conv, uid, welcome)
 	if err != nil {
 		if g.svc.Log != nil {
-			g.svc.Log.Error("agent persist regenerated welcome", zap.Error(err))
+			g.svc.Log.Error("agent persist regenerated welcome",
+				zap.String("trace_id", traceID), zap.Error(err))
 		}
 		return
 	}
@@ -301,6 +310,11 @@ func (g *AgentGenerationService) continueReply(uid uint64, convID uint64, partia
 	g.svc.publishControl(context.Background(), uid, map[string]interface{}{"type": "supersede", "from": g.svc.InstanceID})
 	g.svc.supersedeGeneration(uid)
 	ctx, cancel := context.WithCancel(context.Background())
+	traceID := generateTraceID()
+	ctx = withTraceID(ctx, traceID)
+	ctx = aigateway.WithUsageSink(ctx, &aigateway.UsageSink{
+		OnUsage: func(u aigateway.Usage) { aigateway.RecordUserCost(uid, u) },
+	})
 	genID := g.svc.beginGeneration(uid, cancel)
 	if genID == 0 {
 		cancel()
@@ -323,7 +337,7 @@ func (g *AgentGenerationService) continueReply(uid uint64, convID uint64, partia
 		full, err := g.svc.continueFromDraft(ctx, conv, partial, genID)
 		if err != nil {
 			if g.svc.Log != nil {
-				g.svc.Log.Warn("agent continue", zap.Uint64("conv", conv.ID), zap.Error(err))
+				g.svc.Log.Warn("agent continue", zap.String("trace_id", traceID), zap.Uint64("conv", conv.ID), zap.Error(err))
 			}
 			// Keep the user's stopped draft intact: no fallback message, so the
 			// frontend can retry or copy the partial.
@@ -332,7 +346,7 @@ func (g *AgentGenerationService) continueReply(uid uint64, convID uint64, partia
 		msg, err := g.svc.PostAssistantMessage(conv, uid, full)
 		if err != nil {
 			if g.svc.Log != nil {
-				g.svc.Log.Error("agent persist continuation", zap.Error(err))
+				g.svc.Log.Error("agent persist continuation", zap.String("trace_id", traceID), zap.Error(err))
 			}
 			return
 		}
@@ -427,11 +441,14 @@ func (g *AgentGenerationService) streamTail(humanID uint64, genID uint64, tail s
 }
 
 // persistAndPushReply writes the finished reply to the DB and pushes it.
-func (g *AgentGenerationService) persistAndPushReply(humanID uint64, conv *dm.DmConversation, result *GenerateReplyResult) *dm.DmMessage {
+// traceCtx carries the generation trace id for logs (DB work uses a fresh
+// background context so a canceled generation never blocks persistence).
+func (g *AgentGenerationService) persistAndPushReply(traceCtx context.Context, humanID uint64, conv *dm.DmConversation, result *GenerateReplyResult) *dm.DmMessage {
 	if g.svc == nil || conv == nil || result == nil {
 		return nil
 	}
 	ctx := context.Background()
+	traceID := traceIDFromContext(traceCtx)
 	g.svc.IncrQuota(ctx, humanID)
 	sugJSON := ""
 	if len(result.Suggestions) > 0 {
@@ -442,7 +459,7 @@ func (g *AgentGenerationService) persistAndPushReply(humanID uint64, conv *dm.Dm
 	msg, err := g.svc.PostAssistantMessage(conv, humanID, result.Content, string(result.ToolActivities), string(result.ToolResultData), sugJSON)
 	if err != nil {
 		if g.svc.Log != nil {
-			g.svc.Log.Error("agent persist reply", zap.Error(err))
+			g.svc.Log.Error("agent persist reply", zap.String("trace_id", traceID), zap.Error(err))
 		}
 		return nil
 	}
@@ -459,7 +476,7 @@ func (g *AgentGenerationService) pushAgentMessage(ctx context.Context, humanID u
 	payloads, err := g.svc.Pusher.FormatAgentMessage(ctx, humanID, conv, msg)
 	if err != nil {
 		if g.svc.Log != nil {
-			g.svc.Log.Error("agent format message", zap.Error(err))
+			g.svc.Log.Error("agent format message", zap.String("trace_id", traceIDFromContext(ctx)), zap.Error(err))
 		}
 		return
 	}
@@ -476,13 +493,20 @@ func (g *AgentGenerationService) attachSuggestions(humanID uint64, messageID uin
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
+	traceID := generateTraceID()
+	ctx = withTraceID(ctx, traceID)
+	ctx = aigateway.WithUsageSink(ctx, &aigateway.UsageSink{
+		OnUsage: func(u aigateway.Usage) { aigateway.RecordUserCost(humanID, u) },
+	})
 	sugg := g.svc.GenerateSuggestions(ctx, reply)
 	if len(sugg) == 0 {
 		return
 	}
 	if err := g.svc.UpdateMessageSuggestions(ctx, messageID, sugg); err != nil {
 		if g.svc.Log != nil {
-			g.svc.Log.Warn("agent attach suggestions", zap.Uint64("message_id", messageID), zap.Error(err))
+			g.svc.Log.Warn("agent attach suggestions",
+				zap.String("trace_id", traceID),
+				zap.Uint64("message_id", messageID), zap.Error(err))
 		}
 		return
 	}
@@ -498,7 +522,7 @@ func (g *AgentGenerationService) pushFallback(ctx context.Context, humanID uint6
 	msg, err := g.svc.PostAssistantMessage(conv, humanID, text)
 	if err != nil {
 		if g.svc.Log != nil {
-			g.svc.Log.Error("agent fallback message", zap.Error(err))
+			g.svc.Log.Error("agent fallback message", zap.String("trace_id", traceIDFromContext(ctx)), zap.Error(err))
 		}
 		return
 	}

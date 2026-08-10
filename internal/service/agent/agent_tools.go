@@ -3,6 +3,7 @@ package agent
 import (
 	"cakecake/internal/aigateway"
 	"cakecake/internal/aigateway/toolkit"
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -38,6 +39,28 @@ func generateTraceID() string {
 	return hex.EncodeToString(b)
 }
 
+type traceIDCtxKey struct{}
+
+// withTraceID attaches a generation trace id to the context so the whole turn
+// (LLM call, tool callbacks, error logs) shares one greppable id.
+func withTraceID(ctx context.Context, id string) context.Context {
+	if ctx == nil || id == "" {
+		return ctx
+	}
+	return context.WithValue(ctx, traceIDCtxKey{}, id)
+}
+
+// traceIDFromContext returns the generation trace id carried by ctx.
+func traceIDFromContext(ctx context.Context) string {
+	if ctx == nil {
+		return ""
+	}
+	if s, ok := ctx.Value(traceIDCtxKey{}).(string); ok {
+		return s
+	}
+	return ""
+}
+
 func (g *AgentGenerationService) setupToolCallbacks(traceID string, humanID uint64) {
 	if g.svc.Gateway == nil || g.svc.ChatHub == nil {
 		return
@@ -45,7 +68,9 @@ func (g *AgentGenerationService) setupToolCallbacks(traceID string, humanID uint
 	g.svc.Gateway.OnToolCallStart = func(tid, spanID, parentSpanID, toolName string, argsJSON json.RawMessage) {
 		var args interface{}
 		if err := json.Unmarshal(argsJSON, &args); err != nil && g.svc.Log != nil {
-			g.svc.Log.Warn("agent: parse tool call args failed", zap.String("tool", toolName), zap.Error(err))
+			g.svc.Log.Warn("agent: parse tool call args failed",
+				zap.String("trace_id", tid),
+				zap.String("tool", toolName), zap.Error(err))
 		}
 		payload := map[string]interface{}{
 			"trace_id":       tid,

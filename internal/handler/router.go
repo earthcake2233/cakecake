@@ -1,9 +1,12 @@
 package handler
 
 import (
+	"crypto/subtle"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"cakecake/internal/logger"
 	"cakecake/internal/middleware"
@@ -19,6 +22,13 @@ func RegisterRoutes(r *gin.Engine, a *API, jwtm *jwttoken.Manager, appEnv string
 	}
 
 	r.GET("/api/v1/health", a.Health)
+	// Prometheus metrics (default registry: LLM/agent observability).
+	// Optional bearer token keeps user/cost labels private on shared hosts.
+	metricsToken := ""
+	if a != nil && a.Cfg != nil {
+		metricsToken = a.Cfg.MetricsToken
+	}
+	r.GET("/metrics", metricsAuth(metricsToken), gin.WrapH(promhttp.Handler()))
 
 	// Swagger documentation
 	RegisterSwaggerRoutes(r, appEnv)
@@ -45,6 +55,29 @@ func RegisterRoutes(r *gin.Engine, a *API, jwtm *jwttoken.Manager, appEnv string
 	registerAdminRoutes(r, pub, admin, authd, a, jwtm)
 	registerStatsRoutes(r, pub, admin, authd, a, jwtm)
 	registerWsRoutes(r, pub, admin, authd, a, jwtm)
+}
+
+// metricsAuth guards the Prometheus scrape endpoint with a constant-time
+// bearer-token comparison. An empty token keeps the endpoint open for local
+// development; production must set METRICS_TOKEN.
+func metricsAuth(token string) gin.HandlerFunc {
+	if token == "" {
+		return func(c *gin.Context) { c.Next() }
+	}
+	const prefix = "Bearer "
+	return func(c *gin.Context) {
+		auth := strings.TrimSpace(c.GetHeader("Authorization"))
+		if len(auth) <= len(prefix) || !strings.EqualFold(auth[:len(prefix)], prefix) {
+			c.AbortWithStatus(http.StatusUnauthorized)
+			return
+		}
+		got := strings.TrimSpace(auth[len(prefix):])
+		if subtle.ConstantTimeCompare([]byte(got), []byte(token)) != 1 {
+			c.AbortWithStatus(http.StatusUnauthorized)
+			return
+		}
+		c.Next()
+	}
 }
 
 func corsMiddleware(c *gin.Context) {

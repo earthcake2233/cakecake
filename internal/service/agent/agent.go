@@ -290,7 +290,11 @@ func (g *AgentGenerationService) GenerateReply(ctx context.Context, conv *dm.DmC
 	var reply string
 	genID := g.svc.currentGenID(humanID)
 	if g.svc.ToolExec != nil && len(toolkit.DefineTools(g.svc.enabledTools())) > 0 {
-		traceID := generateTraceID()
+		traceID := traceIDFromContext(ctx)
+		if traceID == "" {
+			traceID = generateTraceID()
+			ctx = withTraceID(ctx, traceID)
+		}
 		g.svc.setupToolCallbacks(traceID, humanID)
 		defer g.svc.clearToolCallbacks()
 		coll = installToolCollectors(g.svc.Gateway)
