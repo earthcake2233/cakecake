@@ -151,7 +151,12 @@ jobs:
             sleep 5
           done
           [ "$ok" = "1" ] || { echo "monitoring stack never became ready"; exit 1; }
-          curl -fsS -H "Authorization: Basic $(printf 'admin:admin' | base64)" \
+          guser=$(sed -n 's/^GRAFANA_ADMIN_USER=//p' .env | head -1)
+          gpass=$(sed -n 's/^GRAFANA_ADMIN_PASSWORD=//p' .env | head -1)
+          [ -n "$guser" ] || guser=admin
+          [ -n "$gpass" ] || { echo "GRAFANA_ADMIN_PASSWORD missing in .env"; exit 1; }
+          auth=$(printf '%s:%s' "$guser" "$gpass" | base64 -w0)
+          curl -fsS -H "Authorization: Basic $auth" \
             "http://127.0.0.1:3000/api/search?query=CakeCake" | grep -q '"title":"CakeCake AI Gateway"'
 
       - name: Scan backend image (Trivy)
