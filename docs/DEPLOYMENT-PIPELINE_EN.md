@@ -64,7 +64,7 @@ flowchart TB
 **Known limits (honest)**:
 - Restart-style releases: 1~3s interruption during switchover; not blue-green/zero-downtime;
 - Single environment: no staging/pre-prod; production is the first stop;
-- Monitoring is health-probe + Issue alerting; no metrics stack (Prometheus/Grafana) or alert escalation yet;
+- Monitoring is health-probe + Issue alerting; the model is "local Prometheus/Grafana + the cloud server only exposes `/metrics`", see [monitoring_EN.md](./monitoring_EN.md);
 - Security group exposes port 22 to the public internet (key-only); stricter options are a self-hosted runner or OSS relay deployment.
 
 ---
@@ -73,7 +73,7 @@ flowchart TB
 
 - Add a staging environment with automated smoke tests before production;
 - Blue-green / canary releases for zero-downtime switchover;
-- Prometheus metrics + Grafana alerting to replace polling-based health probes;
+- Wire the "local monitoring scrapes cloud `/metrics`" path into on-call alert routing (webhook), then replace polling-based health probes;
 - Migrate to a self-hosted runner to shrink the SSH exposure;
 - Automate release metrics (MTTR, rollback count, deploy success rate) dashboards.
 

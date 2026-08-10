@@ -57,11 +57,16 @@ type Client struct {
 }
 
 type chatCompletionReq struct {
-	Model       string        `json:"model"`
-	Messages    []ChatMessage `json:"messages"`
-	Tools       []ToolDef     `json:"tools,omitempty"`
-	Temperature float64       `json:"temperature,omitempty"`
-	Stream      bool          `json:"stream"`
+	Model         string         `json:"model"`
+	Messages      []ChatMessage  `json:"messages"`
+	Tools         []ToolDef      `json:"tools,omitempty"`
+	Temperature   float64        `json:"temperature,omitempty"`
+	Stream        bool           `json:"stream"`
+	StreamOptions *streamOptions `json:"stream_options,omitempty"`
+}
+
+type streamOptions struct {
+	IncludeUsage bool `json:"include_usage"`
 }
 
 type choice struct {
@@ -71,6 +76,7 @@ type choice struct {
 
 type chatCompletionResp struct {
 	Choices []choice `json:"choices"`
+	Usage   *Usage   `json:"usage,omitempty"`
 	Error   *struct {
 		Message string `json:"message"`
 	} `json:"error,omitempty"`
@@ -93,6 +99,7 @@ type chatCompletionStreamChunk struct {
 		} `json:"delta"`
 		FinishReason string `json:"finish_reason"`
 	} `json:"choices"`
+	Usage *Usage `json:"usage,omitempty"`
 }
 
 // Complete returns the assistant text (no tools).
@@ -110,6 +117,8 @@ func (c *Client) CompleteWithTools(ctx context.Context, messages []ChatMessage, 
 }
 
 func (c *Client) completeInternal(ctx context.Context, messages []ChatMessage, tools []ToolDef) (ChatMessage, error) {
+	status := "error"
+	defer func() { RecordLLMRequest(status) }()
 	if c == nil || strings.TrimSpace(c.APIKey) == "" {
 		return ChatMessage{}, fmt.Errorf("deepseek: api key not configured")
 	}
@@ -164,6 +173,8 @@ func (c *Client) completeInternal(ctx context.Context, messages []ChatMessage, t
 	if len(out.Choices) == 0 {
 		return ChatMessage{}, fmt.Errorf("deepseek: empty completion")
 	}
+	status = "ok"
+	recordLLMUsage(ctx, out.Usage)
 	return out.Choices[0].Message, nil
 }
 
@@ -179,6 +190,8 @@ func (c *Client) CompleteWithToolsStream(ctx context.Context, messages []ChatMes
 }
 
 func (c *Client) completeInternalStream(ctx context.Context, messages []ChatMessage, tools []ToolDef, onDelta func(string)) (ChatMessage, error) {
+	status := "error"
+	defer func() { RecordLLMRequest(status) }()
 	if c == nil || strings.TrimSpace(c.APIKey) == "" {
 		return ChatMessage{}, fmt.Errorf("deepseek: api key not configured")
 	}
@@ -191,11 +204,12 @@ func (c *Client) completeInternalStream(ctx context.Context, messages []ChatMess
 		model = "deepseek-v4-flash"
 	}
 	body, err := json.Marshal(chatCompletionReq{
-		Model:       model,
-		Messages:    messages,
-		Tools:       tools,
-		Temperature: 0.5,
-		Stream:      true,
+		Model:         model,
+		Messages:      messages,
+		Tools:         tools,
+		Temperature:   0.5,
+		Stream:        true,
+		StreamOptions: &streamOptions{IncludeUsage: true},
 	})
 	if err != nil {
 		return ChatMessage{}, err
@@ -224,6 +238,9 @@ func (c *Client) completeInternalStream(ctx context.Context, messages []ChatMess
 
 	var acc ChatMessage
 	acc.Role = "assistant"
+	startedAt := time.Now()
+	firstToken := false
+	var usage *Usage
 	scanner := bufio.NewScanner(res.Body)
 	scanner.Buffer(make([]byte, 0, 64*1024), 2<<20)
 	for scanner.Scan() {
@@ -239,15 +256,26 @@ func (c *Client) completeInternalStream(ctx context.Context, messages []ChatMess
 		if err := json.Unmarshal([]byte(payload), &chunk); err != nil {
 			continue
 		}
+		if chunk.Usage != nil {
+			usage = chunk.Usage
+		}
 		if len(chunk.Choices) == 0 {
 			continue
 		}
 		delta := chunk.Choices[0].Delta
 		if delta.Content != "" {
+			if !firstToken {
+				firstToken = true
+				ObserveFirstToken(time.Since(startedAt).Seconds())
+			}
 			acc.Content += delta.Content
 			if onDelta != nil {
 				onDelta(delta.Content)
 			}
+		}
+		if len(delta.ToolCalls) > 0 && !firstToken {
+			firstToken = true
+			ObserveFirstToken(time.Since(startedAt).Seconds())
 		}
 		for _, tc := range delta.ToolCalls {
 			for len(acc.ToolCalls) <= tc.Index {
@@ -268,6 +296,8 @@ func (c *Client) completeInternalStream(ctx context.Context, messages []ChatMess
 	if strings.TrimSpace(acc.Content) == "" && len(acc.ToolCalls) == 0 {
 		return ChatMessage{}, fmt.Errorf("deepseek: empty streaming completion")
 	}
+	status = "ok"
+	recordLLMUsage(ctx, usage)
 	return acc, nil
 }
 

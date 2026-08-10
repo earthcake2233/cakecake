@@ -37,8 +37,14 @@ COMPOSE_ONLY_VARS = {
     "ES_PORT",
     "BACKEND_PORT",
     "WEB_PORT",
-    # Compose-only DSN template for the backend container (local-dev MYSQL_DSN is 127.0.0.1 and unusable in-container).
-    "COMPOSE_MYSQL_DSN",
+    "PROMETHEUS_PORT",
+    "ALERTMANAGER_PORT",
+    "GRAFANA_PORT",
+    "GRAFANA_ADMIN_USER",
+    "GRAFANA_ADMIN_PASSWORD",
+    "PROMETHEUS_RETENTION",
+    "PROMETHEUS_CLUSTER",
+    "ALERTMANAGER_WEBHOOK_URL",
     # Consumed by the web image build (VITE_* is a Vite build-time flag).
     "VITE_VIDEO_UPLOAD_DISABLED",
 }

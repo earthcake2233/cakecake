@@ -243,6 +243,7 @@ func TestLoad_WithEnv(t *testing.T) {
 	setenv("RATE_LIMIT_ENABLED", "1")
 	setenv("RATE_LIMIT_RATE", "50.5")
 	setenv("RATE_LIMIT_BURST", "200")
+	setenv("METRICS_TOKEN", "prom-token")
 
 	defer func() {
 		for _, k := range []string{
@@ -260,6 +261,7 @@ func TestLoad_WithEnv(t *testing.T) {
 			"DEEPSEEK_API_KEY", "DEEPSEEK_BASE_URL", "DEEPSEEK_MODEL",
 			"AGENT_BOT_USERNAME", "AGENT_ENABLED", "AGENT_MAX_HISTORY", "AGENT_HISTORY_TTL", "AGENT_DAILY_QUOTA", "AGENT_REQUEST_TIMEOUT",
 			"RATE_LIMIT_ENABLED", "RATE_LIMIT_RATE", "RATE_LIMIT_BURST",
+			"METRICS_TOKEN",
 		} {
 			os.Unsetenv(k)
 		}
@@ -401,6 +403,9 @@ func TestLoad_WithEnv(t *testing.T) {
 	}
 	if cfg.RateLimitBurst != 200 {
 		t.Errorf("RateLimitBurst = %d; want 200", cfg.RateLimitBurst)
+	}
+	if cfg.MetricsToken != "prom-token" {
+		t.Errorf("MetricsToken = %q; want prom-token", cfg.MetricsToken)
 	}
 }
 

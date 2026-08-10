@@ -126,6 +126,10 @@ type C struct {
 
 	// RateLimitBurst max token capacity (burst allowance).
 	RateLimitBurst int `json:"rate_limit_burst"`
+
+	// MetricsToken optional bearer token guarding GET /metrics. Empty disables
+	// auth (local development); set a strong random value in production.
+	MetricsToken string `json:"-"`
 }
 
 func getenv(key, def string) string {
@@ -242,6 +246,7 @@ func Load() *C {
 		RateLimitEnabled:    parseBoolEnv("RATE_LIMIT_ENABLED", false),
 		RateLimitRate:       parseFloatEnv("RATE_LIMIT_RATE", 20),
 		RateLimitBurst:      atoi(os.Getenv("RATE_LIMIT_BURST"), 50),
+		MetricsToken:        strings.TrimSpace(os.Getenv("METRICS_TOKEN")),
 		AgentRequestTimeout: mustParseDuration(os.Getenv("AGENT_REQUEST_TIMEOUT"), 90*time.Second),
 		ShutdownTimeout:     mustParseDuration(os.Getenv("SHUTDOWN_TIMEOUT"), 30*time.Second),
 	}

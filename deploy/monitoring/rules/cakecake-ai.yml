@@ -1,0 +1,64 @@
+groups:
+  - name: cakecake-ai-gateway
+    rules:
+      - alert: CakecakeBackendDown
+        expr: up{job="cakecake-backend"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "CakeCake backend is unreachable"
+          description: "Prometheus cannot scrape {{ $labels.job }} (instance {{ $labels.instance }}) for more than 2 minutes."
+
+      - alert: CakecakeHighLLMErrorRate
+        expr: |
+          sum(rate(cakecake_llm_requests_total{status="error"}[10m])) by (job)
+            / clamp_min(sum(rate(cakecake_llm_requests_total[10m])) by (job), 1e-6) > 0.1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "LLM error rate above 10%"
+          description: "LLM error rate on {{ $labels.job }} has been above 10% for 10 minutes."
+
+      - alert: CakecakeHighFirstTokenLatency
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(cakecake_llm_first_token_seconds_bucket[10m])) by (le)) > 5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "P95 first token latency above 5s"
+          description: "Streaming first-token latency P95 has been above 5 seconds for 10 minutes."
+
+      - alert: CakecakeHighToolFailureRate
+        expr: |
+          sum(rate(cakecake_agent_tool_calls_total{status="error"}[10m])) by (tool)
+            / clamp_min(sum(rate(cakecake_agent_tool_calls_total[10m])) by (tool), 1e-6) > 0.2
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Tool failure rate above 20%"
+          description: "Tool {{ $labels.tool }} failure rate has been above 20% for 10 minutes."
+
+      - alert: CakecakeSlowToolCalls
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(cakecake_agent_tool_call_seconds_bucket[10m])) by (le, tool)) > 10
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "P95 tool call duration above 10s"
+          description: "Tool {{ $labels.tool }} P95 duration has been above 10 seconds for 10 minutes."
+
+      - alert: CakecakeDailyCostSpike
+        expr: increase(cakecake_llm_cost_usd_total[1h]) > 10
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "LLM cost spike above $10/hour"
+          description: "Estimated LLM spend exceeded $10 in the last hour. Check per-user cost dashboard."

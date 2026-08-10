@@ -12,6 +12,7 @@ docs/service-refactor-*.md
 .env.*
 !.env.example
 !deploy/env.production.example
+.secrets/
 cakecake-vue/cakecake-web/.env
 cakecake-vue/cakecake-web/.env.production
 cakecake-vue/cakecake-web/.env.local

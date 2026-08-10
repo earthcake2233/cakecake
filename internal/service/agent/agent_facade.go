@@ -163,10 +163,6 @@ func (s *AgentService) streamTail(humanID uint64, genID uint64, tail string) {
 	(&AgentGenerationService{svc: s}).streamTail(humanID, genID, tail)
 }
 
-func (s *AgentService) persistAndPushReply(humanID uint64, conv *dm.DmConversation, result *GenerateReplyResult) *dm.DmMessage {
-	return (&AgentGenerationService{svc: s}).persistAndPushReply(humanID, conv, result)
-}
-
 func (s *AgentService) pushAgentMessage(ctx context.Context, humanID uint64, conv *dm.DmConversation, msg *dm.DmMessage) {
 	(&AgentGenerationService{svc: s}).pushAgentMessage(ctx, humanID, conv, msg)
 }

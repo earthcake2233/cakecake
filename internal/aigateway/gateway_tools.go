@@ -29,24 +29,31 @@ func (t *ToolRunner) executeToolCalls(ctx context.Context, calls []ToolCall, tra
 			if t.gw.OnToolCallStart != nil {
 				var raw json.RawMessage
 				if err := json.Unmarshal([]byte(tc.Function.Arguments), &raw); err != nil && logger.L != nil {
-					logger.L.Warn("aigateway: parse tool call args failed", zap.String("tool", tc.Function.Name), zap.Error(err))
+					logger.L.Warn("aigateway: parse tool call args failed",
+						zap.String("trace_id", traceID),
+						zap.String("tool", tc.Function.Name), zap.Error(err))
 				}
 				t.gw.OnToolCallStart(traceID, spanID, parentSpanID, tc.Function.Name, raw)
 			}
 
 			start := time.Now()
 			var res string
+			status := "ok"
 			if t.gw.ToolExec != nil {
 				r, err := t.gw.ToolExec.Execute(ctx, tc.Function.Name, json.RawMessage(tc.Function.Arguments))
 				if err != nil {
+					status = "error"
 					res = fmt.Sprintf(`{"error": "%s"}`, err.Error())
 				} else {
 					res = r
 				}
 			} else {
+				status = "error"
 				res = `{"error": "tool executor not available"}`
 			}
-			duration := time.Since(start).Milliseconds()
+			elapsed := time.Since(start)
+			RecordToolCall(tc.Function.Name, status, elapsed)
+			duration := elapsed.Milliseconds()
 
 			if t.gw.OnToolCallEnd != nil {
 				summary := res

@@ -66,7 +66,7 @@ flowchart TB
 **已知边界（诚实说明）**：
 - 重启式发布：切换有 1~3 秒中断，非蓝绿/零停机；
 - 单环境：无 staging/预发环境，生产即首站；
-- 巡检目前是“健康探测 + Issue 告警”，未接入指标监控（Prometheus/Grafana）与告警升级；
+- 巡检目前是“健康探测 + Issue 告警”；监控采用「本地 Prometheus/Grafana + 云服务器只暴露 `/metrics`」方案，部署细节见 [monitoring.md](./monitoring.md)；
 - 安全组对公网开放 22 端口（仅密钥），更严格方案是自托管 runner 或 OSS 中转发布。
 
 ---
@@ -75,7 +75,7 @@ flowchart TB
 
 - 增加 staging 环境与自动冒烟测试，生产发布前先预发验证；
 - 蓝绿/金丝雀发布，实现零停机切换；
-- 接入 Prometheus 指标与 Grafana 告警，替代轮询式健康探测；
+- 将「本地监控抓云上 `/metrics`」的通道接入告警值班路由（webhook），并逐步替代轮询式健康探测；
 - GitHub Actions 迁移到自托管 runner，收敛 SSH 暴露面；
 - 发布指标（MTTR、回滚次数、部署成功率）自动化统计并展示。
 

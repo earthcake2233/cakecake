@@ -1,6 +1,6 @@
 <p align="center">
   <strong><img src="https://img.shields.io/badge/🇨🇳中文-00a1d6?style=flat-square" alt="中文"></strong>
-  <a href="deploy/DEPLOY_EN.md">
+  <a href="DEPLOY_EN.md">
     <img src="https://img.shields.io/badge/🇬🇧English-999999?style=flat-square" alt="English">
   </a>
 </p>
@@ -54,7 +54,7 @@ compose 默认从 Docker Hub 拉取已发布的镜像（`earthcake/cakecake-back
 | 后端 API | http://localhost:8080 | 健康检查 `GET /api/v1/health`；Swagger `/swagger/` |
 | MySQL / Redis / RabbitMQ / ES | `3306` / `6379` / `5672`·`15672` / `9200` | 默认只绑定 `127.0.0.1` |
 
-内置 **7 个演示用户**（用户名即视频作者昵称）：`暗猫の祝福`、`加载超时请稍后`、`Baka恶魔`、`三栗lili`、`Yeuoly`、`科学超电磁炮F`、`泛式大大`，密码统一 `demo123456`（可用 `DEMO_USER_PASSWORD` 覆盖）；也可以直接注册自己的账号体验。运营后台 `admin` / `change-me-admin`（由 `ADMIN_SEED_PASSWORD` 预设，仅首次建库时生效，管理员无改密接口）。所有端口默认只监听本机回环地址；若本机 8888/8080 已被占用，可在 `.env` 修改 `WEB_PORT` / `BACKEND_PORT` 后重新 `docker compose up -d`。公网部署请修改端口映射、默认密码并配置防火墙。
+内置 **7 个演示用户**（用户名即视频作者昵称）：`暗猫の祝福`、`加载超时请稍后`、`Baka恶魔`、`三栗lili`、`Yeuoly`、`科学超电磁炮F`、`泛式大大`，密码统一 `demo123456`（可用 `DEMO_USER_PASSWORD` 覆盖）；也可以直接注册自己的账号体验。运营后台用户 `admin`，密码来自 `.env` 的 `ADMIN_SEED_PASSWORD`（`scripts/init_env.py` 随机生成，仅首次建库时生效，管理员无改密接口）。所有端口默认只监听本机回环地址；若本机 8888/8080 已被占用，可在 `.env` 修改 `WEB_PORT` / `BACKEND_PORT` 后重新 `docker compose up -d`。公网部署请收敛端口映射并妥善保管密钥。
 
 ### 可选增强
 
@@ -317,6 +317,10 @@ sudo cp /path/to/cakecake/deploy/nginx-minibili.conf /etc/nginx/conf.d/minibili.
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
+> 接入本地监控后，nginx 配置里已包含 `location = /metrics`（Bearer 鉴权反代到
+> `127.0.0.1:8080`）。服务器 `.env` 需配置 `METRICS_TOKEN`，详见
+> [monitoring.md](../docs/monitoring.md#四云服务器接入生产)。
+
 ### 6.7 2G 内存：建议开启 swap
 
 ```bash
@@ -479,7 +483,9 @@ curl -sI http://127.0.0.1/
 - 工程红线：[Rule.md](../Rule.md)  
 - 本地开发：[README.md](../README.md)  
 - 关闭上传时的发视频流程：[docs/manual-video-ingest.md](../docs/manual-video-ingest.md)  
-- 可选 CI 部署：[.github/workflows/deploy.yml](../.github/workflows/deploy.yml)
+- 可选 CI 部署：[.github/workflows/deploy.yml](../.github/workflows/deploy.yml) —— 每次部署会把仓库最新
+  `deploy/env.production.example` 合并进服务器 `/opt/minibili/.env`：已有键值（含密钥/token）一律不覆盖，
+  只追加模板新增键，并备份为 `.env.prev`（逻辑见 [scripts/merge_env.sh](../scripts/merge_env.sh)）。
 
 
 ---

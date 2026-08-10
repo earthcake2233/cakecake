@@ -1,6 +1,6 @@
 <p align="center">
   <strong><img src="https://img.shields.io/badge/🇨🇳中文-00a1d6?style=flat-square" alt="中文"></strong>
-  <a href="docs/manual-video-ingest_EN.md">
+  <a href="manual-video-ingest_EN.md">
     <img src="https://img.shields.io/badge/🇬🇧English-999999?style=flat-square" alt="English">
   </a>
 </p>
@@ -164,7 +164,7 @@ compose 演示模式同样默认关闭上传，手动发视频流程与上面完
 
 ```bash
 docker compose exec mysql mysql -uroot -p cakecake
-# 密码：.env 的 MYSQL_ROOT_PASSWORD（默认 cakecake_dev）；库名：MYSQL_DATABASE（默认 cakecake）
+# 密码：.env 的 MYSQL_ROOT_PASSWORD（由 scripts/init_env.py 随机生成）；库名：MYSQL_DATABASE（默认 cakecake）
 ```
 
 - 查 user_id、插入语句与第 2 / 3 / 4 节完全相同；`user_id` 可直接用演示账号（如 `暗猫の祝福`）

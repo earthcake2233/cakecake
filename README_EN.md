@@ -97,7 +97,7 @@ Or manually (use this path on native Windows terminals):
 ```bash
 git clone --depth 1 git@github.com:earthcake2233/cakecake.git
 cd cakecake
-cp .env.example .env
+python3 scripts/init_env.py   # generates .env with random secrets; without Python: cp .env.example .env and fill in required keys
 docker compose up -d
 ```
 
@@ -141,7 +141,7 @@ Open **[http://localhost:8888](http://localhost:8888)**. First boot runs DB migr
 **1. Backend** (repo root)
 
 ```bash
-cp .env.example .env          # fill in JWT_SECRET, MYSQL_DSN, REDIS_*, RABBITMQ_URL, OSS_*, etc.
+python3 scripts/init_env.py   # generates .env with random secrets and fills MYSQL_DSN; use --refresh to only fill missing keys
 go mod tidy
 go build -o ./bin/cakecake ./cmd/cakecake/
 ./bin/cakecake               # default :8080; health check: GET /api/v1/health

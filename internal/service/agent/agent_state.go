@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"cakecake/internal/aigateway"
 	"cakecake/internal/model/dm"
 	"context"
 	"strings"
@@ -395,6 +396,7 @@ func (g *AgentGenerationService) pauseGeneration(uid uint64) {
 	if uid == 0 {
 		return
 	}
+	aigateway.IncAgentControl("pause")
 	g.svc.genMu.Lock()
 	if g.svc.genStates == nil {
 		g.svc.genStates = make(map[uint64]*agentGenState)
