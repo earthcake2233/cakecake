@@ -24,3 +24,14 @@ regexes = [
   '''akid''',
   '''aksecret''',
 ]
+
+[[allowlist]]
+description = "Fake credentials in integration test fixtures"
+paths = [
+  '''internal/.*_test\.go''',
+]
+regexes = [
+  '''"password":"[^"]*"''',
+  '''"old_password":"[^"]*"''',
+  '''"new_password":"[^"]*"''',
+]

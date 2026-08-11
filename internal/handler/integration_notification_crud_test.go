@@ -333,7 +333,7 @@ func Test_UserMeProfileEndpoints(t *testing.T) {
 	tk, _ := covRegister(t, r, "ump1", "password12")
 	srveOK(t, r, areq("GET", "/api/v1/users/me", tk, nil), http.StatusOK)
 	srveOK(t, r, areq("PUT", "/api/v1/users/me", tk, `{"username":"ump1_new"}`), http.StatusOK)
-	srveOK(t, r, areq("PUT", "/api/v1/users/me/password", tk, `{"old_password":"password12","new_password":"newhash123"}`), http.StatusOK)
+	srveOK(t, r, areq("PUT", "/api/v1/users/me/password", tk, `{"old_password":"password12","new_password":"password"}`), http.StatusOK)
 }
 
 func Test_UserBlockEndpointsMore(t *testing.T) {

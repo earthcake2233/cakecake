@@ -37,7 +37,7 @@ func Test_UpdateMePassword_Short(t *testing.T) {
 	api, r, _ := newTestAPI(t)
 	u := seedUser(t, api, "ump1", "UMP1", 10)
 	tk := tok(t, api, u.ID)
-	srveOK(t, r, areq("PUT", "/api/v1/users/me/password", tk, `{"old_password":"wrong","new_password":"newpass123"}`), http.StatusForbidden)
+	srveOK(t, r, areq("PUT", "/api/v1/users/me/password", tk, `{"old_password":"wrong","new_password":"password"}`), http.StatusForbidden)
 	srveOK(t, r, areq("PUT", "/api/v1/users/me/password", tk, `{"old_password":"","new_password":"short"}`), http.StatusBadRequest)
 }
 

@@ -203,7 +203,7 @@ func Test_UserMeFlow(t *testing.T) {
 	srveOK(t, r, areq("PUT", "/api/v1/users/me", tk, fmt.Sprintf(`{"username":"%s"}`, u.Username)), http.StatusOK)
 
 	// Update password with wrong old password -> 403
-	srveOK(t, r, areq("PUT", "/api/v1/users/me/password", tk, `{"old_password":"wrong","new_password":"newpass12345678"}`), http.StatusForbidden)
+	srveOK(t, r, areq("PUT", "/api/v1/users/me/password", tk, `{"old_password":"wrong","new_password":"password"}`), http.StatusForbidden)
 }
 
 // ==================== 8. user_follow.go ====================
