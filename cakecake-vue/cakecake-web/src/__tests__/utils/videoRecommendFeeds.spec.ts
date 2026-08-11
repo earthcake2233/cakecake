@@ -5,8 +5,7 @@ import {
   formatRecommendDuration,
   fillHomeRecommendSlots,
   nextHomeRecommendBatch,
-  zoneParentFromDetail,
-  HOME_RECOMMEND_PAGE_SIZE
+  zoneParentFromDetail
 } from "@/utils/videoRecommendFeeds";
 
 describe("filterRecommendPool", () => {

@@ -52,7 +52,7 @@ describe("401 retry",()=>{
     axios.post.mockResolvedValue({data:{code:0,data:{access_token:"new_at",refresh_token:"new_rt"}}});
     vi.stubGlobal("window",{location:{hash:""}});
     var cfg={url:"/admin/api",headers:{}};
-    try{await onRejected({response:{status:401,data:{msg:"unauth"}},config:cfg});}catch(e){}
+    try{await onRejected({response:{status:401,data:{msg:"unauth"}},config:cfg});}catch{/* expected rejection */}
     expect(axios.post).toHaveBeenCalledWith("http://localhost:8080/api/v1/admin/auth/refresh",{refresh_token:"rt123"});
     expect(setAdminTokens).toHaveBeenCalledWith("new_at","new_rt");
   });
@@ -61,7 +61,7 @@ describe("401 retry",()=>{
     getAdminRefreshToken.mockReturnValue(null);
     var loc={hash:""};
     vi.stubGlobal("window",{location:loc});
-    try{await onRejected({response:{status:401,data:{msg:"unauth"}},config:{}});}catch(e){}
+    try{await onRejected({response:{status:401,data:{msg:"unauth"}},config:{}});}catch{/* expected rejection */}
     expect(clearAdminTokens).toHaveBeenCalled();
     expect(loc.hash).toBe("#/admin/login");
   });

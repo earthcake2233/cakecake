@@ -41,13 +41,13 @@ describe("mbListVideos",function(){it("GET /videos with params",async function()
 
 describe("mbListComments",function(){it("GET /videos/:id/comments",async function(){
   mockHttp.get.mockResolvedValue(ok({ items:[], comments_closed:false }));
-  var r=await mb.mbListComments(42);
+  mb.mbListComments(42);
   expect(mockHttp.get).toHaveBeenCalledWith("/api/v1/videos/42/comments");
 });});
 
 describe("mbToggleVideoLike",function(){it("POST /videos/:id/like",async function(){
   mockHttp.post.mockResolvedValue(ok({ liked:true }));
-  var r=await mb.mbToggleVideoLike(42);
+  mb.mbToggleVideoLike(42);
   expect(mockHttp.post).toHaveBeenCalledWith("/api/v1/videos/42/like",{},AJ);
 });});
 
@@ -59,7 +59,7 @@ describe("mbPostComment",function(){it("POST /videos/:id/comments",async functio
 
 describe("mbToggleLike",function(){it("POST /comments/:id/like",async function(){
   mockHttp.post.mockResolvedValue(ok({ liked:true }));
-  var r=await mb.mbToggleLike(100);
+  mb.mbToggleLike(100);
   expect(mockHttp.post).toHaveBeenCalledWith("/api/v1/comments/100/like",{},A);
 });});
 
@@ -78,25 +78,25 @@ describe("mbUploadVideo",function(){it("POST /videos with FormData",async functi
 
 describe("mbGetUserPublic",function(){it("GET /space/:userId",async function(){
   mockHttp.get.mockResolvedValue(ok({ user_id:1 }));
-  var r=await mb.mbGetUserPublic(1);
+  mb.mbGetUserPublic(1);
   expect(mockHttp.get).toHaveBeenCalledWith("/api/v1/space/1",undefined);
 });});
 
 describe("mbToggleUserFollow",function(){it("POST /users/:userId/follow",async function(){
   mockHttp.post.mockResolvedValue(ok({ followed:true }));
-  var r=await mb.mbToggleUserFollow(42);
+  mb.mbToggleUserFollow(42);
   expect(mockHttp.post).toHaveBeenCalledWith("/api/v1/users/42/follow",{},A);
 });});
 
 describe("mbToggleVideoFavorite",function(){it("POST /videos/:id/favorite",async function(){
   mockHttp.post.mockResolvedValue(ok({ favorited:true }));
-  var r=await mb.mbToggleVideoFavorite(42);
+  mb.mbToggleVideoFavorite(42);
   expect(mockHttp.post).toHaveBeenCalledWith("/api/v1/videos/42/favorite",{},AJ);
 });});
 
 describe("mbToggleWatchLater",function(){it("POST /videos/:id/watch-later",async function(){
   mockHttp.post.mockResolvedValue(ok({ in_watch_later:true }));
-  var r=await mb.mbToggleWatchLater(42);
+  mb.mbToggleWatchLater(42);
   expect(mockHttp.post).toHaveBeenCalledWith("/api/v1/videos/42/watch-later",{},AJ);
 });});
 
@@ -114,7 +114,7 @@ describe("mbListNotifications",function(){it("GET /notifications",async function
 
 describe("mbUnreadSummary",function(){it("GET /notifications/unread-summary",async function(){
   mockHttp.get.mockResolvedValue(ok({ my_message:3 }));
-  var r=await mb.mbUnreadSummary();
+  mb.mbUnreadSummary();
   expect(mockHttp.get).toHaveBeenCalledWith("/api/v1/notifications/unread-summary",A);
 });});
 
@@ -152,7 +152,7 @@ describe("mbGetMe",function(){it("GET /users/me",async function(){
 
 describe("mbGetSearchSuggest",function(){it("GET /search/suggest",async function(){
   mockHttp.get.mockResolvedValue(ok({ tag:[{name:"t"}] }));
-  var r=await mb.mbGetSearchSuggest("test");
+  mb.mbGetSearchSuggest("test");
   expect(mockHttp.get).toHaveBeenCalledWith("/api/v1/search/suggest",{params:{term:"test",limit:10}});
 });});
 
@@ -184,13 +184,13 @@ describe("mbDeleteDanmaku",function(){it("DELETE /danmakus/:id",async function()
 
 describe("mbToggleDanmakuLike",function(){it("POST /danmakus/:id/like",async function(){
   mockHttp.post.mockResolvedValue(ok({ liked:true }));
-  var r=await mb.mbToggleDanmakuLike(42);
+  mb.mbToggleDanmakuLike(42);
   expect(mockHttp.post).toHaveBeenCalledWith("/api/v1/danmakus/42/like",undefined,{...A});
 });});
 
 describe("mbGetMeDailyRewards",function(){it("GET /users/me/daily-rewards",async function(){
   mockHttp.get.mockResolvedValue(ok({ watched_for_today:false }));
-  var r=await mb.mbGetMeDailyRewards();
+  mb.mbGetMeDailyRewards();
   expect(mockHttp.get).toHaveBeenCalledWith("/api/v1/users/me/daily-rewards",A);
 });});
 

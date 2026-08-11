@@ -7,7 +7,7 @@ describe("dynamicsFeedSeed", () => {
   });
 
   it("each item has rank, title, and badge fields", () => {
-    DYNAMICS_HOT_SEARCH.forEach((item, i) => {
+    DYNAMICS_HOT_SEARCH.forEach((item) => {
       expect(item).toHaveProperty("rank");
       expect(item).toHaveProperty("title");
       expect(item).toHaveProperty("badge");

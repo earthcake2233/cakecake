@@ -718,7 +718,6 @@
 <script>
 import { ElMessage } from "element-plus";
 import CreatorShell from "@/components/creator/CreatorShell.vue";
-import { showCreatorVideoReviewNotice } from "@/utils/creatorVideoReviewNotice";
 import VideoFavoriteFolderDialog from "@/components/video/VideoFavoriteFolderDialog.vue";
 import imgEmpty from "@/assets/empty.png";
 import defaultVideoCover from "@/assets/akari.jpg";

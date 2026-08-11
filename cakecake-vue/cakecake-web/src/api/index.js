@@ -613,7 +613,7 @@ export function getSearchResult(highlight, keyword, opts = {}) {
           e.cakecakeApiCode = body && body.code;
           throw e;
         }
-        const data = body.data || emptySearchPayload.data;
+        const data = body.data || local.emptySearchPayload.data;
         if (!data.search_status) {
           const r = data.result || {};
           const has =
@@ -626,7 +626,7 @@ export function getSearchResult(highlight, keyword, opts = {}) {
       })
       .catch(err => {
         console.warn("cakecake 搜索失败", err);
-        const base = { ...(emptySearchPayload.data || {}) };
+        const base = { ...(local.emptySearchPayload.data || {}) };
         if (err && err.cakecakeApiCode === 50301) {
           base.search_status = "unavailable";
         } else {

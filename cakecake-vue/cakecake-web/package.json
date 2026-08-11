@@ -8,6 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "lint": "eslint \"src/**/*.{js,vue,ts}\"",
+    "typecheck": "vue-tsc --noEmit -p tsconfig.typecheck.json",
     "check:encoding": "node scripts/check-encoding.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -41,7 +42,8 @@
     "typescript": "^5.7.3",
     "vite": "^6.0.7",
     "vitest": "^4.1.10",
-    "vue-eslint-parser": "^9.4.3"
+    "vue-eslint-parser": "^9.4.3",
+    "vue-tsc": "^3.3.9"
   },
   "eslintConfig": {
     "root": true,
@@ -87,6 +89,7 @@
           "x-invalid-end-tag": false
         }
       ],
+      "vue/no-reserved-keys": "off",
       "no-useless-escape": "off",
       "no-unused-vars": [
         "warn",

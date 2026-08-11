@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import module from "@/store/modules/404";
 
 describe("store/modules/404", () => {

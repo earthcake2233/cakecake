@@ -171,7 +171,7 @@ export default {
     contributeRoute(userId) {
       return cakecakeUserSpaceContributeVideoRoute(userId);
     },
-    showFollowBtn(user) {
+    showFollowBtn(_user) {
       return !!getAccessToken();
     },
     isSelfUser(user) {

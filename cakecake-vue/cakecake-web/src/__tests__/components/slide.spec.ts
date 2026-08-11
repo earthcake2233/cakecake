@@ -64,7 +64,6 @@ describe("Slide.vue", () => {
 
   it("pauses interval on mouseover (clearInv)", () => {
     const wrapper = mount(Slide, { props: { slidedata: sampleData, slidetimedata: 1000 } });
-    const intervalId = wrapper.vm.inVld;
     wrapper.find(".slide").trigger("mouseover");
     // After clearInv, the interval should no longer fire
     vi.advanceTimersByTime(2000);
