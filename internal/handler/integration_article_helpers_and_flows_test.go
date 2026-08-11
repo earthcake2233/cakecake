@@ -5,6 +5,7 @@ package handler
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"testing"
 	"time"
 
@@ -118,8 +119,8 @@ func TestParseFolderIDQuery(t *testing.T) {
 	api, r, _ := newTestAPI(t)
 	u := seedUser(t, api, "pfiq1", "PFIQ1", 10)
 	tk := tok(t, api, u.ID)
-	srve(r, areq("GET", "/api/v1/users/me/favorites?folder_id=0", tk, nil))
-	srve(r, areq("GET", "/api/v1/users/me/favorites?folder_id=abc", tk, nil))
+	srveOK(t, r, areq("GET", "/api/v1/users/me/favorites?folder_id=0", tk, nil), http.StatusBadRequest)
+	srveOK(t, r, areq("GET", "/api/v1/users/me/favorites?folder_id=abc", tk, nil), http.StatusBadRequest)
 }
 
 func TestParseVideoFolderParams_NoParam(t *testing.T) {
@@ -128,7 +129,7 @@ func TestParseVideoFolderParams_NoParam(t *testing.T) {
 	u := seedUser(t, api, "pvf1", "PVF1", 10)
 	tk := tok(t, api, u.ID)
 	// Missing video ID
-	srve(r, areq("DELETE", "/api/v1/videos/0/favorite-folders/0", tk, nil))
+	srveOK(t, r, areq("DELETE", "/api/v1/videos/0/favorite-folders/0", tk, nil), http.StatusBadRequest)
 }
 
 func Test_UserDynamicPutAndPlayback(t *testing.T) {
@@ -137,7 +138,10 @@ func Test_UserDynamicPutAndPlayback(t *testing.T) {
 	tk := tok(t, api, u.ID)
 
 	// Post a dynamic
-	w := srve(r, areq("POST", "/api/v1/users/me/dynamics", tk, `{"title":"EditMe","content":"To be edited"}`))
+	w := doMultipart(r, "POST", "/api/v1/users/me/dynamics", tk, map[string]string{
+		"title": "EditMe", "content": "To be edited",
+	})
+	covOK(t, w, http.StatusOK)
 	var dr struct {
 		Code int `json:"code"`
 		Data struct {
@@ -145,16 +149,21 @@ func Test_UserDynamicPutAndPlayback(t *testing.T) {
 		} `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &dr))
+	require.Equal(t, 0, dr.Code, w.Body.String())
 	if dr.Code == 0 && dr.Data.ID > 0 {
 		did := dr.Data.ID
 		// Update dynamic
-		srve(r, areq("PUT", fmt.Sprintf("/api/v1/users/me/dynamics/%d", did), tk, `{"title":"Edited","content":"Edited content"}`))
+		uw := doMultipart(r, "PUT", fmt.Sprintf("/api/v1/users/me/dynamics/%d", did), tk, map[string]string{
+			"title": "Edited", "content": "Edited content",
+		})
+		covOK(t, uw, http.StatusOK)
 		// Patch playback
-		srve(r, areq("PATCH", fmt.Sprintf("/api/v1/users/me/dynamics/%d/playback", did), tk, `{"current_time":20.0}`))
+		pw := covReq(t, r, "PATCH", fmt.Sprintf("/api/v1/users/me/dynamics/%d/playback", did), tk, map[string]any{"comments_closed": true})
+		covOK(t, pw, http.StatusOK)
 	}
 
 	// List dynamics via space
-	srve(r, areq("GET", fmt.Sprintf("/api/v1/space/%d/dynamics", u.ID), "", nil))
+	srveOK(t, r, areq("GET", fmt.Sprintf("/api/v1/space/%d/dynamics", u.ID), tk, nil), http.StatusOK)
 }
 
 func Test_ArticleViewCount(t *testing.T) {
@@ -164,13 +173,13 @@ func Test_ArticleViewCount(t *testing.T) {
 	art := seedArticle(t, api, u.ID, "View Count Test")
 
 	// Post article view (increment count)
-	srve(r, areq("POST", fmt.Sprintf("/api/v1/articles/%d/view", art.ID), tk, nil))
+	srveOK(t, r, areq("POST", fmt.Sprintf("/api/v1/articles/%d/view", art.ID), tk, nil), http.StatusOK)
 
 	// Get article detail
-	srve(r, areq("GET", fmt.Sprintf("/api/v1/articles/%d", art.ID), "", nil))
+	srveOK(t, r, areq("GET", fmt.Sprintf("/api/v1/articles/%d", art.ID), "", nil), http.StatusOK)
 
 	// List user published articles
-	srve(r, areq("GET", fmt.Sprintf("/api/v1/space/%d/article-favorites", u.ID), "", nil))
+	srveOK(t, r, areq("GET", fmt.Sprintf("/api/v1/space/%d/article-favorites", u.ID), "", nil), http.StatusOK)
 }
 
 func Test_ArticleCommentSubActions(t *testing.T) {
@@ -192,11 +201,11 @@ func Test_ArticleCommentSubActions(t *testing.T) {
 	if cr.Code == 0 && cr.Data.ID > 0 {
 		cid := cr.Data.ID
 		// Like
-		srve(r, areq("POST", fmt.Sprintf("/api/v1/article-comments/%d/like", cid), tk, nil))
+		srveOK(t, r, areq("POST", fmt.Sprintf("/api/v1/article-comments/%d/like", cid), tk, nil), http.StatusOK)
 		// Dislike
-		srve(r, areq("POST", fmt.Sprintf("/api/v1/article-comments/%d/dislike", cid), tk, nil))
+		srveOK(t, r, areq("POST", fmt.Sprintf("/api/v1/article-comments/%d/dislike", cid), tk, nil), http.StatusOK)
 		// List article comments
-		srve(r, areq("GET", fmt.Sprintf("/api/v1/articles/%d/comments", art.ID), "", nil))
+		srveOK(t, r, areq("GET", fmt.Sprintf("/api/v1/articles/%d/comments", art.ID), "", nil), http.StatusOK)
 	}
 }
 func Test_DmPostAndList(t *testing.T) {
@@ -206,7 +215,7 @@ func Test_DmPostAndList(t *testing.T) {
 	tk := tok(t, api, u.ID)
 
 	// Create a conversation (should succeed)
-	w := srve(r, areq("POST", "/api/v1/dm/conversations", tk, fmt.Sprintf(`{"user_id":%d}`, u2.ID)))
+	w := srve(r, areq("POST", "/api/v1/dm/conversations", tk, fmt.Sprintf(`{"peer_id":%d}`, u2.ID)))
 	var dcr struct {
 		Code int `json:"code"`
 		Data struct {
@@ -217,11 +226,11 @@ func Test_DmPostAndList(t *testing.T) {
 	if dcr.Code == 0 && dcr.Data.ID > 0 {
 		cid := dcr.Data.ID
 		// List conversations
-		srve(r, areq("GET", "/api/v1/dm/conversations", tk, nil))
+		srveOK(t, r, areq("GET", "/api/v1/dm/conversations", tk, nil), http.StatusOK)
 		// List messages
-		srve(r, areq("GET", fmt.Sprintf("/api/v1/dm/conversations/%d/messages", cid), tk, nil))
+		srveOK(t, r, areq("GET", fmt.Sprintf("/api/v1/dm/conversations/%d/messages", cid), tk, nil), http.StatusOK)
 		// Post a message
-		srve(r, areq("POST", fmt.Sprintf("/api/v1/dm/conversations/%d/messages", cid), tk, `{"content":"Hello from test"}`))
+		srveOK(t, r, areq("POST", fmt.Sprintf("/api/v1/dm/conversations/%d/messages", cid), tk, `{"content":"Hello from test"}`), http.StatusOK)
 	}
 }
 func Test_SpaceRecentCoinsAndFavorites(t *testing.T) {
@@ -232,8 +241,8 @@ func Test_SpaceRecentCoinsAndFavorites(t *testing.T) {
 
 	// Post a coin from u to u2's video
 	tk := tok(t, api, u.ID)
-	srve(r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/coin", v.ID), tk, `{"amount":1}`))
+	srveOK(t, r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/coin", v.ID), tk, `{"amount":1}`), http.StatusOK)
 
 	// List recent coins
-	srve(r, areq("GET", fmt.Sprintf("/api/v1/space/%d/recent-coins", u.ID), "", nil))
+	srveOK(t, r, areq("GET", fmt.Sprintf("/api/v1/space/%d/recent-coins", u.ID), "", nil), http.StatusOK)
 }

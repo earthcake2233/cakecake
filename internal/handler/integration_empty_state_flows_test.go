@@ -4,7 +4,11 @@ package handler
 
 import (
 	"context"
+	"net/http"
 	"testing"
+
+	"github.com/stretchr/testify/require"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func Test_VideoEngagementByViewer_Zero(t *testing.T) {
@@ -12,9 +16,9 @@ func Test_VideoEngagementByViewer_Zero(t *testing.T) {
 	u := seedUser(t, api, "veb1", "VEB1", 10)
 	tk := tok(t, api, u.ID)
 	// Test that endpoints handle zero/non-existent gracefully
-	srve(r, areq("GET", "/api/v1/videos/99999/fav", tk, nil))
-	srve(r, areq("GET", "/api/v1/videos/99999/coin", tk, nil))
-	srve(r, areq("GET", "/api/v1/videos/99999/engagement", tk, nil))
+	srveOK(t, r, areq("GET", "/api/v1/videos/99999", tk, nil), http.StatusNotFound)
+	srveOK(t, r, areq("POST", "/api/v1/videos/99999/like", tk, nil), http.StatusNotFound)
+	srveOK(t, r, areq("POST", "/api/v1/videos/99999/coin", tk, `{"amount":1}`), http.StatusNotFound)
 }
 
 func Test_WatchLaterByViewer_Zero(t *testing.T) {
@@ -22,7 +26,7 @@ func Test_WatchLaterByViewer_Zero(t *testing.T) {
 	u := seedUser(t, api, "wlb1", "WLB1", 10)
 	tk := tok(t, api, u.ID)
 	// Non-existent video
-	srve(r, areq("POST", "/api/v1/videos/99999/watch-later", tk, nil))
+	srveOK(t, r, areq("POST", "/api/v1/videos/99999/watch-later", tk, nil), http.StatusNotFound)
 }
 
 func Test_DmUnreadTotal_Zero(t *testing.T) {
@@ -49,7 +53,10 @@ func Test_CoinRecentListItems_Zero(t *testing.T) {
 func Test_AccountDeletion_RequestAndRevoke(t *testing.T) {
 	api, r, _ := newTestAPI(t)
 	u := seedUser(t, api, "adr1", "ADR1", 10)
+	hash, err := bcrypt.GenerateFromPassword([]byte("password12"), bcrypt.MinCost)
+	require.NoError(t, err)
+	require.NoError(t, api.DB.Model(&u).Update("password_hash", string(hash)).Error)
 	tk := tok(t, api, u.ID)
-	srve(r, areq("POST", "/api/v1/users/me/account-deletion/request", tk, nil))
-	srve(r, areq("POST", "/api/v1/users/me/account-deletion/revoke", tk, nil))
+	srveOK(t, r, areq("POST", "/api/v1/users/me/deletion/request", tk, `{"password":"password12"}`), http.StatusOK)
+	srveOK(t, r, areq("POST", "/api/v1/users/me/deletion/revoke", tk, nil), http.StatusOK)
 }

@@ -28,16 +28,16 @@ func Test_DynamicCommentApproveIgnoreDelete(t *testing.T) {
 	did := dyn.ID
 	// Post a comment as u2
 	w := srve(r, areq("POST", fmt.Sprintf("/api/v1/user-dynamics/%d/comments", did), tk2, `{"content":"Nice!"}`))
-	var cresp map[string]interface{}
+	var cresp struct {
+		Code int `json:"code"`
+		Data struct {
+			ID uint64 `json:"id"`
+		} `json:"data"`
+	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &cresp))
-	cd, _ := cresp["data"].(map[string]interface{})
-	var cid uint64
-	if cd != nil {
-		cid = uint64(cd["id"].(float64))
-	}
-	if cid == 0 {
-		t.Skip("could not parse comment id")
-	}
+	require.Equal(t, 0, cresp.Code, w.Body.String())
+	require.NotZero(t, cresp.Data.ID, w.Body.String())
+	cid := cresp.Data.ID
 	// Approve as owner
 	srveOK(t, r, areq("POST", fmt.Sprintf("/api/v1/dynamic-comments/%d/approve", cid), tk, nil), http.StatusOK)
 	// Ignore curated as owner

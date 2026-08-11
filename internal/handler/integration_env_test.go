@@ -1,4 +1,4 @@
-//go:build integration
+//go:build integration && live
 
 package handler
 
@@ -17,7 +17,7 @@ import (
 func TestLiveHealthEndpoint(t *testing.T) {
 	base := strings.TrimSuffix(os.Getenv("CAKECAKE_TEST_BASE_URL"), "/")
 	if base == "" {
-		t.Skip("set CAKECAKE_TEST_BASE_URL to run live integration test")
+		t.Fatal("set CAKECAKE_TEST_BASE_URL to run live integration test (build with -tags 'integration live')")
 	}
 	c := &http.Client{Timeout: 5 * time.Second}
 	resp, err := c.Get(base + "/api/v1/health")

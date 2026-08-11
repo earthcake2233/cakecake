@@ -6,6 +6,7 @@ import (
 	"cakecake/internal/model/dynamic"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"testing"
 	"time"
 
@@ -28,19 +29,18 @@ func Test_DMFlow(t *testing.T) {
 	}
 	var cr convResp
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &cr))
-	if cr.Code != 0 || cr.Data.ID == 0 {
-		t.Skip("dm conversation not created")
-	}
+	require.Equal(t, 0, cr.Code, w.Body.String())
+	require.NotZero(t, cr.Data.ID, w.Body.String())
 	cid := cr.Data.ID
 
 	// List conversations
-	srve(r, areq("GET", "/api/v1/dm/conversations", tk, nil))
+	srveOK(t, r, areq("GET", "/api/v1/dm/conversations", tk, nil), http.StatusOK)
 
 	// Send message
-	srve(r, areq("POST", fmt.Sprintf("/api/v1/dm/conversations/%d/messages", cid), tk, `{"content":"hello"}`))
+	srveOK(t, r, areq("POST", fmt.Sprintf("/api/v1/dm/conversations/%d/messages", cid), tk, `{"content":"hello"}`), http.StatusOK)
 
 	// List messages
-	srve(r, areq("GET", fmt.Sprintf("/api/v1/dm/conversations/%d/messages", cid), tk, nil))
+	srveOK(t, r, areq("GET", fmt.Sprintf("/api/v1/dm/conversations/%d/messages", cid), tk, nil), http.StatusOK)
 }
 
 // ==================== 2. favorite_folder.go ====================
@@ -60,19 +60,18 @@ func Test_FavoriteFolderCRUD(t *testing.T) {
 	}
 	var ffr ffResp
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &ffr))
-	if ffr.Code != 0 || ffr.Data.ID == 0 {
-		t.Skip("favorite folder not created")
-	}
+	require.Equal(t, 0, ffr.Code, w.Body.String())
+	require.NotZero(t, ffr.Data.ID, w.Body.String())
 	fid := ffr.Data.ID
 
 	// List folders
-	srve(r, areq("GET", "/api/v1/users/me/favorite-folders", tk, nil))
+	srveOK(t, r, areq("GET", "/api/v1/users/me/favorite-folders", tk, nil), http.StatusOK)
 
 	// Rename folder (UpdateFavoriteFolder)
-	srve(r, areq("PUT", fmt.Sprintf("/api/v1/users/me/favorite-folders/%d", fid), tk, `{"title":"Renamed","description":"Updated desc"}`))
+	srveOK(t, r, areq("PUT", fmt.Sprintf("/api/v1/users/me/favorite-folders/%d", fid), tk, `{"title":"Renamed","description":"Updated desc"}`), http.StatusOK)
 
 	// Delete folder
-	srve(r, areq("DELETE", fmt.Sprintf("/api/v1/users/me/favorite-folders/%d", fid), tk, nil))
+	srveOK(t, r, areq("DELETE", fmt.Sprintf("/api/v1/users/me/favorite-folders/%d", fid), tk, nil), http.StatusOK)
 }
 
 // ==================== 3. user_dynamic.go ====================
@@ -87,16 +86,16 @@ func Test_UserDynamicFlow(t *testing.T) {
 	require.NoError(t, api.DB.Create(&dyn).Error)
 
 	// Get dynamic
-	srve(r, areq("GET", fmt.Sprintf("/api/v1/user-dynamics/%d", dyn.ID), "", nil))
+	srveOK(t, r, areq("GET", fmt.Sprintf("/api/v1/user-dynamics/%d", dyn.ID), "", nil), http.StatusOK)
 
 	// Patch playback (comments_closed)
-	srve(r, areq("PATCH", fmt.Sprintf("/api/v1/users/me/dynamics/%d/playback", dyn.ID), tk, `{"comments_closed":true}`))
+	srveOK(t, r, areq("PATCH", fmt.Sprintf("/api/v1/users/me/dynamics/%d/playback", dyn.ID), tk, `{"comments_closed":true}`), http.StatusOK)
 
 	// List dynamics from space
-	srve(r, areq("GET", fmt.Sprintf("/api/v1/space/%d/dynamics", u.ID), "", nil))
+	srveOK(t, r, areq("GET", fmt.Sprintf("/api/v1/space/%d/dynamics", u.ID), "", nil), http.StatusOK)
 
 	// Delete dynamic
-	srve(r, areq("DELETE", fmt.Sprintf("/api/v1/users/me/dynamics/%d", dyn.ID), tk, nil))
+	srveOK(t, r, areq("DELETE", fmt.Sprintf("/api/v1/users/me/dynamics/%d", dyn.ID), tk, nil), http.StatusOK)
 }
 
 // ==================== 4. article.go ====================
@@ -116,25 +115,24 @@ func Test_ArticleCRUD(t *testing.T) {
 	}
 	var ar artResp
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &ar))
-	if ar.Code != 0 || ar.Data.ID == 0 {
-		t.Skip("article not created")
-	}
+	require.Equal(t, 0, ar.Code, w.Body.String())
+	require.NotZero(t, ar.Data.ID, w.Body.String())
 	aid := ar.Data.ID
 
 	// Get article (public)
-	srve(r, areq("GET", fmt.Sprintf("/api/v1/articles/%d", aid), "", nil))
+	srveOK(t, r, areq("GET", fmt.Sprintf("/api/v1/articles/%d", aid), "", nil), http.StatusOK)
 
 	// Put (update) article
-	srve(r, areq("PUT", fmt.Sprintf("/api/v1/users/me/articles/%d", aid), tk, `{"title":"Updated Title","body_md":"# Updated","publish":false}`))
+	srveOK(t, r, areq("PUT", fmt.Sprintf("/api/v1/users/me/articles/%d", aid), tk, `{"title":"Updated Title","body_md":"# Updated"}`), http.StatusOK)
 
 	// Patch playback
-	srve(r, areq("PATCH", fmt.Sprintf("/api/v1/users/me/articles/%d/playback", aid), tk, `{"comments_closed":true}`))
+	srveOK(t, r, areq("PATCH", fmt.Sprintf("/api/v1/users/me/articles/%d/playback", aid), tk, `{"comments_closed":true}`), http.StatusOK)
 
 	// Update article cover (nil body -> multipart parse error -> 400)
-	srve(r, areq("PUT", fmt.Sprintf("/api/v1/users/me/articles/%d/cover", aid), tk, nil))
+	srveOK(t, r, areq("PUT", fmt.Sprintf("/api/v1/users/me/articles/%d/cover", aid), tk, nil), http.StatusBadRequest)
 
 	// Delete article
-	srve(r, areq("DELETE", fmt.Sprintf("/api/v1/users/me/articles/%d", aid), tk, nil))
+	srveOK(t, r, areq("DELETE", fmt.Sprintf("/api/v1/users/me/articles/%d", aid), tk, nil), http.StatusOK)
 }
 
 // ==================== 5. video.go ====================
@@ -146,19 +144,19 @@ func Test_VideoUpdateDelete(t *testing.T) {
 	v := seedVideoWithAPI(t, api, u.ID, "Original Title")
 
 	// Get video
-	srve(r, areq("GET", fmt.Sprintf("/api/v1/videos/%d", v.ID), "", nil))
+	srveOK(t, r, areq("GET", fmt.Sprintf("/api/v1/videos/%d", v.ID), "", nil), http.StatusOK)
 
 	// Update video
-	srve(r, areq("PUT", fmt.Sprintf("/api/v1/videos/%d", v.ID), tk, `{"title":"Updated Title","description":"New desc"}`))
+	srveOK(t, r, areq("PUT", fmt.Sprintf("/api/v1/videos/%d", v.ID), tk, `{"title":"Updated Title","description":"New desc"}`), http.StatusOK)
 
 	// Patch playback
-	srve(r, areq("PATCH", fmt.Sprintf("/api/v1/videos/%d/playback", v.ID), tk, `{"comments_closed":true,"danmaku_closed":false}`))
+	srveOK(t, r, areq("PATCH", fmt.Sprintf("/api/v1/videos/%d/playback", v.ID), tk, `{"comments_closed":true,"danmaku_closed":false}`), http.StatusOK)
 
 	// Update video cover (nil body -> multipart parse error -> 400)
-	srve(r, areq("PUT", fmt.Sprintf("/api/v1/videos/%d/cover", v.ID), tk, nil))
+	srveOK(t, r, areq("PUT", fmt.Sprintf("/api/v1/videos/%d/cover", v.ID), tk, nil), http.StatusBadRequest)
 
 	// Delete video
-	srve(r, areq("DELETE", fmt.Sprintf("/api/v1/videos/%d", v.ID), tk, nil))
+	srveOK(t, r, areq("DELETE", fmt.Sprintf("/api/v1/videos/%d", v.ID), tk, nil), http.StatusOK)
 }
 
 // ==================== 6. view_history.go ====================
@@ -170,19 +168,19 @@ func Test_ViewHistoryFlow(t *testing.T) {
 	tk := tok(t, api, u.ID)
 
 	// Post view history
-	srve(r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/view-history", v.ID), tk, nil))
+	srveOK(t, r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/view-history", v.ID), tk, nil), http.StatusOK)
 
 	// List view history
-	srve(r, areq("GET", "/api/v1/users/me/view-history", tk, nil))
+	srveOK(t, r, areq("GET", "/api/v1/users/me/view-history", tk, nil), http.StatusOK)
 
 	// Get settings
-	srve(r, areq("GET", "/api/v1/users/me/view-history/settings", tk, nil))
+	srveOK(t, r, areq("GET", "/api/v1/users/me/view-history/settings", tk, nil), http.StatusOK)
 
 	// Update settings
-	srve(r, areq("PUT", "/api/v1/users/me/view-history/settings", tk, `{"paused":true}`))
+	srveOK(t, r, areq("PUT", "/api/v1/users/me/view-history/settings", tk, `{"paused":true}`), http.StatusOK)
 
 	// Delete entry
-	srve(r, areq("DELETE", fmt.Sprintf("/api/v1/users/me/view-history/%d", v.ID), tk, nil))
+	srveOK(t, r, areq("DELETE", fmt.Sprintf("/api/v1/users/me/view-history/%d", v.ID), tk, nil), http.StatusOK)
 }
 
 // ==================== 7. user_me.go ====================
@@ -193,19 +191,19 @@ func Test_UserMeFlow(t *testing.T) {
 	tk := tok(t, api, u.ID)
 
 	// GetMe
-	srve(r, areq("GET", "/api/v1/users/me", tk, nil))
+	srveOK(t, r, areq("GET", "/api/v1/users/me", tk, nil), http.StatusOK)
 
 	// Update profile
-	srve(r, areq("PUT", "/api/v1/users/me/profile", tk, `{"nickname":"NewNick","sign":"Hello world","gender":"male","birthday":"2000-01-01"}`))
+	srveOK(t, r, areq("PUT", "/api/v1/users/me/profile", tk, `{"nickname":"NewNick","sign":"Hello world","gender":"male","birthday":"2000-01-01"}`), http.StatusOK)
 
 	// Update announcement
-	srve(r, areq("PUT", "/api/v1/users/me/announcement", tk, `{"announcement":"Welcome to my space!"}`))
+	srveOK(t, r, areq("PUT", "/api/v1/users/me/announcement", tk, `{"announcement":"Welcome to my space!"}`), http.StatusOK)
 
 	// Update username (use same username to test no-op path)
-	srve(r, areq("PUT", "/api/v1/users/me", tk, fmt.Sprintf(`{"username":"%s"}`, u.Username)))
+	srveOK(t, r, areq("PUT", "/api/v1/users/me", tk, fmt.Sprintf(`{"username":"%s"}`, u.Username)), http.StatusOK)
 
 	// Update password with wrong old password -> 403
-	srve(r, areq("PUT", "/api/v1/users/me/password", tk, `{"old_password":"wrong","new_password":"newpass12345678"}`))
+	srveOK(t, r, areq("PUT", "/api/v1/users/me/password", tk, `{"old_password":"wrong","new_password":"newpass12345678"}`), http.StatusForbidden)
 }
 
 // ==================== 8. user_follow.go ====================
@@ -217,16 +215,16 @@ func Test_UserFollowFlow(t *testing.T) {
 	tk := tok(t, api, u.ID)
 
 	// Follow user (POST /api/v1/users/:userId/follow)
-	srve(r, areq("POST", fmt.Sprintf("/api/v1/users/%d/follow", u2.ID), tk, nil))
+	srveOK(t, r, areq("POST", fmt.Sprintf("/api/v1/users/%d/follow", u2.ID), tk, nil), http.StatusOK)
 
 	// List following
-	srve(r, areq("GET", fmt.Sprintf("/api/v1/space/%d/following", u.ID), "", nil))
+	srveOK(t, r, areq("GET", fmt.Sprintf("/api/v1/space/%d/following", u.ID), tk, nil), http.StatusOK)
 
 	// List followers
-	srve(r, areq("GET", fmt.Sprintf("/api/v1/space/%d/followers", u.ID), "", nil))
+	srveOK(t, r, areq("GET", fmt.Sprintf("/api/v1/space/%d/followers", u.ID), tk, nil), http.StatusOK)
 
 	// Unfollow (POST same endpoint toggles)
-	srve(r, areq("POST", fmt.Sprintf("/api/v1/users/%d/follow", u2.ID), tk, nil))
+	srveOK(t, r, areq("POST", fmt.Sprintf("/api/v1/users/%d/follow", u2.ID), tk, nil), http.StatusOK)
 }
 
 // ==================== 9. follow_group.go ====================
@@ -238,7 +236,7 @@ func Test_FollowGroupFlow(t *testing.T) {
 	tk := tok(t, api, u.ID)
 
 	// First follow user2 so we can add to group
-	srve(r, areq("POST", fmt.Sprintf("/api/v1/users/%d/follow", u2.ID), tk, nil))
+	srveOK(t, r, areq("POST", fmt.Sprintf("/api/v1/users/%d/follow", u2.ID), tk, nil), http.StatusOK)
 
 	// Create group
 	w := srve(r, areq("POST", "/api/v1/users/me/follow-groups", tk, `{"name":"Test Group"}`))
@@ -250,22 +248,21 @@ func Test_FollowGroupFlow(t *testing.T) {
 	}
 	var fgr fgResp
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &fgr))
-	if fgr.Code != 0 || fgr.Data.ID == 0 {
-		t.Skip("follow group not created")
-	}
+	require.Equal(t, 0, fgr.Code, w.Body.String())
+	require.NotZero(t, fgr.Data.ID, w.Body.String())
 	gid := fgr.Data.ID
 
 	// List groups
-	srve(r, areq("GET", "/api/v1/users/me/follow-groups", tk, nil))
+	srveOK(t, r, areq("GET", "/api/v1/users/me/follow-groups", tk, nil), http.StatusOK)
 
 	// Add member
-	srve(r, areq("POST", fmt.Sprintf("/api/v1/users/me/follow-groups/%d/members", gid), tk, fmt.Sprintf(`{"followee_id":%d}`, u2.ID)))
+	srveOK(t, r, areq("POST", fmt.Sprintf("/api/v1/users/me/follow-groups/%d/members", gid), tk, fmt.Sprintf(`{"followee_id":%d}`, u2.ID)), http.StatusOK)
 
 	// Remove member
-	srve(r, areq("DELETE", fmt.Sprintf("/api/v1/users/me/follow-groups/%d/members/%d", gid, u2.ID), tk, nil))
+	srveOK(t, r, areq("DELETE", fmt.Sprintf("/api/v1/users/me/follow-groups/%d/members/%d", gid, u2.ID), tk, nil), http.StatusOK)
 
 	// Delete group
-	srve(r, areq("DELETE", fmt.Sprintf("/api/v1/users/me/follow-groups/%d", gid), tk, nil))
+	srveOK(t, r, areq("DELETE", fmt.Sprintf("/api/v1/users/me/follow-groups/%d", gid), tk, nil), http.StatusOK)
 }
 
 // ==================== 10. video_engagement.go ====================
@@ -289,26 +286,26 @@ func Test_VideoEngagementFlow(t *testing.T) {
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &ffr))
 
 	// Toggle video favorite
-	srve(r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/favorite", v.ID), tk, nil))
+	srveOK(t, r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/favorite", v.ID), tk, nil), http.StatusOK)
 
 	if ffr.Code == 0 && ffr.Data.ID > 0 {
 		fid := ffr.Data.ID
 		// Add video to folder
-		srve(r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/favorite-folders/%d", v.ID, fid), tk, nil))
+		srveOK(t, r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/favorite-folders/%d", v.ID, fid), tk, nil), http.StatusOK)
 
 		// Remove video from folder
-		srve(r, areq("DELETE", fmt.Sprintf("/api/v1/videos/%d/favorite-folders/%d", v.ID, fid), tk, nil))
+		srveOK(t, r, areq("DELETE", fmt.Sprintf("/api/v1/videos/%d/favorite-folders/%d", v.ID, fid), tk, nil), http.StatusOK)
 	}
 
 	// Post coin (need another user's video, can't coin self)
-	srve(r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/coin", v.ID), tk, `{"amount":1}`))
+	srveOK(t, r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/coin", v.ID), tk, `{"amount":1}`), http.StatusOK)
 
 	// Toggle watch later
-	srve(r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/watch-later", v.ID), tk, nil))
+	srveOK(t, r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/watch-later", v.ID), tk, nil), http.StatusOK)
 
 	// List watch later
-	srve(r, areq("GET", "/api/v1/users/me/watch-later", tk, nil))
+	srveOK(t, r, areq("GET", "/api/v1/users/me/watch-later", tk, nil), http.StatusOK)
 
 	// Clear watch later
-	srve(r, areq("DELETE", "/api/v1/users/me/watch-later", tk, nil))
+	srveOK(t, r, areq("DELETE", "/api/v1/users/me/watch-later", tk, nil), http.StatusOK)
 }

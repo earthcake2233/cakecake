@@ -1,5 +1,9 @@
 //go:build integration
 
+// Behavioral integration tests for engagement counters, danmaku persistence,
+// search degradation, and admin delete flows. Each test asserts response
+// status, response body, and/or DB side effects rather than just executing
+// the endpoint.
 package handler
 
 import (
@@ -27,8 +31,9 @@ func codeFrom(t *testing.T, w *httptest.ResponseRecorder) int {
 	return r.Code
 }
 
-// Test decrement paths: like/unlike, fav/unfav, coin
-func Test_DecrementPaths(t *testing.T) {
+// Test_EngagementToggleCounters verifies like/favorite/coin toggles keep
+// response flags and DB counters consistent in both directions.
+func Test_EngagementToggleCounters(t *testing.T) {
 	api, r, _ := newTestAPI(t)
 	u := seedUser(t, api, "dec1", "DEC1", 100)
 	u2 := seedUser(t, api, "dec2", "DEC2", 100)
@@ -37,18 +42,14 @@ func Test_DecrementPaths(t *testing.T) {
 
 	// Post a comment
 	w := srve(r, areq("POST", "/api/v1/videos/"+strconv.FormatUint(v.ID, 10)+"/comments", tk, `{"content":"test"}`))
-	if codeFrom(t, w) != 0 {
-		t.Skip("comment post failed")
-	}
+	require.Equal(t, 0, codeFrom(t, w), w.Body.String())
 
 	// Extract comment ID
 	var cm struct {
 		Data comment.Comment `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &cm))
-	if cm.Data.ID == 0 {
-		t.Skip("no comment id")
-	}
+	require.NotZero(t, cm.Data.ID, w.Body.String())
 	cid := cm.Data.ID
 
 	// Like comment (CASE WHEN like_count - 1 later gets tested)
@@ -90,8 +91,9 @@ func Test_DecrementPaths(t *testing.T) {
 	require.Contains(t, afw.Body.String(), `"favorited":false`)
 }
 
-// Test dynamic comment reactions (covers CASE WHEN like_count -= 1)
-func Test_DynamicCommentReactions(t *testing.T) {
+// Test_DynamicCommentReactionToggle verifies like/dislike toggling on a
+// dynamic comment returns the expected state.
+func Test_DynamicCommentReactionToggle(t *testing.T) {
 	api, r, _ := newTestAPI(t)
 	u := seedUser(t, api, "dyn1", "DYN1", 0)
 	tk := tok(t, api, u.ID)
@@ -103,17 +105,13 @@ func Test_DynamicCommentReactions(t *testing.T) {
 	// Post comment on dynamic
 	body := `{"content":"dynamic comment"}`
 	w := srve(r, areq("POST", fmt.Sprintf("/api/v1/user-dynamics/%d/comments", dyn.ID), tk, body))
-	if codeFrom(t, w) != 0 {
-		t.Skip("dynamic comment failed")
-	}
+	require.Equal(t, 0, codeFrom(t, w), w.Body.String())
 
 	var dcm struct {
 		Data comment.DynamicComment `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &dcm))
-	if dcm.Data.ID == 0 {
-		t.Skip("no dynamic comment id")
-	}
+	require.NotZero(t, dcm.Data.ID, w.Body.String())
 	dcid := dcm.Data.ID
 
 	// Like (then unlike by disliking) - covers CASE WHEN like_count -= 1
@@ -124,25 +122,22 @@ func Test_DynamicCommentReactions(t *testing.T) {
 	require.Equal(t, 0, codeFrom(t, dw))
 }
 
-// Test article comment reactions
-func Test_ArticleCommentDecrement(t *testing.T) {
+// Test_ArticleCommentReactionAndDelete verifies article comment
+// like/dislike/approve/pin/delete behaviors.
+func Test_ArticleCommentReactionAndDelete(t *testing.T) {
 	api, r, _ := newTestAPI(t)
 	u := seedUser(t, api, "acd1", "ACD1", 0)
 	art := seedArticle(t, api, u.ID, "ACD Article")
 	tk := tok(t, api, u.ID)
 
 	w := srve(r, areq("POST", fmt.Sprintf("/api/v1/articles/%d/comments", art.ID), tk, `{"content":"acd comment"}`))
-	if codeFrom(t, w) != 0 {
-		t.Skip("article comment failed")
-	}
+	require.Equal(t, 0, codeFrom(t, w), w.Body.String())
 
 	var acm struct {
 		Data comment.ArticleComment `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &acm))
-	if acm.Data.ID == 0 {
-		t.Skip("no article comment id")
-	}
+	require.NotZero(t, acm.Data.ID, w.Body.String())
 	acid := acm.Data.ID
 
 	// Like toggle (covers CASE WHEN like_count -= 1)
@@ -163,8 +158,9 @@ func Test_ArticleCommentDecrement(t *testing.T) {
 	require.Equal(t, 0, codeFrom(t, delw))
 }
 
-// Test danmaku operations
-func Test_DanmakuOperations(t *testing.T) {
+// Test_DanmakuPostPersistsRow verifies a posted danmaku is persisted with the
+// expected fields and the video counter is incremented.
+func Test_DanmakuPostPersistsRow(t *testing.T) {
 	api, r, _ := newTestAPI(t)
 	u := seedUser(t, api, "dan1", "DAN1", 0)
 	v := seedVideoWithAPI(t, api, u.ID, "DAN Video")
@@ -182,8 +178,8 @@ func Test_DanmakuOperations(t *testing.T) {
 	require.Equal(t, int64(1), dmCount)
 }
 
-// Test dynamic like (covers CASE WHEN like_count -= 1)
-func Test_DynamicLike(t *testing.T) {
+// Test_DynamicLikeToggle verifies dynamic like on/off responses.
+func Test_DynamicLikeToggle(t *testing.T) {
 	api, r, _ := newTestAPI(t)
 	u := seedUser(t, api, "dyl1", "DYL1", 0)
 	tk := tok(t, api, u.ID)
@@ -200,8 +196,9 @@ func Test_DynamicLike(t *testing.T) {
 	require.Contains(t, w.Body.String(), `"liked":false`)
 }
 
-// Test view history settings
-func Test_ViewHistorySettingsMore(t *testing.T) {
+// Test_ViewHistorySettingsAndRecord verifies pause/resume settings and that a
+// view record is created and deleted while recording is enabled.
+func Test_ViewHistorySettingsAndRecord(t *testing.T) {
 	api, r, _ := newTestAPI(t)
 	u := seedUser(t, api, "vhs1", "VHS1", 0)
 	tk := tok(t, api, u.ID)
@@ -229,8 +226,9 @@ func Test_ViewHistorySettingsMore(t *testing.T) {
 	require.Equal(t, 0, codeFrom(t, w))
 }
 
-// Test video watch later operations
-func Test_WatchLaterOperations(t *testing.T) {
+// Test_WatchLaterLifecycle verifies watch-later add, mark-watched, and clear
+// operations.
+func Test_WatchLaterLifecycle(t *testing.T) {
 	api, r, _ := newTestAPI(t)
 	u := seedUser(t, api, "wlo1", "WLO1", 0)
 	v := seedVideoWithAPI(t, api, u.ID, "WLO Vid")
@@ -251,8 +249,9 @@ func Test_WatchLaterOperations(t *testing.T) {
 	require.Equal(t, 0, codeFrom(t, w))
 }
 
-// Test video folder operations
-func Test_VideoFolderOperations(t *testing.T) {
+// Test_FavoriteFolderVideoOps verifies adding/removing a video from a favorite
+// folder and deleting the folder.
+func Test_FavoriteFolderVideoOps(t *testing.T) {
 	api, r, _ := newTestAPI(t)
 	u := seedUser(t, api, "vfo1", "VFO1", 0)
 	v := seedVideoWithAPI(t, api, u.ID, "VFO Vid")
@@ -280,8 +279,9 @@ func Test_VideoFolderOperations(t *testing.T) {
 	}
 }
 
-// Test search functionality
-func Test_SearchEndpoints(t *testing.T) {
+// Test_SearchDegradedModeWithoutES verifies all search types return the
+// degraded "unavailable" envelope when Elasticsearch is not configured.
+func Test_SearchDegradedModeWithoutES(t *testing.T) {
 	api, r, _ := newTestAPI(t)
 	u := seedUser(t, api, "sch1", "SCH1", 0)
 	tk := tok(t, api, u.ID)
@@ -300,8 +300,9 @@ func Test_SearchEndpoints(t *testing.T) {
 	require.Contains(t, w.Body.String(), `"search_status":"unavailable"`)
 }
 
-// Test admin delete ops
-func Test_AdminDeleteMore(t *testing.T) {
+// Test_AdminDeleteVideoAndArticle verifies admin deletes remove both the API
+// row and the DB record.
+func Test_AdminDeleteVideoAndArticle(t *testing.T) {
 	api, r, _ := newTestAPI(t)
 	u := seedUser(t, api, "adm1", "ADM1", 0)
 	v := seedVideoWithAPI(t, api, u.ID, "ADM Vid")
@@ -322,8 +323,8 @@ func Test_AdminDeleteMore(t *testing.T) {
 	require.Zero(t, acount)
 }
 
-// Test coin operations
-func Test_CoinOperations(t *testing.T) {
+// Test_VideoAndArticleCoin verifies video and article coin responses.
+func Test_VideoAndArticleCoin(t *testing.T) {
 	api, r, _ := newTestAPI(t)
 	u := seedUser(t, api, "cop1", "COP1", 100)
 	u2 := seedUser(t, api, "cop2", "COP2", 0)

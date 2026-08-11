@@ -48,6 +48,8 @@ def count_bare_calls(path: pathlib.Path) -> tuple[int, list[tuple[int, str]]]:
     bare = 0
     sites: list[tuple[int, str]] = []
     for i, line in enumerate(lines):
+        if line.strip().startswith("//"):
+            continue
         if DEF_RE.search(line) or not SRVE_RE.search(line) or ASSIGN_RE.search(line):
             continue
         # A bare call is only tolerated when an assertion shows up within the
