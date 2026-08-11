@@ -1102,7 +1102,7 @@ export default {
         if (vid3) { path = "/video/" + vid3; q.mb_cid = item.id; }
       }
       if (!path) return;
-      this.$router.push({ path: path, query: q }).catch(function(e) {});
+      this.$router.push({ path: path, query: q }).catch(function() { /* navigation errors are ignored */ });
     },
     stripPreviewMd(s) {
       return String(s || "")

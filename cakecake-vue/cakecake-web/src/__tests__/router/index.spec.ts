@@ -7,8 +7,7 @@ vi.mock("@/utils/notFoundRedirect",()=>({shouldRedirectVideoToNotFound:vi.fn()})
 vi.mock("element-plus",()=>({ElMessageBox:{close:vi.fn()}}));
 var guard;
 vi.mock("vue-router",()=>{
-  var g;
-  var router={beforeEach:vi.fn((fn)=>{g=fn;return router;}),afterEach:vi.fn()};
+  var router={beforeEach:vi.fn((fn)=>{void fn;return router;}),afterEach:vi.fn()};
   return {createRouter:vi.fn(()=>router),createWebHashHistory:vi.fn()};
 });
 beforeAll(async()=>{

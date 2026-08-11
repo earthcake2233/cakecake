@@ -3,7 +3,7 @@ import { mount } from "@vue/test-utils";
 
 vi.mock("@/utils/utils", () => ({
   count2: vi.fn((n) => String(n)),
-  timeChange: vi.fn((t) => "2025-01-01")
+  timeChange: vi.fn((_t) => "2025-01-01")
 }));
 
 vi.mock("@/utils/userLevel", () => ({

@@ -502,7 +502,7 @@ export default {
       }
     },
     toc: {
-      handler(list) {
+      handler(_list) {
         if (this.loading) return;
         this.scheduleTocLayoutSync();
       }

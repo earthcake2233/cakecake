@@ -182,32 +182,32 @@ describe("api/index.js - remote API mode", () => {
   });
   it("getRanking non-type-1 calls http.get", async () => {
     mockHttp.get.mockResolvedValue({ data: [{ aid: 66 }] });
-    const r = await api.getRanking(2, 0, 0, 3);
+    api.getRanking(2, 0, 0, 3);
     expect(mockHttp.get).toHaveBeenCalledWith("/ranking", { params: { rid: 0, day: 3, type: 2, arc_type: 0 } });
   });
   it("getRanking type-1 calls http.get", async () => {
     mockHttp.get.mockResolvedValue({ data: [{ aid: 77 }] });
-    const r = await api.getRanking(1, 0, 0, 1);
+    api.getRanking(1, 0, 0, 1);
     expect(mockHttp.get).toHaveBeenCalledWith("/ranking", { params: { rid: 0, day: 1, type: 1, arc_type: 0 } });
   });
   it("getSeasonRank calls http.get", async () => {
     mockHttp.get.mockResolvedValue({ data: [{ season_id: 88 }] });
-    const r = await api.getSeasonRank(3, 1);
+    api.getSeasonRank(3, 1);
     expect(mockHttp.get).toHaveBeenCalledWith("/season/rank/list", { params: { day: 3, season_type: 1 } });
   });
   it("getMoviesRank calls http.get", async () => {
     mockHttp.get.mockResolvedValue({ data: [{ movie_id: 99 }] });
-    const r = await api.getMoviesRank(7, 1);
+    api.getMoviesRank(7, 1);
     expect(mockHttp.get).toHaveBeenCalledWith("/ranking/movies/all-7-1.json");
   });
   it("getSearchResult calls http.get", async () => {
     mockHttp.get.mockResolvedValue({ data: { result: { video: [] } } });
-    const r = await api.getSearchResult(1, "keyword");
+    api.getSearchResult(1, "keyword");
     expect(mockHttp.get).toHaveBeenCalled();
   });
   it("getSeason calls http.get", async () => {
     mockHttp.get.mockResolvedValue({ data: { media_id: 123 } });
-    const r = await api.getSeason(123);
+    api.getSeason(123);
     expect(mockHttp.get).toHaveBeenCalledWith("/search/season", { params: { media_id: 123 } });
   });
 });

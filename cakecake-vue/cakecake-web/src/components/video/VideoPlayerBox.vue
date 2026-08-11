@@ -817,7 +817,7 @@ export default {
   },
   watch: {
     loopEnabled(v) {
-        var v = this.$refs.videoRef;
+      const el = this.$refs.videoRef;
       if (el) el.loop = v;
     },
     videoSrc() {

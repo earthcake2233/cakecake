@@ -27,9 +27,7 @@ func Test_CommentBasicOps(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
 	cm = resp.Data
-	if cm.ID == 0 {
-		t.Skip("comment not created")
-	}
+	require.NotZero(t, cm.ID, w.Body.String())
 
 	// ToggleLike
 	w = srve(r, areq("POST", "/api/v1/comments/"+strconv.FormatUint(cm.ID, 10)+"/like", tk, nil))

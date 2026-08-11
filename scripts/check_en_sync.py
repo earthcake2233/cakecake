@@ -22,6 +22,8 @@ SKIP_PATTERNS = [
     "service-refactor-*.md",
     "docker-config*.md",
     "ci-checks*.md",
+    # 个人面试准备材料，不要求英文对照，也不提交仓库
+    "interview-testing*.md",
 ]
 
 def extract_heading_levels(text):

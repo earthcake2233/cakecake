@@ -7,6 +7,7 @@ import (
 	"cakecake/internal/model/comment"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/http/httptest"
 	"strconv"
 	"testing"
@@ -34,30 +35,26 @@ func Test_NotifLikeFlow(t *testing.T) {
 	// Create a comment on u2 video
 	body := `{"content":"nice video"}`
 	w := srve(r, areq("POST", "/api/v1/videos/"+strconv.FormatUint(v.ID, 10)+"/comments", tk, body))
-	if code(t, w) != 0 {
-		t.Skip("comment post failed")
-	}
+	require.Equal(t, 0, code(t, w), w.Body.String())
 	var cm struct {
 		Data comment.Comment `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &cm))
-	if cm.Data.ID == 0 {
-		t.Skip("no comment id")
-	}
+	require.NotZero(t, cm.Data.ID, w.Body.String())
 
 	// Like the comment (should create notification for u2)
-	srve(r, areq("POST", "/api/v1/comments/"+strconv.FormatUint(cm.Data.ID, 10)+"/like", tk, nil))
-	srve(r, areq("POST", "/api/v1/comments/"+strconv.FormatUint(cm.Data.ID, 10)+"/dislike", tk, nil))
+	srveOK(t, r, areq("POST", "/api/v1/comments/"+strconv.FormatUint(cm.Data.ID, 10)+"/like", tk, nil), http.StatusOK)
+	srveOK(t, r, areq("POST", "/api/v1/comments/"+strconv.FormatUint(cm.Data.ID, 10)+"/dislike", tk, nil), http.StatusOK)
 
 	// Check notifications as u2
 	tk2 := tok(t, api, u2.ID)
-	srve(r, areq("GET", "/api/v1/users/me/notifications", tk2, nil))
+	srveOK(t, r, areq("GET", "/api/v1/notifications", tk2, nil), http.StatusOK)
 
 	// Mark notification category as read
-	srve(r, areq("POST", "/api/v1/users/me/notifications/read", tk2, `{"category":"like"}`))
+	srveOK(t, r, areq("PATCH", "/api/v1/notifications/read-by-category?category=like", tk2, nil), http.StatusOK)
 
 	// Get like likers
-	srve(r, areq("GET", "/api/v1/users/me/notifications/likers?page=1&page_size=5", tk2, nil))
+	srveOK(t, r, areq("GET", "/api/v1/notifications/99999/like-likers", tk2, nil), http.StatusNotFound)
 }
 
 // DM flow with conversation management
@@ -74,14 +71,12 @@ func Test_DMFullFlow(t *testing.T) {
 		} `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &conv))
-	if conv.Data.ID == 0 {
-		t.Skip("conv not created")
-	}
+	require.NotZero(t, conv.Data.ID, w.Body.String())
 
 	cid := conv.Data.ID
-	srve(r, areq("POST", fmt.Sprintf("/api/v1/dm/conversations/%d/messages", cid), tk, `{"content":"hello there"}`))
-	srve(r, areq("GET", fmt.Sprintf("/api/v1/dm/conversations/%d/messages", cid), tk, nil))
-	srve(r, areq("GET", "/api/v1/dm/conversations", tk, nil))
+	srveOK(t, r, areq("POST", fmt.Sprintf("/api/v1/dm/conversations/%d/messages", cid), tk, `{"content":"hello there"}`), http.StatusOK)
+	srveOK(t, r, areq("GET", fmt.Sprintf("/api/v1/dm/conversations/%d/messages", cid), tk, nil), http.StatusOK)
+	srveOK(t, r, areq("GET", "/api/v1/dm/conversations", tk, nil), http.StatusOK)
 }
 
 // Creator comments list flow
@@ -92,10 +87,10 @@ func Test_CreatorCommentsList(t *testing.T) {
 	tk := tok(t, api, u.ID)
 
 	// Post a comment first
-	srve(r, areq("POST", "/api/v1/videos/"+strconv.FormatUint(v.ID, 10)+"/comments", tk, `{"content":"test comment"}`))
+	srveOK(t, r, areq("POST", "/api/v1/videos/"+strconv.FormatUint(v.ID, 10)+"/comments", tk, `{"content":"test comment"}`), http.StatusCreated)
 
 	// List creator video comments
-	srve(r, areq("GET", "/api/v1/users/me/creator/comments?page=1&page_size=10&type=video", tk, nil))
+	srveOK(t, r, areq("GET", "/api/v1/users/me/creator/comments?page=1&page_size=10&type=video", tk, nil), http.StatusOK)
 }
 
 // Article engagement flow
@@ -111,7 +106,7 @@ func Test_ArticleEngagement(t *testing.T) {
 	_ = code(t, w)
 
 	// Coin article
-	srve(r, areq("POST", fmt.Sprintf("/api/v1/articles/%d/coin", art.ID), tk, `{"amount":1}`))
+	srveOK(t, r, areq("POST", fmt.Sprintf("/api/v1/articles/%d/coin", art.ID), tk, `{"amount":1}`), http.StatusOK)
 }
 
 // Video engagement: watch later full flow
@@ -121,11 +116,12 @@ func Test_WatchLaterFlow(t *testing.T) {
 	v := seedVideoWithAPI(t, api, u.ID, "WL Video")
 	tk := tok(t, api, u.ID)
 
-	srve(r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/watch-later", v.ID), tk, nil))
-	srve(r, areq("GET", "/api/v1/users/me/watch-later", tk, nil))
-	srve(r, areq("DELETE", fmt.Sprintf("/api/v1/users/me/watch-later/%d", v.ID), tk, nil))
-	srve(r, areq("GET", "/api/v1/users/me/watch-later", tk, nil))
-	srve(r, areq("DELETE", "/api/v1/users/me/watch-later", tk, nil))
+	srveOK(t, r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/watch-later", v.ID), tk, nil), http.StatusOK)
+	srveOK(t, r, areq("GET", "/api/v1/users/me/watch-later", tk, nil), http.StatusOK)
+	srveOK(t, r, areq("POST", fmt.Sprintf("/api/v1/videos/%d/watch-later", v.ID), tk, nil), http.StatusOK)
+	srveOK(t, r, areq("GET", "/api/v1/users/me/watch-later", tk, nil), http.StatusOK)
+	srveOK(t, r, areq("DELETE", "/api/v1/users/me/watch-later/watched", tk, nil), http.StatusOK)
+	srveOK(t, r, areq("DELETE", "/api/v1/users/me/watch-later", tk, nil), http.StatusOK)
 }
 
 // Multiple favorite folders
@@ -136,29 +132,28 @@ func Test_MultiFavoriteFolders(t *testing.T) {
 	tk := tok(t, api, u.ID)
 
 	// Create two folders
-	srve(r, areq("POST", "/api/v1/users/me/favorite-folders", tk, `{"title":"Folder A"}`))
-	srve(r, areq("POST", "/api/v1/users/me/favorite-folders", tk, `{"title":"Folder B"}`))
+	srveOK(t, r, areq("POST", "/api/v1/users/me/favorite-folders", tk, `{"title":"Folder A"}`), http.StatusOK)
+	srveOK(t, r, areq("POST", "/api/v1/users/me/favorite-folders", tk, `{"title":"Folder B"}`), http.StatusOK)
 
 	// List folders
-	srve(r, areq("GET", "/api/v1/users/me/favorite-folders", tk, nil))
+	srveOK(t, r, areq("GET", "/api/v1/users/me/favorite-folders", tk, nil), http.StatusOK)
 
 	// Get video favorite status
-	srve(r, areq("GET", fmt.Sprintf("/api/v1/videos/%d/favorite-folders", v.ID), tk, nil))
+	srveOK(t, r, areq("GET", fmt.Sprintf("/api/v1/videos/%d/favorite-picker", v.ID), tk, nil), http.StatusOK)
 }
 
 // User space detailed endpoints
 func Test_UserSpaceDetailed(t *testing.T) {
 	api, r, _ := newTestAPI(t)
 	u := seedUser(t, api, "usd1", "USD1", 0)
-	u2 := seedUser(t, api, "usd2", "USD2", 0)
 
-	srve(r, areq("GET", fmt.Sprintf("/api/v1/space/%d", u.ID), "", nil))
-	srve(r, areq("GET", fmt.Sprintf("/api/v1/space/%d/videos?page=1&page_size=10", u.ID), "", nil))
-	srve(r, areq("GET", fmt.Sprintf("/api/v1/space/%d/articles?page=1&page_size=10", u.ID), "", nil))
+	srveOK(t, r, areq("GET", fmt.Sprintf("/api/v1/space/%d", u.ID), "", nil), http.StatusOK)
+	srveOK(t, r, areq("GET", fmt.Sprintf("/api/v1/space/%d/videos?page=1&page_size=10", u.ID), "", nil), http.StatusOK)
+	srveOK(t, r, areq("GET", fmt.Sprintf("/api/v1/space/%d/articles?page=1&page_size=10", u.ID), "", nil), http.StatusOK)
 
-	tk := tok(t, api, u2.ID)
-	srve(r, areq("GET", fmt.Sprintf("/api/v1/space/%d/followers", u.ID), tk, nil))
-	srve(r, areq("GET", fmt.Sprintf("/api/v1/space/%d/following", u.ID), tk, nil))
+	tk := tok(t, api, u.ID)
+	srveOK(t, r, areq("GET", fmt.Sprintf("/api/v1/space/%d/followers", u.ID), tk, nil), http.StatusOK)
+	srveOK(t, r, areq("GET", fmt.Sprintf("/api/v1/space/%d/following", u.ID), tk, nil), http.StatusOK)
 }
 
 // User settings updates
@@ -168,11 +163,11 @@ func Test_UserSettings(t *testing.T) {
 	tk := tok(t, api, u.ID)
 
 	// Update gender/birthday privacy
-	srve(r, areq("PUT", "/api/v1/users/me/privacy-settings", tk, `{"public_favorites":false,"public_birthday":false}`))
+	srveOK(t, r, areq("PUT", "/api/v1/users/me/space-privacy", tk, `{"public_favorites":false,"public_birthday":false}`), http.StatusOK)
 
 	// Update view history settings
-	srve(r, areq("GET", "/api/v1/users/me/view-history/settings", tk, nil))
-	srve(r, areq("PUT", "/api/v1/users/me/view-history/settings", tk, `{"paused":false}`))
+	srveOK(t, r, areq("GET", "/api/v1/users/me/view-history/settings", tk, nil), http.StatusOK)
+	srveOK(t, r, areq("PUT", "/api/v1/users/me/view-history/settings", tk, `{"paused":false}`), http.StatusOK)
 }
 
 // User avatar update
@@ -182,21 +177,18 @@ func Test_UserAvatarUpdate(t *testing.T) {
 	tk := tok(t, api, u.ID)
 
 	// Calling without multipart should return 400
-	w := srve(r, areq("PUT", "/api/v1/users/me/avatar", tk, nil))
-	_ = w
+	srveOK(t, r, areq("POST", "/api/v1/users/me/avatar", tk, nil), http.StatusBadRequest)
 }
 
 // Admin hot search operations
 func Test_AdminHotSearchOps(t *testing.T) {
 	api, r, _ := newTestAPI(t)
-	_ = api
-
 	// Create an admin user
 	adm := admin.Admin{Username: "admin_hs", PasswordHash: "hash"}
 	require.NoError(t, api.DB.Create(&adm).Error)
 
 	atk := admintok(t, api)
-	srve(r, areq("GET", "/api/v1/admin/hot-search-ops/preview", atk, nil))
+	srveOK(t, r, areq("GET", "/api/v1/admin/hot-search/preview", atk, nil), http.StatusOK)
 }
 
 // Admin video/article review flow
@@ -207,8 +199,8 @@ func Test_AdminReviewOps(t *testing.T) {
 	art := seedArticle(t, api, u.ID, "ARO Article")
 	atk := admintok(t, api)
 
-	srve(r, areq("GET", "/api/v1/admin/videos", atk, nil))
-	srve(r, areq("GET", "/api/v1/admin/articles", atk, nil))
+	srveOK(t, r, areq("GET", "/api/v1/admin/videos", atk, nil), http.StatusOK)
+	srveOK(t, r, areq("GET", "/api/v1/admin/articles", atk, nil), http.StatusOK)
 	_ = v
 	_ = art
 }

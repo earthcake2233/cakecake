@@ -1,7 +1,7 @@
 ﻿import { describe, it, expect, vi, beforeAll, beforeEach, afterAll } from "vitest";
 
 var mockAxiosInstance;
-var mockCreate = vi.fn(function(cfg) {
+var mockCreate = vi.fn(function(_cfg) {
   mockAxiosInstance = Object.assign(vi.fn().mockResolvedValue({data:{code:0}}), {
     interceptors: { request: { use: vi.fn() }, response: { use: vi.fn() } },
     get: vi.fn(), post: vi.fn()

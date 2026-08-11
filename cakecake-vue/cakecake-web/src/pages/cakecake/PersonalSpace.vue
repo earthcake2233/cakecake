@@ -3880,16 +3880,6 @@ export default {
         void this.loadSpaceArticles();
       }
     },
-    activeNav(val) {
-      if (
-        val === "dynamic" &&
-        this.userIdNum &&
-        !this.spaceArticles.length &&
-        !this.spaceArticlesLoading
-      ) {
-        void this.loadSpaceArticles();
-      }
-    },
     userIdNum() {
       this.resetAndLoad();
     },
@@ -3915,6 +3905,14 @@ export default {
       }
     },
     activeNav(val) {
+      if (
+        val === "dynamic" &&
+        this.userIdNum &&
+        !this.spaceArticles.length &&
+        !this.spaceArticlesLoading
+      ) {
+        void this.loadSpaceArticles();
+      }
       if (val === "home") {
         void this.loadHomeSections();
       }

@@ -656,7 +656,7 @@ export async function mbGetMeCoinLedger(params?: {
       limit: params?.limit ?? 10,
       offset: params?.offset ?? 0
     }
-  });
+  } as AxiosRequestConfig);
   return unwrap<CoinLedgerPage>(r);
 }
 
@@ -687,7 +687,7 @@ export async function mbGetMeViewHistory(keyword?: string): Promise<ViewHistoryP
   const r = await http.get("/api/v1/users/me/view-history", {
     ...authAxiosOpts,
     params: keyword ? { keyword } : undefined
-  });
+  } as AxiosRequestConfig);
   return unwrap<ViewHistoryPage>(r);
 }
 

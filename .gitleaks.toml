@@ -8,6 +8,9 @@ useDefault = true
 
 [allowlist]
 description = "Repo-known placeholders, demo credentials and test fixtures"
+# Match allowlist regexes against the full finding line, so field-style
+# patterns like `"new_password":"..."` in test fixtures are ignored.
+regexTarget = "line"
 regexes = [
   '''demo123456''',
   '''change-me[-_a-z0-9]*''',
@@ -23,4 +26,7 @@ regexes = [
   '''redispass''',
   '''akid''',
   '''aksecret''',
+  '''"password":"[^"]*"''',
+  '''"old_password":"[^"]*"''',
+  '''"new_password":"[^"]*"''',
 ]
