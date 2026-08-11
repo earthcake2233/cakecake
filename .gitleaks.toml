@@ -6,7 +6,7 @@ title = "cakecake gitleaks config"
 [extend]
 useDefault = true
 
-[allowlist]
+[[allowlist]]
 description = "Repo-known placeholders, demo credentials and test fixtures"
 regexes = [
   '''demo123456''',
