@@ -40,14 +40,24 @@ func TestWebSocketDanmaku(t *testing.T) {
 
 	// Broadcast a danmaku over HTTP; the WS room should receive it.
 	covOK(t, covReq(t, r, "POST", "/api/v1/videos/"+u64s(vid)+"/danmaku", tokenA, map[string]any{"content": "hi", "video_time": 1, "type": "scroll"}), http.StatusOK)
-	_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
-	_, msg2, err := conn.ReadMessage()
-	require.NoError(t, err)
 	var frame struct {
 		Type string `json:"type"`
+		Data struct {
+			Content string `json:"content"`
+		} `json:"data"`
 	}
-	require.NoError(t, json.Unmarshal(msg2, &frame))
+	// The server may interleave "watching" frames (room-size broadcasts) with
+	// the danmaku frame, so drain frames until the danmaku arrives.
+	_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	receivedDanmaku := false
+	for !receivedDanmaku {
+		_, msg2, err := conn.ReadMessage()
+		require.NoError(t, err)
+		require.NoError(t, json.Unmarshal(msg2, &frame))
+		receivedDanmaku = frame.Type == "danmaku"
+	}
 	require.Equal(t, "danmaku", frame.Type)
+	require.Equal(t, "hi", frame.Data.Content)
 }
 
 func TestWebSocketErrorPaths(t *testing.T) {
