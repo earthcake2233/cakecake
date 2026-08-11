@@ -98,6 +98,9 @@ docs/images/bench/
 # Claude IDE local settings
 .claude/
 _claude*
+
+# 个人面试准备材料（本地保留，不提交）
+docs/interview-testing.md
 # Coverage output file
 coverage
 
