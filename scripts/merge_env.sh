@@ -70,7 +70,8 @@ while IFS= read -r line || [ -n "$line" ]; do
   esac
 done < "$TARGET"
 
-added=()
+added_count=0
+added_names=""
 while IFS= read -r line || [ -n "$line" ]; do
   case "$line" in
     '' | '#'*) continue ;;
@@ -80,13 +81,14 @@ while IFS= read -r line || [ -n "$line" ]; do
         '' | *[!A-Za-z0-9_]*) continue ;;
       esac
       if append_key "$key" "$line"; then
-        added+=("$key")
+        added_count=$((added_count + 1))
+        added_names="${added_names:+$added_names }$key"
       fi
       ;;
   esac
 done < "$TEMPLATE"
 
-if [ ${#added[@]} -eq 0 ] && [ "$removed" -eq 0 ]; then
+if [ "$added_count" -eq 0 ] && [ "$removed" -eq 0 ]; then
   echo "env merge: no changes (${TARGET} already up to date)"
   exit 0
 fi
@@ -95,6 +97,6 @@ cp -a "$TARGET" "${TARGET}.prev"
 mv "$tmp" "$TARGET"
 chmod 600 "$TARGET"
 
-echo "env merge: added ${#added[@]} key(s): ${added[*]}"
+echo "env merge: added ${added_count} key(s): ${added_names}"
 [ "$removed" -gt 0 ] && echo "env merge: removed ${removed} duplicate line(s) (first value kept)"
 echo "env merge: backup written to ${TARGET}.prev"
