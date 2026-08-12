@@ -1,0 +1,19 @@
+groups:
+  - name: cakecake-transcode
+    rules:
+      - alert: CakecakeTranscodeDeadLetters
+        expr: increase(cakecake_transcode_dead_letters_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Transcode dead letters detected"
+          description: "Transcode jobs were dead-lettered in the last 5 minutes. Check transcode_dead_letters and the admin API."
+      - alert: CakecakeTranscodeRequeued
+        expr: increase(cakecake_transcode_requeued_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: info
+        annotations:
+          summary: "Transcode dead letters requeued"
+          description: "Transcode dead letters were requeued via the admin API in the last 5 minutes."
