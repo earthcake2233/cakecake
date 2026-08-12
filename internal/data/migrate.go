@@ -50,7 +50,22 @@ func RegisteredMigrations() []Migration {
 		{20, "dm_message_content_text", "enlarge dm_messages.content to TEXT for long AI replies", migrateDmMessageContentText},
 		{21, "dm_message_suggestions", "add suggestions column for AI follow-up chips", migrateDmMessageSuggestions},
 		{22, "agent_feedback_table", "create agent_feedbacks table", migrateAgentFeedbackTable},
+		{23, "transcode_dead_letters", "create transcode_dead_letters audit table", migrateTranscodeDeadLetters},
 	}
+}
+
+// migrateTranscodeDeadLetters creates the transcode_dead_letters audit table
+// (including lifecycle columns) for installations whose v1 core_schema
+// migration predates the model. Existing fresh databases get the table from
+// autoMigrateCoreModels, so this is a no-op for them.
+func migrateTranscodeDeadLetters(db *gorm.DB, lg *zap.Logger) error {
+	if err := db.AutoMigrate(&video.TranscodeDeadLetter{}); err != nil {
+		return err
+	}
+	if lg != nil {
+		lg.Info("created transcode_dead_letters table")
+	}
+	return nil
 }
 
 // migrateAgentFeedbackTable creates agent_feedbacks for existing installations.

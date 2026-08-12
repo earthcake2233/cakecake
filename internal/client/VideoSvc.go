@@ -29,8 +29,10 @@ type VideoSvc interface {
 	ListMyVideosAdvanced(ctx context.Context, f servicevideo.MyVideoFilter) (*servicevideo.MyVideoPageResult, error)
 	ListPublishedVideos(ctx context.Context, opts servicevideo.VideoListOpts) (*servicevideo.VideoListResult, error)
 	ListUserPublishedVideosCursor(ctx context.Context, uid uint64, cursorID uint64, limit int) ([]video.Video, error)
+	ListTranscodeDeadLetters(ctx context.Context, f servicevideo.TranscodeDeadLetterFilter) ([]video.TranscodeDeadLetter, int64, error)
 	ProbeDurationSeconds(path string) (float64, error)
 	Publish(ctx context.Context, videoID uint64, adminID *uint64) error
+	RequeueTranscodeDeadLetter(ctx context.Context, id uint64) error
 	ToggleVideoLike(ctx context.Context, userID uint64, videoID uint64) (bool, error)
 	UpdateVideo(ctx context.Context, v *video.Video, updates map[string]interface{}) error
 }

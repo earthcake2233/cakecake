@@ -315,6 +315,12 @@ const routes = [
         name: "adminSystemConfigs",
         component: () => import("@/pages/admin/SystemConfigManage.vue"),
         meta: { title: "运行时配置 - 运营后台" }
+      },
+      {
+        path: "transcode-dead-letters",
+        name: "adminTranscodeDeadLetters",
+        component: () => import("@/pages/admin/TranscodeDeadLetterManage.vue"),
+        meta: { title: "转码死信 - 运营后台" }
       }
     ]
   },

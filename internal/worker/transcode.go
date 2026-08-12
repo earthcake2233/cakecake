@@ -112,6 +112,30 @@ func handleDeliveryWith(ctx context.Context, cfg *config.C, db *gorm.DB, pubCh t
 		return
 	}
 	lg.Info("transcode job received", zap.Uint64("video_id", job.VideoID), zap.String("raw", job.RawPath))
+	// At-least-once redelivery guard: a crash between the DB update and the
+	// Ack can redeliver an already-processed job. If the video already reached
+	// a terminal transcode state, skip and Ack instead of re-transcoding.
+	if db != nil {
+		var v video.Video
+		if err := db.WithContext(ctx).First(&v, job.VideoID).Error; err != nil {
+			lg.Warn("transcode video missing, skipping redelivery",
+				zap.Uint64("video_id", job.VideoID), zap.Error(err))
+			cleanupPaths(job.RawPath, job.CoverPath)
+			ackDelivery(lg, d)
+			return
+		}
+		switch v.Status {
+		case video.StatusPublished, video.StatusPendingReview, video.StatusFailed, video.StatusRejected:
+			lg.Info("transcode job already terminal, skipping redelivery",
+				zap.Uint64("video_id", job.VideoID),
+				zap.String("status", v.Status),
+				zap.String("video_url", v.VideoURL),
+			)
+			cleanupPaths(job.RawPath, job.CoverPath)
+			ackDelivery(lg, d)
+			return
+		}
+	}
 	if ossClient == nil {
 		lg.Error("oss not configured, failing job", zap.Uint64("video_id", job.VideoID))
 		failVideo(db, job.VideoID, "OSS 未配置")
@@ -258,6 +282,7 @@ func truncate(s string, n int) string {
 // deadLetterTranscode publishes an exhausted job to the dead-letter queue and
 // records it in the DB, so failed transcodes are observable and compensable.
 func deadLetterTranscode(ctx context.Context, db *gorm.DB, pubCh transcodePublisher, lg *zap.Logger, job TranscodeJob, reason string) {
+	incrTranscodeDeadLetters()
 	if pubCh != nil {
 		body, _ := json.Marshal(job)
 		if err := pubCh.PublishWithContext(ctx, "", queue.TranscodeDeadQueue, false, false, amqp.Publishing{
@@ -284,12 +309,17 @@ func deadLetterTranscode(ctx context.Context, db *gorm.DB, pubCh transcodePublis
 }
 
 // requeueOrFail re-enqueues on retryable failure and returns true (caller must preserve RawPath / user cover).
-// On terminal failure returns false, and has already deleted RawPath, CoverPath and local files in terminalLocalExtras.
+// On terminal failure returns false, and has already deleted only the
+// intermediate files in terminalLocalExtras. RawPath/CoverPath are
+// intentionally KEPT: the dead letter is the compensation trail, and the
+// admin requeue re-runs ffmpeg from those files. They are removed either by
+// a later successful transcode or by retention cleanup once the dead letter
+// is resolved and never requeued.
 func requeueOrFail(ctx context.Context, cfg *config.C, db *gorm.DB, pubCh transcodePublisher, lg *zap.Logger, job TranscodeJob, reason string, terminalLocalExtras ...string) bool {
 	if job.RetryCount >= 3 {
 		deadLetterTranscode(ctx, db, pubCh, lg, job, reason)
 		failVideo(db, job.VideoID, reason)
-		cleanupPaths(append([]string{job.RawPath, job.CoverPath}, terminalLocalExtras...)...)
+		cleanupPaths(terminalLocalExtras...)
 		lg.Error("transcode exhausted retries", zap.Uint64("video_id", job.VideoID))
 		return false
 	}
@@ -306,7 +336,7 @@ func requeueOrFail(ctx context.Context, cfg *config.C, db *gorm.DB, pubCh transc
 		lg.Error("republish transcode job", zap.Error(err))
 		deadLetterTranscode(ctx, db, pubCh, lg, job, reason)
 		failVideo(db, job.VideoID, reason)
-		cleanupPaths(append([]string{job.RawPath, job.CoverPath}, terminalLocalExtras...)...)
+		cleanupPaths(terminalLocalExtras...)
 		return false
 	}
 	return true
@@ -336,7 +366,7 @@ func StartTranscodeDeadConsumer(ctx context.Context, cfg *config.C, db *gorm.DB,
 		if err != nil {
 			lg.Warn("transcode dead consumer: subscribe", zap.Error(err))
 		} else {
-			consumeTranscodeDead(ctx, ch, msgs, lg)
+			consumeTranscodeDead(ctx, ch, msgs, lg, db)
 		}
 		select {
 		case <-ctx.Done():
@@ -348,7 +378,7 @@ func StartTranscodeDeadConsumer(ctx context.Context, cfg *config.C, db *gorm.DB,
 
 // consumeTranscodeDead drains one dead-letter channel. It returns when the
 // channel closes or the context is cancelled; the caller reconnects.
-func consumeTranscodeDead(ctx context.Context, ch interface{ Close() error }, msgs <-chan amqp.Delivery, lg *zap.Logger) {
+func consumeTranscodeDead(ctx context.Context, ch interface{ Close() error }, msgs <-chan amqp.Delivery, lg *zap.Logger, db *gorm.DB) {
 	defer ch.Close()
 	for {
 		select {
@@ -358,13 +388,14 @@ func consumeTranscodeDead(ctx context.Context, ch interface{ Close() error }, ms
 			if !ok {
 				return
 			}
-			handleTranscodeDeadLetter(d, lg)
+			handleTranscodeDeadLetter(d, lg, db)
 		}
 	}
 }
 
-// handleTranscodeDeadLetter logs and acks a single dead letter.
-func handleTranscodeDeadLetter(d amqp.Delivery, lg *zap.Logger) {
+// handleTranscodeDeadLetter logs and acks a single dead letter, then marks the
+// matching audit row processed so retention can eventually clean it up.
+func handleTranscodeDeadLetter(d amqp.Delivery, lg *zap.Logger, db *gorm.DB) {
 	var job TranscodeJob
 	_ = json.Unmarshal(d.Body, &job)
 	lg.Warn("transcode dead letter consumed",
@@ -372,4 +403,71 @@ func handleTranscodeDeadLetter(d amqp.Delivery, lg *zap.Logger) {
 		zap.Int("retry_count", job.RetryCount),
 	)
 	_ = d.Ack(false)
+	if db != nil {
+		if err := db.Model(&video.TranscodeDeadLetter{}).
+			Where("video_id = ? AND retry_count = ? AND processed_at IS NULL", job.VideoID, job.RetryCount).
+			Order("id DESC").
+			Limit(1).
+			Update("processed_at", time.Now()).Error; err != nil {
+			lg.Warn("mark transcode dead letter processed", zap.Uint64("video_id", job.VideoID), zap.Error(err))
+		}
+	}
+}
+
+const (
+	transcodeDeadRetention     = 30 * 24 * time.Hour
+	transcodeDeadCleanInterval = 24 * time.Hour
+)
+
+// StartTranscodeDeadRetention periodically archives resolved dead letters
+// (processed or requeued) older than the retention window.
+func StartTranscodeDeadRetention(ctx context.Context, db *gorm.DB, lg *zap.Logger) {
+	if db == nil {
+		return
+	}
+	cleanupTranscodeDeadLetters(db, time.Now().Add(-transcodeDeadRetention), lg)
+	t := time.NewTicker(transcodeDeadCleanInterval)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			cleanupTranscodeDeadLetters(db, time.Now().Add(-transcodeDeadRetention), lg)
+		}
+	}
+}
+
+// cleanupTranscodeDeadLetters deletes resolved dead letters (processed or
+// requeued) older than the retention cutoff. It returns the deleted row count.
+func cleanupTranscodeDeadLetters(db *gorm.DB, cutoff time.Time, lg *zap.Logger) int64 {
+	// Rows that were consumed and never requeued are safe to archive: no
+	// successor job references their raw media. Remove those files before
+	// deleting the audit rows. Rows that were requeued may still be feeding a
+	// successor job, so their files are left untouched.
+	var archival []video.TranscodeDeadLetter
+	if err := db.Where("processed_at IS NOT NULL AND processed_at < ? AND requeued_at IS NULL", cutoff).
+		Find(&archival).Error; err != nil {
+		lg.Warn("scan transcode dead letters for archival", zap.Error(err))
+		return 0
+	}
+	for i := range archival {
+		var payload struct {
+			Job TranscodeJob `json:"job"`
+		}
+		if err := json.Unmarshal([]byte(archival[i].PayloadJSON), &payload); err == nil {
+			cleanupPaths(payload.Job.RawPath, payload.Job.CoverPath)
+		}
+	}
+	res := db.Where("processed_at IS NOT NULL AND processed_at < ?", cutoff).
+		Or("requeued_at IS NOT NULL AND requeued_at < ?", cutoff).
+		Delete(&video.TranscodeDeadLetter{})
+	if res.Error != nil {
+		lg.Warn("cleanup transcode dead letters", zap.Error(res.Error))
+		return 0
+	}
+	if res.RowsAffected > 0 {
+		lg.Info("cleaned transcode dead letters", zap.Int64("rows", res.RowsAffected))
+	}
+	return res.RowsAffected
 }

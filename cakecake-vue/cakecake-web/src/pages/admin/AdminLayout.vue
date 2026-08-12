@@ -70,6 +70,13 @@
         >
           运行时配置
         </router-link>
+        <router-link
+          :to="{ name: 'adminTranscodeDeadLetters' }"
+          class="adm-side__item"
+          active-class="adm-side__item--on"
+        >
+          转码死信
+        </router-link>
       </aside>
       <main class="adm-main">
         <router-view />

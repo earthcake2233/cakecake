@@ -92,7 +92,7 @@ func setupHandlerIntegrationDB(t *testing.T) (*API, *gin.Engine, string) {
 				service.NewUserProvider(db), vsvc.NewVideoProvider(db),
 				service.NewArticleProvider(db), service.NewDynamicProvider(db)),
 			NotifSvc:          notification.NewNotificationService(db, rdb, zap.NewNop(), nil),
-			VideoSvc:          vsvc.NewVideoService(db, rdb, zap.NewNop(), nil, nil),
+			VideoSvc:          vsvc.NewVideoService(db, rdb, zap.NewNop(), nil, noopMQ{}),
 			BannerSvc:         banner.NewBannerService(db),
 			DmSvc:             dm.NewDmService(db, rdb, zap.NewNop()),
 			FavoriteSvc:       favorite.NewFavoriteService(db, rdb, zap.NewNop(), nil, nil),

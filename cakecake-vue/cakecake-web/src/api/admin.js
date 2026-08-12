@@ -180,6 +180,16 @@ export function adminDeleteAgentProfile(id) {
   return adminHttp.delete(`/api/v1/admin/agent-profiles/${id}`);
 }
 
+export function adminListTranscodeDeadLetters(params) {
+  return adminHttp.get("/api/v1/admin/transcode-dead-letters", { params });
+}
+
+export function adminRequeueTranscodeDeadLetter(id) {
+  return adminHttp.post(`/api/v1/admin/transcode-dead-letters/${id}/requeue`, null, {
+    skipGlobalErrorToast: true
+  });
+}
+
 export function adminUploadAgentProfileAvatar(id, file) {
   const fd = new FormData();
   fd.append("image", file);

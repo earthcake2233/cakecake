@@ -321,6 +321,8 @@ func registerAdminRoutes(r *gin.Engine, pub, admin, authd *gin.RouterGroup, a *A
 	admin.POST("/agent-profiles/:id/avatar", a.AdminUploadAgentProfileAvatar)
 	admin.GET("/system-configs", a.AdminListSystemConfigs)
 	admin.PUT("/system-configs", a.AdminUpdateSystemConfig)
+	admin.GET("/transcode-dead-letters", a.AdminListTranscodeDeadLetters)
+	admin.POST("/transcode-dead-letters/:id/requeue", a.AdminRequeueTranscodeDeadLetter)
 }
 
 func registerStatsRoutes(r *gin.Engine, pub, admin, authd *gin.RouterGroup, a *API, jwtm *jwttoken.Manager) {

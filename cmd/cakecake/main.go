@@ -198,6 +198,11 @@ func main() {
 		defer wg.Done()
 		worker.StartTranscodeDeadConsumer(ctx, cfg, db, mq, log)
 	}()
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		worker.StartTranscodeDeadRetention(ctx, db, log)
+	}()
 
 	pc := &playcount.PlayCounter{Rdb: rdb, Store: playcount.NewPlayCountStore(db)}
 	wg.Add(1)

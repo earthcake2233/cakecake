@@ -5,7 +5,10 @@ import (
 	"cakecake/internal/pkg/dbtx"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"os"
+	"time"
 
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
@@ -24,6 +27,10 @@ type VideoService struct {
 	es     *search.Client
 	mq     queue.TranscodePublisher
 }
+
+// ErrRequeueSourceMissing reports that the raw media (or user cover) behind a
+// dead letter no longer exists on disk, so requeue cannot succeed.
+var ErrRequeueSourceMissing = errors.New("requeue source media missing")
 
 // VideoProbe is the media-duration probe used by the video services. It is a
 // variable so tests can substitute a deterministic probe without invoking
@@ -57,6 +64,87 @@ func (s *VideoService) EnqueueTranscode(ctx context.Context, videoID uint64, raw
 		return err
 	}
 	return s.PublishTranscode(ctx, body)
+}
+
+// ListTranscodeDeadLetters returns dead-letter audit rows with pagination.
+func (s *VideoService) ListTranscodeDeadLetters(ctx context.Context, f TranscodeDeadLetterFilter) ([]video.TranscodeDeadLetter, int64, error) {
+	return s.videos.ListTranscodeDeadLetters(ctx, f)
+}
+
+// RequeueTranscodeDeadLetter re-publishes a dead letter to the main queue with
+// retries reset, and marks the audit row requeued. The video is moved back to
+// processing first so the idempotency guard does not skip the redelivery.
+func (s *VideoService) RequeueTranscodeDeadLetter(ctx context.Context, id uint64) error {
+	row, err := s.videos.GetTranscodeDeadLetter(ctx, id)
+	if err != nil {
+		return err
+	}
+	var payload struct {
+		Job    queue.TranscodeJob `json:"job"`
+		Reason string             `json:"reason"`
+	}
+	if err := json.Unmarshal([]byte(row.PayloadJSON), &payload); err != nil {
+		return fmt.Errorf("dead letter payload invalid: %w", err)
+	}
+	if payload.Job.VideoID == 0 {
+		return fmt.Errorf("dead letter payload missing job")
+	}
+	// The dead letter keeps RawPath/CoverPath on purpose, but old rows or
+	// manual file cleanup can leave them gone. Fail fast with a clear error
+	// instead of publishing a job that is guaranteed to fail again.
+	if _, err := os.Stat(payload.Job.RawPath); err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("%w: raw media %s", ErrRequeueSourceMissing, payload.Job.RawPath)
+		}
+		return fmt.Errorf("check raw media before requeue: %w", err)
+	}
+	if payload.Job.CoverPath != "" {
+		if _, err := os.Stat(payload.Job.CoverPath); err != nil {
+			if os.IsNotExist(err) {
+				return fmt.Errorf("%w: cover media %s", ErrRequeueSourceMissing, payload.Job.CoverPath)
+			}
+			return fmt.Errorf("check cover media before requeue: %w", err)
+		}
+	}
+	job := payload.Job
+	job.RetryCount = 0
+	body, err := json.Marshal(job)
+	if err != nil {
+		return err
+	}
+
+	// Keep the pre-requeue audit state so a failed publish can be compensated:
+	// "requeued" must mean the message actually reached the main queue, not
+	// merely that an attempt was made.
+	prevRequeuedAt, prevRequeuedCount, prevProcessedAt := row.RequeuedAt, row.RequeuedCount, row.ProcessedAt
+
+	// DB first, then publish: if publish fails, revert both the video and the
+	// audit row so the user sees a failed video and a still-pending dead letter.
+	if err := s.videos.ResetVideoForTranscodeRequeue(ctx, job.VideoID); err != nil {
+		return err
+	}
+	if err := s.videos.MarkTranscodeDeadLetterRequeued(ctx, id, time.Now()); err != nil {
+		_ = s.videos.MarkVideoFailedByID(ctx, job.VideoID, "requeue db mark failed: "+err.Error())
+		return err
+	}
+	revertAudit := func(reason string) {
+		if rerr := s.videos.RevertTranscodeDeadLetterRequeue(ctx, id, prevRequeuedAt, prevRequeuedCount, prevProcessedAt); rerr != nil {
+			s.log.Error("revert dead letter requeue audit failed",
+				zap.Uint64("dead_letter_id", id),
+				zap.Error(rerr))
+		}
+		_ = s.videos.MarkVideoFailedByID(ctx, job.VideoID, reason)
+	}
+	if s.mq == nil {
+		revertAudit("requeue failed: transcode queue not configured")
+		return fmt.Errorf("transcode queue not configured")
+	}
+	if err := s.mq.PublishTranscode(ctx, body); err != nil {
+		revertAudit("requeue publish failed: " + err.Error())
+		return err
+	}
+	incrTranscodeRequeued()
+	return nil
 }
 
 // ProbeDurationSeconds probes a raw media file's duration via ffprobe.
