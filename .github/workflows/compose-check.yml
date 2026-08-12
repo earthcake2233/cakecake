@@ -176,13 +176,13 @@ jobs:
           severity: HIGH,CRITICAL
 
       - name: Upload backend SARIF to code scanning
-        uses: github/codeql-action/upload-sarif@c4dd10e44af883a891fe31ced449bcb4a6728b9b # v3
+        uses: github/codeql-action/upload-sarif@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
         with:
           sarif_file: trivy-backend.sarif
           category: trivy-backend
 
       - name: Upload web SARIF to code scanning
-        uses: github/codeql-action/upload-sarif@c4dd10e44af883a891fe31ced449bcb4a6728b9b # v3
+        uses: github/codeql-action/upload-sarif@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
         with:
           sarif_file: trivy-web.sarif
           category: trivy-web
