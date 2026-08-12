@@ -51,6 +51,20 @@ type VideoProvider interface {
 	CountByStatus(ctx context.Context, status string) (int64, error)
 	// ToggleVideoLike creates/removes a like row and adjusts like_count (business check done by caller).
 	ToggleVideoLike(ctx context.Context, userID, videoID uint64) (bool, error)
+	// ListTranscodeDeadLetters lists dead-letter audit rows with pagination.
+	ListTranscodeDeadLetters(ctx context.Context, f TranscodeDeadLetterFilter) ([]video.TranscodeDeadLetter, int64, error)
+	// GetTranscodeDeadLetter loads one dead-letter audit row.
+	GetTranscodeDeadLetter(ctx context.Context, id uint64) (*video.TranscodeDeadLetter, error)
+	// MarkTranscodeDeadLetterRequeued records a manual requeue.
+	MarkTranscodeDeadLetterRequeued(ctx context.Context, id uint64, at time.Time) error
+	// RevertTranscodeDeadLetterRequeue restores lifecycle fields to their
+	// pre-requeue values after a failed publish, so "requeued" never lies.
+	RevertTranscodeDeadLetterRequeue(ctx context.Context, id uint64, prevRequeuedAt *time.Time, prevRequeuedCount int, prevProcessedAt *time.Time) error
+	// ResetVideoForTranscodeRequeue moves a video back to processing and clears
+	// stale output fields so a requeued job is not skipped by the idempotency guard.
+	ResetVideoForTranscodeRequeue(ctx context.Context, videoID uint64) error
+	// MarkVideoFailedByID marks a video failed (used to revert a failed requeue).
+	MarkVideoFailedByID(ctx context.Context, videoID uint64, reason string) error
 	// PublishVideo marks a video published and (re)indexes search. Monolith-phase flow.
 	PublishVideo(ctx context.Context, esc *search.Client, log *zap.Logger, videoID uint64, adminID *uint64) error
 	// AdminDeleteVideoCascade runs the cascade-delete callback inside a transaction.

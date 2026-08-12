@@ -94,6 +94,13 @@ func newMockDB(t *testing.T) (*gorm.DB, sqlmock.Sqlmock) {
 	return gormDB, mock
 }
 
+func expectProcessingVideo(mock sqlmock.Sqlmock, id uint64) {
+	mock.ExpectQuery("SELECT \\* FROM `videos` WHERE `videos`.`id` = .*").
+		WithArgs(id, 1).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id", "status"}).
+			AddRow(id, 1, "processing"))
+}
+
 func deliveryFor(job queue.TranscodeJob, ack *fakeAck) amqp.Delivery {
 	body, _ := json.Marshal(job)
 	return amqp.Delivery{Body: body, Acknowledger: ack}
@@ -126,6 +133,7 @@ func TestHandleDelivery_BadJSON(t *testing.T) {
 
 func TestHandleDelivery_OSSNotConfigured(t *testing.T) {
 	db, mock := newMockDB(t)
+	expectProcessingVideo(mock, 1)
 	mock.ExpectExec("UPDATE `videos` SET .*fail_reason.* WHERE id = .*").
 		WillReturnResult(sqlmock.NewResult(1, 1))
 	ack := &fakeAck{}
@@ -139,6 +147,7 @@ func TestHandleDelivery_OSSNotConfigured(t *testing.T) {
 
 func TestHandleDelivery_TranscodePermanent(t *testing.T) {
 	db, mock := newMockDB(t)
+	expectProcessingVideo(mock, 5)
 	mock.ExpectExec("UPDATE `videos` SET .*fail_reason.* WHERE id = .*").
 		WillReturnResult(sqlmock.NewResult(1, 1))
 	ack := &fakeAck{}
@@ -154,6 +163,7 @@ func TestHandleDelivery_TranscodePermanent(t *testing.T) {
 
 func TestHandleDelivery_TranscodeRetryableExhausted(t *testing.T) {
 	db, mock := newMockDB(t)
+	expectProcessingVideo(mock, 6)
 	mock.ExpectExec("INSERT INTO `transcode_dead_letters`").
 		WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectExec("UPDATE `videos` SET .*fail_reason.* WHERE id = .*").
@@ -174,6 +184,7 @@ func TestHandleDelivery_TranscodeRetryableExhausted(t *testing.T) {
 
 func TestHandleDelivery_TranscodeRetryableRepublish(t *testing.T) {
 	db, mock := newMockDB(t)
+	expectProcessingVideo(mock, 9)
 	oldDelay := transcodeRetryBaseDelay
 	transcodeRetryBaseDelay = time.Millisecond
 	defer func() { transcodeRetryBaseDelay = oldDelay }()
@@ -199,6 +210,7 @@ func TestHandleDelivery_TranscodeRetryableRepublish(t *testing.T) {
 
 func TestHandleDelivery_RepublishFailure(t *testing.T) {
 	db, mock := newMockDB(t)
+	expectProcessingVideo(mock, 10)
 	mock.ExpectExec("INSERT INTO `transcode_dead_letters`").
 		WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectExec("UPDATE `videos` SET .*fail_reason.* WHERE id = .*").
@@ -221,6 +233,7 @@ func TestHandleDelivery_RepublishFailure(t *testing.T) {
 
 func TestHandleDelivery_UploadVideoFailsExhausted(t *testing.T) {
 	db, mock := newMockDB(t)
+	expectProcessingVideo(mock, 11)
 	mock.ExpectExec("INSERT INTO `transcode_dead_letters`").
 		WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectExec("UPDATE `videos` SET .*fail_reason.* WHERE id = .*").
@@ -273,6 +286,7 @@ func TestTruncate_RuneSafeUTF8(t *testing.T) {
 
 func TestHandleDelivery_SuccessDBError(t *testing.T) {
 	db, mock := newMockDB(t)
+	expectProcessingVideo(mock, 12)
 	mock.ExpectExec("UPDATE `videos` SET .* WHERE id = .*").
 		WillReturnError(errors.New("db down"))
 	ack := &fakeAck{}
@@ -290,6 +304,7 @@ func TestHandleDelivery_SuccessDBError(t *testing.T) {
 
 func TestHandleDelivery_SuccessScreenshotPublish(t *testing.T) {
 	db, mock := newMockDB(t)
+	expectProcessingVideo(mock, 13)
 	// handleDelivery update
 	mock.ExpectExec("UPDATE .*videos.* SET .*").
 		WillReturnResult(sqlmock.NewResult(1, 1))

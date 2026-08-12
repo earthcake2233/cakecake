@@ -25,6 +25,7 @@ const (
 	CodeInsufficientCoins     = 40020
 	CodeCommentSensitive      = 40021
 	CodeVideoUploadDisabled   = 40022
+	CodeRequeueSourceMissing  = 40023
 	CodeTooManyRequests       = 42900
 	CodeUnauthorized          = 40100
 	CodeInvalidLogin          = 40101
@@ -61,6 +62,7 @@ var messages = map[int]string{
 	CodeInsufficientCoins:     "硬币不足",
 	CodeCommentSensitive:      "评论内容包含违规信息",
 	CodeVideoUploadDisabled:   "云端视频上传已关闭，可先保存稿件信息；视频文件将由管理员线下处理",
+	CodeRequeueSourceMissing:  "原始文件已被清理，无法重新入队；请让用户重新上传视频",
 	CodeTooManyRequests:       "请求过于频繁，请稍后重试",
 	CodeDanmakuCooldown:       "发送过于频繁，请稍后再试",
 	CodeDanmakuSensitive:      "弹幕内容包含违规信息",

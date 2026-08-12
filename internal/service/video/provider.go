@@ -21,6 +21,84 @@ type VideoProviderImpl struct {
 	db *gorm.DB
 }
 
+// TranscodeDeadLetterFilter filters dead-letter audit rows.
+type TranscodeDeadLetterFilter struct {
+	Page     int
+	PageSize int
+	Status   string // pending | requeued | processed | "" (all)
+}
+
+func (p *VideoProviderImpl) ListTranscodeDeadLetters(ctx context.Context, f TranscodeDeadLetterFilter) ([]video.TranscodeDeadLetter, int64, error) {
+	q := p.db.WithContext(ctx).Model(&video.TranscodeDeadLetter{})
+	switch f.Status {
+	case "pending":
+		q = q.Where("processed_at IS NULL AND requeued_at IS NULL")
+	case "requeued":
+		q = q.Where("requeued_at IS NOT NULL")
+	case "processed":
+		q = q.Where("processed_at IS NOT NULL")
+	}
+	var total int64
+	if err := q.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	page, size := f.Page, f.PageSize
+	if page < 1 {
+		page = 1
+	}
+	if size < 1 {
+		size = 20
+	}
+	var rows []video.TranscodeDeadLetter
+	if err := q.Order("id DESC").Limit(size).Offset((page - 1) * size).Find(&rows).Error; err != nil {
+		return nil, 0, err
+	}
+	return rows, total, nil
+}
+
+func (p *VideoProviderImpl) GetTranscodeDeadLetter(ctx context.Context, id uint64) (*video.TranscodeDeadLetter, error) {
+	var row video.TranscodeDeadLetter
+	if err := p.db.WithContext(ctx).First(&row, id).Error; err != nil {
+		return nil, err
+	}
+	return &row, nil
+}
+
+func (p *VideoProviderImpl) MarkTranscodeDeadLetterRequeued(ctx context.Context, id uint64, at time.Time) error {
+	return p.db.WithContext(ctx).Model(&video.TranscodeDeadLetter{}).Where("id = ?", id).Updates(map[string]interface{}{
+		"requeued_at":    at,
+		"requeued_count": gorm.Expr("requeued_count + 1"),
+		"processed_at":   nil,
+	}).Error
+}
+
+func (p *VideoProviderImpl) RevertTranscodeDeadLetterRequeue(ctx context.Context, id uint64, prevRequeuedAt *time.Time, prevRequeuedCount int, prevProcessedAt *time.Time) error {
+	return p.db.WithContext(ctx).Model(&video.TranscodeDeadLetter{}).Where("id = ?", id).Updates(map[string]interface{}{
+		"requeued_at":    prevRequeuedAt,
+		"requeued_count": prevRequeuedCount,
+		"processed_at":   prevProcessedAt,
+	}).Error
+}
+
+func (p *VideoProviderImpl) ResetVideoForTranscodeRequeue(ctx context.Context, videoID uint64) error {
+	return p.db.WithContext(ctx).Model(&video.Video{}).Where("id = ?", videoID).Updates(map[string]interface{}{
+		"status":      video.StatusProcessing,
+		"fail_reason": "",
+		"video_url":   "",
+		"cover_url":   "",
+	}).Error
+}
+
+func (p *VideoProviderImpl) MarkVideoFailedByID(ctx context.Context, videoID uint64, reason string) error {
+	r := []rune(reason)
+	if len(r) > 1900 {
+		reason = string(r[:1900])
+	}
+	return p.db.WithContext(ctx).Model(&video.Video{}).Where("id = ?", videoID).Updates(map[string]interface{}{
+		"status": video.StatusFailed, "fail_reason": reason,
+	}).Error
+}
+
 var _ VideoProvider = (*VideoProviderImpl)(nil)
 
 // NewVideoProvider creates a gorm-backed VideoProvider implementation.

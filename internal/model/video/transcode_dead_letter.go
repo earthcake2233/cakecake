@@ -11,4 +11,9 @@ type TranscodeDeadLetter struct {
 	RetryCount  int    `gorm:"type:bigint;not null;default:0"`
 	PayloadJSON string `gorm:"type:text"`
 	CreatedAt   time.Time
+	// ProcessedAt is set when the dead-letter consumer acks a message.
+	ProcessedAt *time.Time
+	// RequeuedAt / RequeuedCount track manual compensation via the admin API.
+	RequeuedAt    *time.Time
+	RequeuedCount int `gorm:"type:bigint;not null;default:0"`
 }

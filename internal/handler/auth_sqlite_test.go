@@ -103,7 +103,7 @@ func newTestAPI(t *testing.T) (*API, *gin.Engine, *jwttoken.Manager) {
 	notifSvc := notification.NewNotificationService(db, rdb, log, userProv)
 	commentSvc := comment.NewCommentService(db, rdb, log, sens, notifSvc, userProv, videoProv, articleProv, dynamicProv)
 	userSvc := user.NewUserService(db, log)
-	videoSvc := video.NewVideoService(db, rdb, log, nil, nil)
+	videoSvc := video.NewVideoService(db, rdb, log, nil, noopMQ{})
 	dmSvc := dm.NewDmService(db, rdb, log)
 	favoriteSvc := favorite.NewFavoriteService(db, rdb, log, userProv, videoProv)
 	articleSvc := article.NewArticleService(db, rdb, log, nil)

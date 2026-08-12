@@ -6,6 +6,7 @@ import (
 	"cakecake/internal/model/comment"
 	"cakecake/internal/model/danmaku"
 	"cakecake/internal/model/notification"
+	"cakecake/internal/model/system"
 	"cakecake/internal/model/user"
 	"cakecake/internal/model/video"
 	"errors"
@@ -43,6 +44,30 @@ func TestAutoMigrateAll(t *testing.T) {
 	assert.True(t, db.Migrator().HasTable(&user.UserFollow{}))
 	assert.True(t, db.Migrator().HasTable(&notification.Notification{}))
 	assert.True(t, db.Migrator().HasTable(&admin.HomeBanner{}))
+	assert.True(t, db.Migrator().HasTable(&video.TranscodeDeadLetter{}))
+	assert.True(t, db.Migrator().HasColumn(&video.TranscodeDeadLetter{}, "processed_at"))
+	assert.True(t, db.Migrator().HasColumn(&video.TranscodeDeadLetter{}, "requeued_at"))
+	assert.True(t, db.Migrator().HasColumn(&video.TranscodeDeadLetter{}, "requeued_count"))
+}
+
+// TestAutoMigrateAll_RecreatesMissingTranscodeDeadLetters simulates an
+// existing database whose v1 core_schema migration was recorded before the
+// TranscodeDeadLetter model existed: v1 is skipped on the next run, so the
+// table must be created by its own versioned migration (v23).
+func TestAutoMigrateAll_RecreatesMissingTranscodeDeadLetters(t *testing.T) {
+	db := setupDataDB(t)
+	require.NoError(t, AutoMigrateAll(db, zap.NewNop()))
+	require.True(t, db.Migrator().HasTable(&video.TranscodeDeadLetter{}))
+
+	// Simulate the pre-DLQ installation: table missing, schema_versions
+	// already records v1..v22 (v23 is what this test must re-run).
+	require.NoError(t, db.Migrator().DropTable(&video.TranscodeDeadLetter{}))
+	require.False(t, db.Migrator().HasTable(&video.TranscodeDeadLetter{}))
+	require.NoError(t, db.Where("version = ?", 23).Delete(&system.SchemaVersion{}).Error)
+
+	require.NoError(t, AutoMigrateAll(db, zap.NewNop()))
+	require.True(t, db.Migrator().HasTable(&video.TranscodeDeadLetter{}))
+	require.True(t, db.Migrator().HasColumn(&video.TranscodeDeadLetter{}, "requeued_count"))
 }
 
 func TestAutoMigrateAll_Idempotent(t *testing.T) {
