@@ -24,6 +24,7 @@ SKIP_PATTERNS = [
     "ci-checks*.md",
     # 个人面试准备材料，不要求英文对照，也不提交仓库
     "interview-testing*.md",
+    "interview-core-chains*.md",
 ]
 
 def extract_heading_levels(text):
