@@ -245,16 +245,49 @@ func failVideo(db *gorm.DB, id uint64, reason string) {
 }
 
 func truncate(s string, n int) string {
-	if len(s) <= n {
+	r := []rune(s)
+	if len(r) <= n {
 		return s
 	}
-	return s[:n]
+	// Rune-safe: varchar(1900) counts characters, and slicing by bytes could
+	// split a multi-byte UTF-8 sequence (e.g. Chinese in ffmpeg stderr),
+	// producing invalid UTF-8 that MySQL utf8mb4 rejects with Error 1366.
+	return string(r[:n])
+}
+
+// deadLetterTranscode publishes an exhausted job to the dead-letter queue and
+// records it in the DB, so failed transcodes are observable and compensable.
+func deadLetterTranscode(ctx context.Context, db *gorm.DB, pubCh transcodePublisher, lg *zap.Logger, job TranscodeJob, reason string) {
+	if pubCh != nil {
+		body, _ := json.Marshal(job)
+		if err := pubCh.PublishWithContext(ctx, "", queue.TranscodeDeadQueue, false, false, amqp.Publishing{
+			DeliveryMode: amqp.Persistent,
+			ContentType:  "application/json",
+			Body:         body,
+		}); err != nil {
+			lg.Error("publish transcode dead letter", zap.Uint64("video_id", job.VideoID), zap.Error(err))
+		}
+	}
+	if db == nil {
+		return
+	}
+	payload, _ := json.Marshal(map[string]interface{}{"job": job, "reason": reason})
+	rec := video.TranscodeDeadLetter{
+		VideoID:     job.VideoID,
+		Reason:      truncate(reason, 1900),
+		RetryCount:  job.RetryCount,
+		PayloadJSON: string(payload),
+	}
+	if err := db.Create(&rec).Error; err != nil {
+		lg.Warn("record transcode dead letter", zap.Uint64("video_id", job.VideoID), zap.Error(err))
+	}
 }
 
 // requeueOrFail re-enqueues on retryable failure and returns true (caller must preserve RawPath / user cover).
 // On terminal failure returns false, and has already deleted RawPath, CoverPath and local files in terminalLocalExtras.
 func requeueOrFail(ctx context.Context, cfg *config.C, db *gorm.DB, pubCh transcodePublisher, lg *zap.Logger, job TranscodeJob, reason string, terminalLocalExtras ...string) bool {
 	if job.RetryCount >= 3 {
+		deadLetterTranscode(ctx, db, pubCh, lg, job, reason)
 		failVideo(db, job.VideoID, reason)
 		cleanupPaths(append([]string{job.RawPath, job.CoverPath}, terminalLocalExtras...)...)
 		lg.Error("transcode exhausted retries", zap.Uint64("video_id", job.VideoID))
@@ -271,9 +304,63 @@ func requeueOrFail(ctx context.Context, cfg *config.C, db *gorm.DB, pubCh transc
 		Body:         body,
 	}); err != nil {
 		lg.Error("republish transcode job", zap.Error(err))
+		deadLetterTranscode(ctx, db, pubCh, lg, job, reason)
 		failVideo(db, job.VideoID, reason)
 		cleanupPaths(append([]string{job.RawPath, job.CoverPath}, terminalLocalExtras...)...)
 		return false
 	}
 	return true
+}
+
+// StartTranscodeDeadConsumer drains the dead-letter queue, logging each
+// exhausted job. The DB record is the durable audit/compensation trail.
+func StartTranscodeDeadConsumer(ctx context.Context, cfg *config.C, db *gorm.DB, mq *queue.Client, lg *zap.Logger) {
+	if mq == nil {
+		return
+	}
+	for {
+		if ctx.Err() != nil {
+			return
+		}
+		ch, err := mq.NewConsumerChannel()
+		if err != nil {
+			lg.Warn("transcode dead consumer: open channel", zap.Error(err))
+		} else {
+			msgs, cerr := ch.Consume(queue.TranscodeDeadQueue, "transcode-dead-worker", false, false, false, false, nil)
+			if cerr != nil {
+				lg.Warn("transcode dead consumer: subscribe", zap.Error(cerr))
+				_ = ch.Close()
+			} else {
+				consumeTranscodeDead(ctx, ch, msgs, lg)
+			}
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(3 * time.Second):
+		}
+	}
+}
+
+// consumeTranscodeDead drains one dead-letter channel. It returns when the
+// channel closes or the context is cancelled; the caller reconnects.
+func consumeTranscodeDead(ctx context.Context, ch *amqp.Channel, msgs <-chan amqp.Delivery, lg *zap.Logger) {
+	defer ch.Close()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case d, ok := <-msgs:
+			if !ok {
+				return
+			}
+			var job TranscodeJob
+			_ = json.Unmarshal(d.Body, &job)
+			lg.Warn("transcode dead letter consumed",
+				zap.Uint64("video_id", job.VideoID),
+				zap.Int("retry_count", job.RetryCount),
+			)
+			_ = d.Ack(false)
+		}
+	}
 }

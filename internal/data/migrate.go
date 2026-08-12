@@ -114,6 +114,7 @@ func autoMigrateCoreModels(db *gorm.DB, lg *zap.Logger) error {
 		&comment.CommentLike{},
 		&comment.CommentDislike{},
 		&video.VideoLike{},
+		&video.TranscodeDeadLetter{},
 		&video.FavoriteFolder{},
 		&video.VideoFavorite{},
 		&video.VideoCoin{},
