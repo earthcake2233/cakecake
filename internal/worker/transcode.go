@@ -312,9 +312,19 @@ func requeueOrFail(ctx context.Context, cfg *config.C, db *gorm.DB, pubCh transc
 	return true
 }
 
+// transcodeDeadSubscriber is the RabbitMQ surface the dead-letter consumer
+// needs, kept small so the reconnect loop is unit-testable.
+type transcodeDeadSubscriber interface {
+	NewTranscodeDeadConsumer(consumerTag string) (interface{ Close() error }, <-chan amqp.Delivery, error)
+}
+
+// transcodeDeadRetryDelay is the reconnect backoff; variable for tests.
+var transcodeDeadRetryDelay = 3 * time.Second
+
 // StartTranscodeDeadConsumer drains the dead-letter queue, logging each
 // exhausted job. The DB record is the durable audit/compensation trail.
-func StartTranscodeDeadConsumer(ctx context.Context, cfg *config.C, db *gorm.DB, mq *queue.Client, lg *zap.Logger) {
+// The loop reconnects with a backoff after channel loss.
+func StartTranscodeDeadConsumer(ctx context.Context, cfg *config.C, db *gorm.DB, mq transcodeDeadSubscriber, lg *zap.Logger) {
 	if mq == nil {
 		return
 	}
@@ -322,29 +332,23 @@ func StartTranscodeDeadConsumer(ctx context.Context, cfg *config.C, db *gorm.DB,
 		if ctx.Err() != nil {
 			return
 		}
-		ch, err := mq.NewConsumerChannel()
+		ch, msgs, err := mq.NewTranscodeDeadConsumer("transcode-dead-worker")
 		if err != nil {
-			lg.Warn("transcode dead consumer: open channel", zap.Error(err))
+			lg.Warn("transcode dead consumer: subscribe", zap.Error(err))
 		} else {
-			msgs, cerr := ch.Consume(queue.TranscodeDeadQueue, "transcode-dead-worker", false, false, false, false, nil)
-			if cerr != nil {
-				lg.Warn("transcode dead consumer: subscribe", zap.Error(cerr))
-				_ = ch.Close()
-			} else {
-				consumeTranscodeDead(ctx, ch, msgs, lg)
-			}
+			consumeTranscodeDead(ctx, ch, msgs, lg)
 		}
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(3 * time.Second):
+		case <-time.After(transcodeDeadRetryDelay):
 		}
 	}
 }
 
 // consumeTranscodeDead drains one dead-letter channel. It returns when the
 // channel closes or the context is cancelled; the caller reconnects.
-func consumeTranscodeDead(ctx context.Context, ch *amqp.Channel, msgs <-chan amqp.Delivery, lg *zap.Logger) {
+func consumeTranscodeDead(ctx context.Context, ch interface{ Close() error }, msgs <-chan amqp.Delivery, lg *zap.Logger) {
 	defer ch.Close()
 	for {
 		select {
@@ -354,13 +358,18 @@ func consumeTranscodeDead(ctx context.Context, ch *amqp.Channel, msgs <-chan amq
 			if !ok {
 				return
 			}
-			var job TranscodeJob
-			_ = json.Unmarshal(d.Body, &job)
-			lg.Warn("transcode dead letter consumed",
-				zap.Uint64("video_id", job.VideoID),
-				zap.Int("retry_count", job.RetryCount),
-			)
-			_ = d.Ack(false)
+			handleTranscodeDeadLetter(d, lg)
 		}
 	}
+}
+
+// handleTranscodeDeadLetter logs and acks a single dead letter.
+func handleTranscodeDeadLetter(d amqp.Delivery, lg *zap.Logger) {
+	var job TranscodeJob
+	_ = json.Unmarshal(d.Body, &job)
+	lg.Warn("transcode dead letter consumed",
+		zap.Uint64("video_id", job.VideoID),
+		zap.Int("retry_count", job.RetryCount),
+	)
+	_ = d.Ack(false)
 }

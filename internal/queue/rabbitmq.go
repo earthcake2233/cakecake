@@ -102,6 +102,25 @@ func (c *Client) ConsumeTranscodeDead(consumerTag string) (<-chan amqp.Delivery,
 	return c.ch.Consume(TranscodeDeadQueue, consumerTag, false, false, false, false, nil)
 }
 
+// NewTranscodeDeadConsumer opens a dedicated channel and subscribes it to the
+// dead-letter queue, returning both for the consumer loop. The channel is
+// returned as a minimal closer so tests can substitute a fake.
+func (c *Client) NewTranscodeDeadConsumer(consumerTag string) (interface{ Close() error }, <-chan amqp.Delivery, error) {
+	if c.conn == nil {
+		return nil, nil, fmt.Errorf("connection is nil")
+	}
+	ch, err := c.conn.Channel()
+	if err != nil {
+		return nil, nil, err
+	}
+	msgs, err := ch.Consume(TranscodeDeadQueue, consumerTag, false, false, false, false, nil)
+	if err != nil {
+		_ = ch.Close()
+		return nil, nil, err
+	}
+	return ch, msgs, nil
+}
+
 // NewConsumerChannel opens a dedicated channel for consuming (separate from publish channel).
 func (c *Client) NewConsumerChannel() (*amqp.Channel, error) {
 	if c.conn == nil {
