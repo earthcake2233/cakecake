@@ -101,6 +101,7 @@ _claude*
 
 # 个人面试准备材料（本地保留，不提交）
 docs/interview-testing.md
+docs/interview-core-chains.md
 # Coverage output file
 coverage
 

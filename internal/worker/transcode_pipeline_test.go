@@ -6,6 +6,7 @@ import (
 	"errors"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -15,6 +16,7 @@ import (
 	"gorm.io/gorm"
 
 	"cakecake/internal/config"
+	"cakecake/internal/model/video"
 	"cakecake/internal/queue"
 )
 
@@ -60,11 +62,13 @@ func (f *fakeFFmpeg) IsPermanentTranscodeFailure(stderr string) bool {
 
 type fakePublisher struct {
 	published []amqp.Publishing
+	keys      []string
 	err       error
 }
 
 func (f *fakePublisher) PublishWithContext(ctx context.Context, exchange, key string, mandatory, immediate bool, msg amqp.Publishing) error {
 	f.published = append(f.published, msg)
+	f.keys = append(f.keys, key)
 	return f.err
 }
 
@@ -150,6 +154,8 @@ func TestHandleDelivery_TranscodePermanent(t *testing.T) {
 
 func TestHandleDelivery_TranscodeRetryableExhausted(t *testing.T) {
 	db, mock := newMockDB(t)
+	mock.ExpectExec("INSERT INTO `transcode_dead_letters`").
+		WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectExec("UPDATE `videos` SET .*fail_reason.* WHERE id = .*").
 		WillReturnResult(sqlmock.NewResult(1, 1))
 	ack := &fakeAck{}
@@ -161,9 +167,8 @@ func TestHandleDelivery_TranscodeRetryableExhausted(t *testing.T) {
 	if ack.acked != 1 {
 		t.Errorf("expected 1 ack, got %d", ack.acked)
 	}
-	if len(pub.published) != 0 {
-		t.Errorf("expected no republish on exhausted retries")
-	}
+	require.Len(t, pub.published, 1)
+	require.Equal(t, queue.TranscodeDeadQueue, pub.keys[0])
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
@@ -183,6 +188,7 @@ func TestHandleDelivery_TranscodeRetryableRepublish(t *testing.T) {
 		t.Errorf("expected 1 ack, got %d", ack.acked)
 	}
 	require.Len(t, pub.published, 1)
+	require.Equal(t, queue.TranscodeQueue, pub.keys[0])
 	var republished queue.TranscodeJob
 	require.NoError(t, json.Unmarshal(pub.published[0].Body, &republished))
 	if republished.RetryCount != 1 {
@@ -193,6 +199,8 @@ func TestHandleDelivery_TranscodeRetryableRepublish(t *testing.T) {
 
 func TestHandleDelivery_RepublishFailure(t *testing.T) {
 	db, mock := newMockDB(t)
+	mock.ExpectExec("INSERT INTO `transcode_dead_letters`").
+		WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectExec("UPDATE `videos` SET .*fail_reason.* WHERE id = .*").
 		WillReturnResult(sqlmock.NewResult(1, 1))
 	oldDelay := transcodeRetryBaseDelay
@@ -213,6 +221,8 @@ func TestHandleDelivery_RepublishFailure(t *testing.T) {
 
 func TestHandleDelivery_UploadVideoFailsExhausted(t *testing.T) {
 	db, mock := newMockDB(t)
+	mock.ExpectExec("INSERT INTO `transcode_dead_letters`").
+		WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectExec("UPDATE `videos` SET .*fail_reason.* WHERE id = .*").
 		WillReturnResult(sqlmock.NewResult(1, 1))
 	ack := &fakeAck{}
@@ -225,6 +235,40 @@ func TestHandleDelivery_UploadVideoFailsExhausted(t *testing.T) {
 		t.Errorf("expected 1 ack, got %d", ack.acked)
 	}
 	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestDeadLetterTranscode_PersistsAndPublishes(t *testing.T) {
+	db := newBehavioralWorkerDB(t)
+	pub := &fakePublisher{}
+	job := queue.TranscodeJob{VideoID: 7, RawPath: "/tmp/r.mp4", RetryCount: 3}
+	deadLetterTranscode(context.Background(), db, pub, zap.NewNop(), job, "oss down")
+
+	require.Len(t, pub.published, 1)
+	require.Equal(t, queue.TranscodeDeadQueue, pub.keys[0])
+	var dead queue.TranscodeJob
+	require.NoError(t, json.Unmarshal(pub.published[0].Body, &dead))
+	require.Equal(t, uint64(7), dead.VideoID)
+
+	var rec video.TranscodeDeadLetter
+	require.NoError(t, db.Where("video_id = ?", 7).First(&rec).Error)
+	require.Equal(t, "oss down", rec.Reason)
+	require.Equal(t, 3, rec.RetryCount)
+	require.Contains(t, rec.PayloadJSON, "oss down")
+}
+
+func TestTruncate_RuneSafeUTF8(t *testing.T) {
+	// Byte slicing could split multi-byte UTF-8 runes; truncation must stay
+	// valid UTF-8 and never exceed the rune budget.
+	reason := "ffmpeg 转码失败: 文件损坏"
+	for n := 1; n <= len(reason); n++ {
+		got := truncate(reason, n)
+		require.True(t, utf8.ValidString(got), "truncate(%q, %d) produced invalid UTF-8", reason, n)
+		require.LessOrEqual(t, utf8.RuneCountInString(got), n)
+	}
+	require.Equal(t, "ffmpeg ", truncate(reason, 7))
+	require.Equal(t, "abc", truncate("abcdef", 3))
+	require.Equal(t, "abcdef", truncate("abcdef", 6))
+	require.Equal(t, "", truncate("abc", 0))
 }
 
 func TestHandleDelivery_SuccessDBError(t *testing.T) {
