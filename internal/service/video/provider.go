@@ -28,6 +28,8 @@ type TranscodeDeadLetterFilter struct {
 	Status   string // pending | requeued | processed | "" (all)
 }
 
+// ListTranscodeDeadLetters lists dead-letter audit rows with pagination and
+// optional status filtering.
 func (p *VideoProviderImpl) ListTranscodeDeadLetters(ctx context.Context, f TranscodeDeadLetterFilter) ([]video.TranscodeDeadLetter, int64, error) {
 	q := p.db.WithContext(ctx).Model(&video.TranscodeDeadLetter{})
 	switch f.Status {
@@ -56,6 +58,7 @@ func (p *VideoProviderImpl) ListTranscodeDeadLetters(ctx context.Context, f Tran
 	return rows, total, nil
 }
 
+// GetTranscodeDeadLetter loads a single dead-letter audit row by id.
 func (p *VideoProviderImpl) GetTranscodeDeadLetter(ctx context.Context, id uint64) (*video.TranscodeDeadLetter, error) {
 	var row video.TranscodeDeadLetter
 	if err := p.db.WithContext(ctx).First(&row, id).Error; err != nil {
@@ -64,6 +67,7 @@ func (p *VideoProviderImpl) GetTranscodeDeadLetter(ctx context.Context, id uint6
 	return &row, nil
 }
 
+// MarkTranscodeDeadLetterRequeued records a manual requeue on the audit row.
 func (p *VideoProviderImpl) MarkTranscodeDeadLetterRequeued(ctx context.Context, id uint64, at time.Time) error {
 	return p.db.WithContext(ctx).Model(&video.TranscodeDeadLetter{}).Where("id = ?", id).Updates(map[string]interface{}{
 		"requeued_at":    at,
@@ -72,6 +76,8 @@ func (p *VideoProviderImpl) MarkTranscodeDeadLetterRequeued(ctx context.Context,
 	}).Error
 }
 
+// RevertTranscodeDeadLetterRequeue restores lifecycle fields to their
+// pre-requeue values after a failed publish.
 func (p *VideoProviderImpl) RevertTranscodeDeadLetterRequeue(ctx context.Context, id uint64, prevRequeuedAt *time.Time, prevRequeuedCount int, prevProcessedAt *time.Time) error {
 	return p.db.WithContext(ctx).Model(&video.TranscodeDeadLetter{}).Where("id = ?", id).Updates(map[string]interface{}{
 		"requeued_at":    prevRequeuedAt,
@@ -80,6 +86,8 @@ func (p *VideoProviderImpl) RevertTranscodeDeadLetterRequeue(ctx context.Context
 	}).Error
 }
 
+// ResetVideoForTranscodeRequeue moves a video back to processing and clears
+// stale output fields so a requeued job is not skipped by the idempotency guard.
 func (p *VideoProviderImpl) ResetVideoForTranscodeRequeue(ctx context.Context, videoID uint64) error {
 	return p.db.WithContext(ctx).Model(&video.Video{}).Where("id = ?", videoID).Updates(map[string]interface{}{
 		"status":      video.StatusProcessing,
@@ -89,6 +97,7 @@ func (p *VideoProviderImpl) ResetVideoForTranscodeRequeue(ctx context.Context, v
 	}).Error
 }
 
+// MarkVideoFailedByID marks a video failed with a rune-safe reason.
 func (p *VideoProviderImpl) MarkVideoFailedByID(ctx context.Context, videoID uint64, reason string) error {
 	r := []rune(reason)
 	if len(r) > 1900 {
