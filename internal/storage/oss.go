@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
 )
@@ -74,6 +76,40 @@ func (o *OSS) Exists(objectKey string) (bool, error) {
 		return false, nil
 	}
 	return o.bucket.IsObjectExist(key)
+}
+
+// Size returns the object size in bytes via a HEAD request.
+func (o *OSS) Size(objectKey string) (int64, error) {
+	key := strings.TrimPrefix(strings.TrimSpace(objectKey), "/")
+	if key == "" {
+		return 0, fmt.Errorf("empty object key")
+	}
+	meta, err := o.bucket.GetObjectMeta(key)
+	if err != nil {
+		return 0, err
+	}
+	if v := meta.Get("Content-Length"); v != "" {
+		n, err := strconv.ParseInt(v, 10, 64)
+		if err != nil {
+			return 0, fmt.Errorf("parse content-length %q: %w", v, err)
+		}
+		return n, nil
+	}
+	return 0, fmt.Errorf("content-length missing for %s", key)
+}
+
+// PresignPut returns a time-limited HTTP PUT URL for client-side direct
+// upload. The browser uploads straight to OSS, bypassing the API server.
+func (o *OSS) PresignPut(objectKey string, expiry time.Duration) (string, error) {
+	key := strings.TrimPrefix(strings.TrimSpace(objectKey), "/")
+	if key == "" {
+		return "", fmt.Errorf("empty object key")
+	}
+	u, err := o.bucket.SignURL(key, oss.HTTPPut, int64(expiry.Seconds()))
+	if err != nil {
+		return "", err
+	}
+	return u, nil
 }
 
 // DeleteObject removes one object from the bucket. Missing keys are ignored.

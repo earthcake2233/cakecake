@@ -170,13 +170,17 @@ sequenceDiagram
 1. Creator uploads raw video + optional custom cover via `POST /api/v1/videos`
 2. Server saves metadata (status: `processing`) to MySQL, stores raw file in temp dir
 3. With OSS configured, the raw media is first uploaded to `raws/{videoID}/source.ext` and the job carries `RawKey/CoverKey`; the legacy local `RawPath/CoverPath` is only a fallback
-4. Worker goroutine downloads the source from OSS by key, runs `ffmpeg` to transcode to H.264 MP4 (bounded by `TRANSCODE_TIMEOUT`, default 10m, so a hung process is killed), takes a screenshot at frame 1, and uploads both to OSS
+4. Worker runs `TRANSCODE_CONCURRENCY` (default 1, production: cores 2-4) parallel consumers: each downloads the source from OSS by key, runs `ffmpeg` to transcode to H.264 MP4 (bounded by `TRANSCODE_TIMEOUT`, default 10m, so a hung process is killed), takes a screenshot at frame 1, and uploads both to OSS
 5. On success: updates `video_url`, `cover_url`, sets status to `published` (or `pending_review` in review mode)
 6. On failure: transient failures are **confirm-published** with `RetryCount+1` to `retry_30s/60s/90s` delayed queues; RabbitMQ dead-letters them back to the main queue after the TTL expires (max 3 retries). Permanent failures are marked `failed` with a human-readable reason.
 7. DB write failures on the success path are not swallowed: a failed `db.Updates` / publish-state update goes through the same retry path, raw media is kept, and OSS overwrite is idempotent — the job either completes or lands in a requeueable dead letter.
-8. The main consumer reconnects with a 3s backoff after channel loss, like the dead-letter consumer; the dead-letter consumer marks `processed_at` **before** acking (a failed mark redelivers); retention archives expired dead letters via `archived_at` instead of physically deleting audit rows.
+8. The main consumer reconnects with a 3s backoff after channel loss; the RabbitMQ `Client` also rebuilds the connection + queues + confirm after a broker restart (no process restart needed).
+9. The dead-letter consumer marks `processed_at` **before** acking (a failed mark redelivers); retention archives expired dead letters via `archived_at` instead of physically deleting audit rows.
+10. Direct upload is supported: `POST /api/v1/videos/upload-ticket` issues presigned PUT URLs, the browser uploads straight to OSS, then submits JSON metadata; ffprobe probing is bounded by a 15s timeout.
 
 Every publish (upload enqueue, retry scheduling, dead-lettering, admin requeue) uses **publisher confirm + mandatory**: a successful enqueue is a broker-confirmed, decidable result, and unroutable messages trigger a basic.return error.
+
+**SLO observability:** `cakecake_transcode_jobs_total{result=...}` (success/permanent failure), `duration_seconds` histogram, `retries_scheduled_total`, `queue_depth{queue=...}` (management API polled every 15s); Grafana panels show success/failure rate, P95 duration, queue depth and dead-letter/retry rates, with Alertmanager rules for backlog, failure rate and slow jobs.
 
 **Durable source storage & replay:**
 

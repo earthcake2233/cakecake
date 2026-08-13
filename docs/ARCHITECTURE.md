@@ -170,13 +170,17 @@ sequenceDiagram
 1. UP 主上传原始视频 + 可选自定义封面 → `POST /api/v1/videos`
 2. 服务端写入 MySQL（status: `processing`），原始文件存入临时目录
 3. 配置 OSS 时先把源文件上传到 `raws/{videoID}/source.ext`，投递 `TranscodeJob{VideoID, RawKey, CoverKey}`；未配置 OSS 才回退本地 `RawPath/CoverPath`
-4. Worker 协程消费任务：按 RawKey 从 OSS 下载源文件 → FFmpeg 转 H.264 MP4（带 `TRANSCODE_TIMEOUT` 超时，默认 10m，挂死进程会被杀掉）→ 截取第 1 帧为封面 → 上传 OSS
+4. Worker 按 `TRANSCODE_CONCURRENCY`（默认 1，生产建议按核数 2-4）起 N 个消费者并行处理：按 RawKey 从 OSS 下载源文件 → FFmpeg 转 H.264 MP4（带 `TRANSCODE_TIMEOUT` 超时，默认 10m，挂死进程会被杀掉）→ 截取第 1 帧为封面 → 上传 OSS
 5. 成功：更新 `video_url`、`cover_url`，status → `published`（或审核模式 `pending_review`）
 6. 失败：瞬时失败将 `RetryCount+1` 的 job **confirm 发布**到 `retry_30s/60s/90s` 延迟队列，TTL 到期由 RabbitMQ DLX 自动投回主队列，最多重试 3 次；永久性失败标记 `failed` 并记录可读原因
 7. 成功路径的 DB 写入失败不吞掉：`db.Updates` / 发布状态失败同样进入重试，源文件保留，OSS 覆盖写幂等，最终要么成功要么进死信可重放
-8. 主消费者与死信消费者一样在 channel 断线后 **3s 退避自动重连**；死信消费者先写 `processed_at` 再 Ack（标记失败会重投）；retention 只把到期死信标记 `archived_at` 归档，不物理删除审计行
+8. 主消费者与死信消费者一样在 channel 断线后 **3s 退避自动重连**；RabbitMQ 连接断开后 `Client` **自动重建连接 + 队列 + confirm**（broker 重启无需重启进程）
+9. 死信消费者先写 `processed_at` 再 Ack（标记失败会重投）；retention 只把到期死信标记 `archived_at` 归档，不物理删除审计行
+10. 上传支持客户端直传：`POST /api/v1/videos/upload-ticket` 发 presigned PUT URL，浏览器直传 OSS 后 JSON 提交；ffprobe 探测带 15s 超时
 
 所有发布（上传入队、重试调度、死信、管理后台重放）都走 **publisher confirm + mandatory**：入队成功是 broker 确认过的可判定结果，不可路由消息会触发 basic.return 报错。
+
+**可观测性（SLO）：** `cakecake_transcode_jobs_total{result=...}`（成功/永久失败）、`duration_seconds`（耗时直方图）、`retries_scheduled_total`、`queue_depth{queue=...}`（管理 API 每 15s 采集）；Grafana 面板展示成功率、P95 耗时、队列深度、死信/重试，Alertmanager 对积压、失败率、慢任务告警。
 
 **源文件存储与重放：**
 

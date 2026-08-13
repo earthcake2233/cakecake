@@ -33,9 +33,10 @@ func CheckFFprobe() error {
 	return exec.Command(ffprobeExe, "-version").Run()
 }
 
-// ProbeDurationSeconds returns media duration using ffprobe.
-func ProbeDurationSeconds(path string) (float64, error) {
-	cmd := exec.Command(ffprobeExe,
+// ProbeDurationSeconds returns media duration using ffprobe. The context
+// bounds the probe so a hung ffprobe cannot block an upload request forever.
+func ProbeDurationSeconds(ctx context.Context, path string) (float64, error) {
+	cmd := exec.CommandContext(ctx, ffprobeExe,
 		"-v", "error",
 		"-show_entries", "format=duration",
 		"-of", "default=noprint_wrappers=1:nokey=1",

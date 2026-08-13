@@ -19,6 +19,8 @@ type VideoSvc interface {
 	CountPublishedVideos(ctx context.Context) int64
 	CountZoneVideos(zoneParent string) int64
 	CreateVideoRecord(ctx context.Context, v *video.Video) error
+	CreateDirectUploadTicket(ctx context.Context, uid uint64, filename string, coverFilename string) (*servicevideo.DirectUploadTicket, error)
+	CreateVideoFromDirectUpload(ctx context.Context, uid uint64, title string, description string, tagsJSON string, zone string, rawKey string, coverKey string) (*video.Video, error)
 	DeleteVideoByID(ctx context.Context, id uint64) error
 	DeleteVideoWithCascade(ctx context.Context, id uint64, fn func(tx dbtx.Tx) error) error
 	EnqueueTranscode(ctx context.Context, videoID uint64, rawPath string, coverPath string) error

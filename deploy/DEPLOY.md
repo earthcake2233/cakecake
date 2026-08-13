@@ -304,6 +304,10 @@ sudo rabbitmqctl status
 
 转码相关队列（主队列、30/60/90s 三级延迟重试队列、死信队列）由应用启动时自动声明，无需手工创建；升级旧版本后直接重启应用即可，重试队列会在首次启动时补建。
 
+转码并发与可观测：`TRANSCODE_CONCURRENCY`（单实例并发消费者，建议按核数 2-4）；`RABBITMQ_MGMT_URL`（如 `http://127.0.0.1:15672`）开启队列积压指标，为空则禁用该 gauge。
+
+客户端直传：浏览器直传 OSS 需要给 bucket 配置 CORS（允许 PUT、来源域名），否则前端会自动回退传统 multipart 上传。
+
 ### 6.6 Nginx
 
 ```bash

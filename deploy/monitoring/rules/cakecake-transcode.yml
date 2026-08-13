@@ -17,3 +17,31 @@ groups:
         annotations:
           summary: "Transcode dead letters requeued"
           description: "Transcode dead letters were requeued via the admin API in the last 5 minutes."
+      - alert: CakecakeTranscodeQueueBacklog
+        expr: cakecake_transcode_queue_depth{queue="mini_bili_transcode"} > 20
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Transcode queue backlog above 20"
+          description: "The main transcode queue has more than 20 pending jobs for 10 minutes. Check worker health and TRANSCODE_CONCURRENCY."
+      - alert: CakecakeTranscodeHighFailureRate
+        expr: |
+          sum(rate(cakecake_transcode_jobs_total{result="permanent_failure"}[15m]))
+            / clamp_min(sum(rate(cakecake_transcode_jobs_total[15m])), 1e-6) > 0.2
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Transcode permanent failure rate above 20%"
+          description: "More than 20% of transcode jobs ended in permanent failure over 15 minutes."
+      - alert: CakecakeTranscodeSlowJobs
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(cakecake_transcode_duration_seconds_bucket[15m])) by (le)) > 600
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Transcode P95 duration above 10 minutes"
+          description: "P95 transcode job duration exceeded 600s for 15 minutes. Check ffmpeg load and TRANSCODE_TIMEOUT."

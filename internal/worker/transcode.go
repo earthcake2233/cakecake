@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -92,9 +93,26 @@ var transcodeReconnectDelay = 3 * time.Second
 // StartTranscodeConsumer runs a blocking AMQP consumer loop. Unlike the old
 // fail-fast design, a closed channel or broker blip no longer stops the
 // worker silently: the loop reconnects with backoff, so queued jobs do not
-// pile up unattended.
+// pile up unattended. With TRANSCODE_CONCURRENCY > 1 each consumer has its
+// own channel (QoS=1), so one process can transcode several videos at once.
 func StartTranscodeConsumer(ctx context.Context, cfg *config.C, db *gorm.DB, mq *queue.Client, ossClient *storage.OSS, esc *search.Client) {
-	consumeTranscodeLoop(ctx, cfg, db, mq, ossClient, esc, logger.L)
+	n := transcodeConcurrency(cfg)
+	var wg sync.WaitGroup
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			consumeTranscodeLoop(ctx, cfg, db, mq, ossClient, esc, logger.L.With(zap.Int("worker_id", i)))
+		}(i)
+	}
+	wg.Wait()
+}
+
+func transcodeConcurrency(cfg *config.C) int {
+	if cfg != nil && cfg.TranscodeConcurrency > 0 {
+		return cfg.TranscodeConcurrency
+	}
+	return 1
 }
 
 func consumeTranscodeLoop(ctx context.Context, cfg *config.C, db *gorm.DB, sub transcodeSubscriber, ossClient *storage.OSS, esc *search.Client, lg *zap.Logger) {
@@ -143,6 +161,7 @@ func handleDelivery(ctx context.Context, cfg *config.C, db *gorm.DB, pubCh trans
 }
 
 func handleDeliveryWith(ctx context.Context, cfg *config.C, db *gorm.DB, pubCh transcodePublisher, ossClient objectStore, esc *search.Client, d amqp.Delivery, ff ffmpegOps, lg *zap.Logger) {
+	start := time.Now()
 	var job TranscodeJob
 	if err := json.Unmarshal(d.Body, &job); err != nil {
 		lg.Error("transcode bad json", zap.Error(err))
@@ -227,6 +246,7 @@ func handleDeliveryWith(ctx context.Context, cfg *config.C, db *gorm.DB, pubCh t
 	if err != nil {
 		lg.Warn("ffmpeg transcode failed", zap.Uint64("video_id", job.VideoID), zap.Error(err), zap.String("stderr", stderr))
 		if ff.IsPermanentTranscodeFailure(stderr) {
+			incrTranscodePermanentFailure()
 			failVideo(db, job.VideoID, strings.TrimSpace(stderr))
 			cleanupPaths(rawLocal, coverLocal, outMP4, coverOut, "")
 			deleteSourceObjects(ossClient, lg, job.RawKey, job.CoverKey)
@@ -256,6 +276,7 @@ func handleDeliveryWith(ctx context.Context, cfg *config.C, db *gorm.DB, pubCh t
 		if err != nil {
 			lg.Warn("ffmpeg screenshot failed", zap.Error(err), zap.String("stderr", se))
 			if ff.IsPermanentTranscodeFailure(se) {
+				incrTranscodePermanentFailure()
 				failVideo(db, job.VideoID, strings.TrimSpace(se))
 				cleanupPaths(rawLocal, coverLocal, outMP4, coverOut, "")
 				deleteSourceObjects(ossClient, lg, job.RawKey, job.CoverKey)
@@ -334,6 +355,7 @@ func handleDeliveryWith(ctx context.Context, cfg *config.C, db *gorm.DB, pubCh t
 	cleanupPaths(job.RawPath, job.CoverPath, outMP4, coverOut, "")
 	cleanupPaths(downloadedSources...)
 	deleteSourceObjects(ossClient, lg, job.RawKey, job.CoverKey)
+	incrTranscodeSuccess(time.Since(start))
 	lg.Info("transcode completed", zap.Uint64("video_id", job.VideoID))
 	ackDelivery(lg, d)
 }
@@ -468,6 +490,7 @@ func requeueOrFail(ctx context.Context, db *gorm.DB, pubCh transcodePublisher, l
 		zap.Uint64("video_id", job.VideoID),
 		zap.String("retry_queue", retryQueue),
 		zap.Int("retry", job.RetryCount))
+	incrTranscodeRetriesScheduled()
 	return true
 }
 

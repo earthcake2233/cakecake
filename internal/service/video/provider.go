@@ -451,7 +451,15 @@ func isUniqueViolation(err error) bool {
 		return false
 	}
 	msg := strings.ToLower(err.Error())
-	return strings.Contains(msg, "unique constraint") || strings.Contains(msg, "duplicate entry")
+	return strings.Contains(msg, "unique constraint") ||
+		strings.Contains(msg, "duplicate entry") ||
+		strings.Contains(msg, "constraint failed")
+}
+
+// DeleteDirectUploadClaim removes the idempotency claim for a raw object
+// (used to compensate a failed enqueue so the submit can be retried).
+func (p *VideoProviderImpl) DeleteDirectUploadClaim(ctx context.Context, rawKey string) error {
+	return p.db.WithContext(ctx).Where("raw_key = ?", rawKey).Delete(&video.DirectUploadClaim{}).Error
 }
 
 // PublishVideo marks a video published, stamps review metadata, and indexes it in Elasticsearch.

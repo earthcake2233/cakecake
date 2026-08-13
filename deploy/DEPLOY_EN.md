@@ -307,6 +307,10 @@ Default `guest/guest` works locally; for production create a dedicated user and 
 
 All transcode queues (main queue, 30/60/90s delayed retry queues, dead-letter queue) are declared automatically by the application at startup — no manual creation is needed. After upgrading from an older version, just restart the app; the retry queues are created on first boot.
 
+Concurrency & observability: `TRANSCODE_CONCURRENCY` controls parallel consumers per instance (start with cores 2-4); `RABBITMQ_MGMT_URL` (e.g. `http://127.0.0.1:15672`) enables the queue-depth gauge and is disabled when empty.
+
+Browser direct upload requires OSS bucket CORS (allow PUT from your origin); when CORS/OSS is unavailable the frontend falls back to traditional multipart upload.
+
 ### 6.6 Nginx
 
 ```bash

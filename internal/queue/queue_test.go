@@ -26,6 +26,7 @@ type mockChannel struct {
 	declaredQueue   string
 	confirmCh       chan amqp.Confirmation
 	returnCh        chan amqp.Return
+	seq             uint64
 }
 
 func (m *mockChannel) Close() error {
@@ -54,6 +55,11 @@ func (m *mockChannel) QueueDeclare(name string, durable, autoDelete, exclusive, 
 
 func (m *mockChannel) Confirm(noWait bool) error {
 	return nil
+}
+
+func (m *mockChannel) GetNextPublishSeqNo() uint64 {
+	m.seq++
+	return m.seq
 }
 
 func (m *mockChannel) NotifyPublish(ch chan amqp.Confirmation) chan amqp.Confirmation {
@@ -150,7 +156,7 @@ func TestPublishTranscode_Success(t *testing.T) {
 	mc := &mockChannel{t: t}
 	confirms := make(chan amqp.Confirmation, 1)
 	returns := make(chan amqp.Return, 1)
-	confirms <- amqp.Confirmation{Ack: true}
+	confirms <- amqp.Confirmation{DeliveryTag: 1, Ack: true}
 	c := &Client{ch: mc, confirms: confirms, returns: returns}
 	body := []byte(`{"video_id":123}`)
 	err := c.PublishTranscode(context.Background(), body)
@@ -194,7 +200,7 @@ func TestPublishConfirmed_Success(t *testing.T) {
 	mc := &mockChannel{t: t}
 	confirms := make(chan amqp.Confirmation, 1)
 	returns := make(chan amqp.Return, 1)
-	confirms <- amqp.Confirmation{Ack: true}
+	confirms <- amqp.Confirmation{DeliveryTag: 1, Ack: true}
 	c := &Client{ch: mc, confirms: confirms, returns: returns}
 
 	err := c.PublishConfirmed(context.Background(), "", TranscodeDeadQueue, true, amqp.Publishing{
@@ -216,7 +222,7 @@ func TestPublishConfirmed_Nack(t *testing.T) {
 	mc := &mockChannel{t: t}
 	confirms := make(chan amqp.Confirmation, 1)
 	returns := make(chan amqp.Return, 1)
-	confirms <- amqp.Confirmation{Ack: false}
+	confirms <- amqp.Confirmation{DeliveryTag: 1, Ack: false}
 	c := &Client{ch: mc, confirms: confirms, returns: returns}
 
 	err := c.PublishConfirmed(context.Background(), "", TranscodeQueue, true, amqp.Publishing{Body: []byte("x")})
@@ -252,24 +258,41 @@ func TestPublishConfirmed_ContextTimeout(t *testing.T) {
 	}
 }
 
-func TestPublishConfirmed_ContextCancelledButAckArrives(t *testing.T) {
+func TestPublishConfirmed_LateAckIgnoredByNextPublish(t *testing.T) {
 	mc := &mockChannel{t: t}
-	confirms := make(chan amqp.Confirmation, 1)
+	confirms := make(chan amqp.Confirmation, 2)
 	returns := make(chan amqp.Return, 1)
 	c := &Client{ch: mc, confirms: confirms, returns: returns}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	// First publish times out without a broker confirmation.
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	defer cancel()
-	go func() {
-		time.Sleep(50 * time.Millisecond)
-		cancel()
-		time.Sleep(50 * time.Millisecond)
-		confirms <- amqp.Confirmation{Ack: true}
-	}()
+	if err := c.PublishConfirmed(ctx, "", TranscodeQueue, true, amqp.Publishing{Body: []byte("first")}); err == nil {
+		t.Fatal("expected timeout on first publish")
+	}
 
-	err := c.PublishConfirmed(ctx, "", TranscodeQueue, true, amqp.Publishing{Body: []byte("x")})
-	if err != nil {
-		t.Fatalf("expected ack within the grace window to be treated as success, got %v", err)
+	// Its ack arrives late, after the first call already returned.
+	confirms <- amqp.Confirmation{DeliveryTag: 1, Ack: true}
+
+	// Second publish must not treat the late tag-1 ack as its own success.
+	done := make(chan error, 1)
+	go func() {
+		done <- c.PublishConfirmed(context.Background(), "", TranscodeQueue, true, amqp.Publishing{Body: []byte("second")})
+	}()
+	select {
+	case err := <-done:
+		t.Fatalf("second publish misattributed a late ack: %v", err)
+	case <-time.After(50 * time.Millisecond):
+		// Still waiting for tag 2, as expected.
+	}
+	confirms <- amqp.Confirmation{DeliveryTag: 2, Ack: true}
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("second publish failed after its own ack: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("second publish did not complete after its own ack")
 	}
 }
 

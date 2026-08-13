@@ -30,11 +30,13 @@ func (f *fakeTranscodePublisher) PublishTranscode(_ context.Context, body []byte
 }
 
 type fakeSourceStore struct {
-	uploaded  []string
-	deleted   []string
-	exist     map[string]bool
-	uploadErr error
-	failOn    int // 1-based: fail the N-th UploadFile call
+	uploaded   []string
+	deleted    []string
+	exist      map[string]bool
+	sizes      map[string]int64
+	uploadErr  error
+	presignErr error
+	failOn     int // 1-based: fail the N-th UploadFile call
 }
 
 func (f *fakeSourceStore) UploadFile(key, _ string) error {
@@ -50,6 +52,24 @@ func (f *fakeSourceStore) UploadFile(key, _ string) error {
 
 func (f *fakeSourceStore) Exists(key string) (bool, error) {
 	return f.exist[key], nil
+}
+
+func (f *fakeSourceStore) Size(key string) (int64, error) {
+	if f.sizes == nil {
+		return 0, nil
+	}
+	return f.sizes[key], nil
+}
+
+func (f *fakeSourceStore) DownloadFile(_ string, localPath string) error {
+	return os.WriteFile(localPath, []byte("media"), 0o644)
+}
+
+func (f *fakeSourceStore) PresignPut(key string, _ time.Duration) (string, error) {
+	if f.presignErr != nil {
+		return "", f.presignErr
+	}
+	return "https://oss.example.com/" + key, nil
 }
 
 func (f *fakeSourceStore) DeleteObject(key string) error {

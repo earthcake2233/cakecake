@@ -6,6 +6,7 @@ import (
 	"io"
 	"regexp"
 	"strings"
+	"time"
 
 	"go.uber.org/zap"
 
@@ -30,6 +31,10 @@ type StorageService struct {
 type StorageBackend interface {
 	UploadFile(objectKey, localPath string) error
 	UploadReader(objectKey string, r io.Reader) error
+	DownloadFile(objectKey, localPath string) error
+	Exists(objectKey string) (bool, error)
+	Size(objectKey string) (int64, error)
+	PresignPut(objectKey string, expiry time.Duration) (string, error)
 	DeleteObject(objectKey string) error
 	DeleteObjects(objectKeys []string) error
 }
@@ -72,6 +77,38 @@ func (s *StorageService) UploadReader(objectKey string, r io.Reader) error {
 		return fmt.Errorf("oss not configured")
 	}
 	return s.backend().UploadReader(objectKey, r)
+}
+
+// DownloadFile downloads objectKey into a local file.
+func (s *StorageService) DownloadFile(objectKey, localPath string) error {
+	if s.backend() == nil {
+		return fmt.Errorf("oss not configured")
+	}
+	return s.backend().DownloadFile(objectKey, localPath)
+}
+
+// Exists reports whether objectKey exists.
+func (s *StorageService) Exists(objectKey string) (bool, error) {
+	if s.backend() == nil {
+		return false, fmt.Errorf("oss not configured")
+	}
+	return s.backend().Exists(objectKey)
+}
+
+// Size returns the object size in bytes.
+func (s *StorageService) Size(objectKey string) (int64, error) {
+	if s.backend() == nil {
+		return 0, fmt.Errorf("oss not configured")
+	}
+	return s.backend().Size(objectKey)
+}
+
+// PresignPut returns a time-limited PUT URL for browser direct upload.
+func (s *StorageService) PresignPut(objectKey string, expiry time.Duration) (string, error) {
+	if s.backend() == nil {
+		return "", fmt.Errorf("oss not configured")
+	}
+	return s.backend().PresignPut(objectKey, expiry)
 }
 
 // PurgeAgentAvatar removes a replaced agent avatar object.

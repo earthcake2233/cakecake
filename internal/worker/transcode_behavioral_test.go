@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -123,6 +124,7 @@ func TestBehavioral_TranscodeSuccess(t *testing.T) {
 // permanent ffmpeg error marks the video failed, uploads nothing, cleans the
 // raw file, and acks (the message is consumed, not requeued).
 func TestBehavioral_TranscodePermanentFailure(t *testing.T) {
+	permBefore := testutil.ToFloat64(transcodeJobsTotal.WithLabelValues("permanent_failure"))
 	db := newBehavioralWorkerDB(t)
 	require.NoError(t, db.Create(&video.Video{ID: 11, UserID: 1, Title: "v", Status: video.StatusProcessing}).Error)
 
@@ -145,6 +147,7 @@ func TestBehavioral_TranscodePermanentFailure(t *testing.T) {
 	require.NotEmpty(t, v.FailReason)
 	_, err := os.Stat(rawPath)
 	require.ErrorIs(t, err, os.ErrNotExist, "raw file should be removed after terminal failure")
+	require.Greater(t, testutil.ToFloat64(transcodeJobsTotal.WithLabelValues("permanent_failure")), permBefore)
 }
 
 // TestBehavioral_TranscodeExhaustedRetriesKeepsRawSource verifies that going
@@ -305,6 +308,7 @@ func TestBehavioral_TranscodeRedelivery_MissingVideoAcks(t *testing.T) {
 // transcodes, uploads the results, and deletes both the temp copies and the
 // source objects on success.
 func TestBehavioral_TranscodeSuccessWithOSSKeys(t *testing.T) {
+	successBefore := testutil.ToFloat64(transcodeJobsTotal.WithLabelValues("success"))
 	db := newBehavioralWorkerDB(t)
 	require.NoError(t, db.Create(&user.User{ID: 1, Username: "uploader", PasswordHash: "x"}).Error)
 	require.NoError(t, db.Create(&video.Video{ID: 30, UserID: 1, Title: "v", Status: video.StatusProcessing}).Error)
@@ -338,12 +342,14 @@ func TestBehavioral_TranscodeSuccessWithOSSKeys(t *testing.T) {
 		_, err := os.Stat(p)
 		require.ErrorIs(t, err, os.ErrNotExist, "temp file %s should be removed", p)
 	}
+	require.Greater(t, testutil.ToFloat64(transcodeJobsTotal.WithLabelValues("success")), successBefore)
 }
 
 // TestBehavioral_TranscodeDownloadFailureRequeues verifies that a failed
 // source download schedules a retry with the OSS key intact: the object is
 // the compensation input and must survive, only the local copy is cleaned.
 func TestBehavioral_TranscodeDownloadFailureRequeues(t *testing.T) {
+	retriesBefore := testutil.ToFloat64(transcodeRetriesScheduledTotal)
 	db := newBehavioralWorkerDB(t)
 	require.NoError(t, db.Create(&user.User{ID: 1, Username: "uploader", PasswordHash: "x"}).Error)
 	require.NoError(t, db.Create(&video.Video{ID: 31, UserID: 1, Title: "v", Status: video.StatusProcessing}).Error)
@@ -365,4 +371,5 @@ func TestBehavioral_TranscodeDownloadFailureRequeues(t *testing.T) {
 	require.Equal(t, 1, requeued.RetryCount)
 	require.Equal(t, "raws/31/source.mp4", requeued.RawKey, "OSS source key must survive retry scheduling")
 	require.Empty(t, store.deleted)
+	require.Greater(t, testutil.ToFloat64(transcodeRetriesScheduledTotal), retriesBefore)
 }

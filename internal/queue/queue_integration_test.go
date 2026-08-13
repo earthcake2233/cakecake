@@ -4,8 +4,11 @@ package queue
 
 import (
 	"context"
+	"fmt"
 	"os"
+	"sync"
 	"testing"
+	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 )
@@ -124,6 +127,94 @@ func TestNewTranscodeConsumer_Integration(t *testing.T) {
 	defer func() { _ = ch.Close() }()
 	if msgs == nil {
 		t.Fatal("message channel should not be nil")
+	}
+}
+
+func TestReconnect_Integration(t *testing.T) {
+	url := rabbitmqURL(t)
+	old := rabbitmqReconnectDelay
+	rabbitmqReconnectDelay = 100 * time.Millisecond
+	defer func() { rabbitmqReconnectDelay = old }()
+
+	c, err := Dial(url)
+	if err != nil {
+		t.Fatalf("Dial failed: %v", err)
+	}
+	defer func() { _ = c.Close() }()
+
+	oldConn := c.conn
+	if err := oldConn.Close(); err != nil {
+		t.Fatalf("close connection to trigger reconnect: %v", err)
+	}
+
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		c.mu.Lock()
+		curConn, curCh := c.conn, c.ch
+		c.mu.Unlock()
+		if curConn != nil && curConn != oldConn && curCh != nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("connection did not self-heal after broker connection loss")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+
+	if err := c.PublishTranscode(context.Background(), []byte(`{"reconnect_test":true}`)); err != nil {
+		t.Fatalf("publish after reconnect failed: %v", err)
+	}
+}
+
+func TestConcurrentConsumers_Integration(t *testing.T) {
+	url := rabbitmqURL(t)
+	c, err := Dial(url)
+	if err != nil {
+		t.Fatalf("Dial failed: %v", err)
+	}
+	defer func() { _ = c.Close() }()
+
+	const n = 3
+	for i := 0; i < n; i++ {
+		if err := c.PublishTranscode(context.Background(), []byte(fmt.Sprintf(`{"seq":%d}`, i))); err != nil {
+			t.Fatalf("publish %d failed: %v", i, err)
+		}
+	}
+
+	received := make(chan string, n)
+	var wg sync.WaitGroup
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			ch, msgs, err := c.NewTranscodeConsumer(fmt.Sprintf("concurrent-%d", i))
+			if err != nil {
+				t.Errorf("consumer %d subscribe failed: %v", i, err)
+				return
+			}
+			defer func() { _ = ch.Close() }()
+			select {
+			case d, ok := <-msgs:
+				if !ok {
+					t.Errorf("consumer %d channel closed", i)
+					return
+				}
+				_ = d.Ack(false)
+				received <- string(d.Body)
+			case <-time.After(5 * time.Second):
+				t.Errorf("consumer %d did not receive a message", i)
+			}
+		}(i)
+	}
+	wg.Wait()
+	close(received)
+
+	seen := map[string]bool{}
+	for b := range received {
+		seen[b] = true
+	}
+	if len(seen) != n {
+		t.Errorf("expected %d distinct messages across consumers, got %d", n, len(seen))
 	}
 }
 
