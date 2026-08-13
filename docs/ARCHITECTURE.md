@@ -169,18 +169,29 @@ sequenceDiagram
 
 1. UP 主上传原始视频 + 可选自定义封面 → `POST /api/v1/videos`
 2. 服务端写入 MySQL（status: `processing`），原始文件存入临时目录
-3. 投递 `TranscodeJob{VideoID, RawPath, CoverPath}` 到 RabbitMQ `transcode` 队列
-4. Worker 协程消费任务：FFmpeg 转 H.264 MP4 → 截取第 1 帧为封面 → 上传 OSS
-5. 成功：更新 `video_url`、`cover_url`，status → `published`
-6. 失败：最多重试 **3 次**，指数退避（30s → 60s → 90s）。永久性失败标记 `failed` 并记录可读原因，瞬时失败重新入队
+3. 配置 OSS 时先把源文件上传到 `raws/{videoID}/source.ext`，投递 `TranscodeJob{VideoID, RawKey, CoverKey}`；未配置 OSS 才回退本地 `RawPath/CoverPath`
+4. Worker 协程消费任务：按 RawKey 从 OSS 下载源文件 → FFmpeg 转 H.264 MP4（带 `TRANSCODE_TIMEOUT` 超时，默认 10m，挂死进程会被杀掉）→ 截取第 1 帧为封面 → 上传 OSS
+5. 成功：更新 `video_url`、`cover_url`，status → `published`（或审核模式 `pending_review`）
+6. 失败：瞬时失败将 `RetryCount+1` 的 job **confirm 发布**到 `retry_30s/60s/90s` 延迟队列，TTL 到期由 RabbitMQ DLX 自动投回主队列，最多重试 3 次；永久性失败标记 `failed` 并记录可读原因
+7. 成功路径的 DB 写入失败不吞掉：`db.Updates` / 发布状态失败同样进入重试，源文件保留，OSS 覆盖写幂等，最终要么成功要么进死信可重放
+8. 主消费者与死信消费者一样在 channel 断线后 **3s 退避自动重连**；死信消费者先写 `processed_at` 再 Ack（标记失败会重投）；retention 只把到期死信标记 `archived_at` 归档，不物理删除审计行
+
+所有发布（上传入队、重试调度、死信、管理后台重放）都走 **publisher confirm + mandatory**：入队成功是 broker 确认过的可判定结果，不可路由消息会触发 basic.return 报错。
+
+**源文件存储与重放：**
+
+- OSS 模式下源文件/封面存对象（`raws/{videoID}/source.ext`、`raws/{videoID}/cover.ext`），job 只携带对象 key；
+- Worker 每次消费把对象下载到本地临时文件再转码，成功后或永久失败后删除源对象；重试/死信路径保留对象作为补偿输入；
+- 死信重放前用 `Exists` 校验 OSS 对象仍在（旧本地路径死信仍走 `os.Stat` 兼容），跨实例、容器重建、磁盘清理后重放不再依赖单机路径；
+- 本地 `RawPath` 模式仅用于 OSS 未配置的兼容/演示场景。
 
 **失败分类：**
 
 | 类型   | 检测方式                                         | 处理                                       |
 | ------ | ------------------------------------------------ | ------------------------------------------ |
 | 永久性 | FFmpeg stderr 匹配已知模式（非法编码、损坏文件） | 标记`failed`，存储 `fail_reason`，ack 消息 |
-| 瞬时性 | 超时、OSS 网络错误、磁盘满                       | 重试计数 +1，重新入队                      |
-| 耗尽   | `retry_count >= 3`                               | 标记`failed`，ack 消息                     |
+| 瞬时性 | ffmpeg 超时/挂死、源文件下载失败、OSS 网络错误、磁盘满、DB 写入失败 | 重试计数 +1，confirm 发布到 retry TTL 队列（30/60/90s），DLX 到期回主队列 |
+| 耗尽   | `retry_count >= 3`                               | 发布显式死信队列 + 写 `transcode_dead_letters` 审计表 + 标记`failed`，可管理后台重放 |
 
 ---
 
@@ -260,7 +271,7 @@ graph TB
 | 用户、视频元数据、评论、通知、草稿      | MySQL         | 关系完整性、复杂查询           |
 | 视频文件、封面、头像                    | 阿里云 OSS    | 弹性扩容、CDN 就绪             |
 | 弹幕广播、播放计数、冷却、Refresh Token | Redis         | 低延迟、数据可丢失             |
-| 转码任务                                | RabbitMQ      | 持久化、ACK 确认、精确一次投递 |
+| 转码任务                                | RabbitMQ      | 持久化、手动 Ack、publisher confirm、TTL/DLX 延迟重试（at-least-once + 幂等守卫） |
 | 搜索索引                                | Elasticsearch | 倒排索引、相关性评分           |
 
 ---
@@ -272,7 +283,7 @@ graph TB
 | **v1 用单体而非微服务**                               | 单人开发，快速迭代。代码按领域分层（`handler/`、`service/`、`worker/`），为后续拆分为 Kratos 微服务预留空间                     |
 | **Redis Pub/Sub 做弹幕广播中继，而非 WebSocket 直发** | 解耦广播与 HTTP handler。多副本订阅同一 Redis 频道，无需共享内存即可水平扩展                                                    |
 | **AI 事件/控制走 Redis Pub/Sub + 生成快照（owner/genID 守卫）** | 多副本下 WS 与生成解耦：事件扇出到用户所在副本，暂停/继续路由到 owner；热路径缓冲留在 owner 内存保证性能                     |
-| **转码用 RabbitMQ 而非 Redis List**                   | RabbitMQ 提供消息持久化、消费确认、死信队列——视频处理不可接受数据丢失                                                           |
+| **转码用 RabbitMQ 而非 Redis List**                   | RabbitMQ 提供消息持久化、消费确认、publisher confirm、TTL/DLX 延迟重试与死信——视频处理不可接受数据丢失，延迟重试不能靠业务层 sleep                                                           |
 | **GORM AutoMigrate + goose 版本化迁移**                | 开发环境 GORM AutoMigrate 自动建表（V1-V19），生产环境 APP_ENV=production 默认走 goose SQL 迁移（V20+），支持 up/down 回滚 |      |
 | **ES 可选而非强制依赖**                               | 降低上手门槛，未配置时搜索页优雅降级                                                                                            |
 | **Redis 令牌桶做全局限流**                            | 保护列表、搜索、空间等公开接口不受突发/爬虫打垮；按 IP 维度限流；Lua 脚本保证令牌桶原子性；桶容量支持短时突发，速率限制稳态 QPS |
@@ -296,6 +307,7 @@ flowchart TB
     I["FFmpeg 截封面"]
     J["上传视频到 OSS"]
     K["上传封面到 OSS"]
+    R["retry TTL 队列 30/60/90s"]
 
     L["DB 更新为 ready"]
     M["删除临时文件"]
@@ -307,6 +319,8 @@ flowchart TB
     G --> H
     H --> J
     H --> I --> K
+    G -.->|瞬时失败| R
+    R -.->|TTL 到期/DLX| G
     J --> L
     K --> L
     L --> M

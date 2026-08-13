@@ -68,6 +68,7 @@ func TestAutoMigrateAll_RecreatesMissingTranscodeDeadLetters(t *testing.T) {
 	require.NoError(t, AutoMigrateAll(db, zap.NewNop()))
 	require.True(t, db.Migrator().HasTable(&video.TranscodeDeadLetter{}))
 	require.True(t, db.Migrator().HasColumn(&video.TranscodeDeadLetter{}, "requeued_count"))
+	require.True(t, db.Migrator().HasColumn(&video.TranscodeDeadLetter{}, "archived_at"))
 }
 
 func TestAutoMigrateAll_Idempotent(t *testing.T) {

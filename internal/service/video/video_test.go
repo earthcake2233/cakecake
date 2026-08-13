@@ -15,7 +15,7 @@ func newVideoService(t *testing.T) (*VideoService, *gorm.DB) {
 	t.Helper()
 	db := servicetest.NewDB(t)
 	_, rdb := servicetest.NewRedis(t)
-	return NewVideoService(db, rdb, servicetest.ZapNop(), nil, nil), db
+	return NewVideoService(db, rdb, servicetest.ZapNop(), nil, nil, nil), db
 }
 
 func seedVideoRow(t *testing.T, db *gorm.DB, id, userID uint64, status, zone string) {

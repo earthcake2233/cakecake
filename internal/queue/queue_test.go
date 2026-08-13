@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 )
@@ -23,6 +24,8 @@ type mockChannel struct {
 	publishKey      string
 	consumeCh       chan amqp.Delivery
 	declaredQueue   string
+	confirmCh       chan amqp.Confirmation
+	returnCh        chan amqp.Return
 }
 
 func (m *mockChannel) Close() error {
@@ -49,11 +52,43 @@ func (m *mockChannel) QueueDeclare(name string, durable, autoDelete, exclusive, 
 	return amqp.Queue{Name: name}, m.queueDeclareErr
 }
 
+func (m *mockChannel) Confirm(noWait bool) error {
+	return nil
+}
+
+func (m *mockChannel) NotifyPublish(ch chan amqp.Confirmation) chan amqp.Confirmation {
+	m.confirmCh = ch
+	return ch
+}
+
+func (m *mockChannel) NotifyReturn(ch chan amqp.Return) chan amqp.Return {
+	m.returnCh = ch
+	return ch
+}
+
 // ---------- unit tests ----------
 
 func TestTranscodeQueueConstant(t *testing.T) {
 	if TranscodeQueue != "mini_bili_transcode" {
 		t.Errorf("TranscodeQueue = %q, want %q", TranscodeQueue, "mini_bili_transcode")
+	}
+}
+
+func TestRetryQueueForAttempt(t *testing.T) {
+	cases := []struct {
+		attempt int
+		want    string
+	}{
+		{1, TranscodeRetryQueue30s},
+		{2, TranscodeRetryQueue60s},
+		{3, TranscodeRetryQueue90s},
+		{4, TranscodeRetryQueue90s},
+		{0, TranscodeRetryQueue90s},
+	}
+	for _, tc := range cases {
+		if got := RetryQueueForAttempt(tc.attempt); got != tc.want {
+			t.Errorf("RetryQueueForAttempt(%d) = %q, want %q", tc.attempt, got, tc.want)
+		}
 	}
 }
 
@@ -113,7 +148,10 @@ func TestClose_NilChannel(t *testing.T) {
 
 func TestPublishTranscode_Success(t *testing.T) {
 	mc := &mockChannel{t: t}
-	c := &Client{ch: mc}
+	confirms := make(chan amqp.Confirmation, 1)
+	returns := make(chan amqp.Return, 1)
+	confirms <- amqp.Confirmation{Ack: true}
+	c := &Client{ch: mc, confirms: confirms, returns: returns}
 	body := []byte(`{"video_id":123}`)
 	err := c.PublishTranscode(context.Background(), body)
 	if err != nil {
@@ -129,18 +167,109 @@ func TestPublishTranscode_Success(t *testing.T) {
 
 func TestPublishTranscode_Error(t *testing.T) {
 	mc := &mockChannel{t: t, publishErr: errors.New("publish failed")}
-	c := &Client{ch: mc}
+	c := &Client{ch: mc, confirms: make(chan amqp.Confirmation, 1), returns: make(chan amqp.Return, 1)}
 	err := c.PublishTranscode(context.Background(), []byte(`{}`))
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
 }
 
+func TestPublishTranscode_ConfirmNotEnabled(t *testing.T) {
+	c := &Client{ch: &mockChannel{t: t}}
+	err := c.PublishTranscode(context.Background(), []byte(`{}`))
+	if err == nil {
+		t.Fatal("expected error when publisher confirm is not enabled")
+	}
+}
+
 func TestPublishTranscode_NilChannel(t *testing.T) {
-	c := &Client{ch: nil}
+	c := &Client{ch: nil, confirms: make(chan amqp.Confirmation, 1)}
 	err := c.PublishTranscode(context.Background(), []byte(`{}`))
 	if err == nil {
 		t.Fatal("expected error for nil channel")
+	}
+}
+
+func TestPublishConfirmed_Success(t *testing.T) {
+	mc := &mockChannel{t: t}
+	confirms := make(chan amqp.Confirmation, 1)
+	returns := make(chan amqp.Return, 1)
+	confirms <- amqp.Confirmation{Ack: true}
+	c := &Client{ch: mc, confirms: confirms, returns: returns}
+
+	err := c.PublishConfirmed(context.Background(), "", TranscodeDeadQueue, true, amqp.Publishing{
+		DeliveryMode: amqp.Persistent,
+		Body:         []byte("dead"),
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if mc.publishKey != TranscodeDeadQueue {
+		t.Errorf("key = %q, want %q", mc.publishKey, TranscodeDeadQueue)
+	}
+	if string(mc.publishedBody) != "dead" {
+		t.Errorf("body = %q, want dead", mc.publishedBody)
+	}
+}
+
+func TestPublishConfirmed_Nack(t *testing.T) {
+	mc := &mockChannel{t: t}
+	confirms := make(chan amqp.Confirmation, 1)
+	returns := make(chan amqp.Return, 1)
+	confirms <- amqp.Confirmation{Ack: false}
+	c := &Client{ch: mc, confirms: confirms, returns: returns}
+
+	err := c.PublishConfirmed(context.Background(), "", TranscodeQueue, true, amqp.Publishing{Body: []byte("x")})
+	if err == nil {
+		t.Fatal("expected error on nack")
+	}
+}
+
+func TestPublishConfirmed_Return(t *testing.T) {
+	mc := &mockChannel{t: t}
+	confirms := make(chan amqp.Confirmation, 1)
+	returns := make(chan amqp.Return, 1)
+	returns <- amqp.Return{ReplyCode: 404, ReplyText: "NOT_FOUND"}
+	c := &Client{ch: mc, confirms: confirms, returns: returns}
+
+	err := c.PublishConfirmed(context.Background(), "", TranscodeQueue, true, amqp.Publishing{Body: []byte("x")})
+	if err == nil {
+		t.Fatal("expected error on basic.return")
+	}
+}
+
+func TestPublishConfirmed_ContextTimeout(t *testing.T) {
+	mc := &mockChannel{t: t}
+	confirms := make(chan amqp.Confirmation, 1)
+	returns := make(chan amqp.Return, 1)
+	c := &Client{ch: mc, confirms: confirms, returns: returns}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
+	defer cancel()
+	err := c.PublishConfirmed(ctx, "", TranscodeQueue, true, amqp.Publishing{Body: []byte("x")})
+	if err == nil {
+		t.Fatal("expected error on confirm timeout")
+	}
+}
+
+func TestPublishConfirmed_ContextCancelledButAckArrives(t *testing.T) {
+	mc := &mockChannel{t: t}
+	confirms := make(chan amqp.Confirmation, 1)
+	returns := make(chan amqp.Return, 1)
+	c := &Client{ch: mc, confirms: confirms, returns: returns}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		cancel()
+		time.Sleep(50 * time.Millisecond)
+		confirms <- amqp.Confirmation{Ack: true}
+	}()
+
+	err := c.PublishConfirmed(ctx, "", TranscodeQueue, true, amqp.Publishing{Body: []byte("x")})
+	if err != nil {
+		t.Fatalf("expected ack within the grace window to be treated as success, got %v", err)
 	}
 }
 

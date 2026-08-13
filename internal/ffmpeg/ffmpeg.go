@@ -2,6 +2,7 @@ package ffmpeg
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os/exec"
 	"strconv"
@@ -53,9 +54,11 @@ func ProbeDurationSeconds(path string) (float64, error) {
 	return strconv.ParseFloat(s, 64)
 }
 
-// TranscodeToH264MP4 converts input to H.264 + AAC MP4.
-func TranscodeToH264MP4(inputPath, outputPath string) (stderr string, err error) {
-	cmd := exec.Command(ffmpegExe,
+// TranscodeToH264MP4 converts input to H.264 + AAC MP4. The context bounds
+// the ffmpeg process: on timeout/cancel the process is killed so a hung
+// encoder cannot block the worker forever.
+func TranscodeToH264MP4(ctx context.Context, inputPath, outputPath string) (stderr string, err error) {
+	cmd := exec.CommandContext(ctx, ffmpegExe,
 		"-y",
 		"-i", inputPath,
 		"-c:v", "libx264",
@@ -73,9 +76,10 @@ func TranscodeToH264MP4(inputPath, outputPath string) (stderr string, err error)
 	return eb.String(), nil
 }
 
-// ScreenshotJPEG captures a frame at t seconds as JPEG.
-func ScreenshotJPEG(inputPath, outputPath string, atSeconds float64) (stderr string, err error) {
-	cmd := exec.Command(ffmpegExe,
+// ScreenshotJPEG captures a frame at t seconds as JPEG. The context bounds
+// the ffmpeg process the same way as TranscodeToH264MP4.
+func ScreenshotJPEG(ctx context.Context, inputPath, outputPath string, atSeconds float64) (stderr string, err error) {
+	cmd := exec.CommandContext(ctx, ffmpegExe,
 		"-y",
 		"-ss", fmt.Sprintf("%.3f", atSeconds),
 		"-i", inputPath,

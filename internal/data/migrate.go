@@ -51,7 +51,20 @@ func RegisteredMigrations() []Migration {
 		{21, "dm_message_suggestions", "add suggestions column for AI follow-up chips", migrateDmMessageSuggestions},
 		{22, "agent_feedback_table", "create agent_feedbacks table", migrateAgentFeedbackTable},
 		{23, "transcode_dead_letters", "create transcode_dead_letters audit table", migrateTranscodeDeadLetters},
+		{24, "transcode_dead_letter_archive", "add archived_at for retention archiving", migrateTranscodeDeadLetterArchive},
 	}
+}
+
+// migrateTranscodeDeadLetterArchive adds archived_at so retention soft-archives
+// dead letters instead of deleting the audit trail.
+func migrateTranscodeDeadLetterArchive(db *gorm.DB, lg *zap.Logger) error {
+	if err := db.AutoMigrate(&video.TranscodeDeadLetter{}); err != nil {
+		return err
+	}
+	if lg != nil {
+		lg.Info("added transcode_dead_letters.archived_at")
+	}
+	return nil
 }
 
 // migrateTranscodeDeadLetters creates the transcode_dead_letters audit table

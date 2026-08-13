@@ -103,7 +103,7 @@ func newTestAPI(t *testing.T) (*API, *gin.Engine, *jwttoken.Manager) {
 	notifSvc := notification.NewNotificationService(db, rdb, log, userProv)
 	commentSvc := comment.NewCommentService(db, rdb, log, sens, notifSvc, userProv, videoProv, articleProv, dynamicProv)
 	userSvc := user.NewUserService(db, log)
-	videoSvc := video.NewVideoService(db, rdb, log, nil, noopMQ{})
+	videoSvc := video.NewVideoService(db, rdb, log, nil, noopMQ{}, nil)
 	dmSvc := dm.NewDmService(db, rdb, log)
 	favoriteSvc := favorite.NewFavoriteService(db, rdb, log, userProv, videoProv)
 	articleSvc := article.NewArticleService(db, rdb, log, nil)
@@ -112,7 +112,7 @@ func newTestAPI(t *testing.T) (*API, *gin.Engine, *jwttoken.Manager) {
 	hotSearchSvc := hotsearch.NewHotSearchService(db, searchHot)
 	engagementSvc := engagement.NewEngagementService(db, rdb, log, userProv, videoProv)
 	viewHistorySvc := viewhistory.NewViewHistoryService(db, rdb, log)
-	videoDraftSvc := video.NewVideoDraftService(db, rdb, log, noopMQ{})
+	videoDraftSvc := video.NewVideoDraftService(db, rdb, log, noopMQ{}, nil)
 	creatorCommentSvc := comment.NewCreatorCommentService(db, rdb, log)
 	searchHistorySvc := searchsvc.NewSearchHistoryService(db, log)
 	api := &API{

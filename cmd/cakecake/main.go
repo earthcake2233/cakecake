@@ -201,7 +201,7 @@ func main() {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		worker.StartTranscodeDeadRetention(ctx, db, log)
+		worker.StartTranscodeDeadRetention(ctx, db, ossc, log)
 	}()
 
 	pc := &playcount.PlayCounter{Rdb: rdb, Store: playcount.NewPlayCountStore(db)}
@@ -303,7 +303,7 @@ func main() {
 	userSvc := user.NewUserService(db, log)
 	searchSvc := searchsvc.NewSearchService(esc, db, rdb, log)
 	dailyRewardSvc := dailyreward.NewDailyRewardService(db)
-	videoSvc := video.NewVideoService(db, rdb, log, esc, mq)
+	videoSvc := video.NewVideoService(db, rdb, log, esc, mq, ossc)
 	bannerSvc := banner.NewBannerService(db)
 	dmSvc := dm.NewDmService(db, rdb, log)
 	favoriteSvc := favorite.NewFavoriteService(db, rdb, log, userProv, videoProv)
@@ -311,7 +311,7 @@ func main() {
 	dynamicSvc := dynamic.NewDynamicService(db, rdb, log)
 	engagementSvc := engagement.NewEngagementService(db, rdb, log, userProv, videoProv)
 	viewHistorySvc := viewhistory.NewViewHistoryService(db, rdb, log)
-	videoDraftSvc := video.NewVideoDraftService(db, rdb, log, mq)
+	videoDraftSvc := video.NewVideoDraftService(db, rdb, log, mq, ossc)
 	creatorCommentSvc := comment.NewCreatorCommentService(db, rdb, log)
 	searchHistorySvc := searchsvc.NewSearchHistoryService(db, log)
 	hotSearchSvc := hotsearch.NewHotSearchService(db, searchHot)

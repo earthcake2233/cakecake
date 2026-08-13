@@ -106,14 +106,14 @@ func TestTranscodeJob_MinJSON_Adv(t *testing.T) {
 func TestHandleDelivery_BadJSON_Adv(t *testing.T) {
 	mockAck := &mockAcknowledger{}
 	d := amqp.Delivery{Acknowledger: mockAck, Body: []byte("not json")}
-	handleDelivery(context.TODO(), nil, nil, nil, nil, nil, nil, d)
+	handleDelivery(context.TODO(), nil, nil, nil, nil, nil, d)
 	assert.True(t, mockAck.ackCalled)
 }
 
 func TestHandleDelivery_EmptyBody_Adv(t *testing.T) {
 	mockAck := &mockAcknowledger{}
 	d := amqp.Delivery{Acknowledger: mockAck, Body: []byte{}}
-	handleDelivery(context.TODO(), nil, nil, nil, nil, nil, nil, d)
+	handleDelivery(context.TODO(), nil, nil, nil, nil, nil, d)
 	assert.True(t, mockAck.ackCalled)
 }
 
@@ -124,7 +124,7 @@ func TestHandleDelivery_NilOSS_Adv(t *testing.T) {
 	body, _ := json.Marshal(job)
 	mockAck := &mockAcknowledger{}
 	d := amqp.Delivery{Acknowledger: mockAck, Body: body}
-	handleDelivery(context.TODO(), nil, db, nil, nil, nil, nil, d)
+	handleDelivery(context.TODO(), nil, db, nil, nil, nil, d)
 	assert.True(t, mockAck.ackCalled)
 	var v video.Video
 	db.First(&v, 1)

@@ -5,5 +5,7 @@ type TranscodeJob struct {
 	VideoID    uint64 `json:"video_id"`
 	RawPath    string `json:"raw_path"`
 	CoverPath  string `json:"cover_path,omitempty"`
+	RawKey     string `json:"raw_key,omitempty"`
+	CoverKey   string `json:"cover_key,omitempty"`
 	RetryCount int    `json:"retry_count"`
 }
