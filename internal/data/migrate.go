@@ -52,7 +52,20 @@ func RegisteredMigrations() []Migration {
 		{22, "agent_feedback_table", "create agent_feedbacks table", migrateAgentFeedbackTable},
 		{23, "transcode_dead_letters", "create transcode_dead_letters audit table", migrateTranscodeDeadLetters},
 		{24, "transcode_dead_letter_archive", "add archived_at for retention archiving", migrateTranscodeDeadLetterArchive},
+		{25, "direct_upload_claims", "create direct_upload_claims idempotency table", migrateDirectUploadClaims},
 	}
+}
+
+// migrateDirectUploadClaims creates the claim table that makes direct-upload
+// submits idempotent (one raw_key -> one video).
+func migrateDirectUploadClaims(db *gorm.DB, lg *zap.Logger) error {
+	if err := db.AutoMigrate(&video.DirectUploadClaim{}); err != nil {
+		return err
+	}
+	if lg != nil {
+		lg.Info("created direct_upload_claims table")
+	}
+	return nil
 }
 
 // migrateTranscodeDeadLetterArchive adds archived_at so retention soft-archives

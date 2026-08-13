@@ -394,3 +394,20 @@ func TestHandleDelivery_SuccessScreenshotPublish(t *testing.T) {
 	require.Len(t, store.uploads, 2)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
+
+func TestTranscodeConcurrency(t *testing.T) {
+	cases := []struct {
+		name string
+		cfg  *config.C
+		want int
+	}{
+		{"nil config defaults to 1", nil, 1},
+		{"zero falls back to 1", &config.C{TranscodeConcurrency: 0}, 1},
+		{"configured value is used", &config.C{TranscodeConcurrency: 4}, 4},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.want, transcodeConcurrency(tc.cfg))
+		})
+	}
+}

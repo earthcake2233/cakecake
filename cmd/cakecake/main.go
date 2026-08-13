@@ -108,6 +108,7 @@ func main() {
 	if err != nil {
 		log.Fatal("rabbitmq", zap.Error(err))
 	}
+	mq.SetLogger(log)
 	defer func() { _ = mq.Close() }()
 
 	jm, err := jwttoken.NewManager(cfg.JWTSecret)
@@ -202,6 +203,11 @@ func main() {
 	go func() {
 		defer wg.Done()
 		worker.StartTranscodeDeadRetention(ctx, db, ossc, log)
+	}()
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		worker.StartQueueDepthCollector(ctx, cfg, log)
 	}()
 
 	pc := &playcount.PlayCounter{Rdb: rdb, Store: playcount.NewPlayCountStore(db)}

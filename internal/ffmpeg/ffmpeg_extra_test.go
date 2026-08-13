@@ -112,7 +112,25 @@ func TestCheckFFprobe_Skip(t *testing.T) {
 
 func TestProbeDurationSeconds_Skip(t *testing.T) {
 	t.Skip("ProbeDurationSeconds requires ffprobe on PATH")
-	_, _ = ProbeDurationSeconds("/nonexistent/file.mp4")
+	_, _ = ProbeDurationSeconds(context.Background(), "/nonexistent/file.mp4")
+}
+
+// TestProbeDurationSeconds_ContextTimeoutKillsProcess proves a hung ffprobe
+// is killed by the context instead of holding an upload request forever.
+func TestProbeDurationSeconds_ContextTimeoutKillsProcess(t *testing.T) {
+	script := filepath.Join(t.TempDir(), "fakeffprobe.sh")
+	if err := os.WriteFile(script, []byte("#!/bin/sh\nexec sleep 10\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	orig := ffprobeExe
+	ffprobeExe = script
+	defer func() { ffprobeExe = orig }()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
+	defer cancel()
+	if _, err := ProbeDurationSeconds(ctx, "input"); err == nil {
+		t.Fatal("expected the context timeout to kill the ffprobe child process")
+	}
 }
 
 func TestTranscodeToH264MP4_Skip(t *testing.T) {

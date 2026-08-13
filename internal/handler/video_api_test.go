@@ -4,13 +4,16 @@ import (
 	"bytes"
 	"cakecake/internal/model/video"
 	vsvc "cakecake/internal/service/video"
+	"context"
 	"encoding/json"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
+	"time"
 )
 
 func TestVideoEngagementAndComments(t *testing.T) {
@@ -104,7 +107,7 @@ func TestVideoUploadFlows(t *testing.T) {
 	// and stub the media probe so the upload pipeline runs without ffmpeg.
 	api.VideoSvc = vsvc.NewVideoService(api.DB, api.Redis, zap.NewNop(), nil, noopMQ{}, nil)
 	oldProbe := vsvc.VideoProbe
-	vsvc.VideoProbe = func(string) (float64, error) { return 12.5, nil }
+	vsvc.VideoProbe = func(context.Context, string) (float64, error) { return 12.5, nil }
 	defer func() { vsvc.VideoProbe = oldProbe }()
 
 	tokenA, uidA := covRegister(t, r, "covup", "password12")
@@ -196,4 +199,23 @@ type fakeOSSBackend struct {
 	uploads []string
 	deletes []string
 	err     error
+}
+
+func (f *fakeOSSBackend) DownloadFile(_ string, localPath string) error {
+	if f.err != nil {
+		return f.err
+	}
+	return os.WriteFile(localPath, []byte("media"), 0o644)
+}
+
+func (f *fakeOSSBackend) Exists(string) (bool, error) {
+	return true, f.err
+}
+
+func (f *fakeOSSBackend) Size(string) (int64, error) {
+	return 1024, f.err
+}
+
+func (f *fakeOSSBackend) PresignPut(key string, _ time.Duration) (string, error) {
+	return "https://oss.example.com/" + key, f.err
 }

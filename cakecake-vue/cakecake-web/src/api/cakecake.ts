@@ -1393,6 +1393,45 @@ export async function mbUploadVideo(
   return unwrap<UploadVideoResult>(r);
 }
 
+export interface DirectUploadTicket {
+  raw_key: string;
+  raw_upload_url: string;
+  cover_key?: string;
+  cover_upload_url?: string;
+  expires_in: number;
+}
+
+export interface DirectUploadSubmit {
+  title: string;
+  description: string;
+  tags: string[];
+  zone: string;
+  raw_key: string;
+  cover_key?: string;
+}
+
+export async function mbCreateUploadTicket(
+  filename: string,
+  coverFilename = ""
+): Promise<DirectUploadTicket> {
+  const r = await http.post(
+    "/api/v1/videos/upload-ticket",
+    { filename, cover_filename: coverFilename },
+    { skipGlobalErrorToast: true }
+  );
+  return unwrap<DirectUploadTicket>(r);
+}
+
+export async function mbCreateVideoDirect(
+  body: DirectUploadSubmit
+): Promise<UploadVideoResult> {
+  const r = await http.post("/api/v1/videos", body, {
+    timeout: 600000,
+    skipGlobalErrorToast: true
+  });
+  return unwrap<UploadVideoResult>(r);
+}
+
 export interface SaveVideoDraftResult {
   id: number;
   status: string;

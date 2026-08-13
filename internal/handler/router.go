@@ -147,6 +147,7 @@ func registerVideoRoutes(r *gin.Engine, pub, admin, authd *gin.RouterGroup, a *A
 	admin.DELETE("/videos/:id", a.AdminDeleteVideo)
 	authd.GET("/users/me/videos", a.ListMyVideos)
 	authd.DELETE("/videos/:id", a.DeleteMyVideo)
+	authd.POST("/videos/upload-ticket", a.CreateVideoUploadTicket)
 	authd.POST("/videos", a.UploadVideo)
 	authd.POST("/videos/draft", a.SaveVideoDraft)
 	authd.PUT("/videos/:id/draft", a.UpdateVideoDraft)

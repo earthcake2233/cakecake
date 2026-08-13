@@ -46,9 +46,14 @@
 
 <script>
 import { ElMessage } from "element-plus";
-import { mbUploadVideo } from "@/api/cakecake";
+import {
+  mbCreateUploadTicket,
+  mbCreateVideoDirect,
+  mbUploadVideo
+} from "@/api/cakecake";
 import { getAccessToken } from "@/utils/authTokens";
 import { openCakecakeLoginModal } from "@/utils/cakecakeLoginModal";
+import { uploadToPresignedURL } from "@/utils/directVideoUpload";
 import VideoUploadMaintenanceNotice from "@/components/creator/VideoUploadMaintenanceNotice.vue";
 import {
   guardVideoFileUploadDisabled,
@@ -105,17 +110,47 @@ export default {
         return;
       }
       if (!this.canSubmit) return;
-      const fd = new FormData();
-      fd.append("title", this.title.trim());
-      fd.append("description", (this.description || "").trim());
-      fd.append("file", this.videoFile);
-      if (this.coverFile) {
-        fd.append("cover", this.coverFile);
-      }
+      const title = this.title.trim();
+      const description = (this.description || "").trim();
       this.uploading = true;
       this.result = "";
       try {
-        const data = await mbUploadVideo(fd);
+        let data;
+        let ticket = null;
+        try {
+          // 首选客户端直传：浏览器把文件 PUT 到 OSS，再提交元数据。
+          ticket = await mbCreateUploadTicket(
+            this.videoFile.name,
+            this.coverFile ? this.coverFile.name : ""
+          );
+        } catch (ticketErr) {
+          // 直传不可用（如 OSS 未配置），回退传统 multipart 上传。
+        }
+        if (ticket) {
+          await uploadToPresignedURL(ticket.raw_upload_url, this.videoFile);
+          let coverKey = "";
+          if (this.coverFile && ticket.cover_upload_url) {
+            await uploadToPresignedURL(ticket.cover_upload_url, this.coverFile);
+            coverKey = ticket.cover_key || "";
+          }
+          data = await mbCreateVideoDirect({
+            title,
+            description,
+            tags: [],
+            zone: "",
+            raw_key: ticket.raw_key,
+            cover_key: coverKey || undefined
+          });
+        } else {
+          const fd = new FormData();
+          fd.append("title", title);
+          fd.append("description", description);
+          fd.append("file", this.videoFile);
+          if (this.coverFile) {
+            fd.append("cover", this.coverFile);
+          }
+          data = await mbUploadVideo(fd);
+        }
         this.result = JSON.stringify(data, null, 2);
       } catch (e) {
         ElMessage.error((e && e.message) || "上传失败");

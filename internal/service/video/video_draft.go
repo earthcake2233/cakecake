@@ -47,7 +47,9 @@ func (s *VideoDraftService) EnqueueTranscode(ctx context.Context, videoID uint64
 
 // ProbeDurationSeconds probes a raw media file's duration via ffprobe.
 func (s *VideoDraftService) ProbeDurationSeconds(path string) (float64, error) {
-	return VideoProbe(path)
+	ctx, cancel := context.WithTimeout(context.Background(), probeTimeout)
+	defer cancel()
+	return VideoProbe(ctx, path)
 }
 
 // FFprobeExe returns the ffprobe executable path used by the probe helpers.

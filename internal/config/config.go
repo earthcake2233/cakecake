@@ -36,6 +36,11 @@ type C struct {
 
 	RabbitMQURL string `json:"-"`
 
+	// RabbitMQMgmtURL enables the transcode queue-depth gauge via the
+	// RabbitMQ management HTTP API (e.g. http://127.0.0.1:15672). Empty
+	// disables the metric.
+	RabbitMQMgmtURL string `json:"rabbitmq_mgmt_url"`
+
 	// ElasticsearchURL empty disables search (optional, like OSS).
 	ElasticsearchURL string `json:"elasticsearch_url"`
 
@@ -90,6 +95,11 @@ type C struct {
 	// TranscodeTimeout bounds a single ffmpeg transcode/screenshot run. A
 	// hung encoder is killed instead of blocking the worker (QoS=1) forever.
 	TranscodeTimeout time.Duration `json:"transcode_timeout"`
+
+	// TranscodeConcurrency is the number of main-queue consumers running in
+	// this process. Transcoding is CPU-bound; production typically sets it
+	// to min(cores, 4) and scales out with more instances.
+	TranscodeConcurrency int `json:"transcode_concurrency"`
 
 	// SeedDemoData: when true and the videos table is empty, insert demo users/videos/danmaku
 	// pointing at public demo media URLs (Docker Compose one-command experience).
@@ -209,7 +219,8 @@ func Load() *C {
 		RedisWrite:    mustParseDuration(os.Getenv("REDIS_WRITE_TIMEOUT"), 3*time.Second),
 		RedisPoolSize: atoi(os.Getenv("REDIS_POOL_SIZE"), 20),
 
-		RabbitMQURL: getenv("RABBITMQ_URL", "amqp://guest:guest@127.0.0.1:5672/"),
+		RabbitMQURL:     getenv("RABBITMQ_URL", "amqp://guest:guest@127.0.0.1:5672/"),
+		RabbitMQMgmtURL: getenv("RABBITMQ_MGMT_URL", ""),
 
 		ElasticsearchURL:      strings.TrimSpace(os.Getenv("ELASTICSEARCH_URL")),
 		ElasticsearchUsername: strings.TrimSpace(os.Getenv("ELASTICSEARCH_USERNAME")),
@@ -227,6 +238,7 @@ func Load() *C {
 		SensitiveWordsFile:    getenv("SENSITIVE_WORDS_FILE", "./configs/sensitive_words.txt"),
 		TempUploadDir:         getenv("TEMP_UPLOAD_DIR", "./data/tmp"),
 		TranscodeTimeout:      mustParseDuration(os.Getenv("TRANSCODE_TIMEOUT"), 10*time.Minute),
+		TranscodeConcurrency:  atoi(os.Getenv("TRANSCODE_CONCURRENCY"), 1),
 		FFprobePath:           strings.TrimSpace(os.Getenv("FFPROBE_PATH")),
 		FFmpegPath:            strings.TrimSpace(os.Getenv("FFMPEG_PATH")),
 		IP2RegionV4XDB:        getenv("IP2REGION_V4_XDB", "./configs/ip2region_v4.xdb"),
@@ -267,6 +279,7 @@ func (c *C) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	enc.AddDuration("redis_read_timeout", c.RedisRead)
 	enc.AddDuration("redis_write_timeout", c.RedisWrite)
 	enc.AddInt("redis_pool_size", c.RedisPoolSize)
+	enc.AddString("rabbitmq_mgmt_url", c.RabbitMQMgmtURL)
 	enc.AddString("elasticsearch_url", c.ElasticsearchURL)
 	enc.AddString("oss_endpoint", c.OSSEndpoint)
 	enc.AddString("oss_bucket", c.OSSBucket)
@@ -274,6 +287,7 @@ func (c *C) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	enc.AddString("sensitive_words_file", c.SensitiveWordsFile)
 	enc.AddString("temp_upload_dir", c.TempUploadDir)
 	enc.AddDuration("transcode_timeout", c.TranscodeTimeout)
+	enc.AddInt("transcode_concurrency", c.TranscodeConcurrency)
 	enc.AddString("ffprobe_path", c.FFprobePath)
 	enc.AddString("ffmpeg_path", c.FFmpegPath)
 	enc.AddString("ip2region_v4_xdb", c.IP2RegionV4XDB)

@@ -12,6 +12,8 @@ import "gorm.io/gorm"
 type Tx interface {
 	Model(value interface{}) *gorm.DB
 	Where(query interface{}, args ...interface{}) *gorm.DB
+	Create(value interface{}) *gorm.DB
+	First(dest interface{}, conds ...interface{}) *gorm.DB
 	Pluck(column string, dest interface{}) *gorm.DB
 	Find(dest interface{}, conds ...interface{}) *gorm.DB
 	Delete(value interface{}, conds ...interface{}) *gorm.DB

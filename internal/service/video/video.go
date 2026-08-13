@@ -9,8 +9,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -39,14 +41,65 @@ var ErrRequeueSourceMissing = errors.New("requeue source media missing")
 // single-host local path.
 type SourceObjectStore interface {
 	UploadFile(objectKey, localPath string) error
+	DownloadFile(objectKey, localPath string) error
 	Exists(objectKey string) (bool, error)
+	Size(objectKey string) (int64, error)
+	PresignPut(objectKey string, expiry time.Duration) (string, error)
 	DeleteObject(objectKey string) error
+}
+
+// ErrDirectUploadUnavailable reports that OSS is not configured for
+// client-side direct upload.
+var ErrDirectUploadUnavailable = errors.New("direct upload unavailable: OSS not configured")
+
+// ErrDirectUploadSourceMissing reports that the OSS object claimed by a
+// direct-upload submission does not exist.
+var ErrDirectUploadSourceMissing = errors.New("direct upload source object missing")
+
+// ErrDirectUploadTooLarge reports that the OSS object exceeds the upload size
+// limit; it is rejected before any download so a large object cannot be used
+// as a disk/bandwidth DoS vector.
+var ErrDirectUploadTooLarge = errors.New("direct upload source object too large")
+
+// ErrDirectUploadInvalidKey reports that a submitted object key is outside
+// the raws/ namespace.
+var ErrDirectUploadInvalidKey = errors.New("direct upload object key invalid")
+
+// ErrDirectUploadAlreadyClaimed reports that the raw object belongs to a
+// different user's claim.
+var ErrDirectUploadAlreadyClaimed = errors.New("direct upload object already claimed")
+
+// ErrDirectUploadInProgress reports that a concurrent submit for the same raw
+// object is still creating its video row.
+var ErrDirectUploadInProgress = errors.New("direct upload object claim in progress")
+
+// directUploadMaxBytes matches the multipart upload limit (500 MB) so both
+// upload paths enforce the same ceiling.
+const directUploadMaxBytes int64 = 500 << 20
+
+// directUploadExpiry bounds the presigned PUT URLs issued by
+// CreateDirectUploadTicket.
+const directUploadExpiry = 15 * time.Minute
+
+// DirectUploadTicket is the presigned-PUT ticket a client uses to upload the
+// raw video (and optional cover) straight to OSS before submitting metadata.
+type DirectUploadTicket struct {
+	RawKey   string `json:"raw_key"`
+	RawURL   string `json:"raw_upload_url"`
+	CoverKey string `json:"cover_key,omitempty"`
+	CoverURL string `json:"cover_upload_url,omitempty"`
+	// ExpiresIn is the ticket lifetime in seconds.
+	ExpiresIn int64 `json:"expires_in"`
 }
 
 // VideoProbe is the media-duration probe used by the video services. It is a
 // variable so tests can substitute a deterministic probe without invoking
 // the external ffprobe binary.
 var VideoProbe = ffmpeg.ProbeDurationSeconds
+
+// probeTimeout bounds a single ffprobe run during upload validation; a hung
+// probe must not hold the HTTP request forever.
+var probeTimeout = 15 * time.Second
 
 // NewVideoService creates a VideoService with storage, cache, logger,
 // optional search client, and optional transcode queue publisher.
@@ -70,6 +123,159 @@ func (s *VideoService) PublishTranscode(ctx context.Context, body []byte) error 
 // EnqueueTranscode builds the transcode job and publishes it to the queue.
 func (s *VideoService) EnqueueTranscode(ctx context.Context, videoID uint64, rawPath, coverPath string) error {
 	return enqueueTranscodeJob(ctx, s.mq, s.oss, videoID, rawPath, coverPath)
+}
+
+// EnqueueTranscodeWithKeys publishes a job whose source media already lives in
+// OSS (client direct upload), so no local path is involved.
+func (s *VideoService) EnqueueTranscodeWithKeys(ctx context.Context, videoID uint64, rawKey, coverKey string) error {
+	if s.mq == nil {
+		return fmt.Errorf("transcode queue not configured")
+	}
+	job := queue.TranscodeJob{VideoID: videoID, RawKey: rawKey, CoverKey: coverKey, RetryCount: 0}
+	body, err := json.Marshal(job)
+	if err != nil {
+		return err
+	}
+	return s.mq.PublishTranscode(ctx, body)
+}
+
+// CreateDirectUploadTicket issues presigned PUT URLs for a direct upload:
+// the browser uploads the source files straight to OSS, then submits the
+// metadata via CreateVideoFromDirectUpload. This keeps large files off the
+// API server's bandwidth. Object keys are namespaced by the owning user
+// (uploads/{uid}/{uuid}/...) so a later submit cannot reference someone
+// else's objects.
+func (s *VideoService) CreateDirectUploadTicket(_ context.Context, uid uint64, filename, coverFilename string) (*DirectUploadTicket, error) {
+	if s.oss == nil {
+		return nil, ErrDirectUploadUnavailable
+	}
+	prefix := directUploadKeyPrefix(uid)
+	rawKey := fmt.Sprintf("%s%s/source%s", prefix, uuid.NewString(), safeObjectExt(filename))
+	rawURL, err := s.oss.PresignPut(rawKey, directUploadExpiry)
+	if err != nil {
+		return nil, fmt.Errorf("presign raw upload: %w", err)
+	}
+	ticket := &DirectUploadTicket{
+		RawKey:    rawKey,
+		RawURL:    rawURL,
+		ExpiresIn: int64(directUploadExpiry.Seconds()),
+	}
+	if strings.TrimSpace(coverFilename) != "" {
+		coverKey := fmt.Sprintf("%s%s/cover%s", prefix, uuid.NewString(), safeObjectExt(coverFilename))
+		coverURL, err := s.oss.PresignPut(coverKey, directUploadExpiry)
+		if err != nil {
+			return nil, fmt.Errorf("presign cover upload: %w", err)
+		}
+		ticket.CoverKey = coverKey
+		ticket.CoverURL = coverURL
+	}
+	return ticket, nil
+}
+
+// CreateVideoFromDirectUpload validates an OSS-uploaded source (existence +
+// size limit + ffprobe duration), creates the video row and enqueues
+// transcoding with the object keys.
+func (s *VideoService) CreateVideoFromDirectUpload(ctx context.Context, uid uint64, title, description, tagsJSON, zone, rawKey, coverKey string) (*video.Video, error) {
+	if s.oss == nil {
+		return nil, ErrDirectUploadUnavailable
+	}
+	prefix := directUploadKeyPrefix(uid)
+	if !strings.HasPrefix(rawKey, prefix) {
+		return nil, fmt.Errorf("%w: raw key %s", ErrDirectUploadInvalidKey, rawKey)
+	}
+	if coverKey != "" && !strings.HasPrefix(coverKey, prefix) {
+		return nil, fmt.Errorf("%w: cover key %s", ErrDirectUploadInvalidKey, coverKey)
+	}
+	ok, err := s.oss.Exists(rawKey)
+	if err != nil {
+		return nil, fmt.Errorf("check raw object: %w", err)
+	}
+	if !ok {
+		return nil, fmt.Errorf("%w: %s", ErrDirectUploadSourceMissing, rawKey)
+	}
+	size, err := s.oss.Size(rawKey)
+	if err != nil {
+		return nil, fmt.Errorf("check raw object size: %w", err)
+	}
+	if size > directUploadMaxBytes {
+		return nil, fmt.Errorf("%w: %d bytes", ErrDirectUploadTooLarge, size)
+	}
+	tmp := filepath.Join(os.TempDir(), fmt.Sprintf("direct_%d_%s", time.Now().UnixNano(), filepath.Base(rawKey)))
+	defer func() { _ = os.Remove(tmp) }()
+	if err := s.oss.DownloadFile(rawKey, tmp); err != nil {
+		return nil, fmt.Errorf("download raw object for probe: %w", err)
+	}
+	dur, err := s.ProbeDurationSeconds(tmp)
+	if err != nil {
+		return nil, err
+	}
+	var v video.Video
+	created := false
+	err = s.videos.WithTx(ctx, func(tx dbtx.Tx) error {
+		claim := video.DirectUploadClaim{RawKey: rawKey, UserID: uid}
+		if err := tx.Create(&claim).Error; err != nil {
+			if !isUniqueViolation(err) {
+				return err
+			}
+			var existing video.DirectUploadClaim
+			if err := tx.Where("raw_key = ?", rawKey).First(&existing).Error; err != nil {
+				return err
+			}
+			if existing.UserID != uid {
+				return fmt.Errorf("%w: key %s", ErrDirectUploadAlreadyClaimed, rawKey)
+			}
+			if existing.VideoID == 0 {
+				return fmt.Errorf("%w: key %s", ErrDirectUploadInProgress, rawKey)
+			}
+			if err := tx.First(&v, existing.VideoID).Error; err != nil {
+				return err
+			}
+			return nil
+		}
+		created = true
+		v = video.Video{
+			UserID:      uid,
+			Title:       title,
+			Description: description,
+			DurationSec: dur,
+			Status:      video.StatusProcessing,
+			TagsJSON:    tagsJSON,
+			Zone:        zone,
+		}
+		if err := tx.Create(&v).Error; err != nil {
+			return err
+		}
+		return tx.Model(&video.DirectUploadClaim{}).Where("id = ?", claim.ID).
+			Updates(map[string]interface{}{"video_id": v.ID}).Error
+	})
+	if err != nil {
+		return nil, err
+	}
+	if err := s.EnqueueTranscodeWithKeys(ctx, v.ID, rawKey, coverKey); err != nil {
+		if created {
+			_ = s.DeleteVideoByID(ctx, v.ID)
+			_ = s.videos.DeleteDirectUploadClaim(ctx, rawKey)
+		}
+		return nil, err
+	}
+	return &v, nil
+}
+
+func directUploadKeyPrefix(uid uint64) string {
+	return fmt.Sprintf("uploads/%d/", uid)
+}
+
+func safeObjectExt(filename string) string {
+	ext := strings.ToLower(filepath.Ext(strings.TrimSpace(filename)))
+	if len(ext) > 16 {
+		return ""
+	}
+	for _, r := range ext {
+		if !(r >= 'a' && r <= 'z') && !(r >= '0' && r <= '9') && r != '.' {
+			return ""
+		}
+	}
+	return ext
 }
 
 // enqueueTranscodeJob uploads the original media to object storage when OSS is
@@ -224,7 +430,9 @@ func (s *VideoService) ensureRequeueSource(kind, objectKey, localPath string) er
 
 // ProbeDurationSeconds probes a raw media file's duration via ffprobe.
 func (s *VideoService) ProbeDurationSeconds(path string) (float64, error) {
-	return VideoProbe(path)
+	ctx, cancel := context.WithTimeout(context.Background(), probeTimeout)
+	defer cancel()
+	return VideoProbe(ctx, path)
 }
 
 // FFprobeExe returns the ffprobe executable path used by the probe helpers.

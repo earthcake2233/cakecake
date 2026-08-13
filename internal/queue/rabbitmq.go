@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
+	"go.uber.org/zap"
 )
 
 // TranscodePublisher publishes transcode jobs (implemented by *Client).
@@ -60,10 +62,15 @@ var retryQueues = []struct {
 // confirmation before failing the call.
 const publishConfirmTimeout = 5 * time.Second
 
+// rabbitmqReconnectDelay is the backoff between connection rebuild attempts;
+// variable for tests.
+var rabbitmqReconnectDelay = 3 * time.Second
+
 // amqpChannel is the subset of *amqp.Channel needed by Client.
 type amqpChannel interface {
 	PublishWithContext(ctx context.Context, exchange, key string, mandatory, immediate bool, msg amqp.Publishing) error
 	Confirm(noWait bool) error
+	GetNextPublishSeqNo() uint64
 	NotifyPublish(confirm chan amqp.Confirmation) chan amqp.Confirmation
 	NotifyReturn(returns chan amqp.Return) chan amqp.Return
 	Consume(queue, consumer string, autoAck, exclusive, noLocal, noWait bool, args amqp.Table) (<-chan amqp.Delivery, error)
@@ -76,12 +83,22 @@ var _ amqpChannel = (*amqp.Channel)(nil)
 
 // Client wraps an AMQP channel for publishing and consuming.
 type Client struct {
+	url  string
 	conn *amqp.Connection
 	ch   amqpChannel
 
 	mu       sync.Mutex
 	confirms <-chan amqp.Confirmation
 	returns  <-chan amqp.Return
+
+	closed        bool
+	reconnectWait time.Duration
+	dialFn        func(url string) (*amqp.Connection, error)
+
+	ctx    context.Context
+	cancel context.CancelFunc
+
+	log atomic.Value // *zap.Logger
 }
 
 // TranscodeConsumer is the minimal channel surface the main transcode
@@ -93,27 +110,68 @@ type TranscodeConsumer interface {
 
 // Dial connects to RabbitMQ and declares the transcode queue.
 func Dial(url string) (*Client, error) {
-	conn, err := amqp.Dial(url)
+	return dialWithFn(url, amqp.Dial)
+}
+
+func dialWithFn(url string, dialFn func(string) (*amqp.Connection, error)) (*Client, error) {
+	conn, err := dialFn(url)
 	if err != nil {
 		return nil, fmt.Errorf("amqp dial failed")
 	}
-	ch, err := conn.Channel()
-	if err != nil {
+	ctx, cancel := context.WithCancel(context.Background())
+	c := &Client{
+		url:           url,
+		conn:          conn,
+		reconnectWait: rabbitmqReconnectDelay,
+		dialFn:        dialFn,
+		ctx:           ctx,
+		cancel:        cancel,
+	}
+	c.log.Store(zap.NewNop())
+	if err := c.initChannel(); err != nil {
+		cancel()
 		_ = conn.Close()
-		return nil, fmt.Errorf("amqp channel: %w", err)
+		return nil, err
+	}
+	go c.watchConnection()
+	return c, nil
+}
+
+// SetLogger replaces the reconnect logger (project-wide zap instance).
+func (c *Client) SetLogger(lg *zap.Logger) {
+	if lg != nil {
+		c.log.Store(lg)
+	}
+}
+
+func (c *Client) logger() *zap.Logger {
+	if v := c.log.Load(); v != nil {
+		return v.(*zap.Logger)
+	}
+	return zap.NewNop()
+}
+
+// initChannel (re)builds the publish channel, declares the queues and enables
+// publisher confirms. Callers must not hold c.mu.
+func (c *Client) initChannel() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.initChannelLocked()
+}
+
+func (c *Client) initChannelLocked() error {
+	ch, err := c.conn.Channel()
+	if err != nil {
+		return fmt.Errorf("amqp channel: %w", err)
 	}
 	if _, err := ch.QueueDeclare(TranscodeQueue, true, false, false, false, nil); err != nil {
 		_ = ch.Close()
-		_ = conn.Close()
-		return nil, fmt.Errorf("queue declare: %w", err)
+		return fmt.Errorf("queue declare: %w", err)
 	}
 	if _, err := ch.QueueDeclare(TranscodeDeadQueue, true, false, false, false, nil); err != nil {
 		_ = ch.Close()
-		_ = conn.Close()
-		return nil, fmt.Errorf("dead queue declare: %w", err)
+		return fmt.Errorf("dead queue declare: %w", err)
 	}
-	// Delayed retry queues: after the per-queue TTL expires, RabbitMQ
-	// dead-letters the message back to the main transcode queue.
 	for _, rq := range retryQueues {
 		args := amqp.Table{
 			"x-message-ttl":             int64(rq.ttl.Milliseconds()),
@@ -122,29 +180,135 @@ func Dial(url string) (*Client, error) {
 		}
 		if _, err := ch.QueueDeclare(rq.name, true, false, false, false, args); err != nil {
 			_ = ch.Close()
-			_ = conn.Close()
-			return nil, fmt.Errorf("retry queue %s declare: %w", rq.name, err)
+			return fmt.Errorf("retry queue %s declare: %w", rq.name, err)
 		}
 	}
-	// Publisher confirms: every PublishConfirmed waits for the broker's ack
-	// (or a basic.return for unroutable mandatory messages).
 	confirms := ch.NotifyPublish(make(chan amqp.Confirmation, 32))
 	returns := ch.NotifyReturn(make(chan amqp.Return, 32))
 	if err := ch.Confirm(false); err != nil {
 		_ = ch.Close()
-		_ = conn.Close()
-		return nil, fmt.Errorf("publisher confirm: %w", err)
+		return fmt.Errorf("publisher confirm: %w", err)
 	}
-	return &Client{conn: conn, ch: ch, confirms: confirms, returns: returns}, nil
+	if c.ch != nil {
+		_ = c.ch.Close()
+	}
+	c.ch = ch
+	c.confirms = confirms
+	c.returns = returns
+	return nil
+}
+
+// watchConnection waits for the underlying connection to die and rebuilds it
+// (channel included) so a broker restart self-heals without a process restart.
+func (c *Client) watchConnection() {
+	for {
+		notify := c.conn.NotifyClose(make(chan *amqp.Error, 1))
+		select {
+		case <-c.ctx.Done():
+			return
+		case err, ok := <-notify:
+			c.mu.Lock()
+			closed := c.closed
+			c.mu.Unlock()
+			if closed {
+				return
+			}
+			if ok && err != nil {
+				c.logger().Warn("rabbitmq connection lost; reconnecting", zap.Error(err))
+			}
+			if !c.reconnect() {
+				return
+			}
+		}
+	}
+}
+
+// reconnect dials a fresh connection and re-initializes the publish channel.
+// It returns false when the client was closed while reconnecting.
+func (c *Client) reconnect() bool {
+	for {
+		select {
+		case <-c.ctx.Done():
+			return false
+		default:
+		}
+		conn, err := c.dialFn(c.url)
+		if err != nil {
+			if !c.waitReconnect() {
+				return false
+			}
+			continue
+		}
+		c.mu.Lock()
+		if c.closed {
+			c.mu.Unlock()
+			_ = conn.Close()
+			return false
+		}
+		oldConn, oldCh := c.conn, c.ch
+		c.conn = conn
+		c.ch = nil
+		c.confirms = nil
+		c.returns = nil
+		if err := c.initChannelLocked(); err != nil {
+			c.mu.Unlock()
+			_ = conn.Close()
+			// The old connection/channel are still owned by this client; close
+			// them explicitly so a live-but-misconfigured broker cannot leak
+			// the previous connection (dead-connection reconnect is a no-op).
+			if oldCh != nil {
+				_ = oldCh.Close()
+			}
+			if oldConn != nil {
+				_ = oldConn.Close()
+			}
+			if !c.waitReconnect() {
+				return false
+			}
+			continue
+		}
+		c.mu.Unlock()
+		if oldCh != nil {
+			_ = oldCh.Close()
+		}
+		if oldConn != nil {
+			_ = oldConn.Close()
+		}
+		c.logger().Info("rabbitmq reconnected")
+		return true
+	}
+}
+
+func (c *Client) waitReconnect() bool {
+	t := time.NewTimer(c.reconnectWait)
+	defer t.Stop()
+	select {
+	case <-c.ctx.Done():
+		return false
+	case <-t.C:
+		return true
+	}
 }
 
 // Close releases resources.
 func (c *Client) Close() error {
-	if c.ch != nil {
-		_ = c.ch.Close()
+	c.mu.Lock()
+	if c.closed {
+		c.mu.Unlock()
+		return nil
 	}
-	if c.conn != nil {
-		return c.conn.Close()
+	c.closed = true
+	ch := c.ch
+	conn := c.conn
+	c.mu.Unlock()
+	if c.cancel != nil {
+		c.cancel()
+	}
+	if ch != nil {
+		_ = ch.Close()
+	}
+	if conn != nil {
+		return conn.Close()
 	}
 	return nil
 }
@@ -162,17 +326,19 @@ func (c *Client) PublishTranscode(ctx context.Context, body []byte) error {
 
 // PublishConfirmed publishes a message and blocks until RabbitMQ confirms it.
 // With mandatory=true, an unroutable message triggers a basic.return and is
-// reported as an error. Publishing is serialized so the next confirmation /
-// return on the shared channel unambiguously belongs to this call.
+// reported as an error. Confirmations are matched by delivery tag, so a late
+// ack from an earlier timed-out publish is ignored instead of being
+// misattributed to the next call.
 func (c *Client) PublishConfirmed(ctx context.Context, exchange, key string, mandatory bool, msg amqp.Publishing) error {
-	if c.ch == nil {
-		return fmt.Errorf("channel is nil")
-	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if c.confirms == nil {
+	if c.closed {
+		return fmt.Errorf("client closed")
+	}
+	if c.ch == nil || c.confirms == nil {
 		return fmt.Errorf("publisher confirm not enabled")
 	}
+	seq := c.ch.GetNextPublishSeqNo()
 	if err := c.ch.PublishWithContext(ctx, exchange, key, mandatory, false, msg); err != nil {
 		return err
 	}
@@ -181,27 +347,7 @@ func (c *Client) PublishConfirmed(ctx context.Context, exchange, key string, man
 	for {
 		select {
 		case <-ctx.Done():
-			// The message may already be on the wire and confirmed a moment
-			// after the caller's context fires. Give the broker a short grace
-			// window so a late confirmation cannot be misattributed to the
-			// next serialized publish.
-			select {
-			case conf, ok := <-c.confirms:
-				if !ok {
-					return fmt.Errorf("publish confirm channel closed")
-				}
-				if !conf.Ack {
-					return fmt.Errorf("publish nacked by broker")
-				}
-				return nil
-			case ret, ok := <-c.returns:
-				if ok {
-					return fmt.Errorf("publish returned by broker: %s (code %d)", ret.ReplyText, ret.ReplyCode)
-				}
-				return fmt.Errorf("publish return channel closed")
-			case <-time.After(500 * time.Millisecond):
-				return fmt.Errorf("publish confirm: %w", ctx.Err())
-			}
+			return fmt.Errorf("publish confirm: %w", ctx.Err())
 		case ret, ok := <-c.returns:
 			if ok {
 				return fmt.Errorf("publish returned by broker: %s (code %d)", ret.ReplyText, ret.ReplyCode)
@@ -210,6 +356,14 @@ func (c *Client) PublishConfirmed(ctx context.Context, exchange, key string, man
 		case conf, ok := <-c.confirms:
 			if !ok {
 				return fmt.Errorf("publish confirm channel closed")
+			}
+			if conf.DeliveryTag < seq {
+				// Late confirmation from an earlier timed-out publish;
+				// ignore it and keep waiting for ours.
+				continue
+			}
+			if conf.DeliveryTag > seq {
+				return fmt.Errorf("publish confirm tag mismatch: got %d, want %d", conf.DeliveryTag, seq)
 			}
 			if !conf.Ack {
 				return fmt.Errorf("publish nacked by broker")
@@ -228,6 +382,17 @@ func (c *Client) PublishConfirmed(ctx context.Context, exchange, key string, man
 			return fmt.Errorf("publish confirm timeout after %s", publishConfirmTimeout)
 		}
 	}
+}
+
+// connSnapshot returns the current connection under lock, or nil when closed.
+// Channels derived from a stale snapshot may fail; consumers retry on error.
+func (c *Client) connSnapshot() *amqp.Connection {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.closed {
+		return nil
+	}
+	return c.conn
 }
 
 // ConsumeTranscode registers a consumer (manual ack).
@@ -250,10 +415,11 @@ func (c *Client) ConsumeTranscodeDead(consumerTag string) (<-chan amqp.Delivery,
 // dead-letter queue, returning both for the consumer loop. The channel is
 // returned as a minimal closer so tests can substitute a fake.
 func (c *Client) NewTranscodeDeadConsumer(consumerTag string) (interface{ Close() error }, <-chan amqp.Delivery, error) {
-	if c.conn == nil {
+	conn := c.connSnapshot()
+	if conn == nil {
 		return nil, nil, fmt.Errorf("connection is nil")
 	}
-	ch, err := c.conn.Channel()
+	ch, err := conn.Channel()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -267,19 +433,21 @@ func (c *Client) NewTranscodeDeadConsumer(consumerTag string) (interface{ Close(
 
 // NewConsumerChannel opens a dedicated channel for consuming (separate from publish channel).
 func (c *Client) NewConsumerChannel() (*amqp.Channel, error) {
-	if c.conn == nil {
+	conn := c.connSnapshot()
+	if conn == nil {
 		return nil, fmt.Errorf("connection is nil")
 	}
-	return c.conn.Channel()
+	return conn.Channel()
 }
 
 // NewTranscodeConsumer opens a dedicated channel, applies QoS=1 and subscribes
 // to the main transcode queue. The caller owns closing the returned consumer.
 func (c *Client) NewTranscodeConsumer(consumerTag string) (TranscodeConsumer, <-chan amqp.Delivery, error) {
-	if c.conn == nil {
+	conn := c.connSnapshot()
+	if conn == nil {
 		return nil, nil, fmt.Errorf("connection is nil")
 	}
-	ch, err := c.conn.Channel()
+	ch, err := conn.Channel()
 	if err != nil {
 		return nil, nil, err
 	}

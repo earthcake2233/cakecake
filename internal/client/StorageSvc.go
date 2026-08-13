@@ -9,6 +9,7 @@ import (
 	video "cakecake/internal/model/video"
 	storage "cakecake/internal/service/storage"
 	io "io"
+	time "time"
 )
 
 // StorageSvc is the client-side contract for cakecake/internal/service/storage.StorageService.
@@ -24,6 +25,10 @@ type StorageSvc interface {
 	PurgeFavoriteFolderCoverURL(coverURL string, uid uint64, folderID uint64)
 	PurgeRemovedDynamicImageURLs(oldURLs []string, newURLs []string)
 	PurgeVideo(v video.Video)
+	DownloadFile(objectKey string, localPath string) error
+	Exists(objectKey string) (bool, error)
+	Size(objectKey string) (int64, error)
+	PresignPut(objectKey string, expiry time.Duration) (string, error)
 	UploadFile(objectKey string, localPath string) error
 	UploadReader(objectKey string, r io.Reader) error
 }
