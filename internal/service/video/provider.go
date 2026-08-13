@@ -32,6 +32,8 @@ type TranscodeDeadLetterFilter struct {
 // optional status filtering.
 func (p *VideoProviderImpl) ListTranscodeDeadLetters(ctx context.Context, f TranscodeDeadLetterFilter) ([]video.TranscodeDeadLetter, int64, error) {
 	q := p.db.WithContext(ctx).Model(&video.TranscodeDeadLetter{})
+	// Archived rows are retained for audit but hidden from the active list.
+	q = q.Where("archived_at IS NULL")
 	switch f.Status {
 	case "pending":
 		q = q.Where("processed_at IS NULL AND requeued_at IS NULL")

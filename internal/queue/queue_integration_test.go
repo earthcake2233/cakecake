@@ -6,6 +6,8 @@ import (
 	"context"
 	"os"
 	"testing"
+
+	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 func rabbitmqURL(t *testing.T) string {
@@ -50,6 +52,46 @@ func TestPublishTranscode_Integration(t *testing.T) {
 	}
 }
 
+func TestPublishConfirmed_Integration(t *testing.T) {
+	url := rabbitmqURL(t)
+	c, err := Dial(url)
+	if err != nil {
+		t.Fatalf("Dial failed: %v", err)
+	}
+	defer func() { _ = c.Close() }()
+
+	// Publish to the dead queue: durable, no TTL, so the confirmed message
+	// stays put and proves the confirm round-trip against a real broker.
+	err = c.PublishConfirmed(context.Background(), "", TranscodeDeadQueue, true, amqp.Publishing{
+		DeliveryMode: amqp.Persistent,
+		ContentType:  "application/json",
+		Body:         []byte(`{"integration":true}`),
+	})
+	if err != nil {
+		t.Fatalf("PublishConfirmed failed: %v", err)
+	}
+}
+
+func TestRetryQueueDeclaration_Integration(t *testing.T) {
+	url := rabbitmqURL(t)
+	c, err := Dial(url)
+	if err != nil {
+		t.Fatalf("Dial failed: %v", err)
+	}
+	defer func() { _ = c.Close() }()
+
+	for _, attempt := range []int{1, 2, 3} {
+		queueName := RetryQueueForAttempt(attempt)
+		err = c.PublishConfirmed(context.Background(), "", queueName, true, amqp.Publishing{
+			DeliveryMode: amqp.Persistent,
+			Body:         []byte(`{"retry_queue_test":true}`),
+		})
+		if err != nil {
+			t.Fatalf("publish to retry queue %s failed: %v", queueName, err)
+		}
+	}
+}
+
 func TestConsumeTranscode_Integration(t *testing.T) {
 	url := rabbitmqURL(t)
 	c, err := Dial(url)
@@ -62,6 +104,24 @@ func TestConsumeTranscode_Integration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ConsumeTranscode failed: %v", err)
 	}
+	if msgs == nil {
+		t.Fatal("message channel should not be nil")
+	}
+}
+
+func TestNewTranscodeConsumer_Integration(t *testing.T) {
+	url := rabbitmqURL(t)
+	c, err := Dial(url)
+	if err != nil {
+		t.Fatalf("Dial failed: %v", err)
+	}
+	defer func() { _ = c.Close() }()
+
+	ch, msgs, err := c.NewTranscodeConsumer("test-reconnect-integration")
+	if err != nil {
+		t.Fatalf("NewTranscodeConsumer failed: %v", err)
+	}
+	defer func() { _ = ch.Close() }()
 	if msgs == nil {
 		t.Fatal("message channel should not be nil")
 	}

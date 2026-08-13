@@ -3,6 +3,8 @@ package queue
 import (
 	"context"
 	"fmt"
+	"sync"
+	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 )
@@ -22,9 +24,48 @@ const TranscodeQueue = "mini_bili_transcode"
 // transcodes are observable and compensable instead of silently dropped.
 const TranscodeDeadQueue = "mini_bili_transcode_dead"
 
+// Retry queues carry jobs that failed with a retryable error. Each queue has
+// a fixed per-message TTL; when a message expires it is dead-lettered back to
+// TranscodeQueue, so backoff is owned by RabbitMQ instead of a worker sleep.
+const (
+	TranscodeRetryQueue30s = "mini_bili_transcode_retry_30s"
+	TranscodeRetryQueue60s = "mini_bili_transcode_retry_60s"
+	TranscodeRetryQueue90s = "mini_bili_transcode_retry_90s"
+)
+
+// RetryQueueForAttempt returns the retry queue for a 1-based retry attempt
+// (attempt 1 = 30s, 2 = 60s, 3+ = 90s).
+func RetryQueueForAttempt(attempt int) string {
+	switch attempt {
+	case 1:
+		return TranscodeRetryQueue30s
+	case 2:
+		return TranscodeRetryQueue60s
+	default:
+		return TranscodeRetryQueue90s
+	}
+}
+
+// retryQueues is the ordered set of delayed queues declared at Dial time.
+var retryQueues = []struct {
+	name string
+	ttl  time.Duration
+}{
+	{TranscodeRetryQueue30s, 30 * time.Second},
+	{TranscodeRetryQueue60s, 60 * time.Second},
+	{TranscodeRetryQueue90s, 90 * time.Second},
+}
+
+// publishConfirmTimeout bounds how long PublishConfirmed waits for a broker
+// confirmation before failing the call.
+const publishConfirmTimeout = 5 * time.Second
+
 // amqpChannel is the subset of *amqp.Channel needed by Client.
 type amqpChannel interface {
 	PublishWithContext(ctx context.Context, exchange, key string, mandatory, immediate bool, msg amqp.Publishing) error
+	Confirm(noWait bool) error
+	NotifyPublish(confirm chan amqp.Confirmation) chan amqp.Confirmation
+	NotifyReturn(returns chan amqp.Return) chan amqp.Return
 	Consume(queue, consumer string, autoAck, exclusive, noLocal, noWait bool, args amqp.Table) (<-chan amqp.Delivery, error)
 	QueueDeclare(name string, durable, autoDelete, exclusive, noWait bool, args amqp.Table) (amqp.Queue, error)
 	Close() error
@@ -37,6 +78,17 @@ var _ amqpChannel = (*amqp.Channel)(nil)
 type Client struct {
 	conn *amqp.Connection
 	ch   amqpChannel
+
+	mu       sync.Mutex
+	confirms <-chan amqp.Confirmation
+	returns  <-chan amqp.Return
+}
+
+// TranscodeConsumer is the minimal channel surface the main transcode
+// consumer loop needs, kept small so the reconnect loop is unit-testable.
+type TranscodeConsumer interface {
+	Close() error
+	Qos(prefetchCount, prefetchSize int, global bool) error
 }
 
 // Dial connects to RabbitMQ and declares the transcode queue.
@@ -60,7 +112,30 @@ func Dial(url string) (*Client, error) {
 		_ = conn.Close()
 		return nil, fmt.Errorf("dead queue declare: %w", err)
 	}
-	return &Client{conn: conn, ch: ch}, nil
+	// Delayed retry queues: after the per-queue TTL expires, RabbitMQ
+	// dead-letters the message back to the main transcode queue.
+	for _, rq := range retryQueues {
+		args := amqp.Table{
+			"x-message-ttl":             int64(rq.ttl.Milliseconds()),
+			"x-dead-letter-exchange":    "",
+			"x-dead-letter-routing-key": TranscodeQueue,
+		}
+		if _, err := ch.QueueDeclare(rq.name, true, false, false, false, args); err != nil {
+			_ = ch.Close()
+			_ = conn.Close()
+			return nil, fmt.Errorf("retry queue %s declare: %w", rq.name, err)
+		}
+	}
+	// Publisher confirms: every PublishConfirmed waits for the broker's ack
+	// (or a basic.return for unroutable mandatory messages).
+	confirms := ch.NotifyPublish(make(chan amqp.Confirmation, 32))
+	returns := ch.NotifyReturn(make(chan amqp.Return, 32))
+	if err := ch.Confirm(false); err != nil {
+		_ = ch.Close()
+		_ = conn.Close()
+		return nil, fmt.Errorf("publisher confirm: %w", err)
+	}
+	return &Client{conn: conn, ch: ch, confirms: confirms, returns: returns}, nil
 }
 
 // Close releases resources.
@@ -74,16 +149,85 @@ func (c *Client) Close() error {
 	return nil
 }
 
-// PublishTranscode sends a persistent JSON body to the transcode queue.
+// PublishTranscode sends a persistent JSON body to the transcode queue and
+// waits for a broker confirmation, so enqueue callers know the job actually
+// reached RabbitMQ.
 func (c *Client) PublishTranscode(ctx context.Context, body []byte) error {
-	if c.ch == nil {
-		return fmt.Errorf("channel is nil")
-	}
-	return c.ch.PublishWithContext(ctx, "", TranscodeQueue, false, false, amqp.Publishing{
+	return c.PublishConfirmed(ctx, "", TranscodeQueue, true, amqp.Publishing{
 		DeliveryMode: amqp.Persistent,
 		ContentType:  "application/json",
 		Body:         body,
 	})
+}
+
+// PublishConfirmed publishes a message and blocks until RabbitMQ confirms it.
+// With mandatory=true, an unroutable message triggers a basic.return and is
+// reported as an error. Publishing is serialized so the next confirmation /
+// return on the shared channel unambiguously belongs to this call.
+func (c *Client) PublishConfirmed(ctx context.Context, exchange, key string, mandatory bool, msg amqp.Publishing) error {
+	if c.ch == nil {
+		return fmt.Errorf("channel is nil")
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.confirms == nil {
+		return fmt.Errorf("publisher confirm not enabled")
+	}
+	if err := c.ch.PublishWithContext(ctx, exchange, key, mandatory, false, msg); err != nil {
+		return err
+	}
+	timeout := time.NewTimer(publishConfirmTimeout)
+	defer timeout.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			// The message may already be on the wire and confirmed a moment
+			// after the caller's context fires. Give the broker a short grace
+			// window so a late confirmation cannot be misattributed to the
+			// next serialized publish.
+			select {
+			case conf, ok := <-c.confirms:
+				if !ok {
+					return fmt.Errorf("publish confirm channel closed")
+				}
+				if !conf.Ack {
+					return fmt.Errorf("publish nacked by broker")
+				}
+				return nil
+			case ret, ok := <-c.returns:
+				if ok {
+					return fmt.Errorf("publish returned by broker: %s (code %d)", ret.ReplyText, ret.ReplyCode)
+				}
+				return fmt.Errorf("publish return channel closed")
+			case <-time.After(500 * time.Millisecond):
+				return fmt.Errorf("publish confirm: %w", ctx.Err())
+			}
+		case ret, ok := <-c.returns:
+			if ok {
+				return fmt.Errorf("publish returned by broker: %s (code %d)", ret.ReplyText, ret.ReplyCode)
+			}
+			return fmt.Errorf("publish return channel closed")
+		case conf, ok := <-c.confirms:
+			if !ok {
+				return fmt.Errorf("publish confirm channel closed")
+			}
+			if !conf.Ack {
+				return fmt.Errorf("publish nacked by broker")
+			}
+			// RabbitMQ sends basic.return before basic.ack for unroutable
+			// messages; drain a return that is already buffered.
+			select {
+			case ret, ok := <-c.returns:
+				if ok {
+					return fmt.Errorf("publish returned by broker: %s (code %d)", ret.ReplyText, ret.ReplyCode)
+				}
+			default:
+			}
+			return nil
+		case <-timeout.C:
+			return fmt.Errorf("publish confirm timeout after %s", publishConfirmTimeout)
+		}
+	}
 }
 
 // ConsumeTranscode registers a consumer (manual ack).
@@ -127,4 +271,26 @@ func (c *Client) NewConsumerChannel() (*amqp.Channel, error) {
 		return nil, fmt.Errorf("connection is nil")
 	}
 	return c.conn.Channel()
+}
+
+// NewTranscodeConsumer opens a dedicated channel, applies QoS=1 and subscribes
+// to the main transcode queue. The caller owns closing the returned consumer.
+func (c *Client) NewTranscodeConsumer(consumerTag string) (TranscodeConsumer, <-chan amqp.Delivery, error) {
+	if c.conn == nil {
+		return nil, nil, fmt.Errorf("connection is nil")
+	}
+	ch, err := c.conn.Channel()
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := ch.Qos(1, 0, false); err != nil {
+		_ = ch.Close()
+		return nil, nil, err
+	}
+	msgs, err := ch.Consume(TranscodeQueue, consumerTag, false, false, false, false, nil)
+	if err != nil {
+		_ = ch.Close()
+		return nil, nil, err
+	}
+	return ch, msgs, nil
 }

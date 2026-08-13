@@ -38,7 +38,7 @@ func newMockAPISimple(t *testing.T, gormDB *gorm.DB) *API {
 	t.Helper()
 	commentSvc := comment.NewCommentService(gormDB, nil, zap.NewNop(), nil, nil, nil, nil, nil, nil)
 	viewHistorySvc := viewhistory.NewViewHistoryService(gormDB, nil, zap.NewNop())
-	videoSvc := video.NewVideoService(gormDB, nil, zap.NewNop(), nil, nil)
+	videoSvc := video.NewVideoService(gormDB, nil, zap.NewNop(), nil, nil, nil)
 	hotSearchSvc := hotsearch.NewHotSearchService(gormDB, nil)
 	articleSvc := article.NewArticleService(gormDB, nil, zap.NewNop(), nil)
 	userSvc := user.NewUserService(gormDB, zap.NewNop())

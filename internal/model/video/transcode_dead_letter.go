@@ -16,4 +16,7 @@ type TranscodeDeadLetter struct {
 	// RequeuedAt / RequeuedCount track manual compensation via the admin API.
 	RequeuedAt    *time.Time
 	RequeuedCount int `gorm:"type:bigint;not null;default:0"`
+	// ArchivedAt is set by the retention job instead of physically deleting
+	// the audit row: dead letters are archived, never silently destroyed.
+	ArchivedAt *time.Time
 }

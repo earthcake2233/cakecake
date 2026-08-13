@@ -1,8 +1,11 @@
 package ffmpeg
 
 import (
+	"context"
 	"os"
+	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestInit_OverrideBothToSameValue(t *testing.T) {
@@ -114,12 +117,34 @@ func TestProbeDurationSeconds_Skip(t *testing.T) {
 
 func TestTranscodeToH264MP4_Skip(t *testing.T) {
 	t.Skip("TranscodeToH264MP4 requires ffmpeg on PATH")
-	_, _ = TranscodeToH264MP4("/nonexistent/input.mp4", "/tmp/output.mp4")
+	_, _ = TranscodeToH264MP4(context.Background(), "/nonexistent/input.mp4", "/tmp/output.mp4")
 }
 
 func TestScreenshotJPEG_Skip(t *testing.T) {
 	t.Skip("ScreenshotJPEG requires ffmpeg on PATH")
-	_, _ = ScreenshotJPEG("/nonexistent/input.mp4", "/tmp/screenshot.jpg", 10.5)
+	_, _ = ScreenshotJPEG(context.Background(), "/nonexistent/input.mp4", "/tmp/screenshot.jpg", 10.5)
+}
+
+// TestTranscodeToH264MP4_ContextTimeoutKillsProcess proves the context is
+// wired into the child process: a hung encoder is killed instead of blocking
+// the worker forever.
+func TestTranscodeToH264MP4_ContextTimeoutKillsProcess(t *testing.T) {
+	script := filepath.Join(t.TempDir(), "fakeffmpeg.sh")
+	// exec replaces the shell with sleep so no grandchild inherits the
+	// stderr pipe; CommandContext's Kill then returns promptly.
+	if err := os.WriteFile(script, []byte("#!/bin/sh\nexec sleep 10\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	orig := ffmpegExe
+	ffmpegExe = script
+	defer func() { ffmpegExe = orig }()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
+	defer cancel()
+	_, err := TranscodeToH264MP4(ctx, "input", filepath.Join(t.TempDir(), "out.mp4"))
+	if err == nil {
+		t.Fatal("expected the context timeout to kill the ffmpeg child process")
+	}
 }
 
 func TestVarDefaults(t *testing.T) {

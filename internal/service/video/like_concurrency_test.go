@@ -38,7 +38,7 @@ func TestVideoLike_ConcurrentDistinctUsers(t *testing.T) {
 	ctx := context.Background()
 	servicetest.SeedUser(t, db, 1, "owner")
 	require.NoError(t, db.Create(&video.Video{ID: 10, UserID: 1, Title: "v", Status: video.StatusPublished}).Error)
-	s := NewVideoService(db, nil, zap.NewNop(), nil, nil)
+	s := NewVideoService(db, nil, zap.NewNop(), nil, nil, nil)
 
 	const n = 10
 	var wg sync.WaitGroup
@@ -80,7 +80,7 @@ func TestVideoLike_ConcurrentSameUserNoDuplicate(t *testing.T) {
 	ctx := context.Background()
 	servicetest.SeedUser(t, db, 1, "alice")
 	require.NoError(t, db.Create(&video.Video{ID: 20, UserID: 1, Title: "v", Status: video.StatusPublished}).Error)
-	s := NewVideoService(db, nil, zap.NewNop(), nil, nil)
+	s := NewVideoService(db, nil, zap.NewNop(), nil, nil, nil)
 
 	const n = 8
 	var wg sync.WaitGroup

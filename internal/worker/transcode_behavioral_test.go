@@ -12,7 +12,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/stretchr/testify/require"
@@ -26,14 +25,14 @@ import (
 // them, and reports success for every operation.
 type writingFFmpeg struct{}
 
-func (writingFFmpeg) TranscodeToH264MP4(_ string, outMP4 string) (string, error) {
+func (writingFFmpeg) TranscodeToH264MP4(_ context.Context, _ string, outMP4 string) (string, error) {
 	if err := os.WriteFile(outMP4, []byte("fake mp4"), 0o644); err != nil {
 		return "", err
 	}
 	return "", nil
 }
 
-func (writingFFmpeg) ScreenshotJPEG(_ string, outJPEG string, _ float64) (string, error) {
+func (writingFFmpeg) ScreenshotJPEG(_ context.Context, _ string, outJPEG string, _ float64) (string, error) {
 	if err := os.WriteFile(outJPEG, []byte("fake jpg"), 0o644); err != nil {
 		return "", err
 	}
@@ -44,10 +43,22 @@ func (writingFFmpeg) IsPermanentTranscodeFailure(string) bool { return false }
 
 type recordingStore struct {
 	uploads []string
+	deleted []string
 }
 
 func (s *recordingStore) UploadFile(objectKey, localPath string) error {
 	s.uploads = append(s.uploads, objectKey)
+	return nil
+}
+
+func (s *recordingStore) DownloadFile(_ string, _ string) error {
+	// Tests seed source files locally before the call; OSS-keyed behavior
+	// is covered by fakeObjectStore, so no-op downloads are fine here.
+	return nil
+}
+
+func (s *recordingStore) DeleteObject(objectKey string) error {
+	s.deleted = append(s.deleted, objectKey)
 	return nil
 }
 
@@ -183,10 +194,6 @@ func TestBehavioral_TranscodeRepublishFailureKeepsRawSource(t *testing.T) {
 	rawPath := filepath.Join(tmp, "raw.mp4")
 	require.NoError(t, os.WriteFile(rawPath, []byte("raw"), 0o644))
 
-	oldDelay := transcodeRetryBaseDelay
-	transcodeRetryBaseDelay = time.Millisecond
-	defer func() { transcodeRetryBaseDelay = oldDelay }()
-
 	body, _ := json.Marshal(TranscodeJob{VideoID: 22, RawPath: rawPath, RetryCount: 2})
 	ack := &fakeAck{}
 	store := &recordingStore{}
@@ -210,12 +217,12 @@ type spyFFmpeg struct {
 	called bool
 }
 
-func (s *spyFFmpeg) TranscodeToH264MP4(_, _ string) (string, error) {
+func (s *spyFFmpeg) TranscodeToH264MP4(_ context.Context, _, _ string) (string, error) {
 	s.called = true
 	return "", errors.New("should not run on redelivery")
 }
 
-func (s *spyFFmpeg) ScreenshotJPEG(_, _ string, _ float64) (string, error) {
+func (s *spyFFmpeg) ScreenshotJPEG(_ context.Context, _, _ string, _ float64) (string, error) {
 	s.called = true
 	return "", errors.New("should not run on redelivery")
 }
@@ -291,4 +298,71 @@ func TestBehavioral_TranscodeRedelivery_MissingVideoAcks(t *testing.T) {
 	require.Empty(t, store.uploads)
 	_, err := os.Stat(raw)
 	require.ErrorIs(t, err, os.ErrNotExist, "staging raw should be cleaned on missing video")
+}
+
+// TestBehavioral_TranscodeSuccessWithOSSKeys verifies the durable-source path:
+// the job carries OSS object keys, the worker downloads them to temp files,
+// transcodes, uploads the results, and deletes both the temp copies and the
+// source objects on success.
+func TestBehavioral_TranscodeSuccessWithOSSKeys(t *testing.T) {
+	db := newBehavioralWorkerDB(t)
+	require.NoError(t, db.Create(&user.User{ID: 1, Username: "uploader", PasswordHash: "x"}).Error)
+	require.NoError(t, db.Create(&video.Video{ID: 30, UserID: 1, Title: "v", Status: video.StatusProcessing}).Error)
+
+	tmp := t.TempDir()
+	cfg := &config.C{
+		TempUploadDir:       tmp,
+		OSSPublicURLPrefix:  "https://cdn.example.com",
+		VideoReviewRequired: false,
+	}
+	store := &fakeObjectStore{}
+	ack := &fakeAck{}
+	body, _ := json.Marshal(TranscodeJob{VideoID: 30, RawKey: "raws/30/source.mp4", CoverKey: "raws/30/cover.png"})
+	handleDeliveryWith(context.Background(), cfg, db, nil, store, nil,
+		amqp.Delivery{Body: body, Acknowledger: ack}, writingFFmpeg{}, zap.NewNop())
+
+	require.Equal(t, 1, ack.acked)
+	require.Equal(t, []string{"videos/30.mp4", "covers/30.png"}, store.uploads)
+	require.ElementsMatch(t, []string{"raws/30/source.mp4", "raws/30/cover.png"}, store.deleted,
+		"source objects are released after a successful transcode")
+
+	var v video.Video
+	require.NoError(t, db.First(&v, 30).Error)
+	require.Equal(t, video.StatusPublished, v.Status)
+	for _, p := range []string{
+		filepath.Join(tmp, "30_source.mp4"),
+		filepath.Join(tmp, "30_cover.png"),
+		filepath.Join(tmp, "30_out.mp4"),
+		filepath.Join(tmp, "30_cover.jpg"),
+	} {
+		_, err := os.Stat(p)
+		require.ErrorIs(t, err, os.ErrNotExist, "temp file %s should be removed", p)
+	}
+}
+
+// TestBehavioral_TranscodeDownloadFailureRequeues verifies that a failed
+// source download schedules a retry with the OSS key intact: the object is
+// the compensation input and must survive, only the local copy is cleaned.
+func TestBehavioral_TranscodeDownloadFailureRequeues(t *testing.T) {
+	db := newBehavioralWorkerDB(t)
+	require.NoError(t, db.Create(&user.User{ID: 1, Username: "uploader", PasswordHash: "x"}).Error)
+	require.NoError(t, db.Create(&video.Video{ID: 31, UserID: 1, Title: "v", Status: video.StatusProcessing}).Error)
+
+	tmp := t.TempDir()
+	store := &fakeObjectStore{downloadErr: errors.New("oss down")}
+	pub := &fakePublisher{}
+	ack := &fakeAck{}
+	body, _ := json.Marshal(TranscodeJob{VideoID: 31, RawKey: "raws/31/source.mp4"})
+	handleDeliveryWith(context.Background(), &config.C{TempUploadDir: tmp}, db, pub, store, nil,
+		amqp.Delivery{Body: body, Acknowledger: ack}, writingFFmpeg{}, zap.NewNop())
+
+	require.Equal(t, 1, ack.acked)
+	require.Empty(t, store.uploads)
+	require.Len(t, pub.published, 1)
+	require.Equal(t, queue.RetryQueueForAttempt(1), pub.keys[0])
+	var requeued TranscodeJob
+	require.NoError(t, json.Unmarshal(pub.published[0].Body, &requeued))
+	require.Equal(t, 1, requeued.RetryCount)
+	require.Equal(t, "raws/31/source.mp4", requeued.RawKey, "OSS source key must survive retry scheduling")
+	require.Empty(t, store.deleted)
 }

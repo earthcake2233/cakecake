@@ -125,6 +125,7 @@ services:
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
       SENSITIVE_WORDS_FILE: ./configs/sensitive_words.txt
       TEMP_UPLOAD_DIR: /data/tmp
+      TRANSCODE_TIMEOUT: ${TRANSCODE_TIMEOUT:-10m}
       FFPROBE_PATH: ${FFPROBE_PATH:-ffprobe}
       FFMPEG_PATH: ${FFMPEG_PATH:-ffmpeg}
       IP2REGION_V4_XDB: ${IP2REGION_V4_XDB:-./configs/ip2region_v4.xdb}

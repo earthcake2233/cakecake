@@ -4,6 +4,7 @@ import (
 	"cakecake/internal/model/video"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -28,21 +29,21 @@ type TranscodeJob = queue.TranscodeJob
 
 // ffmpegOps isolates external ffmpeg calls so the pipeline is unit-testable.
 type ffmpegOps interface {
-	TranscodeToH264MP4(rawPath, outMP4 string) (stderr string, err error)
-	ScreenshotJPEG(inPath, outPath string, second float64) (stderr string, err error)
+	TranscodeToH264MP4(ctx context.Context, rawPath, outMP4 string) (stderr string, err error)
+	ScreenshotJPEG(ctx context.Context, inPath, outPath string, second float64) (stderr string, err error)
 	IsPermanentTranscodeFailure(stderr string) bool
 }
 
 type realFFmpegOps struct{}
 
 // TranscodeToH264MP4 runs the real ffmpeg transcode.
-func (realFFmpegOps) TranscodeToH264MP4(rawPath, outMP4 string) (string, error) {
-	return ffmpeg.TranscodeToH264MP4(rawPath, outMP4)
+func (realFFmpegOps) TranscodeToH264MP4(ctx context.Context, rawPath, outMP4 string) (string, error) {
+	return ffmpeg.TranscodeToH264MP4(ctx, rawPath, outMP4)
 }
 
 // ScreenshotJPEG captures a frame from a video via ffmpeg.
-func (realFFmpegOps) ScreenshotJPEG(inPath, outPath string, second float64) (string, error) {
-	return ffmpeg.ScreenshotJPEG(inPath, outPath, second)
+func (realFFmpegOps) ScreenshotJPEG(ctx context.Context, inPath, outPath string, second float64) (string, error) {
+	return ffmpeg.ScreenshotJPEG(ctx, inPath, outPath, second)
 }
 
 // IsPermanentTranscodeFailure reports whether ffmpeg stderr indicates a permanent failure.
@@ -52,51 +53,88 @@ func (realFFmpegOps) IsPermanentTranscodeFailure(stderr string) bool {
 
 // transcodePublisher is the minimal channel surface needed to republish a job.
 type transcodePublisher interface {
-	PublishWithContext(ctx context.Context, exchange, key string, mandatory, immediate bool, msg amqp.Publishing) error
+	PublishConfirmed(ctx context.Context, exchange, key string, mandatory bool, msg amqp.Publishing) error
 }
 
 // objectStore is the minimal object-storage surface the pipeline needs.
 type objectStore interface {
 	UploadFile(objectKey, localPath string) error
+	DownloadFile(objectKey, localPath string) error
+	DeleteObject(objectKey string) error
 }
 
-// transcodeRetryBaseDelay is the base retry backoff; variable for tests.
-var transcodeRetryBaseDelay = 30 * time.Second
+// maxTranscodeRetries is the number of retryable attempts before a job is
+// dead-lettered. Retry backoff is owned by RabbitMQ TTL queues.
+const maxTranscodeRetries = 3
 
-// StartTranscodeConsumer runs a blocking AMQP consumer loop.
+// defaultTranscodeTimeout bounds one ffmpeg run when TRANSCODE_TIMEOUT is
+// unset or the config is nil (tests).
+const defaultTranscodeTimeout = 10 * time.Minute
+
+func transcodeTimeout(cfg *config.C) time.Duration {
+	if cfg != nil && cfg.TranscodeTimeout > 0 {
+		return cfg.TranscodeTimeout
+	}
+	return defaultTranscodeTimeout
+}
+
+// transcodeSubscriber combines subscription and confirmed publishing so the
+// reconnect loop is unit-testable without a real broker.
+type transcodeSubscriber interface {
+	transcodePublisher
+	NewTranscodeConsumer(consumerTag string) (queue.TranscodeConsumer, <-chan amqp.Delivery, error)
+}
+
+// transcodeReconnectDelay is the backoff after a subscribe error or channel
+// loss; variable for tests.
+var transcodeReconnectDelay = 3 * time.Second
+
+// StartTranscodeConsumer runs a blocking AMQP consumer loop. Unlike the old
+// fail-fast design, a closed channel or broker blip no longer stops the
+// worker silently: the loop reconnects with backoff, so queued jobs do not
+// pile up unattended.
 func StartTranscodeConsumer(ctx context.Context, cfg *config.C, db *gorm.DB, mq *queue.Client, ossClient *storage.OSS, esc *search.Client) {
-	ch, err := mq.NewConsumerChannel()
-	if err != nil {
-		logger.L.Fatal("transcode: 无法打开消费 Channel（请检查 RabbitMQ）", zap.Error(err))
-	}
-	defer ch.Close()
-	if err := ch.Qos(1, 0, false); err != nil {
-		logger.L.Fatal("transcode: QoS 失败", zap.Error(err))
-	}
-	msgs, err := ch.Consume(queue.TranscodeQueue, "transcode-worker", false, false, false, false, nil)
-	if err != nil {
-		logger.L.Fatal("transcode: 无法订阅队列 "+queue.TranscodeQueue+"（任务将堆积、OSS 不会更新）", zap.Error(err))
-	}
-	pubCh, err := mq.NewConsumerChannel()
-	if err != nil {
-		logger.L.Fatal("transcode: 无法打开重投 Channel", zap.Error(err))
-	}
-	defer pubCh.Close()
+	consumeTranscodeLoop(ctx, cfg, db, mq, ossClient, esc, logger.L)
+}
 
+func consumeTranscodeLoop(ctx context.Context, cfg *config.C, db *gorm.DB, sub transcodeSubscriber, ossClient *storage.OSS, esc *search.Client, lg *zap.Logger) {
 	for {
+		if ctx.Err() != nil {
+			return
+		}
+		if err := consumeTranscodeOnce(ctx, cfg, db, sub, ossClient, esc, lg); err != nil {
+			lg.Warn("transcode consumer: subscribe", zap.Error(err))
+		}
 		select {
 		case <-ctx.Done():
 			return
-		case d, ok := <-msgs:
-			if !ok {
-				return
-			}
-			handleDelivery(ctx, cfg, db, ch, pubCh, ossClient, esc, d)
+		case <-time.After(transcodeReconnectDelay):
 		}
 	}
 }
 
-func handleDelivery(ctx context.Context, cfg *config.C, db *gorm.DB, ch, pubCh *amqp.Channel, ossClient *storage.OSS, esc *search.Client, d amqp.Delivery) {
+// consumeTranscodeOnce drains one main-queue channel. It returns when the
+// channel closes or the context is cancelled; the caller reconnects.
+func consumeTranscodeOnce(ctx context.Context, cfg *config.C, db *gorm.DB, sub transcodeSubscriber, ossClient *storage.OSS, esc *search.Client, lg *zap.Logger) error {
+	ch, msgs, err := sub.NewTranscodeConsumer("transcode-worker")
+	if err != nil {
+		return err
+	}
+	defer ch.Close()
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case d, ok := <-msgs:
+			if !ok {
+				return errors.New("transcode consumer channel closed")
+			}
+			handleDelivery(ctx, cfg, db, sub, ossClient, esc, d)
+		}
+	}
+}
+
+func handleDelivery(ctx context.Context, cfg *config.C, db *gorm.DB, pubCh transcodePublisher, ossClient *storage.OSS, esc *search.Client, d amqp.Delivery) {
 	var store objectStore
 	if ossClient != nil {
 		store = ossClient
@@ -144,22 +182,61 @@ func handleDeliveryWith(ctx context.Context, cfg *config.C, db *gorm.DB, pubCh t
 		return
 	}
 
+	// The job may reference OSS object keys (RawKey/CoverKey) instead of a
+	// local path: download the durable source to this worker before
+	// transcoding, so any host/container can process it. Legacy jobs with
+	// only local paths keep working unchanged.
+	var downloadedSources []string
+	rawLocal := job.RawPath
+	if job.RawKey != "" {
+		rawLocal = filepath.Join(cfg.TempUploadDir, fmt.Sprintf("%d_source%s", job.VideoID, filepath.Ext(job.RawKey)))
+		if err := ossClient.DownloadFile(job.RawKey, rawLocal); err != nil {
+			lg.Warn("download raw source", zap.Uint64("video_id", job.VideoID), zap.String("key", job.RawKey), zap.Error(err))
+			if requeueOrFail(ctx, db, pubCh, lg, job, fmt.Sprintf("下载原始视频失败: %v", err), rawLocal) {
+				cleanupPaths(rawLocal)
+			}
+			ackDelivery(lg, d)
+			return
+		}
+		downloadedSources = append(downloadedSources, rawLocal)
+	}
+	coverLocal := job.CoverPath
+	if job.CoverKey != "" {
+		coverLocal = filepath.Join(cfg.TempUploadDir, fmt.Sprintf("%d_cover%s", job.VideoID, filepath.Ext(job.CoverKey)))
+		if err := ossClient.DownloadFile(job.CoverKey, coverLocal); err != nil {
+			lg.Warn("download cover source", zap.Uint64("video_id", job.VideoID), zap.String("key", job.CoverKey), zap.Error(err))
+			cleanup := append(append([]string{}, downloadedSources...), coverLocal)
+			if requeueOrFail(ctx, db, pubCh, lg, job, fmt.Sprintf("下载封面失败: %v", err), cleanup...) {
+				cleanupPaths(cleanup...)
+			}
+			ackDelivery(lg, d)
+			return
+		}
+		downloadedSources = append(downloadedSources, coverLocal)
+	}
+
 	outMP4 := filepath.Join(cfg.TempUploadDir, fmt.Sprintf("%d_out.mp4", job.VideoID))
 	coverOut := filepath.Join(cfg.TempUploadDir, fmt.Sprintf("%d_cover.jpg", job.VideoID))
 	_ = os.Remove(outMP4)
 	_ = os.Remove(coverOut)
 
 	lg.Info("transcode ffmpeg start", zap.Uint64("video_id", job.VideoID))
-	stderr, err := ff.TranscodeToH264MP4(job.RawPath, outMP4)
+	ffCtx, cancelFF := context.WithTimeout(ctx, transcodeTimeout(cfg))
+	defer cancelFF()
+	stderr, err := ff.TranscodeToH264MP4(ffCtx, rawLocal, outMP4)
 	if err != nil {
 		lg.Warn("ffmpeg transcode failed", zap.Uint64("video_id", job.VideoID), zap.Error(err), zap.String("stderr", stderr))
 		if ff.IsPermanentTranscodeFailure(stderr) {
 			failVideo(db, job.VideoID, strings.TrimSpace(stderr))
-			cleanupPaths(job.RawPath, job.CoverPath, outMP4, coverOut, "")
+			cleanupPaths(rawLocal, coverLocal, outMP4, coverOut, "")
+			deleteSourceObjects(ossClient, lg, job.RawKey, job.CoverKey)
 			ackDelivery(lg, d)
 			return
 		}
-		requeueOrFail(ctx, cfg, db, pubCh, lg, job, stderr, outMP4, coverOut)
+		extras := append(regenerableExtras(outMP4, coverOut, "", coverLocal), downloadedSources...)
+		if requeueOrFail(ctx, db, pubCh, lg, job, stderr, extras...) {
+			cleanupPaths(extras...)
+		}
 		ackDelivery(lg, d)
 		return
 	}
@@ -167,24 +244,28 @@ func handleDeliveryWith(ctx context.Context, cfg *config.C, db *gorm.DB, pubCh t
 
 	var finalCoverPath string
 	var coverExt string
-	if job.CoverPath != "" {
-		finalCoverPath = job.CoverPath
-		coverExt = strings.TrimPrefix(strings.ToLower(filepath.Ext(job.CoverPath)), ".")
+	if coverLocal != "" {
+		finalCoverPath = coverLocal
+		coverExt = strings.TrimPrefix(strings.ToLower(filepath.Ext(coverLocal)), ".")
 		if coverExt == "jpeg" {
 			coverExt = "jpg"
 		}
 	} else {
 		// Default cover: captures a frame from the transcoded H.264 MP4 (more reliable than capturing from the source container).
-		se, err := ff.ScreenshotJPEG(outMP4, coverOut, 1)
+		se, err := ff.ScreenshotJPEG(ffCtx, outMP4, coverOut, 1)
 		if err != nil {
 			lg.Warn("ffmpeg screenshot failed", zap.Error(err), zap.String("stderr", se))
 			if ff.IsPermanentTranscodeFailure(se) {
 				failVideo(db, job.VideoID, strings.TrimSpace(se))
-				cleanupPaths(job.RawPath, job.CoverPath, outMP4, coverOut, "")
+				cleanupPaths(rawLocal, coverLocal, outMP4, coverOut, "")
+				deleteSourceObjects(ossClient, lg, job.RawKey, job.CoverKey)
 				ackDelivery(lg, d)
 				return
 			}
-			requeueOrFail(ctx, cfg, db, pubCh, lg, job, se, outMP4, coverOut)
+			extras := append(regenerableExtras(outMP4, coverOut, coverOut, coverLocal), downloadedSources...)
+			if requeueOrFail(ctx, db, pubCh, lg, job, se, extras...) {
+				cleanupPaths(extras...)
+			}
 			ackDelivery(lg, d)
 			return
 		}
@@ -198,17 +279,20 @@ func handleDeliveryWith(ctx context.Context, cfg *config.C, db *gorm.DB, pubCh t
 	lg.Info("transcode oss upload start", zap.Uint64("video_id", job.VideoID), zap.String("video_key", videoKey), zap.String("cover_key", coverKey))
 	if err := ossClient.UploadFile(videoKey, outMP4); err != nil {
 		lg.Error("oss upload video", zap.Error(err))
-		if requeueOrFail(ctx, cfg, db, pubCh, lg, job, err.Error(), outMP4, coverOut, finalCoverPath) {
-			// Retries still depend on RawPath / user cover: only delete regenerable intermediate artifacts (next round will re-transcode / re-capture).
-			cleanupPaths(outMP4, coverOut)
+		extras := append(regenerableExtras(outMP4, coverOut, finalCoverPath, coverLocal), downloadedSources...)
+		if requeueOrFail(ctx, db, pubCh, lg, job, err.Error(), extras...) {
+			// Retries still depend on RawPath / user cover: only delete
+			// regenerable intermediate artifacts.
+			cleanupPaths(extras...)
 		}
 		ackDelivery(lg, d)
 		return
 	}
 	if err := ossClient.UploadFile(coverKey, finalCoverPath); err != nil {
 		lg.Error("oss upload cover", zap.Error(err))
-		if requeueOrFail(ctx, cfg, db, pubCh, lg, job, err.Error(), outMP4, coverOut, finalCoverPath) {
-			cleanupPaths(outMP4, coverOut)
+		extras := append(regenerableExtras(outMP4, coverOut, finalCoverPath, coverLocal), downloadedSources...)
+		if requeueOrFail(ctx, db, pubCh, lg, job, err.Error(), extras...) {
+			cleanupPaths(extras...)
 		}
 		ackDelivery(lg, d)
 		return
@@ -224,14 +308,32 @@ func handleDeliveryWith(ctx context.Context, cfg *config.C, db *gorm.DB, pubCh t
 	if cfg.VideoReviewRequired {
 		updates["status"] = video.StatusPendingReview
 	}
+	// The OSS objects are already durable; a DB failure must not be swallowed.
+	// Requeue with retry budget instead of Acking a video that would stay
+	// stuck in processing forever. Raw media is kept for compensation.
 	if err := db.Model(&video.Video{}).Where("id = ?", job.VideoID).Updates(updates).Error; err != nil {
-		lg.Error("db update after transcode", zap.Error(err))
-	} else if !cfg.VideoReviewRequired {
+		lg.Error("db update after transcode", zap.Error(err), zap.Uint64("video_id", job.VideoID))
+		extras := append(regenerableExtras(outMP4, coverOut, finalCoverPath, coverLocal), downloadedSources...)
+		if requeueOrFail(ctx, db, pubCh, lg, job, fmt.Sprintf("记录转码产物失败: %v", err), extras...) {
+			cleanupPaths(extras...)
+		}
+		ackDelivery(lg, d)
+		return
+	}
+	if !cfg.VideoReviewRequired {
 		if err := vsvc.PublishVideo(ctx, db, esc, lg, job.VideoID, nil); err != nil {
-			lg.Error("publish video after transcode", zap.Error(err))
+			lg.Error("publish video after transcode", zap.Error(err), zap.Uint64("video_id", job.VideoID))
+			extras := append(regenerableExtras(outMP4, coverOut, finalCoverPath, coverLocal), downloadedSources...)
+			if requeueOrFail(ctx, db, pubCh, lg, job, fmt.Sprintf("发布视频失败: %v", err), extras...) {
+				cleanupPaths(extras...)
+			}
+			ackDelivery(lg, d)
+			return
 		}
 	}
 	cleanupPaths(job.RawPath, job.CoverPath, outMP4, coverOut, "")
+	cleanupPaths(downloadedSources...)
+	deleteSourceObjects(ossClient, lg, job.RawKey, job.CoverKey)
 	lg.Info("transcode completed", zap.Uint64("video_id", job.VideoID))
 	ackDelivery(lg, d)
 }
@@ -250,6 +352,31 @@ func cleanupPaths(paths ...string) {
 		}
 		_ = os.Remove(p)
 	}
+}
+
+// deleteSourceObjects removes durable raw/cover objects once they are no
+// longer needed (success or permanent failure). Retry/dead-letter paths keep
+// them: they are the compensation input for requeue.
+func deleteSourceObjects(oss objectStore, lg *zap.Logger, keys ...string) {
+	for _, k := range keys {
+		if k == "" {
+			continue
+		}
+		if err := oss.DeleteObject(k); err != nil {
+			lg.Warn("delete transcode source object", zap.String("key", k), zap.Error(err))
+		}
+	}
+}
+
+// regenerableExtras returns only artifacts that can be regenerated on the
+// next attempt. The user-provided cover is a compensation input, not a
+// disposable intermediate, so it is never included.
+func regenerableExtras(outMP4, coverOut, finalCoverPath, userCoverPath string) []string {
+	extras := []string{outMP4, coverOut}
+	if finalCoverPath != "" && finalCoverPath != userCoverPath {
+		extras = append(extras, finalCoverPath)
+	}
+	return extras
 }
 
 func failVideo(db *gorm.DB, id uint64, reason string) {
@@ -285,7 +412,7 @@ func deadLetterTranscode(ctx context.Context, db *gorm.DB, pubCh transcodePublis
 	incrTranscodeDeadLetters()
 	if pubCh != nil {
 		body, _ := json.Marshal(job)
-		if err := pubCh.PublishWithContext(ctx, "", queue.TranscodeDeadQueue, false, false, amqp.Publishing{
+		if err := pubCh.PublishConfirmed(ctx, "", queue.TranscodeDeadQueue, true, amqp.Publishing{
 			DeliveryMode: amqp.Persistent,
 			ContentType:  "application/json",
 			Body:         body,
@@ -315,30 +442,32 @@ func deadLetterTranscode(ctx context.Context, db *gorm.DB, pubCh transcodePublis
 // admin requeue re-runs ffmpeg from those files. They are removed either by
 // a later successful transcode or by retention cleanup once the dead letter
 // is resolved and never requeued.
-func requeueOrFail(ctx context.Context, cfg *config.C, db *gorm.DB, pubCh transcodePublisher, lg *zap.Logger, job TranscodeJob, reason string, terminalLocalExtras ...string) bool {
-	if job.RetryCount >= 3 {
+func requeueOrFail(ctx context.Context, db *gorm.DB, pubCh transcodePublisher, lg *zap.Logger, job TranscodeJob, reason string, terminalLocalExtras ...string) bool {
+	if job.RetryCount >= maxTranscodeRetries {
 		deadLetterTranscode(ctx, db, pubCh, lg, job, reason)
 		failVideo(db, job.VideoID, reason)
 		cleanupPaths(terminalLocalExtras...)
 		lg.Error("transcode exhausted retries", zap.Uint64("video_id", job.VideoID))
 		return false
 	}
-	wait := time.Duration(transcodeRetryBaseDelay.Nanoseconds() * int64(job.RetryCount+1))
-	lg.Info("transcode retry scheduled", zap.Uint64("video_id", job.VideoID), zap.Duration("wait", wait), zap.Int("retry", job.RetryCount+1))
-	time.Sleep(wait)
 	job.RetryCount++
+	retryQueue := queue.RetryQueueForAttempt(job.RetryCount)
 	body, _ := json.Marshal(job)
-	if err := pubCh.PublishWithContext(ctx, "", queue.TranscodeQueue, false, false, amqp.Publishing{
+	if err := pubCh.PublishConfirmed(ctx, "", retryQueue, true, amqp.Publishing{
 		DeliveryMode: amqp.Persistent,
 		ContentType:  "application/json",
 		Body:         body,
 	}); err != nil {
-		lg.Error("republish transcode job", zap.Error(err))
+		lg.Error("schedule transcode retry", zap.Error(err), zap.String("retry_queue", retryQueue))
 		deadLetterTranscode(ctx, db, pubCh, lg, job, reason)
 		failVideo(db, job.VideoID, reason)
 		cleanupPaths(terminalLocalExtras...)
 		return false
 	}
+	lg.Info("transcode retry scheduled",
+		zap.Uint64("video_id", job.VideoID),
+		zap.String("retry_queue", retryQueue),
+		zap.Int("retry", job.RetryCount))
 	return true
 }
 
@@ -393,8 +522,9 @@ func consumeTranscodeDead(ctx context.Context, ch interface{ Close() error }, ms
 	}
 }
 
-// handleTranscodeDeadLetter logs and acks a single dead letter, then marks the
-// matching audit row processed so retention can eventually clean it up.
+// handleTranscodeDeadLetter marks the matching audit row processed and only
+// then acks the message. A DB failure leaves the message unacked so it is
+// redelivered and retried instead of being observably lost.
 func handleTranscodeDeadLetter(d amqp.Delivery, lg *zap.Logger, db *gorm.DB) {
 	var job TranscodeJob
 	_ = json.Unmarshal(d.Body, &job)
@@ -402,7 +532,6 @@ func handleTranscodeDeadLetter(d amqp.Delivery, lg *zap.Logger, db *gorm.DB) {
 		zap.Uint64("video_id", job.VideoID),
 		zap.Int("retry_count", job.RetryCount),
 	)
-	_ = d.Ack(false)
 	if db != nil {
 		if err := db.Model(&video.TranscodeDeadLetter{}).
 			Where("video_id = ? AND retry_count = ? AND processed_at IS NULL", job.VideoID, job.RetryCount).
@@ -410,8 +539,11 @@ func handleTranscodeDeadLetter(d amqp.Delivery, lg *zap.Logger, db *gorm.DB) {
 			Limit(1).
 			Update("processed_at", time.Now()).Error; err != nil {
 			lg.Warn("mark transcode dead letter processed", zap.Uint64("video_id", job.VideoID), zap.Error(err))
+			_ = d.Nack(false, true)
+			return
 		}
 	}
+	_ = d.Ack(false)
 }
 
 const (
@@ -420,12 +552,14 @@ const (
 )
 
 // StartTranscodeDeadRetention periodically archives resolved dead letters
-// (processed or requeued) older than the retention window.
-func StartTranscodeDeadRetention(ctx context.Context, db *gorm.DB, lg *zap.Logger) {
+// (processed or requeued) older than the retention window. Archiving sets
+// archived_at and releases their source media instead of deleting the audit
+// trail.
+func StartTranscodeDeadRetention(ctx context.Context, db *gorm.DB, oss objectStore, lg *zap.Logger) {
 	if db == nil {
 		return
 	}
-	cleanupTranscodeDeadLetters(db, time.Now().Add(-transcodeDeadRetention), lg)
+	cleanupTranscodeDeadLetters(db, time.Now().Add(-transcodeDeadRetention), oss, lg)
 	t := time.NewTicker(transcodeDeadCleanInterval)
 	defer t.Stop()
 	for {
@@ -433,20 +567,21 @@ func StartTranscodeDeadRetention(ctx context.Context, db *gorm.DB, lg *zap.Logge
 		case <-ctx.Done():
 			return
 		case <-t.C:
-			cleanupTranscodeDeadLetters(db, time.Now().Add(-transcodeDeadRetention), lg)
+			cleanupTranscodeDeadLetters(db, time.Now().Add(-transcodeDeadRetention), oss, lg)
 		}
 	}
 }
 
-// cleanupTranscodeDeadLetters deletes resolved dead letters (processed or
-// requeued) older than the retention cutoff. It returns the deleted row count.
-func cleanupTranscodeDeadLetters(db *gorm.DB, cutoff time.Time, lg *zap.Logger) int64 {
+// cleanupTranscodeDeadLetters archives resolved dead letters (processed or
+// requeued) older than the retention cutoff. It returns the archived row
+// count.
+func cleanupTranscodeDeadLetters(db *gorm.DB, cutoff time.Time, oss objectStore, lg *zap.Logger) int64 {
 	// Rows that were consumed and never requeued are safe to archive: no
 	// successor job references their raw media. Remove those files before
-	// deleting the audit rows. Rows that were requeued may still be feeding a
+	// marking them archived. Rows that were requeued may still be feeding a
 	// successor job, so their files are left untouched.
 	var archival []video.TranscodeDeadLetter
-	if err := db.Where("processed_at IS NOT NULL AND processed_at < ? AND requeued_at IS NULL", cutoff).
+	if err := db.Where("archived_at IS NULL AND processed_at IS NOT NULL AND processed_at < ? AND requeued_at IS NULL", cutoff).
 		Find(&archival).Error; err != nil {
 		lg.Warn("scan transcode dead letters for archival", zap.Error(err))
 		return 0
@@ -457,17 +592,20 @@ func cleanupTranscodeDeadLetters(db *gorm.DB, cutoff time.Time, lg *zap.Logger) 
 		}
 		if err := json.Unmarshal([]byte(archival[i].PayloadJSON), &payload); err == nil {
 			cleanupPaths(payload.Job.RawPath, payload.Job.CoverPath)
+			if oss != nil {
+				deleteSourceObjects(oss, lg, payload.Job.RawKey, payload.Job.CoverKey)
+			}
 		}
 	}
-	res := db.Where("processed_at IS NOT NULL AND processed_at < ?", cutoff).
-		Or("requeued_at IS NOT NULL AND requeued_at < ?", cutoff).
-		Delete(&video.TranscodeDeadLetter{})
+	res := db.Model(&video.TranscodeDeadLetter{}).
+		Where("archived_at IS NULL AND ((processed_at IS NOT NULL AND processed_at < ?) OR (requeued_at IS NOT NULL AND requeued_at < ?))", cutoff, cutoff).
+		Update("archived_at", time.Now())
 	if res.Error != nil {
-		lg.Warn("cleanup transcode dead letters", zap.Error(res.Error))
+		lg.Warn("archive transcode dead letters", zap.Error(res.Error))
 		return 0
 	}
 	if res.RowsAffected > 0 {
-		lg.Info("cleaned transcode dead letters", zap.Int64("rows", res.RowsAffected))
+		lg.Info("archived transcode dead letters", zap.Int64("rows", res.RowsAffected))
 	}
 	return res.RowsAffected
 }

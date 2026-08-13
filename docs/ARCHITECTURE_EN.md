@@ -169,18 +169,29 @@ sequenceDiagram
 
 1. Creator uploads raw video + optional custom cover via `POST /api/v1/videos`
 2. Server saves metadata (status: `processing`) to MySQL, stores raw file in temp dir
-3. Server publishes `TranscodeJob{VideoID, RawPath, CoverPath}` to RabbitMQ `transcode` queue
-4. Worker goroutine consumes the job, calls `ffmpeg` to transcode to H.264 MP4, takes a screenshot at frame 1, uploads both to OSS
-5. On success: updates `video_url`, `cover_url`, sets status to `published`
-6. On failure: retries up to **3 times** with exponential backoff (30s, 60s, 90s). Permanent failures detected and marked `failed` with human-readable reason. Transient failures re-queued.
+3. With OSS configured, the raw media is first uploaded to `raws/{videoID}/source.ext` and the job carries `RawKey/CoverKey`; the legacy local `RawPath/CoverPath` is only a fallback
+4. Worker goroutine downloads the source from OSS by key, runs `ffmpeg` to transcode to H.264 MP4 (bounded by `TRANSCODE_TIMEOUT`, default 10m, so a hung process is killed), takes a screenshot at frame 1, and uploads both to OSS
+5. On success: updates `video_url`, `cover_url`, sets status to `published` (or `pending_review` in review mode)
+6. On failure: transient failures are **confirm-published** with `RetryCount+1` to `retry_30s/60s/90s` delayed queues; RabbitMQ dead-letters them back to the main queue after the TTL expires (max 3 retries). Permanent failures are marked `failed` with a human-readable reason.
+7. DB write failures on the success path are not swallowed: a failed `db.Updates` / publish-state update goes through the same retry path, raw media is kept, and OSS overwrite is idempotent — the job either completes or lands in a requeueable dead letter.
+8. The main consumer reconnects with a 3s backoff after channel loss, like the dead-letter consumer; the dead-letter consumer marks `processed_at` **before** acking (a failed mark redelivers); retention archives expired dead letters via `archived_at` instead of physically deleting audit rows.
+
+Every publish (upload enqueue, retry scheduling, dead-lettering, admin requeue) uses **publisher confirm + mandatory**: a successful enqueue is a broker-confirmed, decidable result, and unroutable messages trigger a basic.return error.
+
+**Durable source storage & replay:**
+
+- With OSS, raw media and user covers live as objects (`raws/{videoID}/source.ext`, `raws/{videoID}/cover.ext`); the job carries only object keys.
+- The worker downloads each object to a local temp file per attempt, then deletes the object on success or permanent failure; retry/dead-letter paths keep it as the compensation input.
+- Requeue verifies the object with `Exists` before publishing (legacy local-path dead letters still use `os.Stat`), so replay works across instances, container rebuilds, and disk cleanup.
+- The local `RawPath` mode is only a compatibility/fallback when OSS is not configured.
 
 **Failure classification:**
 
 | Type      | Detection                                                                | Action                                         |
 | --------- | ------------------------------------------------------------------------ | ---------------------------------------------- |
 | Permanent | FFmpeg stderr contains known patterns (invalid codec, corrupt container) | Mark`failed`, store `fail_reason`, ack message |
-| Transient | Timeout, OSS network error, disk full                                    | Re-queue with incremented`retry_count`         |
-| Exhausted | `retry_count >= 3`                                                       | Mark`failed`, ack message                      |
+| Transient | ffmpeg timeout/hang, source download failure, OSS network error, disk full, DB write failure | Increment `retry_count`, confirm-publish to a retry TTL queue (30/60/90s); DLX returns it to the main queue |
+| Exhausted | `retry_count >= 3`                                                       | Publish to explicit dead-letter queue + write `transcode_dead_letters` audit row + mark `failed`; admin can requeue |
 
 ---
 
@@ -260,7 +271,7 @@ graph TB
 | User, video, comments, notifications, drafts            | MySQL             | Relational integrity, complex queries        |
 | Video files, covers, avatars                            | Alibaba Cloud OSS | Scalable blob storage, CDN-ready             |
 | Danmaku fan-out, play counts, cooldowns, Refresh Tokens | Redis             | Low-latency ephemeral data                   |
-| Transcode jobs                                          | RabbitMQ          | Persistent, ack-based, exactly-once delivery |
+| Transcode jobs                                          | RabbitMQ          | Persistent, manual ack, publisher confirm, TTL/DLX delayed retry (at-least-once + idempotency guard) |
 | Search indices                                          | Elasticsearch     | Inverted index, relevance scoring            |
 
 ---
@@ -272,7 +283,7 @@ graph TB
 | **Monolith over microservices (v1)**            | Single developer, faster iteration. Code is organized by domain (`handler/`, `service/`, `worker/`) to enable future split into Kratos microservices. |
 | **Redis Pub/Sub over direct WebSocket fan-out** | Decouples broadcast from the HTTP handler. Multiple replicas subscribe to the same Redis channel, enabling horizontal scaling without shared memory.  |
 | **AI events/controls via Redis Pub/Sub + generation snapshot (owner/genID-guarded)** | Decouples WS from generation under multiple replicas: events fan out to the replica holding the user's WS, pause/resume route to the owner; the hot-path buffer stays in the owner's memory for performance. |
-| **RabbitMQ over Redis List for transcode**      | RabbitMQ provides message persistence, consumer acknowledgments, and dead-lettering — critical for video processing where data loss is unacceptable.  |
+| **RabbitMQ over Redis List for transcode**      | RabbitMQ provides message persistence, consumer acknowledgments, publisher confirm, TTL/DLX delayed retry, and dead-lettering — video processing cannot tolerate data loss, and delayed retry must not rely on worker sleep.  |
 | **GORM AutoMigrate + goose versioned migrations** | Dev: GORM AutoMigrate (V1-V19). Prod (APP_ENV=production): goose SQL migrations (V20+) with up/down rollback. |                                                    |
 | **ES optional, not mandatory**                  | Reduces onboarding friction. The search page degrades gracefully when ES is not configured.                                                           |
 | **bcrypt + dual-token JWT**                     | Industry standard for auth. Access/Refresh token pattern with Redis-managed refresh token rotation.                                                   |
@@ -295,6 +306,7 @@ flowchart TB
     I["FFmpeg extract cover"]
     J["Upload video to OSS"]
     K["Upload cover to OSS"]
+    R["retry TTL queues 30/60/90s"]
 
     L["DB update to ready"]
     M["Remove temp files"]
@@ -306,6 +318,8 @@ flowchart TB
     G --> H
     H --> J
     H --> I --> K
+    G -.->|transient failure| R
+    R -.->|TTL expiry/DLX| G
     J --> L
     K --> L
     L --> M

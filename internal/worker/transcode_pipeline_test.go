@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 	"unicode/utf8"
@@ -48,11 +50,11 @@ type fakeFFmpeg struct {
 	permStderr      string
 }
 
-func (f *fakeFFmpeg) TranscodeToH264MP4(_, _ string) (string, error) {
+func (f *fakeFFmpeg) TranscodeToH264MP4(_ context.Context, _, _ string) (string, error) {
 	return f.transcodeStderr, f.transcodeErr
 }
 
-func (f *fakeFFmpeg) ScreenshotJPEG(_, _ string, _ float64) (string, error) {
+func (f *fakeFFmpeg) ScreenshotJPEG(_ context.Context, _, _ string, _ float64) (string, error) {
 	return f.shotStderr, f.shotErr
 }
 
@@ -66,20 +68,37 @@ type fakePublisher struct {
 	err       error
 }
 
-func (f *fakePublisher) PublishWithContext(ctx context.Context, exchange, key string, mandatory, immediate bool, msg amqp.Publishing) error {
+func (f *fakePublisher) PublishConfirmed(_ context.Context, _, key string, _ bool, msg amqp.Publishing) error {
 	f.published = append(f.published, msg)
 	f.keys = append(f.keys, key)
 	return f.err
 }
 
 type fakeObjectStore struct {
-	uploads []string
-	err     error
+	uploads     []string
+	deleted     []string
+	err         error
+	downloadErr error
 }
 
 func (f *fakeObjectStore) UploadFile(objectKey, localPath string) error {
 	f.uploads = append(f.uploads, objectKey)
 	return f.err
+}
+
+func (f *fakeObjectStore) DownloadFile(objectKey, localPath string) error {
+	if f.downloadErr != nil {
+		return f.downloadErr
+	}
+	if err := os.WriteFile(localPath, []byte("downloaded source"), 0o644); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (f *fakeObjectStore) DeleteObject(objectKey string) error {
+	f.deleted = append(f.deleted, objectKey)
+	return nil
 }
 
 func newMockDB(t *testing.T) (*gorm.DB, sqlmock.Sqlmock) {
@@ -185,9 +204,6 @@ func TestHandleDelivery_TranscodeRetryableExhausted(t *testing.T) {
 func TestHandleDelivery_TranscodeRetryableRepublish(t *testing.T) {
 	db, mock := newMockDB(t)
 	expectProcessingVideo(mock, 9)
-	oldDelay := transcodeRetryBaseDelay
-	transcodeRetryBaseDelay = time.Millisecond
-	defer func() { transcodeRetryBaseDelay = oldDelay }()
 
 	ack := &fakeAck{}
 	job := queue.TranscodeJob{VideoID: 9, RawPath: "/tmp/r.mp4"}
@@ -199,7 +215,7 @@ func TestHandleDelivery_TranscodeRetryableRepublish(t *testing.T) {
 		t.Errorf("expected 1 ack, got %d", ack.acked)
 	}
 	require.Len(t, pub.published, 1)
-	require.Equal(t, queue.TranscodeQueue, pub.keys[0])
+	require.Equal(t, queue.RetryQueueForAttempt(1), pub.keys[0])
 	var republished queue.TranscodeJob
 	require.NoError(t, json.Unmarshal(pub.published[0].Body, &republished))
 	if republished.RetryCount != 1 {
@@ -215,9 +231,6 @@ func TestHandleDelivery_RepublishFailure(t *testing.T) {
 		WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectExec("UPDATE `videos` SET .*fail_reason.* WHERE id = .*").
 		WillReturnResult(sqlmock.NewResult(1, 1))
-	oldDelay := transcodeRetryBaseDelay
-	transcodeRetryBaseDelay = time.Millisecond
-	defer func() { transcodeRetryBaseDelay = oldDelay }()
 
 	ack := &fakeAck{}
 	job := queue.TranscodeJob{VideoID: 10, RawPath: "/tmp/r.mp4"}
@@ -284,21 +297,70 @@ func TestTruncate_RuneSafeUTF8(t *testing.T) {
 	require.Equal(t, "", truncate("abc", 0))
 }
 
-func TestHandleDelivery_SuccessDBError(t *testing.T) {
+func TestHandleDelivery_SuccessDBErrorRequeues(t *testing.T) {
 	db, mock := newMockDB(t)
 	expectProcessingVideo(mock, 12)
 	mock.ExpectExec("UPDATE `videos` SET .* WHERE id = .*").
 		WillReturnError(errors.New("db down"))
 	ack := &fakeAck{}
-	job := queue.TranscodeJob{VideoID: 12, RawPath: "/tmp/r.mp4", CoverPath: "/tmp/c.jpg"}
+	tmp := t.TempDir()
+	rawPath := filepath.Join(tmp, "raw.mp4")
+	coverPath := filepath.Join(tmp, "cover.png")
+	require.NoError(t, os.WriteFile(rawPath, []byte("raw"), 0o644))
+	require.NoError(t, os.WriteFile(coverPath, []byte("cover"), 0o644))
+	job := queue.TranscodeJob{VideoID: 12, RawPath: rawPath, CoverPath: coverPath}
 	d := deliveryFor(job, ack)
 	ff := &fakeFFmpeg{}
 	store := &fakeObjectStore{}
-	handleDeliveryWith(context.Background(), &config.C{TempUploadDir: t.TempDir()}, db, nil, store, nil, d, ff, zap.NewNop())
-	if ack.acked != 1 {
-		t.Errorf("expected 1 ack, got %d", ack.acked)
-	}
-	require.Len(t, store.uploads, 2)
+	pub := &fakePublisher{}
+	handleDeliveryWith(context.Background(), &config.C{TempUploadDir: tmp}, db, pub, store, nil, d, ff, zap.NewNop())
+	require.Equal(t, 1, ack.acked, "job must be acked after a retry is scheduled")
+	require.Len(t, store.uploads, 2, "OSS objects are uploaded before the DB update")
+	require.Len(t, pub.published, 1)
+	require.Equal(t, queue.RetryQueueForAttempt(1), pub.keys[0])
+	var requeued queue.TranscodeJob
+	require.NoError(t, json.Unmarshal(pub.published[0].Body, &requeued))
+	require.Equal(t, 1, requeued.RetryCount)
+	_, err := os.Stat(rawPath)
+	require.NoError(t, err, "raw media must survive a DB update failure for compensation")
+	_, err = os.Stat(coverPath)
+	require.NoError(t, err, "user cover must survive a DB update failure for compensation")
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestHandleDelivery_PublishVideoErrorRequeues(t *testing.T) {
+	db, mock := newMockDB(t)
+	expectProcessingVideo(mock, 14)
+	// handleDelivery update succeeds
+	mock.ExpectExec("UPDATE .*videos.* SET .*").
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	// video.PublishVideo: SELECT video
+	mock.ExpectQuery("SELECT \\* FROM `videos`").
+		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id", "status", "created_at"}).
+			AddRow(14, 1, "processing", time.Now()))
+	// video.PublishVideo: UPDATE status fails
+	mock.ExpectExec("UPDATE `videos` SET .* WHERE `id` = .*").
+		WillReturnError(errors.New("db down"))
+
+	ack := &fakeAck{}
+	tmp := t.TempDir()
+	rawPath := filepath.Join(tmp, "raw.mp4")
+	require.NoError(t, os.WriteFile(rawPath, []byte("raw"), 0o644))
+	job := queue.TranscodeJob{VideoID: 14, RawPath: rawPath}
+	d := deliveryFor(job, ack)
+	ff := &fakeFFmpeg{}
+	store := &fakeObjectStore{}
+	pub := &fakePublisher{}
+	handleDeliveryWith(context.Background(), &config.C{TempUploadDir: tmp}, db, pub, store, nil, d, ff, zap.NewNop())
+
+	require.Equal(t, 1, ack.acked)
+	require.Len(t, pub.published, 1)
+	require.Equal(t, queue.RetryQueueForAttempt(1), pub.keys[0])
+	var requeued queue.TranscodeJob
+	require.NoError(t, json.Unmarshal(pub.published[0].Body, &requeued))
+	require.Equal(t, 1, requeued.RetryCount)
+	_, err := os.Stat(rawPath)
+	require.NoError(t, err, "raw media must survive a publish failure for compensation")
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
