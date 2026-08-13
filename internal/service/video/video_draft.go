@@ -3,7 +3,6 @@ package video
 import (
 	"cakecake/internal/model/video"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -21,6 +20,7 @@ type VideoDraftService struct {
 	rdb    *redis.Client
 	log    *zap.Logger
 	mq     queue.TranscodePublisher
+	oss    SourceObjectStore
 }
 
 // ErrReplaceMediaUpdate marks a failure at the first (field-update) stage of
@@ -28,8 +28,8 @@ type VideoDraftService struct {
 var ErrReplaceMediaUpdate = errors.New("replace media: draft field update failed")
 
 // NewVideoDraftService creates a VideoDraftService for the draft editing flow.
-func NewVideoDraftService(db *gorm.DB, rdb *redis.Client, log *zap.Logger, mq queue.TranscodePublisher) *VideoDraftService {
-	return &VideoDraftService{videos: NewVideoProvider(db), rdb: rdb, log: log, mq: mq}
+func NewVideoDraftService(db *gorm.DB, rdb *redis.Client, log *zap.Logger, mq queue.TranscodePublisher, oss SourceObjectStore) *VideoDraftService {
+	return &VideoDraftService{videos: NewVideoProvider(db), rdb: rdb, log: log, mq: mq, oss: oss}
 }
 
 // PublishTranscode enqueues a transcode job (best-effort via RabbitMQ).
@@ -42,12 +42,7 @@ func (s *VideoDraftService) PublishTranscode(ctx context.Context, body []byte) e
 
 // EnqueueTranscode builds the transcode job and publishes it to the queue.
 func (s *VideoDraftService) EnqueueTranscode(ctx context.Context, videoID uint64, rawPath, coverPath string) error {
-	job := queue.TranscodeJob{VideoID: videoID, RawPath: rawPath, CoverPath: coverPath, RetryCount: 0}
-	body, err := json.Marshal(job)
-	if err != nil {
-		return err
-	}
-	return s.PublishTranscode(ctx, body)
+	return enqueueTranscodeJob(ctx, s.mq, s.oss, videoID, rawPath, coverPath)
 }
 
 // ProbeDurationSeconds probes a raw media file's duration via ffprobe.

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -26,11 +27,21 @@ type VideoService struct {
 	log    *zap.Logger
 	es     *search.Client
 	mq     queue.TranscodePublisher
+	oss    SourceObjectStore
 }
 
 // ErrRequeueSourceMissing reports that the raw media (or user cover) behind a
 // dead letter no longer exists on disk, so requeue cannot succeed.
 var ErrRequeueSourceMissing = errors.New("requeue source media missing")
+
+// SourceObjectStore keeps the original media durable so dead-letter requeue
+// works across instances and container rebuilds instead of depending on a
+// single-host local path.
+type SourceObjectStore interface {
+	UploadFile(objectKey, localPath string) error
+	Exists(objectKey string) (bool, error)
+	DeleteObject(objectKey string) error
+}
 
 // VideoProbe is the media-duration probe used by the video services. It is a
 // variable so tests can substitute a deterministic probe without invoking
@@ -39,8 +50,8 @@ var VideoProbe = ffmpeg.ProbeDurationSeconds
 
 // NewVideoService creates a VideoService with storage, cache, logger,
 // optional search client, and optional transcode queue publisher.
-func NewVideoService(db *gorm.DB, rdb *redis.Client, log *zap.Logger, es *search.Client, mq queue.TranscodePublisher) *VideoService {
-	return &VideoService{videos: NewVideoProvider(db), rdb: rdb, log: log, es: es, mq: mq}
+func NewVideoService(db *gorm.DB, rdb *redis.Client, log *zap.Logger, es *search.Client, mq queue.TranscodePublisher, oss SourceObjectStore) *VideoService {
+	return &VideoService{videos: NewVideoProvider(db), rdb: rdb, log: log, es: es, mq: mq, oss: oss}
 }
 
 // Publish marks a video published and re-indexes search (post-review or direct publish).
@@ -58,12 +69,52 @@ func (s *VideoService) PublishTranscode(ctx context.Context, body []byte) error 
 
 // EnqueueTranscode builds the transcode job and publishes it to the queue.
 func (s *VideoService) EnqueueTranscode(ctx context.Context, videoID uint64, rawPath, coverPath string) error {
+	return enqueueTranscodeJob(ctx, s.mq, s.oss, videoID, rawPath, coverPath)
+}
+
+// enqueueTranscodeJob uploads the original media to object storage when OSS is
+// configured, then publishes the job. The job carries object keys (RawKey /
+// CoverKey) so a worker on any host can download and retry them; without OSS
+// it falls back to the legacy local-path payload.
+//
+// Failure safety: the local temp files are deleted ONLY after the publish is
+// confirmed, and already-uploaded source objects are KEPT on any failure. A
+// transient broker error therefore never destroys the user's video: the OSS
+// object (or the local file, in fallback mode) always survives for retry or
+// manual compensation.
+func enqueueTranscodeJob(ctx context.Context, mq queue.TranscodePublisher, oss SourceObjectStore, videoID uint64, rawPath, coverPath string) error {
+	if mq == nil {
+		return fmt.Errorf("transcode queue not configured")
+	}
 	job := queue.TranscodeJob{VideoID: videoID, RawPath: rawPath, CoverPath: coverPath, RetryCount: 0}
+	if oss != nil && rawPath != "" {
+		rawKey := fmt.Sprintf("raws/%d/source%s", videoID, filepath.Ext(rawPath))
+		if err := oss.UploadFile(rawKey, rawPath); err != nil {
+			return fmt.Errorf("upload raw source: %w", err)
+		}
+		job.RawKey, job.RawPath = rawKey, ""
+	}
+	if oss != nil && coverPath != "" {
+		coverKey := fmt.Sprintf("raws/%d/cover%s", videoID, filepath.Ext(coverPath))
+		if err := oss.UploadFile(coverKey, coverPath); err != nil {
+			return fmt.Errorf("upload cover source: %w", err)
+		}
+		job.CoverKey, job.CoverPath = coverKey, ""
+	}
 	body, err := json.Marshal(job)
 	if err != nil {
 		return err
 	}
-	return s.PublishTranscode(ctx, body)
+	if err := mq.PublishTranscode(ctx, body); err != nil {
+		return err
+	}
+	// Publish confirmed: the OSS objects are now the authoritative source.
+	// Local temp copies are no longer needed on this host.
+	if oss != nil {
+		_ = os.Remove(rawPath)
+		_ = os.Remove(coverPath)
+	}
+	return nil
 }
 
 // ListTranscodeDeadLetters returns dead-letter audit rows with pagination.
@@ -89,21 +140,16 @@ func (s *VideoService) RequeueTranscodeDeadLetter(ctx context.Context, id uint64
 	if payload.Job.VideoID == 0 {
 		return fmt.Errorf("dead letter payload missing job")
 	}
-	// The dead letter keeps RawPath/CoverPath on purpose, but old rows or
-	// manual file cleanup can leave them gone. Fail fast with a clear error
-	// instead of publishing a job that is guaranteed to fail again.
-	if _, err := os.Stat(payload.Job.RawPath); err != nil {
-		if os.IsNotExist(err) {
-			return fmt.Errorf("%w: raw media %s", ErrRequeueSourceMissing, payload.Job.RawPath)
-		}
-		return fmt.Errorf("check raw media before requeue: %w", err)
+	// The dead letter keeps RawKey/RawPath (and the cover equivalents) on
+	// purpose, but the object/file can still be gone (retention, manual
+	// cleanup). Fail fast with a clear error instead of publishing a job
+	// that is guaranteed to fail again.
+	if err := s.ensureRequeueSource("raw", payload.Job.RawKey, payload.Job.RawPath); err != nil {
+		return err
 	}
-	if payload.Job.CoverPath != "" {
-		if _, err := os.Stat(payload.Job.CoverPath); err != nil {
-			if os.IsNotExist(err) {
-				return fmt.Errorf("%w: cover media %s", ErrRequeueSourceMissing, payload.Job.CoverPath)
-			}
-			return fmt.Errorf("check cover media before requeue: %w", err)
+	if payload.Job.CoverKey != "" || payload.Job.CoverPath != "" {
+		if err := s.ensureRequeueSource("cover", payload.Job.CoverKey, payload.Job.CoverPath); err != nil {
+			return err
 		}
 	}
 	job := payload.Job
@@ -144,6 +190,35 @@ func (s *VideoService) RequeueTranscodeDeadLetter(ctx context.Context, id uint64
 		return err
 	}
 	incrTranscodeRequeued()
+	return nil
+}
+
+// ensureRequeueSource verifies the compensation input behind a dead letter
+// still exists: an OSS object when the job was enqueued with object keys,
+// otherwise the legacy local path.
+func (s *VideoService) ensureRequeueSource(kind, objectKey, localPath string) error {
+	if objectKey != "" {
+		if s.oss == nil {
+			return fmt.Errorf("OSS 未配置，无法校验%s源对象 %s", kind, objectKey)
+		}
+		ok, err := s.oss.Exists(objectKey)
+		if err != nil {
+			return fmt.Errorf("check %s source object %s: %w", kind, objectKey, err)
+		}
+		if !ok {
+			return fmt.Errorf("%w: %s object %s", ErrRequeueSourceMissing, kind, objectKey)
+		}
+		return nil
+	}
+	if localPath == "" {
+		return nil
+	}
+	if _, err := os.Stat(localPath); err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("%w: %s media %s", ErrRequeueSourceMissing, kind, localPath)
+		}
+		return fmt.Errorf("check %s media before requeue: %w", kind, err)
+	}
 	return nil
 }
 

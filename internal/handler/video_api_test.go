@@ -102,7 +102,7 @@ func TestVideoUploadFlows(t *testing.T) {
 	api, r, _ := newTestAPI(t)
 	// Replace the video service with one wired to a no-op transcode publisher
 	// and stub the media probe so the upload pipeline runs without ffmpeg.
-	api.VideoSvc = vsvc.NewVideoService(api.DB, api.Redis, zap.NewNop(), nil, noopMQ{})
+	api.VideoSvc = vsvc.NewVideoService(api.DB, api.Redis, zap.NewNop(), nil, noopMQ{}, nil)
 	oldProbe := vsvc.VideoProbe
 	vsvc.VideoProbe = func(string) (float64, error) { return 12.5, nil }
 	defer func() { vsvc.VideoProbe = oldProbe }()

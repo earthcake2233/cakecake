@@ -47,6 +47,35 @@ func (o *OSS) UploadReader(objectKey string, r io.Reader) error {
 	return o.bucket.PutObject(objectKey, r)
 }
 
+// DownloadFile downloads objectKey into localPath.
+func (o *OSS) DownloadFile(objectKey, localPath string) error {
+	key := strings.TrimPrefix(strings.TrimSpace(objectKey), "/")
+	if key == "" {
+		return fmt.Errorf("empty object key")
+	}
+	rc, err := o.bucket.GetObject(key)
+	if err != nil {
+		return err
+	}
+	defer rc.Close()
+	f, err := os.Create(localPath)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	_, err = io.Copy(f, rc)
+	return err
+}
+
+// Exists reports whether objectKey exists in the bucket.
+func (o *OSS) Exists(objectKey string) (bool, error) {
+	key := strings.TrimPrefix(strings.TrimSpace(objectKey), "/")
+	if key == "" {
+		return false, nil
+	}
+	return o.bucket.IsObjectExist(key)
+}
+
 // DeleteObject removes one object from the bucket. Missing keys are ignored.
 func (o *OSS) DeleteObject(objectKey string) error {
 	key := strings.TrimPrefix(strings.TrimSpace(objectKey), "/")

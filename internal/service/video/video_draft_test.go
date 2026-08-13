@@ -14,7 +14,7 @@ func newVideoDraftService(t *testing.T) *VideoDraftService {
 	t.Helper()
 	db := servicetest.NewDB(t)
 	_, rdb := servicetest.NewRedis(t)
-	return NewVideoDraftService(db, rdb, servicetest.ZapNop(), nil)
+	return NewVideoDraftService(db, rdb, servicetest.ZapNop(), nil, nil)
 }
 
 func TestVideoDraftService_CRUD(t *testing.T) {

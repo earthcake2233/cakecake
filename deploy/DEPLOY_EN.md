@@ -305,6 +305,8 @@ sudo rabbitmqctl status
 
 Default `guest/guest` works locally; for production create a dedicated user and put it in `RABBITMQ_URL`.
 
+All transcode queues (main queue, 30/60/90s delayed retry queues, dead-letter queue) are declared automatically by the application at startup — no manual creation is needed. After upgrading from an older version, just restart the app; the retry queues are created on first boot.
+
 ### 6.6 Nginx
 
 ```bash

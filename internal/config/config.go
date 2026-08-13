@@ -87,6 +87,10 @@ type C struct {
 	// VideoUploadDisabled: reject video file upload/transcode; metadata-only drafts still allowed.
 	VideoUploadDisabled bool `json:"video_upload_disabled"`
 
+	// TranscodeTimeout bounds a single ffmpeg transcode/screenshot run. A
+	// hung encoder is killed instead of blocking the worker (QoS=1) forever.
+	TranscodeTimeout time.Duration `json:"transcode_timeout"`
+
 	// SeedDemoData: when true and the videos table is empty, insert demo users/videos/danmaku
 	// pointing at public demo media URLs (Docker Compose one-command experience).
 	SeedDemoData bool `json:"seed_demo_data"`
@@ -222,6 +226,7 @@ func Load() *C {
 
 		SensitiveWordsFile:    getenv("SENSITIVE_WORDS_FILE", "./configs/sensitive_words.txt"),
 		TempUploadDir:         getenv("TEMP_UPLOAD_DIR", "./data/tmp"),
+		TranscodeTimeout:      mustParseDuration(os.Getenv("TRANSCODE_TIMEOUT"), 10*time.Minute),
 		FFprobePath:           strings.TrimSpace(os.Getenv("FFPROBE_PATH")),
 		FFmpegPath:            strings.TrimSpace(os.Getenv("FFMPEG_PATH")),
 		IP2RegionV4XDB:        getenv("IP2REGION_V4_XDB", "./configs/ip2region_v4.xdb"),
@@ -268,6 +273,7 @@ func (c *C) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	enc.AddString("oss_public_url_prefix", c.OSSPublicURLPrefix)
 	enc.AddString("sensitive_words_file", c.SensitiveWordsFile)
 	enc.AddString("temp_upload_dir", c.TempUploadDir)
+	enc.AddDuration("transcode_timeout", c.TranscodeTimeout)
 	enc.AddString("ffprobe_path", c.FFprobePath)
 	enc.AddString("ffmpeg_path", c.FFmpegPath)
 	enc.AddString("ip2region_v4_xdb", c.IP2RegionV4XDB)

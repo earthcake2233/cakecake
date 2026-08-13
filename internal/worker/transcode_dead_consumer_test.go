@@ -2,6 +2,7 @@ package worker
 
 import (
 	"cakecake/internal/model/video"
+	"cakecake/internal/queue"
 	"context"
 	"encoding/json"
 	"os"
@@ -21,6 +22,35 @@ type fakeCloseable struct {
 func (f *fakeCloseable) Close() error {
 	f.closed = true
 	return nil
+}
+
+func (f *fakeCloseable) Qos(_ int, _ int, _ bool) error {
+	return nil
+}
+
+type fakeTranscodeSubscriber struct {
+	calls int
+	errs  []error
+	ch    *fakeCloseable
+	msgs  chan amqp.Delivery
+	pub   *fakePublisher
+}
+
+func (f *fakeTranscodeSubscriber) NewTranscodeConsumer(_ string) (queue.TranscodeConsumer, <-chan amqp.Delivery, error) {
+	f.calls++
+	if len(f.errs) > 0 {
+		err := f.errs[0]
+		f.errs = f.errs[1:]
+		return nil, nil, err
+	}
+	return f.ch, f.msgs, nil
+}
+
+func (f *fakeTranscodeSubscriber) PublishConfirmed(ctx context.Context, _, key string, _ bool, msg amqp.Publishing) error {
+	if f.pub == nil {
+		return nil
+	}
+	return f.pub.PublishConfirmed(ctx, "", key, true, msg)
 }
 
 type fakeDeadSubscriber struct {
@@ -101,7 +131,47 @@ func TestStartTranscodeDeadConsumer_ReconnectsUntilCancel(t *testing.T) {
 	require.GreaterOrEqual(t, sub.calls, 3)
 }
 
-func TestCleanupTranscodeDeadLetters_RemovesOnlyResolvedOld(t *testing.T) {
+func TestStartTranscodeConsumer_ReconnectsUntilCancel(t *testing.T) {
+	old := transcodeReconnectDelay
+	transcodeReconnectDelay = time.Millisecond
+	defer func() { transcodeReconnectDelay = old }()
+
+	sub := &fakeTranscodeSubscriber{
+		errs: []error{errTestBrokerDown, errTestBrokerDown},
+		ch:   &fakeCloseable{},
+		msgs: make(chan amqp.Delivery),
+		pub:  &fakePublisher{},
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		consumeTranscodeLoop(ctx, nil, nil, sub, nil, nil, zap.NewNop())
+	}()
+
+	deadline := time.Now().Add(2 * time.Second)
+	for sub.calls < 3 && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	cancel()
+	<-done
+	require.GreaterOrEqual(t, sub.calls, 3)
+}
+
+func TestHandleTranscodeDeadLetter_MarkFailedNacksAndRequeues(t *testing.T) {
+	db := newBehavioralWorkerDB(t)
+	sqlDB, err := db.DB()
+	require.NoError(t, err)
+	require.NoError(t, sqlDB.Close())
+
+	ack := &fakeAck{}
+	body, _ := json.Marshal(TranscodeJob{VideoID: 99, RetryCount: 3})
+	handleTranscodeDeadLetter(amqp.Delivery{Body: body, Acknowledger: ack}, zap.NewNop(), db)
+	require.Equal(t, 0, ack.acked, "message must not be acked when the audit mark fails")
+	require.Equal(t, 1, ack.nacked, "message must be requeued so the mark is retried")
+}
+
+func TestCleanupTranscodeDeadLetters_ArchivesResolvedOld(t *testing.T) {
 	db := newBehavioralWorkerDB(t)
 	old := time.Now().Add(-40 * 24 * time.Hour)
 	recent := time.Now().Add(-time.Hour)
@@ -122,11 +192,11 @@ func TestCleanupTranscodeDeadLetters_RemovesOnlyResolvedOld(t *testing.T) {
 	require.NoError(t, db.Create(&video.TranscodeDeadLetter{VideoID: 3, RetryCount: 1, Reason: "recent processed", ProcessedAt: &recent, PayloadJSON: payload(recentRaw)}).Error)
 	require.NoError(t, db.Create(&video.TranscodeDeadLetter{VideoID: 4, RetryCount: 1, Reason: "pending"}).Error)
 
-	deleted := cleanupTranscodeDeadLetters(db, time.Now().Add(-30*24*time.Hour), zap.NewNop())
-	require.Equal(t, int64(2), deleted)
-	var left int64
-	require.NoError(t, db.Model(&video.TranscodeDeadLetter{}).Count(&left).Error)
-	require.Equal(t, int64(2), left)
+	archived := cleanupTranscodeDeadLetters(db, time.Now().Add(-30*24*time.Hour), nil, zap.NewNop())
+	require.Equal(t, int64(2), archived)
+	var total int64
+	require.NoError(t, db.Model(&video.TranscodeDeadLetter{}).Count(&total).Error)
+	require.Equal(t, int64(4), total, "archiving must not delete audit rows")
 
 	_, err := os.Stat(processedRaw)
 	require.ErrorIs(t, err, os.ErrNotExist, "files of an old processed row are archived")
@@ -134,6 +204,16 @@ func TestCleanupTranscodeDeadLetters_RemovesOnlyResolvedOld(t *testing.T) {
 	require.NoError(t, err, "files of an old requeued row may still feed a successor job")
 	_, err = os.Stat(recentRaw)
 	require.NoError(t, err, "files of a recent row are not touched")
+
+	var oldProcessed, oldRequeued, recentRow, pending video.TranscodeDeadLetter
+	require.NoError(t, db.First(&oldProcessed, 1).Error)
+	require.NotNil(t, oldProcessed.ArchivedAt)
+	require.NoError(t, db.First(&oldRequeued, 2).Error)
+	require.NotNil(t, oldRequeued.ArchivedAt)
+	require.NoError(t, db.First(&recentRow, 3).Error)
+	require.Nil(t, recentRow.ArchivedAt)
+	require.NoError(t, db.First(&pending, 4).Error)
+	require.Nil(t, pending.ArchivedAt)
 }
 
 var errTestBrokerDown = &testBrokerError{}
