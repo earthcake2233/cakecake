@@ -84,7 +84,7 @@ func (a *API) ListPublishedVideos(c *gin.Context) {
 	items := make([]videoCardDTO, 0, len(res.Videos))
 	for _, v := range res.Videos {
 		pc, _ := a.Play.Display(c.Request.Context(), &v)
-		items = append(items, videoCard(v, user.DisplayUsername(&user.User{Username: ""}), pc, videoEngagement{}))
+		items = append(items, videoCard(v, res.UploaderNames[v.UserID], pc, videoEngagement{}))
 	}
 	resp.OK(c, zoneVideoListResponse{
 		Items:          items,

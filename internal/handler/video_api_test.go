@@ -20,7 +20,20 @@ func TestVideoEngagementAndComments(t *testing.T) {
 	vid := covSeedVideo(t, api, uidA, "video one", video.StatusPublished)
 	vid2 := covSeedVideo(t, api, uidA, "video two", video.StatusPublished)
 
-	covOK(t, covReq(t, r, "GET", "/api/v1/videos", "", nil), http.StatusOK)
+	listW := covReq(t, r, "GET", "/api/v1/videos", "", nil)
+	covOK(t, listW, http.StatusOK)
+	var listOut struct {
+		Data struct {
+			Items []struct {
+				Uploader string `json:"uploader"`
+			} `json:"items"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(listW.Body.Bytes(), &listOut))
+	require.NotEmpty(t, listOut.Data.Items)
+	for _, it := range listOut.Data.Items {
+		require.Equal(t, "covva", it.Uploader, "feed cards must carry the uploader name")
+	}
 	covOK(t, covReq(t, r, "GET", "/api/v1/videos?zone=动画", "", nil), http.StatusOK)
 	covOK(t, covReq(t, r, "GET", "/api/v1/videos/"+u64s(vid), "", nil), http.StatusOK)
 	covOK(t, covReq(t, r, "GET", "/api/v1/videos/"+u64s(vid), tokenB, nil), http.StatusOK)

@@ -62,6 +62,7 @@ func TestVideoService_CRUDAndPublish(t *testing.T) {
 func TestVideoService_ListPublished(t *testing.T) {
 	s, db := newVideoService(t)
 	ctx := context.Background()
+	servicetest.SeedUser(t, db, 1, "alice")
 	seedVideoRow(t, db, 10, 1, video.StatusPublished, "anime")
 	seedVideoRow(t, db, 11, 1, video.StatusPublished, "anime-comedy")
 	seedVideoRow(t, db, 12, 1, video.StatusDraft, "anime")
@@ -69,6 +70,7 @@ func TestVideoService_ListPublished(t *testing.T) {
 	res, err := s.ListPublishedVideos(ctx, VideoListOpts{Limit: 10, SortKey: "time"})
 	require.NoError(t, err)
 	require.Len(t, res.Videos, 2)
+	require.Equal(t, "alice", res.UploaderNames[1])
 
 	// Zone filter.
 	res, err = s.ListPublishedVideos(ctx, VideoListOpts{Limit: 10, SortKey: "hot", ZoneParent: "anime"})
