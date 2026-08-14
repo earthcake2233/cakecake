@@ -567,7 +567,10 @@ type VideoListOpts struct {
 
 // VideoListResult is the result of ListPublishedVideos.
 type VideoListResult struct {
-	Videos         []video.Video
+	Videos []video.Video
+	// UploaderNames maps video UserID to its display name ("" when the user
+	// is missing; anonymized accounts map to the 已注销用户 marker).
+	UploaderNames  map[uint64]string
 	NextCursor     string
 	HasMore        bool
 	ZoneVideoCount int64

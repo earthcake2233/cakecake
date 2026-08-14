@@ -232,6 +232,21 @@ func (p *VideoProviderImpl) ListPublishedVideos(ctx context.Context, opts VideoL
 	if hasMore {
 		list = list[:opts.Limit]
 	}
+	// Best-effort enrichment: attach uploader display names so feed cards do
+	// not fall back to "未知UP主". Mirrors the pre-service-layer behavior.
+	uploaderNames := map[uint64]string{}
+	uids := make([]uint64, 0, len(list))
+	for _, v := range list {
+		uids = append(uids, v.UserID)
+	}
+	if len(uids) > 0 {
+		var users []user.User
+		if err := p.db.WithContext(ctx).Where("id IN ?", uids).Find(&users).Error; err == nil {
+			for i := range users {
+				uploaderNames[users[i].ID] = user.DisplayUsername(&users[i])
+			}
+		}
+	}
 	var next string
 	if hasMore && len(list) > 0 {
 		last := list[len(list)-1]
@@ -248,6 +263,7 @@ func (p *VideoProviderImpl) ListPublishedVideos(ctx context.Context, opts VideoL
 	}
 	return &VideoListResult{
 		Videos:         list,
+		UploaderNames:  uploaderNames,
 		NextCursor:     next,
 		HasMore:        hasMore,
 		ZoneVideoCount: zoneCount,
