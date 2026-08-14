@@ -149,8 +149,10 @@ sequenceDiagram
     participant FF as FFmpeg
     participant OSS as Alibaba OSS
 
-    C->>API: POST /videos (multipart/form-data)
-    API->>DB: INSERT video (status: processing)
+    C->>OSS: PUT raw video (presigned)
+    C->>OSS: PUT cover (presigned)
+    C->>API: POST /videos (JSON: raw_key/cover_key)
+    API->>DB: INSERT video + transcode_outbox (same tx)
     API->>RMQ: PUBLISH TranscodeJob
     API-->>C: 200 OK (video_id)
 
@@ -167,24 +169,39 @@ sequenceDiagram
 
 **Flow:**
 
-1. Creator uploads raw video + optional custom cover via `POST /api/v1/videos`
-2. Server saves metadata (status: `processing`) to MySQL, stores raw file in temp dir
-3. With OSS configured, the raw media is first uploaded to `raws/{videoID}/source.ext` and the job carries `RawKey/CoverKey`; the legacy local `RawPath/CoverPath` is only a fallback
-4. Worker runs `TRANSCODE_CONCURRENCY` (default 1, production: cores 2-4) parallel consumers: each downloads the source from OSS by key, runs `ffmpeg` to transcode to H.264 MP4 (bounded by `TRANSCODE_TIMEOUT`, default 10m, so a hung process is killed), takes a screenshot at frame 1, and uploads both to OSS
+1. There is one user upload path: `POST /api/v1/videos/upload-ticket` issues presigned PUT URLs, the browser uploads the raw video (and optional cover) **straight to OSS**, then submits JSON metadata + `raw_key`/`cover_key` — large file bytes never traverse the API server. **On the publish page the upload starts as soon as the user selects a video file** (background while the form is being filled); clicking "publish" only validates and atomically enqueues, so perceived latency is near zero.
+2. The server performs **cheap HEAD validation only** (object ownership under `uploads/{uid}/` + `Exists` + 500 MB size limit; no full download), stores the client-provided duration hint (clamped to 30 min for display only), writes the MySQL row and a `transcode_outbox` row in the **same transaction** (Outbox pattern); a relay publishes `TranscodeJob{VideoID, JobID, TraceID, RawKey, CoverKey}` with confirm. The submit endpoint never blocks on downloading the object.
+3. Drafts and media replacement reuse the same direct flow: draft tickets issue `drafts/{uid}/{uuid}/...` keys, saving a draft only stores metadata + object keys, and publishing a draft re-validates the object and **atomically commits** "outbox row + status=processing". Draft preview uses short-lived presigned GET; private objects stay private.
+4. Worker runs `TRANSCODE_CONCURRENCY` (default 1, production: cores 2-4) parallel consumers: each downloads the source from OSS by key, **re-probes the real duration with ffprobe first (15s timeout; rejects >30 min or unreadable media as a permanent failure with a readable reason, and writes back `duration_sec`)**, runs `ffmpeg` to transcode to H.264 MP4 (bounded by `TRANSCODE_TIMEOUT`, default 10m, so a hung process is killed), takes a screenshot at frame 1, and uploads both to OSS
 5. On success: updates `video_url`, `cover_url`, sets status to `published` (or `pending_review` in review mode)
 6. On failure: transient failures are **confirm-published** with `RetryCount+1` to `retry_30s/60s/90s` delayed queues; RabbitMQ dead-letters them back to the main queue after the TTL expires (max 3 retries). Permanent failures are marked `failed` with a human-readable reason.
 7. DB write failures on the success path are not swallowed: a failed `db.Updates` / publish-state update goes through the same retry path, raw media is kept, and OSS overwrite is idempotent — the job either completes or lands in a requeueable dead letter.
 8. The main consumer reconnects with a 3s backoff after channel loss; the RabbitMQ `Client` also rebuilds the connection + queues + confirm after a broker restart (no process restart needed).
 9. The dead-letter consumer marks `processed_at` **before** acking (a failed mark redelivers); retention archives expired dead letters via `archived_at` instead of physically deleting audit rows.
-10. Direct upload is supported: `POST /api/v1/videos/upload-ticket` issues presigned PUT URLs, the browser uploads straight to OSS, then submits JSON metadata; ffprobe probing is bounded by a 15s timeout.
+10. User upload / drafts / media replacement all use presigned direct upload (server-side multipart is removed from the video chain); submits do HEAD-only ownership/size/existence validation and **never download the object**; duration validation is unified in the worker after download.
+11. **Message dedup**: every job carries a stable `job_id`; the worker inserts a `(job_id, retry_count)` dedup row before processing, so at-least-once redeliveries are skipped while legitimate retries are unaffected.
+12. **State machine + audit**: status changes pass `ValidateTranscodeStatusTransition`; the success path and `PublishVideo` use conditional updates (`WHERE status = current status`) so a stale worker cannot overwrite a concurrent admin reject; `transcode_events` records from/to/reason.
+13. **End-to-end trace**: `X-Trace-Id` flows from the upload request into the outbox payload → `TranscodeJob.TraceID`, and worker/dead-letter logs carry `trace_id` for full correlation.
+14. **Dead-letter auto loop**: a background job auto-replays transient failures by reason (`auto_retry_count` + exponential backoff + audit events); permanent failures stay manual. `TRANSCODE_MAX_QUEUE` backpressure returns 503 once the main queue is over capacity.
 
 Every publish (upload enqueue, retry scheduling, dead-lettering, admin requeue) uses **publisher confirm + mandatory**: a successful enqueue is a broker-confirmed, decidable result, and unroutable messages trigger a basic.return error.
 
 **SLO observability:** `cakecake_transcode_jobs_total{result=...}` (success/permanent failure), `duration_seconds` histogram, `retries_scheduled_total`, `queue_depth{queue=...}` (management API polled every 15s); Grafana panels show success/failure rate, P95 duration, queue depth and dead-letter/retry rates, with Alertmanager rules for backlog, failure rate and slow jobs.
 
+**Consistency & idempotency:**
+
+- The Outbox local message table commits "video row + pending job" atomically; the relay marks a row sent only after publisher confirm, with exponential backoff (saturated exponent against overflow).
+- The `(job_id, retry_count)` composite dedup key prevents double transcoding; the terminal-state guard covers already-finished jobs.
+- State-machine validation plus conditional updates prevent a stale worker from overwriting a concurrent review result.
+- Dead-letter auto retry (transient reasons only, fresh job_id, max 3 per row, 1m/2m/4m backoff capped at 15m) coexists with manual replay; both write audit events. A per-video lifetime budget (3 total) stops fresh rows from restarting unbounded retry rounds.
+- Backpressure: direct uploads and draft submissions return 503 once the main queue exceeds `TRANSCODE_MAX_QUEUE` (management API outages are passed through).
+
 **Durable source storage & replay:**
 
-- With OSS, raw media and user covers live as objects (`raws/{videoID}/source.ext`, `raws/{videoID}/cover.ext`); the job carries only object keys.
+- With OSS, raw media and user covers live as objects: direct submissions use `uploads/{uid}/{uuid}/...`, drafts stage under `drafts/{uid}/{uuid}/...`, and transcode outputs are `videos/{id}.mp4` / `covers/{id}.jpg`; the job carries only object keys.
+- Draft objects live in a private namespace; preview uses a short-lived presigned GET (307). Covers are server-side copied (`CopyObject`) to the public `covers/{id}.{ext}` key on draft save.
+- Select-to-upload produces orphan objects (abandoned submissions, file swaps, save-as-draft, or cancellation mid-upload — a ticket with no upload creates nothing, but a **partial upload leaves an object behind**): the in-app `StartOrphanObjectCleanup` task scans `uploads/`/`drafts/` every hour (default) and deletes only objects **older than 24h with no DB reference** (draft keys, `direct_upload_claims`, outbox payloads and dead-letter payloads all count as references, so in-flight or not-yet-submitted uploads are protected by the grace period); deletions are counted in Prometheus. The OSS lifecycle rule is now an optional safety net (if used, set it longer than the in-app retention since it cannot check DB references). The frontend invalidates stale uploads with a token when the file changes.
+- The legacy local `RawPath` mode only remains for pre-migration drafts and dead letters; new writes never produce it.
 - The worker downloads each object to a local temp file per attempt, then deletes the object on success or permanent failure; retry/dead-letter paths keep it as the compensation input.
 - Requeue verifies the object with `Exists` before publishing (legacy local-path dead letters still use `os.Stat`), so replay works across instances, container rebuilds, and disk cleanup.
 - The local `RawPath` mode is only a compatibility/fallback when OSS is not configured.

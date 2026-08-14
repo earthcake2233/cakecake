@@ -53,7 +53,93 @@ func RegisteredMigrations() []Migration {
 		{23, "transcode_dead_letters", "create transcode_dead_letters audit table", migrateTranscodeDeadLetters},
 		{24, "transcode_dead_letter_archive", "add archived_at for retention archiving", migrateTranscodeDeadLetterArchive},
 		{25, "direct_upload_claims", "create direct_upload_claims idempotency table", migrateDirectUploadClaims},
+		{26, "transcode_outbox", "create transcode_outbox local message table", migrateTranscodeOutbox},
+		{27, "transcode_job_dedup", "create transcode_job_dedup idempotency table", migrateTranscodeJobDedup},
+		{28, "transcode_events", "create transcode_events audit table", migrateTranscodeEvents},
+		{29, "transcode_outbox_pinned_names", "recreate outbox/dedup tables with pinned single names", migrateTranscodeOutboxPinnedNames},
+		{30, "transcode_dead_letter_auto_retry", "add auto retry fields to transcode_dead_letters", migrateTranscodeDeadLetterAutoRetry},
+		{31, "draft_object_keys", "rename draft staging paths to OSS object keys", migrateDraftObjectKeys},
 	}
+}
+
+// migrateDraftObjectKeys renames the draft staging columns so the field name
+// matches their new meaning (OSS object key, with legacy local paths kept in
+// place for old rows). Fresh databases already create the new column names
+// through AutoMigrate, so this is a no-op for them.
+func migrateDraftObjectKeys(db *gorm.DB, lg *zap.Logger) error {
+	if db.Dialector.Name() != "mysql" {
+		return nil
+	}
+	renames := []struct{ from, to string }{
+		{"draft_raw_path", "draft_raw_key"},
+		{"draft_cover_path", "draft_cover_key"},
+	}
+	for _, r := range renames {
+		if !dbColumnExists(db, "videos", r.from) {
+			continue
+		}
+		if err := db.Exec("ALTER TABLE `videos` CHANGE COLUMN `" + r.from + "` `" + r.to + "` VARCHAR(1024) NULL").Error; err != nil {
+			return err
+		}
+		if lg != nil {
+			lg.Info("renamed videos column", zap.String("from", r.from), zap.String("to", r.to))
+		}
+	}
+	return nil
+}
+
+func migrateTranscodeDeadLetterAutoRetry(db *gorm.DB, lg *zap.Logger) error {
+	if err := db.AutoMigrate(&video.TranscodeDeadLetter{}); err != nil {
+		return err
+	}
+	if lg != nil {
+		lg.Info("added transcode_dead_letters auto retry fields")
+	}
+	return nil
+}
+
+// migrateTranscodeOutboxPinnedNames repairs installs that recorded v26/v27
+// while the models still used GORM's default plural table names: those
+// versions are skipped forever, so the single-name tables (matching goose
+// 00009/00010) must be created by their own versioned migration.
+func migrateTranscodeOutboxPinnedNames(db *gorm.DB, lg *zap.Logger) error {
+	if err := db.AutoMigrate(&video.TranscodeOutbox{}, &video.TranscodeJobDedup{}); err != nil {
+		return err
+	}
+	if lg != nil {
+		lg.Info("pinned transcode_outbox / transcode_job_dedup table names")
+	}
+	return nil
+}
+
+func migrateTranscodeOutbox(db *gorm.DB, lg *zap.Logger) error {
+	if err := db.AutoMigrate(&video.TranscodeOutbox{}); err != nil {
+		return err
+	}
+	if lg != nil {
+		lg.Info("created transcode_outbox table")
+	}
+	return nil
+}
+
+func migrateTranscodeJobDedup(db *gorm.DB, lg *zap.Logger) error {
+	if err := db.AutoMigrate(&video.TranscodeJobDedup{}); err != nil {
+		return err
+	}
+	if lg != nil {
+		lg.Info("created transcode_job_dedup table")
+	}
+	return nil
+}
+
+func migrateTranscodeEvents(db *gorm.DB, lg *zap.Logger) error {
+	if err := db.AutoMigrate(&video.TranscodeEvent{}); err != nil {
+		return err
+	}
+	if lg != nil {
+		lg.Info("created transcode_events table")
+	}
+	return nil
 }
 
 // migrateDirectUploadClaims creates the claim table that makes direct-upload

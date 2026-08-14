@@ -27,6 +27,8 @@ When production has `VITE_VIDEO_UPLOAD_DISABLED=true`, the user-facing Creator C
 4. (Optional) Admin panel review and publish, or directly status=published
 ```
 
+> **Unaffected by the app upload pipeline**: this flow never touches the app's upload APIs and uses none of the source-object namespaces (`uploads/`, `drafts/`, `raws/`). Transcode outputs go straight to `videos/{id}.mp4` / `covers/{id}.jpg`, and the database records final public URLs and status. Therefore changes like "direct-to-OSS only" or "removing the server-side `raws/` upload path" do not affect it; this remains the official way for admins to publish videos when upload is disabled.
+
 ---
 
 ## 1. Prepare Files Locally

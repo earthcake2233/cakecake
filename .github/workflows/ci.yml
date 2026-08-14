@@ -104,6 +104,12 @@ jobs:
         # model->service/data are forbidden (see scripts/check_deps.sh).
         run: bash scripts/check_deps.sh
 
+      - name: Check goose/GORM migration sync
+        # Every GORM model table + column must exist in the goose SQL
+        # migrations; prevents the two migration tracks from drifting
+        # (see scripts/check_migration_sync.py).
+        run: python3 scripts/check_migration_sync.py
+
       - name: Check handler tests never call srve without assertions
         # Bare srve() smoke calls inflate coverage without verifying behavior.
         # The baseline is tracked in scripts/bare_srve_baseline.txt and must

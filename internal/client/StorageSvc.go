@@ -28,7 +28,10 @@ type StorageSvc interface {
 	DownloadFile(objectKey string, localPath string) error
 	Exists(objectKey string) (bool, error)
 	Size(objectKey string) (int64, error)
-	PresignPut(objectKey string, expiry time.Duration) (string, error)
+	PresignPut(objectKey string, expiry time.Duration, contentType string) (string, error)
+	PresignGet(objectKey string, expiry time.Duration) (string, error)
+	CopyObject(srcKey string, dstKey string) error
+	DeleteObject(objectKey string) error
 	UploadFile(objectKey string, localPath string) error
 	UploadReader(objectKey string, r io.Reader) error
 }

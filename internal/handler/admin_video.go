@@ -223,13 +223,7 @@ func (a *API) AdminRejectVideo(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	now := time.Now()
-	if err := a.VideoSvc.AdminUpdateVideo(c.Request.Context(), id, map[string]interface{}{
-		"status":               video.StatusRejected,
-		"fail_reason":          reason,
-		"reviewed_at":          now,
-		"reviewed_by_admin_id": adminID,
-	}); err != nil {
+	if err := a.VideoSvc.AdminRejectVideoWithAudit(c.Request.Context(), id, reason, adminID); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
@@ -266,7 +260,7 @@ func (a *API) AdminDeleteVideo(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	removeVideoDraftFiles(*v)
+	a.purgeDraftMedia(*v)
 	if err := a.VideoSvc.AdminDeleteVideoCascade(c.Request.Context(), id, func(tx dbtx.Tx) error {
 		return deleteVideoCascade(tx, id)
 	}); err != nil {

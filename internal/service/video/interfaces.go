@@ -27,6 +27,8 @@ type VideoProvider interface {
 	CreateVideo(ctx context.Context, v *video.Video) error
 	DeleteVideo(ctx context.Context, id uint64) error
 	DeleteDirectUploadClaim(ctx context.Context, rawKey string) error
+	CreateTranscodeOutbox(ctx context.Context, outbox *video.TranscodeOutbox) error
+	RecordTranscodeEvent(ctx context.Context, ev *video.TranscodeEvent) error
 	UpdateVideo(ctx context.Context, v *video.Video, updates map[string]interface{}) error
 	UpdateVideoByID(ctx context.Context, id uint64, updates map[string]interface{}) error
 	UpdateVideoField(ctx context.Context, v *video.Video, field string, value interface{}) error

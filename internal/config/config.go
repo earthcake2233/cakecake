@@ -5,6 +5,7 @@ import (
 	"go.uber.org/zap/zapcore"
 	"net/url"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -59,6 +60,14 @@ type C struct {
 	// OSSPublicURLPrefix optional full prefix without trailing slash, e.g. https://bucket.oss-cn-beijing.aliyuncs.com
 	OSSPublicURLPrefix string `json:"oss_public_url_prefix"`
 
+	// OrphanObjectRetention is how long an unlinked uploads//drafts/ object
+	// may live before the in-app cleanup task deletes it (default 24h).
+	OrphanObjectRetention time.Duration `json:"orphan_object_retention"`
+
+	// OrphanCleanInterval is how often the cleanup task scans staged objects
+	// (default 1h).
+	OrphanCleanInterval time.Duration `json:"orphan_clean_interval"`
+
 	SensitiveWordsFile string `json:"sensitive_words_file"`
 
 	TempUploadDir string `json:"temp_upload_dir"`
@@ -97,9 +106,14 @@ type C struct {
 	TranscodeTimeout time.Duration `json:"transcode_timeout"`
 
 	// TranscodeConcurrency is the number of main-queue consumers running in
-	// this process. Transcoding is CPU-bound; production typically sets it
-	// to min(cores, 4) and scales out with more instances.
+	// this process. Transcoding is CPU-bound; the default converges to
+	// min(NumCPU, 4) unless TRANSCODE_CONCURRENCY is set explicitly.
 	TranscodeConcurrency int `json:"transcode_concurrency"`
+
+	// TranscodeMaxQueue is the main-queue depth threshold for backpressure:
+	// uploads are rejected with 503 while depth >= this value. 0 disables
+	// the check.
+	TranscodeMaxQueue int `json:"transcode_max_queue"`
 
 	// SeedDemoData: when true and the videos table is empty, insert demo users/videos/danmaku
 	// pointing at public demo media URLs (Docker Compose one-command experience).
@@ -163,6 +177,17 @@ func mustParseDuration(s string, def time.Duration) time.Duration {
 		return def
 	}
 	return d
+}
+
+func defaultTranscodeConcurrency() int {
+	n := runtime.NumCPU()
+	if n > 4 {
+		n = 4
+	}
+	if n < 1 {
+		return 1
+	}
+	return n
 }
 
 func atoi(s string, def int) int {
@@ -233,12 +258,15 @@ func Load() *C {
 			os.Getenv("OSS_ENDPOINT"),
 			os.Getenv("OSS_BUCKET"),
 		),
-		OSSPublicURLPrefix: os.Getenv("OSS_PUBLIC_URL_PREFIX"),
+		OSSPublicURLPrefix:    os.Getenv("OSS_PUBLIC_URL_PREFIX"),
+		OrphanObjectRetention: mustParseDuration(os.Getenv("OSS_ORPHAN_RETENTION"), 24*time.Hour),
+		OrphanCleanInterval:   mustParseDuration(os.Getenv("OSS_ORPHAN_CLEAN_INTERVAL"), time.Hour),
 
 		SensitiveWordsFile:    getenv("SENSITIVE_WORDS_FILE", "./configs/sensitive_words.txt"),
 		TempUploadDir:         getenv("TEMP_UPLOAD_DIR", "./data/tmp"),
 		TranscodeTimeout:      mustParseDuration(os.Getenv("TRANSCODE_TIMEOUT"), 10*time.Minute),
-		TranscodeConcurrency:  atoi(os.Getenv("TRANSCODE_CONCURRENCY"), 1),
+		TranscodeConcurrency:  atoi(os.Getenv("TRANSCODE_CONCURRENCY"), defaultTranscodeConcurrency()),
+		TranscodeMaxQueue:     atoi(os.Getenv("TRANSCODE_MAX_QUEUE"), 0),
 		FFprobePath:           strings.TrimSpace(os.Getenv("FFPROBE_PATH")),
 		FFmpegPath:            strings.TrimSpace(os.Getenv("FFMPEG_PATH")),
 		IP2RegionV4XDB:        getenv("IP2REGION_V4_XDB", "./configs/ip2region_v4.xdb"),
@@ -284,10 +312,13 @@ func (c *C) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	enc.AddString("oss_endpoint", c.OSSEndpoint)
 	enc.AddString("oss_bucket", c.OSSBucket)
 	enc.AddString("oss_public_url_prefix", c.OSSPublicURLPrefix)
+	enc.AddDuration("orphan_object_retention", c.OrphanObjectRetention)
+	enc.AddDuration("orphan_clean_interval", c.OrphanCleanInterval)
 	enc.AddString("sensitive_words_file", c.SensitiveWordsFile)
 	enc.AddString("temp_upload_dir", c.TempUploadDir)
 	enc.AddDuration("transcode_timeout", c.TranscodeTimeout)
 	enc.AddInt("transcode_concurrency", c.TranscodeConcurrency)
+	enc.AddInt("transcode_max_queue", c.TranscodeMaxQueue)
 	enc.AddString("ffprobe_path", c.FFprobePath)
 	enc.AddString("ffmpeg_path", c.FFmpegPath)
 	enc.AddString("ip2region_v4_xdb", c.IP2RegionV4XDB)

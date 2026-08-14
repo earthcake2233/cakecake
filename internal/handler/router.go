@@ -17,6 +17,7 @@ import (
 func RegisterRoutes(r *gin.Engine, a *API, jwtm *jwttoken.Manager, appEnv string) {
 	r.Use(corsMiddleware)
 	r.Use(logger.GinMiddleware(a.Log))
+	r.Use(middleware.TraceID())
 	if a.RateLimiter != nil {
 		r.Use(a.RateLimiter.RateLimit())
 	}
@@ -150,6 +151,7 @@ func registerVideoRoutes(r *gin.Engine, pub, admin, authd *gin.RouterGroup, a *A
 	authd.POST("/videos/upload-ticket", a.CreateVideoUploadTicket)
 	authd.POST("/videos", a.UploadVideo)
 	authd.POST("/videos/draft", a.SaveVideoDraft)
+	authd.POST("/videos/draft/upload-ticket", a.CreateVideoDraftUploadTicket)
 	authd.PUT("/videos/:id/draft", a.UpdateVideoDraft)
 	authd.POST("/videos/:id/draft", a.UpdateVideoDraft)
 	authd.POST("/videos/:id/publish", a.PublishVideoDraft)

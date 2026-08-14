@@ -207,7 +207,22 @@ func main() {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
+		worker.StartOrphanObjectCleanup(ctx, db, ossc, cfg.OrphanObjectRetention, cfg.OrphanCleanInterval, log)
+	}()
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		worker.StartTranscodeDeadLetterAutoRetry(ctx, db, log)
+	}()
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
 		worker.StartQueueDepthCollector(ctx, cfg, log)
+	}()
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		worker.StartTranscodeOutboxRelay(ctx, db, mq, log)
 	}()
 
 	pc := &playcount.PlayCounter{Rdb: rdb, Store: playcount.NewPlayCountStore(db)}
@@ -309,7 +324,12 @@ func main() {
 	userSvc := user.NewUserService(db, log)
 	searchSvc := searchsvc.NewSearchService(esc, db, rdb, log)
 	dailyRewardSvc := dailyreward.NewDailyRewardService(db)
-	videoSvc := video.NewVideoService(db, rdb, log, esc, mq, ossc)
+	var transcodeBackpressure *queue.TranscodeBackpressure
+	if cfg.TranscodeMaxQueue > 0 && cfg.RabbitMQMgmtURL != "" {
+		user, pass := queue.AMQPCredentials(cfg.RabbitMQURL)
+		transcodeBackpressure = queue.NewTranscodeBackpressure(cfg.RabbitMQMgmtURL, user, pass, int64(cfg.TranscodeMaxQueue))
+	}
+	videoSvc := video.NewVideoService(db, rdb, log, esc, mq, ossc, transcodeBackpressure)
 	bannerSvc := banner.NewBannerService(db)
 	dmSvc := dm.NewDmService(db, rdb, log)
 	favoriteSvc := favorite.NewFavoriteService(db, rdb, log, userProv, videoProv)
@@ -317,7 +337,7 @@ func main() {
 	dynamicSvc := dynamic.NewDynamicService(db, rdb, log)
 	engagementSvc := engagement.NewEngagementService(db, rdb, log, userProv, videoProv)
 	viewHistorySvc := viewhistory.NewViewHistoryService(db, rdb, log)
-	videoDraftSvc := video.NewVideoDraftService(db, rdb, log, mq, ossc)
+	videoDraftSvc := video.NewVideoDraftService(db, rdb, log, mq, ossc, transcodeBackpressure)
 	creatorCommentSvc := comment.NewCreatorCommentService(db, rdb, log)
 	searchHistorySvc := searchsvc.NewSearchHistoryService(db, log)
 	hotSearchSvc := hotsearch.NewHotSearchService(db, searchHot)

@@ -149,8 +149,10 @@ sequenceDiagram
     participant FF as FFmpeg
     participant OSS as 阿里云 OSS
 
-    C->>API: POST /videos (multipart/form-data)
-    API->>DB: INSERT video (status: processing)
+    C->>OSS: PUT raw video (presigned)
+    C->>OSS: PUT cover (presigned)
+    C->>API: POST /videos (JSON: raw_key/cover_key)
+    API->>DB: INSERT video + transcode_outbox (同事务)
     API->>RMQ: PUBLISH TranscodeJob
     API-->>C: 200 OK (video_id)
 
@@ -167,24 +169,39 @@ sequenceDiagram
 
 **流程：**
 
-1. UP 主上传原始视频 + 可选自定义封面 → `POST /api/v1/videos`
-2. 服务端写入 MySQL（status: `processing`），原始文件存入临时目录
-3. 配置 OSS 时先把源文件上传到 `raws/{videoID}/source.ext`，投递 `TranscodeJob{VideoID, RawKey, CoverKey}`；未配置 OSS 才回退本地 `RawPath/CoverPath`
-4. Worker 按 `TRANSCODE_CONCURRENCY`（默认 1，生产建议按核数 2-4）起 N 个消费者并行处理：按 RawKey 从 OSS 下载源文件 → FFmpeg 转 H.264 MP4（带 `TRANSCODE_TIMEOUT` 超时，默认 10m，挂死进程会被杀掉）→ 截取第 1 帧为封面 → 上传 OSS
+1. 上传只有一条用户链路：`POST /api/v1/videos/upload-ticket` 签发 presigned PUT URL，浏览器把原始视频（可选封面）**直传 OSS**，再以 JSON 提交元数据 + `raw_key/cover_key`——大文件字节不经过 API 服务器带宽。**发布页在用户选完视频文件后立即开始后台直传**（填表单与上传并行），点“立即投稿”时只做校验 + 原子入队，感知延迟趋近于零
+2. 服务端**只做便宜的 HEAD 校验**（对象归属 `uploads/{uid}/` 命名空间 + `Exists` + 大小上限 500 MB，不下载原文件），时长采用前端提交的提示值（仅用于播放器展示，钳制到 30 分钟），写入 MySQL 并在**同一事务**写入 `transcode_outbox`（Outbox 模式），由 relay confirm 发布 `TranscodeJob{VideoID, JobID, TraceID, RawKey, CoverKey}`——提交接口不再阻塞在 OSS 全量下载上
+3. 草稿/换源复用同一套直传：草稿票签发 `drafts/{uid}/{uuid}/...` 键，保存草稿只写元数据 + 对象键，发布草稿时再次校验对象并**原子提交**「outbox 行 + status=processing」；草稿预览用短时 presigned GET，不公开私有对象
+4. Worker 按 `TRANSCODE_CONCURRENCY`（默认 1，生产建议按核数 2-4）起 N 个消费者并行处理：按 RawKey 从 OSS 下载源文件 → **先 ffprobe 复核真实时长（15s 超时；≤30 分钟，超限或文件不可读直接永久失败并给出可读原因；同时回写 `duration_sec`）** → FFmpeg 转 H.264 MP4（带 `TRANSCODE_TIMEOUT` 超时，默认 10m，挂死进程会被杀掉）→ 截取第 1 帧为封面 → 上传 OSS
 5. 成功：更新 `video_url`、`cover_url`，status → `published`（或审核模式 `pending_review`）
 6. 失败：瞬时失败将 `RetryCount+1` 的 job **confirm 发布**到 `retry_30s/60s/90s` 延迟队列，TTL 到期由 RabbitMQ DLX 自动投回主队列，最多重试 3 次；永久性失败标记 `failed` 并记录可读原因
 7. 成功路径的 DB 写入失败不吞掉：`db.Updates` / 发布状态失败同样进入重试，源文件保留，OSS 覆盖写幂等，最终要么成功要么进死信可重放
 8. 主消费者与死信消费者一样在 channel 断线后 **3s 退避自动重连**；RabbitMQ 连接断开后 `Client` **自动重建连接 + 队列 + confirm**（broker 重启无需重启进程）
 9. 死信消费者先写 `processed_at` 再 Ack（标记失败会重投）；retention 只把到期死信标记 `archived_at` 归档，不物理删除审计行
-10. 上传支持客户端直传：`POST /api/v1/videos/upload-ticket` 发 presigned PUT URL，浏览器直传 OSS 后 JSON 提交；ffprobe 探测带 15s 超时
+10. 用户上传/草稿/换源全部走 presigned 直传（服务端 multipart 已从视频链路移除）；提交只做归属/大小/存在性 HEAD 校验，**不下载原文件**；时长校验统一由 worker 在下载后执行
+11. **消息去重**：job 带稳定 `job_id`，worker 处理前插入 `(job_id, retry_count)` 去重行——at-least-once 重复投递直接跳过，合法 retry 不受影响
+12. **状态机 + 审计**：状态变更先过 `ValidateTranscodeStatusTransition`，成功路径与 `PublishVideo` 用条件更新（`WHERE status = 当前状态`）防并发覆盖（如 admin reject 与 worker 完成竞态），`transcode_events` 记录 from/to/reason
+13. **trace 贯穿**：`X-Trace-Id` 从上传请求透传到 outbox payload → `TranscodeJob.TraceID`，worker/死信日志按 `trace_id` 关联整条链路
+14. **死信自动闭环**：后台任务按原因自动重放瞬时失败（`auto_retry_count` + 指数退避 + 审计事件），永久失败只走人工重放；`TRANSCODE_MAX_QUEUE` 背压：主队列超限时上传返回 503
 
 所有发布（上传入队、重试调度、死信、管理后台重放）都走 **publisher confirm + mandatory**：入队成功是 broker 确认过的可判定结果，不可路由消息会触发 basic.return 报错。
 
 **可观测性（SLO）：** `cakecake_transcode_jobs_total{result=...}`（成功/永久失败）、`duration_seconds`（耗时直方图）、`retries_scheduled_total`、`queue_depth{queue=...}`（管理 API 每 15s 采集）；Grafana 面板展示成功率、P95 耗时、队列深度、死信/重试，Alertmanager 对积压、失败率、慢任务告警。
 
+**一致性与幂等：**
+
+- Outbox 本地消息表保证「video 行 + 待发 job」原子提交，relay confirm 发布成功才标 sent，失败指数退避（指数饱和防溢出）；
+- `(job_id, retry_count)` 复合去重键防重复转码；终态守卫兜底已完成任务；
+- 状态机校验 + 条件更新防「陈旧 worker 覆盖并发审核结果」。
+- 死信自动重试（仅瞬时原因、重新生成 JobID、每行上限 3 次、1m/2m/4m 退避封顶 15m）与人工重放并存，均写审计；按 video 生命周期总次数封顶（3 次），失败重试产生的新死信行不会无限循环；
+- 背压：`TRANSCODE_MAX_QUEUE` 超过阈值时直传/草稿发布返回 503（管理 API 故障时放行）。
+
 **源文件存储与重放：**
 
-- OSS 模式下源文件/封面存对象（`raws/{videoID}/source.ext`、`raws/{videoID}/cover.ext`），job 只携带对象 key；
+- OSS 模式下源文件/封面存对象：直传提交流 `uploads/{uid}/{uuid}/...`，草稿阶段存 `drafts/{uid}/{uuid}/...`，转码输出存 `videos/{id}.mp4` / `covers/{id}.jpg`；job 只携带对象 key；
+- 草稿对象属于私有命名空间，预览经 presigned GET（307）短时授权；封面在保存草稿时用服务端 `CopyObject` 复制到公开 `covers/{id}.{ext}` 并记录 URL；
+- 选文件即传会产生“未发布”的孤儿对象（用户放弃/换文件/改存草稿，或上传中途取消——ticket 未上传不产生对象，但**部分上传会残留**）：应用内 `StartOrphanObjectCleanup` 后台任务默认每 1h 扫描一次 `uploads/`、`drafts/` 前缀，只删除**超过 24h 且 DB 无任何引用**的对象（草稿键、`direct_upload_claims`、outbox payload、死信 payload 均视为引用，在途/未提交上传受宽限期保护），删除计数上报 Prometheus；OSS 生命周期规则降级为可选兜底（若配置，时间应大于应用内保留期，且它不会检查 DB 引用）；前端换文件/改存草稿时用 token 作废旧上传；
+- 遗留本地路径（`RawPath`）仅兼容迁移前的旧草稿/旧死信，新写入不再产生；
 - Worker 每次消费把对象下载到本地临时文件再转码，成功后或永久失败后删除源对象；重试/死信路径保留对象作为补偿输入；
 - 死信重放前用 `Exists` 校验 OSS 对象仍在（旧本地路径死信仍走 `os.Stat` 兼容），跨实例、容器重建、磁盘清理后重放不再依赖单机路径；
 - 本地 `RawPath` 模式仅用于 OSS 未配置的兼容/演示场景。

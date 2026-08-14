@@ -16,6 +16,10 @@ type TranscodeDeadLetter struct {
 	// RequeuedAt / RequeuedCount track manual compensation via the admin API.
 	RequeuedAt    *time.Time
 	RequeuedCount int `gorm:"type:bigint;not null;default:0"`
+	// AutoRetryCount / LastAutoRetryAt track automatic requeue of transient
+	// failures (the dead-letter auto-retry loop), separate from manual replay.
+	AutoRetryCount  int `gorm:"not null;default:0"`
+	LastAutoRetryAt *time.Time
 	// ArchivedAt is set by the retention job instead of physically deleting
 	// the audit row: dead letters are archived, never silently destroyed.
 	ArchivedAt *time.Time

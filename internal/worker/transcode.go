@@ -32,6 +32,7 @@ type TranscodeJob = queue.TranscodeJob
 type ffmpegOps interface {
 	TranscodeToH264MP4(ctx context.Context, rawPath, outMP4 string) (stderr string, err error)
 	ScreenshotJPEG(ctx context.Context, inPath, outPath string, second float64) (stderr string, err error)
+	ProbeDurationSeconds(ctx context.Context, path string) (float64, error)
 	IsPermanentTranscodeFailure(stderr string) bool
 }
 
@@ -52,6 +53,11 @@ func (realFFmpegOps) IsPermanentTranscodeFailure(stderr string) bool {
 	return ffmpeg.IsPermanentTranscodeFailure(stderr)
 }
 
+// ProbeDurationSeconds returns media duration via ffprobe.
+func (realFFmpegOps) ProbeDurationSeconds(ctx context.Context, path string) (float64, error) {
+	return ffmpeg.ProbeDurationSeconds(ctx, path)
+}
+
 // transcodePublisher is the minimal channel surface needed to republish a job.
 type transcodePublisher interface {
 	PublishConfirmed(ctx context.Context, exchange, key string, mandatory bool, msg amqp.Publishing) error
@@ -67,6 +73,14 @@ type objectStore interface {
 // maxTranscodeRetries is the number of retryable attempts before a job is
 // dead-lettered. Retry backoff is owned by RabbitMQ TTL queues.
 const maxTranscodeRetries = 3
+
+// maxVideoDurationSec is the authoritative media duration limit enforced by
+// the worker after it downloads the source (the submit path only stores a
+// client-provided hint and never blocks on a full download).
+const maxVideoDurationSec = 30 * 60
+
+// transcodeProbeTimeout bounds the worker-side ffprobe run.
+const transcodeProbeTimeout = 15 * time.Second
 
 // defaultTranscodeTimeout bounds one ffmpeg run when TRANSCODE_TIMEOUT is
 // unset or the config is nil (tests).
@@ -168,6 +182,25 @@ func handleDeliveryWith(ctx context.Context, cfg *config.C, db *gorm.DB, pubCh t
 		ackDelivery(lg, d)
 		return
 	}
+	if db != nil && job.JobID != "" {
+		// Message-level dedup: a (job_id, retry_count) pair is inserted before
+		// processing starts, so an at-least-once redelivery of an in-flight or
+		// finished attempt is skipped instead of re-transcoding.
+		dedup := video.TranscodeJobDedup{JobID: job.JobID, RetryCount: job.RetryCount, VideoID: job.VideoID}
+		if err := db.WithContext(ctx).Create(&dedup).Error; err != nil {
+			if isDuplicateJobErr(err) {
+				lg.Info("transcode job duplicate, skipping",
+					zap.String("job_id", job.JobID),
+					zap.Int("retry_count", job.RetryCount))
+				ackDelivery(lg, d)
+				return
+			}
+			lg.Warn("transcode dedup insert failed; processing anyway", zap.Error(err))
+		}
+	}
+	if job.TraceID != "" {
+		lg = lg.With(zap.String("trace_id", job.TraceID))
+	}
 	lg.Info("transcode job received", zap.Uint64("video_id", job.VideoID), zap.String("raw", job.RawPath))
 	// At-least-once redelivery guard: a crash between the DB update and the
 	// Ack can redeliver an already-processed job. If the video already reached
@@ -195,7 +228,7 @@ func handleDeliveryWith(ctx context.Context, cfg *config.C, db *gorm.DB, pubCh t
 	}
 	if ossClient == nil {
 		lg.Error("oss not configured, failing job", zap.Uint64("video_id", job.VideoID))
-		failVideo(db, job.VideoID, "OSS 未配置")
+		failVideo(ctx, db, job.VideoID, job.JobID, "OSS 未配置")
 		cleanupPaths(job.RawPath, job.CoverPath, "", "", "")
 		ackDelivery(lg, d)
 		return
@@ -234,10 +267,42 @@ func handleDeliveryWith(ctx context.Context, cfg *config.C, db *gorm.DB, pubCh t
 		downloadedSources = append(downloadedSources, coverLocal)
 	}
 
+	// Authoritative duration validation: submit no longer downloads the
+	// object, so the worker probes the real source before transcoding and
+	// updates the stored duration. Oversized media fails permanently with a
+	// readable reason; unreadable media is a content problem, not a retryable
+	// network blip.
+	probeCtx, cancelProbe := context.WithTimeout(ctx, transcodeProbeTimeout)
+	probedDuration, perr := ff.ProbeDurationSeconds(probeCtx, rawLocal)
+	cancelProbe()
+	if perr != nil {
+		incrTranscodePermanentFailure()
+		failVideo(ctx, db, job.VideoID, job.JobID, "无法读取视频时长，文件可能已损坏")
+		cleanupPaths(rawLocal, coverLocal)
+		deleteSourceObjects(ossClient, lg, job.RawKey, job.CoverKey)
+		ackDelivery(lg, d)
+		return
+	}
+	if probedDuration > maxVideoDurationSec {
+		incrTranscodePermanentFailure()
+		failVideo(ctx, db, job.VideoID, job.JobID,
+			fmt.Sprintf("视频时长超过 %d 分钟上限，无法处理", maxVideoDurationSec/60))
+		cleanupPaths(rawLocal, coverLocal)
+		deleteSourceObjects(ossClient, lg, job.RawKey, job.CoverKey)
+		ackDelivery(lg, d)
+		return
+	}
+
 	outMP4 := filepath.Join(cfg.TempUploadDir, fmt.Sprintf("%d_out.mp4", job.VideoID))
 	coverOut := filepath.Join(cfg.TempUploadDir, fmt.Sprintf("%d_cover.jpg", job.VideoID))
 	_ = os.Remove(outMP4)
-	_ = os.Remove(coverOut)
+	// coverOut shares its path with a downloaded user cover (both are
+	// {temp}/{video_id}_cover.jpg). Only remove the stale default cover when
+	// no user cover was downloaded; otherwise the download just deleted
+	// itself before the upload.
+	if coverLocal == "" {
+		_ = os.Remove(coverOut)
+	}
 
 	lg.Info("transcode ffmpeg start", zap.Uint64("video_id", job.VideoID))
 	ffCtx, cancelFF := context.WithTimeout(ctx, transcodeTimeout(cfg))
@@ -247,7 +312,7 @@ func handleDeliveryWith(ctx context.Context, cfg *config.C, db *gorm.DB, pubCh t
 		lg.Warn("ffmpeg transcode failed", zap.Uint64("video_id", job.VideoID), zap.Error(err), zap.String("stderr", stderr))
 		if ff.IsPermanentTranscodeFailure(stderr) {
 			incrTranscodePermanentFailure()
-			failVideo(db, job.VideoID, strings.TrimSpace(stderr))
+			failVideo(ctx, db, job.VideoID, job.JobID, strings.TrimSpace(stderr))
 			cleanupPaths(rawLocal, coverLocal, outMP4, coverOut, "")
 			deleteSourceObjects(ossClient, lg, job.RawKey, job.CoverKey)
 			ackDelivery(lg, d)
@@ -277,7 +342,7 @@ func handleDeliveryWith(ctx context.Context, cfg *config.C, db *gorm.DB, pubCh t
 			lg.Warn("ffmpeg screenshot failed", zap.Error(err), zap.String("stderr", se))
 			if ff.IsPermanentTranscodeFailure(se) {
 				incrTranscodePermanentFailure()
-				failVideo(db, job.VideoID, strings.TrimSpace(se))
+				failVideo(ctx, db, job.VideoID, job.JobID, strings.TrimSpace(se))
 				cleanupPaths(rawLocal, coverLocal, outMP4, coverOut, "")
 				deleteSourceObjects(ossClient, lg, job.RawKey, job.CoverKey)
 				ackDelivery(lg, d)
@@ -323,16 +388,29 @@ func handleDeliveryWith(ctx context.Context, cfg *config.C, db *gorm.DB, pubCh t
 	coverURL := cfg.OSSObjectURL(coverKey)
 
 	updates := map[string]interface{}{
-		"video_url": videoURL,
-		"cover_url": coverURL,
+		"video_url":    videoURL,
+		"cover_url":    coverURL,
+		"duration_sec": probedDuration,
 	}
 	if cfg.VideoReviewRequired {
 		updates["status"] = video.StatusPendingReview
+		if !vsvc.ValidateTranscodeStatusTransition(video.StatusProcessing, video.StatusPendingReview) {
+			lg.Error("illegal transcode status transition",
+				zap.Uint64("video_id", job.VideoID),
+				zap.String("from", video.StatusProcessing),
+				zap.String("to", video.StatusPendingReview))
+			ackDelivery(lg, d)
+			return
+		}
 	}
 	// The OSS objects are already durable; a DB failure must not be swallowed.
 	// Requeue with retry budget instead of Acking a video that would stay
-	// stuck in processing forever. Raw media is kept for compensation.
-	if err := db.Model(&video.Video{}).Where("id = ?", job.VideoID).Updates(updates).Error; err != nil {
+	// stuck in processing forever. Raw media is kept for compensation. The
+	// conditional WHERE status = processing prevents a concurrent admin
+	// reject from being overwritten by a stale worker completion.
+	res := db.Model(&video.Video{}).Where("id = ? AND status = ?", job.VideoID, video.StatusProcessing).Updates(updates)
+	if res.Error != nil {
+		err := res.Error
 		lg.Error("db update after transcode", zap.Error(err), zap.Uint64("video_id", job.VideoID))
 		extras := append(regenerableExtras(outMP4, coverOut, finalCoverPath, coverLocal), downloadedSources...)
 		if requeueOrFail(ctx, db, pubCh, lg, job, fmt.Sprintf("记录转码产物失败: %v", err), extras...) {
@@ -340,6 +418,18 @@ func handleDeliveryWith(ctx context.Context, cfg *config.C, db *gorm.DB, pubCh t
 		}
 		ackDelivery(lg, d)
 		return
+	}
+	if res.RowsAffected == 0 {
+		// A concurrent state change (e.g. admin reject or a newer job) won the
+		// race; do not overwrite it. The source objects are left for the
+		// terminal-state guard on redelivery or retention.
+		lg.Warn("transcode status changed concurrently; not overwriting",
+			zap.Uint64("video_id", job.VideoID))
+		ackDelivery(lg, d)
+		return
+	}
+	if cfg.VideoReviewRequired {
+		vsvc.RecordTranscodeEvent(ctx, db, job.VideoID, job.JobID, video.StatusProcessing, video.StatusPendingReview, "")
 	}
 	if !cfg.VideoReviewRequired {
 		if err := vsvc.PublishVideo(ctx, db, esc, lg, job.VideoID, nil); err != nil {
@@ -358,6 +448,16 @@ func handleDeliveryWith(ctx context.Context, cfg *config.C, db *gorm.DB, pubCh t
 	incrTranscodeSuccess(time.Since(start))
 	lg.Info("transcode completed", zap.Uint64("video_id", job.VideoID))
 	ackDelivery(lg, d)
+}
+
+func isDuplicateJobErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "unique constraint") ||
+		strings.Contains(msg, "duplicate entry") ||
+		strings.Contains(msg, "constraint failed")
 }
 
 // ackDelivery acknowledges a consumed message and logs (rather than swallows) Ack failures.
@@ -401,7 +501,7 @@ func regenerableExtras(outMP4, coverOut, finalCoverPath, userCoverPath string) [
 	return extras
 }
 
-func failVideo(db *gorm.DB, id uint64, reason string) {
+func failVideo(ctx context.Context, db *gorm.DB, id uint64, jobID, reason string) {
 	msg := strings.TrimSpace(reason)
 	if msg != "" {
 		msg = ffmpeg.HumanizeFailReason(msg)
@@ -409,12 +509,30 @@ func failVideo(db *gorm.DB, id uint64, reason string) {
 	if msg == "" {
 		msg = "视频处理失败，请稍后重试。"
 	}
+	from := video.StatusProcessing
+	var v video.Video
+	if err := db.WithContext(ctx).First(&v, id).Error; err == nil {
+		from = v.Status
+		if from == video.StatusFailed {
+			return // idempotent: already failed
+		}
+		if !vsvc.ValidateTranscodeStatusTransition(from, video.StatusFailed) {
+			if logger.L != nil {
+				logger.L.Warn("illegal transcode status transition",
+					zap.Uint64("video_id", id),
+					zap.String("from", from),
+					zap.String("to", video.StatusFailed))
+			}
+			return
+		}
+	}
 	if err := db.Model(&video.Video{}).Where("id = ?", id).Updates(map[string]interface{}{
 		"status":      video.StatusFailed,
 		"fail_reason": truncate(msg, 1900),
 	}).Error; err != nil && logger.L != nil {
 		logger.L.Warn("fail video db update failed", zap.Uint64("video_id", id), zap.Error(err))
 	}
+	vsvc.RecordTranscodeEvent(ctx, db, id, jobID, from, video.StatusFailed, msg)
 }
 
 func truncate(s string, n int) string {
@@ -467,7 +585,7 @@ func deadLetterTranscode(ctx context.Context, db *gorm.DB, pubCh transcodePublis
 func requeueOrFail(ctx context.Context, db *gorm.DB, pubCh transcodePublisher, lg *zap.Logger, job TranscodeJob, reason string, terminalLocalExtras ...string) bool {
 	if job.RetryCount >= maxTranscodeRetries {
 		deadLetterTranscode(ctx, db, pubCh, lg, job, reason)
-		failVideo(db, job.VideoID, reason)
+		failVideo(ctx, db, job.VideoID, job.JobID, reason)
 		cleanupPaths(terminalLocalExtras...)
 		lg.Error("transcode exhausted retries", zap.Uint64("video_id", job.VideoID))
 		return false
@@ -482,7 +600,7 @@ func requeueOrFail(ctx context.Context, db *gorm.DB, pubCh transcodePublisher, l
 	}); err != nil {
 		lg.Error("schedule transcode retry", zap.Error(err), zap.String("retry_queue", retryQueue))
 		deadLetterTranscode(ctx, db, pubCh, lg, job, reason)
-		failVideo(db, job.VideoID, reason)
+		failVideo(ctx, db, job.VideoID, job.JobID, reason)
 		cleanupPaths(terminalLocalExtras...)
 		return false
 	}
@@ -551,6 +669,9 @@ func consumeTranscodeDead(ctx context.Context, ch interface{ Close() error }, ms
 func handleTranscodeDeadLetter(d amqp.Delivery, lg *zap.Logger, db *gorm.DB) {
 	var job TranscodeJob
 	_ = json.Unmarshal(d.Body, &job)
+	if job.TraceID != "" {
+		lg = lg.With(zap.String("trace_id", job.TraceID))
+	}
 	lg.Warn("transcode dead letter consumed",
 		zap.Uint64("video_id", job.VideoID),
 		zap.Int("retry_count", job.RetryCount),

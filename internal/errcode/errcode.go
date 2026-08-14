@@ -29,6 +29,7 @@ const (
 	CodeDirectUploadUnavailable   = 40024
 	CodeDirectUploadSourceMissing = 40025
 	CodeDirectUploadConflict      = 40026
+	CodeTranscodeQueueFull        = 40027
 	CodeTooManyRequests           = 42900
 	CodeUnauthorized              = 40100
 	CodeInvalidLogin              = 40101
@@ -69,6 +70,7 @@ var messages = map[int]string{
 	CodeDirectUploadUnavailable:   "直传暂不可用：OSS 未配置，请稍后重试或改用普通上传",
 	CodeDirectUploadSourceMissing: "直传对象不存在或已过期，请重新上传",
 	CodeDirectUploadConflict:      "该上传已存在或正在处理中，请勿重复提交",
+	CodeTranscodeQueueFull:        "转码队列已满，请稍后重试",
 	CodeTooManyRequests:           "请求过于频繁，请稍后重试",
 	CodeDanmakuCooldown:           "发送过于频繁，请稍后再试",
 	CodeDanmakuSensitive:          "弹幕内容包含违规信息",

@@ -2,12 +2,6 @@ package worker
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
-	"io"
-	"net/http"
-	"net/url"
-	"strings"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -56,6 +50,13 @@ var (
 		Name:      "queue_depth",
 		Help:      "Current message backlog per RabbitMQ transcode queue (management API).",
 	}, []string{"queue"})
+
+	orphanObjectsDeletedTotal = promauto.NewCounter(prometheus.CounterOpts{
+		Namespace: "cakecake",
+		Subsystem: "upload",
+		Name:      "orphan_objects_deleted_total",
+		Help:      "Total unlinked uploads/drafts objects deleted by the in-app orphan cleanup task.",
+	})
 )
 
 func incrTranscodeDeadLetters() {
@@ -73,6 +74,10 @@ func incrTranscodeSuccess(d time.Duration) {
 
 func incrTranscodePermanentFailure() {
 	transcodeJobsTotal.WithLabelValues("permanent_failure").Inc()
+}
+
+func incrOrphanObjectsDeleted() {
+	orphanObjectsDeletedTotal.Inc()
 }
 
 // queueDepthCollectInterval is how often the management API is polled.
@@ -94,9 +99,9 @@ func StartQueueDepthCollector(ctx context.Context, cfg *config.C, lg *zap.Logger
 	if cfg == nil || cfg.RabbitMQMgmtURL == "" {
 		return
 	}
-	user, pass := amqpCredentials(cfg.RabbitMQURL)
+	user, pass := queue.AMQPCredentials(cfg.RabbitMQURL)
 	fetch := func() {
-		depths, err := fetchQueueDepths(cfg.RabbitMQMgmtURL, user, pass, transcodeQueuesForDepth)
+		depths, err := queue.FetchQueueDepths(cfg.RabbitMQMgmtURL, user, pass, transcodeQueuesForDepth)
 		if err != nil {
 			lg.Warn("fetch rabbitmq queue depth", zap.Error(err))
 			return
@@ -116,46 +121,4 @@ func StartQueueDepthCollector(ctx context.Context, cfg *config.C, lg *zap.Logger
 			fetch()
 		}
 	}
-}
-
-func fetchQueueDepths(mgmtURL, user, pass string, queues []string) (map[string]int64, error) {
-	client := &http.Client{Timeout: 5 * time.Second}
-	out := make(map[string]int64, len(queues))
-	for _, q := range queues {
-		endpoint := fmt.Sprintf("%s/api/queues/%s/%s", strings.TrimSuffix(mgmtURL, "/"), url.PathEscape("/"), q)
-		req, err := http.NewRequest(http.MethodGet, endpoint, nil)
-		if err != nil {
-			return nil, err
-		}
-		req.SetBasicAuth(user, pass)
-		resp, err := client.Do(req)
-		if err != nil {
-			return nil, err
-		}
-		body, readErr := io.ReadAll(resp.Body)
-		_ = resp.Body.Close()
-		if readErr != nil {
-			return nil, readErr
-		}
-		if resp.StatusCode != http.StatusOK {
-			return nil, fmt.Errorf("management api %s: HTTP %d", q, resp.StatusCode)
-		}
-		var d struct {
-			Messages int64 `json:"messages"`
-		}
-		if err := json.Unmarshal(body, &d); err != nil {
-			return nil, err
-		}
-		out[q] = d.Messages
-	}
-	return out, nil
-}
-
-func amqpCredentials(raw string) (string, string) {
-	u, err := url.Parse(raw)
-	if err != nil || u.User == nil {
-		return "", ""
-	}
-	pass, _ := u.User.Password()
-	return u.User.Username(), pass
 }

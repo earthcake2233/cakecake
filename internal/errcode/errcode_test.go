@@ -38,6 +38,7 @@ func TestGetMsg_KnownCodes(t *testing.T) {
 		CodeDirectUploadUnavailable,
 		CodeDirectUploadSourceMissing,
 		CodeDirectUploadConflict,
+		CodeTranscodeQueueFull,
 		CodeTooManyRequests,
 		CodeUnauthorized,
 		CodeInvalidLogin,

@@ -392,6 +392,9 @@ import { ElMessage, ElMessageBox } from "element-plus";
 import "element-plus/es/components/message-box/style/css";
 import "element-plus/es/components/message/style/css";
 import {
+  mbCreateDraftUploadTicket,
+  mbCreateUploadTicket,
+  mbCreateVideoDirect,
   mbFetchDraftVideoObjectUrl,
   mbGetVideo,
   mbPublishVideoDraft,
@@ -399,8 +402,7 @@ import {
   mbSaveVideoDraft,
   mbUpdateMyVideo,
   mbUpdateVideoCover,
-  mbUpdateVideoDraft,
-  mbUploadVideo
+  mbUpdateVideoDraft
 } from "@/api/cakecake";
 import icoComplete from "@/assets/upload_manager/article/complete.png";
 import icoUpdate from "@/assets/upload_manager/article/update.png";
@@ -410,6 +412,7 @@ import {
   clearPendingVideoFile,
   takePendingVideoFile
 } from "@/utils/creatorPendingVideo";
+import { uploadToPresignedURL } from "@/utils/directVideoUpload";
 import {
   isKnownVideoZone,
   normalizeVideoZoneValue
@@ -480,6 +483,14 @@ export default {
       uploadProgress: 0,
       /** 上传已成功：用于在 finally 清空 progress 后仍显示满格绿色条，直至路由离开 */
       mbUploadFinishedOk: false,
+      /** 发布页：选完视频文件即后台直传 OSS（填表单与上传并行） */
+      bgUploading: false,
+      bgUploadDone: false,
+      bgUploadError: "",
+      bgRawKey: "",
+      bgUploadToken: 0,
+      bgUploadFile: null,
+      bgUploadPromise: null,
       /** 0–100：本地隐藏 video 的缓冲/解码进度（发布页未上传前） */
       localMediaProgress: 0,
       /** bump 后让「可截取封面」等计算属性随 capVideo 赋值刷新 */
@@ -592,19 +603,19 @@ export default {
       }
       return "";
     },
-    /** cakecake 发布：multipart 正在上传（用于进度条配色） */
+    /** cakecake 发布：直传 OSS 正在上传（用于进度条配色） */
     mbUploadBarActive() {
       return (
         this.isCakecakeApiEnv &&
         this.isPublishMode &&
-        this.uploadSubmitting
+        (this.uploadSubmitting || this.bgUploading)
       );
     },
     mbUploadBarComplete() {
       if (!this.isCakecakeApiEnv || !this.isPublishMode) return false;
       return this.uploadProgress >= 100 || this.mbUploadFinishedOk;
     },
-    /** 整条进度条用成功色 #43ce5b：含服务端上传完成，或本地文件已缓冲至 100%（见文案「本地已载入」） */
+    /** 整条进度条用成功色 #43ce5b：含直传 OSS 完成，或本地文件已缓冲至 100%（见文案「本地已载入」） */
     uploadProgressBarCompleteGreen() {
       if (this.mbUploadBarComplete) return true;
       if (
@@ -622,7 +633,7 @@ export default {
       return (
         this.isCakecakeApiEnv &&
         this.isPublishMode &&
-        this.uploadSubmitting &&
+        (this.uploadSubmitting || this.bgUploading) &&
         this.uploadProgress < 1
       );
     },
@@ -631,7 +642,7 @@ export default {
       if (
         this.isCakecakeApiEnv &&
         this.isPublishMode &&
-        (this.uploadSubmitting || this.mbUploadFinishedOk)
+        (this.uploadSubmitting || this.bgUploading || this.mbUploadFinishedOk)
       ) {
         if (this.mbUploadFinishedOk) {
           return { width: "100%" };
@@ -705,6 +716,14 @@ export default {
         }
         return this.uploadSubmitting ? "保存中…" : "保存修改";
       }
+      if (this.isCakecakeApiEnv && this.isPublishMode && this.bgUploading) {
+        return this.uploadProgress > 0
+          ? `上传中 ${this.uploadProgress}%`
+          : "上传中…";
+      }
+      if (this.isCakecakeApiEnv && this.isPublishMode && this.bgUploadError) {
+        return "重新上传";
+      }
       if (!this.uploadSubmitting) {
         return "立即投稿";
       }
@@ -733,6 +752,15 @@ export default {
         if (this.isMetadataOnlyPublish) {
           return "视频文件将由管理员线下处理，可先保存标题、简介等信息";
         }
+        if (this.bgUploading) {
+          return `视频上传中 ${this.uploadProgress}%（可继续填写，完成后即可投稿）`;
+        }
+        if (this.bgUploadError) {
+          return "视频上传失败，点击「立即投稿」重试";
+        }
+        if (this.bgUploadDone) {
+          return "视频已上传，可以投稿了";
+        }
         if (this.uploadSubmitting) {
           return this.uploadProgress > 0
             ? `正在上传 ${this.uploadProgress}%`
@@ -742,7 +770,7 @@ export default {
           if (this.localMediaProgress < 100) {
             return `本地载入 ${this.localMediaProgress}%`;
           }
-          return "本地已载入，提交后将上传至服务器";
+          return "已载入，选完文件后自动上传，无需等待";
         }
         return "请选择视频文件";
       }
@@ -1024,6 +1052,9 @@ export default {
         this.coverDisplay = "";
         this.needCapture = true;
         this.captureScheduled = false;
+        if (this.isPublishMode && picked) {
+          void this.startBgUpload(picked);
+        }
         this.publishCommitted = false;
         this.leaveGuardEnabled = true;
         this.$nextTick(() => {
@@ -1635,6 +1666,7 @@ export default {
         if (this.needCapture) this.tryCaptureFallback();
       }, 600);
       if (this.isEditMode) this.editDirty = true;
+      if (this.isPublishMode) void this.startBgUpload(f);
     },
     addTag() {
       const t = this.tagInput.trim();
@@ -1661,12 +1693,143 @@ export default {
       }
       return "动画";
     },
-    appendVideoZone(fd) {
-      const z = this.resolveStoredVideoZone(this.form.zone);
-      if (z) {
-        this.form.zone = z;
-        fd.append("zone", z);
+    uploadProgressFrom(total, loaded) {
+      if (total && total > 0) {
+        this.uploadProgress = Math.min(99, Math.round((100 * loaded) / total));
+      } else if (loaded > 0) {
+        this.uploadProgress = Math.max(this.uploadProgress, 1);
       }
+    },
+    /** 本地 <video> 已解码出的时长（秒），随提交作为展示提示；服务端不下载文件。 */
+    currentVideoDuration() {
+      const cap = this.$refs.capVideo;
+      if (cap && Number.isFinite(cap.duration) && cap.duration > 0) {
+        return Math.round(cap.duration * 1000) / 1000;
+      }
+      return undefined;
+    },
+    /**
+     * 直传 OSS：浏览器把视频/封面 PUT 到对象存储（不经过 API 服务器带宽），
+     * 返回提交元数据所需的 raw_key/cover_key。ticketFn 决定使用发布票
+     * （uploads/{uid}/...）还是草稿/换源票（drafts/{uid}/...）。
+     */
+    async uploadMediaDirect(ticketFn, videoFile, coverFile) {
+      const rawType = (videoFile && videoFile.type) || "";
+      const coverType = (coverFile && coverFile.type) || "";
+      const ticket = await ticketFn(
+        videoFile ? videoFile.name : "",
+        coverFile ? coverFile.name : "",
+        rawType,
+        coverType
+      );
+      // 视频与封面并行直传，缩短整体上传耗时（互不依赖）。
+      const jobs = [];
+      if (videoFile && ticket.raw_upload_url) {
+        jobs.push(
+          uploadToPresignedURL(
+            ticket.raw_upload_url,
+            videoFile,
+            (l, t) => this.uploadProgressFrom(t, l),
+            rawType
+          ).then(() => ticket.raw_key || "")
+        );
+      } else {
+        jobs.push(Promise.resolve(""));
+      }
+      if (coverFile && ticket.cover_upload_url) {
+        jobs.push(
+          uploadToPresignedURL(
+            ticket.cover_upload_url,
+            coverFile,
+            (l, t) => this.uploadProgressFrom(t, l),
+            coverType
+          ).then(() => ticket.cover_key || "")
+        );
+      } else {
+        jobs.push(Promise.resolve(""));
+      }
+      const [rawKey, coverKey] = await Promise.all(jobs);
+      return {
+        raw_key: rawKey || undefined,
+        cover_key: coverKey || undefined
+      };
+    },
+    /**
+     * 发布页：选完视频文件立刻取 ticket 并后台直传 OSS，用户同时填表单。
+     * 上传与“立即投稿”解耦；换文件时用 token 作废旧上传，孤儿对象由 OSS
+     * 生命周期规则清理（uploads/ 前缀）。
+     */
+    async startBgUpload(file) {
+      if (!file || !this.isPublishMode || this.isMetadataOnlyPublish) return;
+      if (this.warnVideoFileUploadDisabled()) return;
+      const token = ++this.bgUploadToken;
+      this.bgUploading = true;
+      this.bgUploadDone = false;
+      this.bgUploadError = "";
+      this.bgUploadFile = file;
+      this.uploadProgress = 0;
+      try {
+        const ticket = await mbCreateUploadTicket(
+          file.name,
+          "",
+          file.type || "",
+          ""
+        );
+        if (token !== this.bgUploadToken) return;
+        const p = uploadToPresignedURL(
+          ticket.raw_upload_url,
+          file,
+          (l, t) => this.uploadProgressFrom(t, l),
+          file.type || ""
+        );
+        this.bgUploadPromise = p;
+        await p;
+        if (token !== this.bgUploadToken) return;
+        this.bgRawKey = ticket.raw_key;
+        this.bgUploadDone = true;
+        this.bgUploading = false;
+        this.uploadProgress = 100;
+      } catch (err) {
+        if (token !== this.bgUploadToken) return;
+        this.bgUploading = false;
+        this.bgUploadDone = false;
+        this.bgUploadError = (err && err.message) || "上传失败，请重试";
+        this.uploadProgress = 0;
+      }
+    },
+    /** 作废后台直传（换文件/改存草稿时调用），孤儿对象由 OSS 生命周期清理。 */
+    resetBgUpload() {
+      this.bgUploadToken += 1;
+      this.bgUploading = false;
+      this.bgUploadDone = false;
+      this.bgUploadError = "";
+      this.bgRawKey = "";
+      this.bgUploadFile = null;
+      this.bgUploadPromise = null;
+    },
+    /** 提交前保证后台直传已成功；失败自动重试一次，仍失败返回 false。 */
+    async ensureBgUploadReady() {
+      if (this.bgUploadDone && this.bgRawKey) return true;
+      if (!this.localVideoFile && !this.videoObjectUrl) return false;
+      if (this.bgUploading && this.bgUploadPromise) {
+        try {
+          await this.bgUploadPromise;
+        } catch {
+          /* startBgUpload 已记录错误，下面统一重试 */
+        }
+      }
+      if (!this.bgUploadDone || !this.bgRawKey) {
+        let file;
+        try {
+          file = await this.resolveVideoFileForUpload();
+        } catch (err) {
+          this.bgUploadError = (err && err.message) || "无法读取视频文件";
+          return false;
+        }
+        this.bgUploadError = "";
+        await this.startBgUpload(file);
+      }
+      return this.bgUploadDone && !!this.bgRawKey;
     },
     warnVideoFileUploadDisabled() {
       return guardVideoFileUploadDisabled(msg => {
@@ -1677,6 +1840,8 @@ export default {
       if (this.footActionsDisabled) return;
       if (this.isCakecakeApiEnv && (this.isPublishMode || this.isDraftEditMode)) {
         if (this.localVideoFile && this.warnVideoFileUploadDisabled()) return;
+        // 草稿走 drafts/ 命名空间，作废发布页的 uploads/ 后台直传，避免双传。
+        if (this.isPublishMode) this.resetBgUpload();
         void this.submitCakecakeDraftSave();
         return;
       }
@@ -1695,6 +1860,10 @@ export default {
           return;
         }
         if (this.warnVideoFileUploadDisabled()) return;
+        if (this.bgUploading) {
+          ElMessage.warning("视频正在上传，请稍候…");
+          return;
+        }
         void this.submitCakecakeUpload();
         return;
       }
@@ -1762,31 +1931,24 @@ export default {
               return;
             }
           }
-          const needMultipart = !!(this.localVideoFile || coverFile);
-          if (!title && !desc && !needMultipart) {
+          const needMediaUpload = !!(this.localVideoFile || coverFile);
+          if (!title && !desc && !needMediaUpload) {
             ElMessage.warning("请至少填写标题或简介");
             return;
           }
-          if (needMultipart) {
-            const fd = new FormData();
-            fd.append("title", title);
-            fd.append("description", desc);
-            fd.append("tags", JSON.stringify(this.tags || []));
-            if (this.localVideoFile) {
-              fd.append("file", this.localVideoFile);
-            }
-            if (coverFile) {
-              fd.append("cover", coverFile);
-            }
-            this.appendVideoZone(fd);
-            const res = await mbUpdateVideoDraft(id, fd, {
-              onUploadProgress: e => {
-                const t = e.total;
-                const l = e.loaded;
-                if (t && t > 0) {
-                  this.uploadProgress = Math.min(99, Math.round((100 * l) / t));
-                }
-              }
+          if (needMediaUpload) {
+            const keys = await this.uploadMediaDirect(
+              mbCreateDraftUploadTicket,
+              this.localVideoFile,
+              coverFile
+            );
+            const res = await mbUpdateVideoDraft(id, {
+              title,
+              description: desc,
+              tags: [...this.tags],
+              zone: this.resolveStoredVideoZone(this.form.zone),
+              duration: this.currentVideoDuration(),
+              ...keys
             });
             this.applyServerCoverAfterSave(res.cover_url);
             this.localVideoFile = null;
@@ -1816,34 +1978,11 @@ export default {
             ElMessage.warning("请先填写标题（1–80 个字）");
             return;
           }
-          let coverFile = null;
-          if (this.coverNeedsUpload()) {
-            try {
-              coverFile = await this.coverDisplayToOptionalCoverFile();
-            } catch (err) {
-              ElMessage.error((err && err.message) || "封面不符合要求");
-              return;
-            }
-          }
-          const fd = new FormData();
-          fd.append("title", title);
-          fd.append("description", desc);
-          fd.append("tags", JSON.stringify(this.tags || []));
-          if (coverFile) {
-            fd.append("cover", coverFile);
-          }
-          this.appendVideoZone(fd);
-          await mbSaveVideoDraft(fd, {
-            onUploadProgress: e => {
-              const t = e.total;
-              const l = e.loaded;
-              if (t && t > 0) {
-                this.uploadProgress = Math.min(
-                  99,
-                  Math.round((100 * l) / t)
-                );
-              }
-            }
+          await mbSaveVideoDraft({
+            title,
+            description: desc,
+            tags: [...this.tags],
+            zone: this.resolveStoredVideoZone(this.form.zone)
           });
           sessionStorage.removeItem(STORAGE_METADATA_ONLY);
           this.metadataOnlyMode = false;
@@ -1895,23 +2034,18 @@ export default {
             return;
           }
         }
-        const fd = new FormData();
-        fd.append("title", title);
-        fd.append("description", desc);
-        fd.append("tags", JSON.stringify(this.tags || []));
-        fd.append("file", videoFile);
-        if (coverFile) {
-          fd.append("cover", coverFile);
-        }
-        this.appendVideoZone(fd);
-        await mbSaveVideoDraft(fd, {
-          onUploadProgress: e => {
-            const t = e.total;
-            const l = e.loaded;
-            if (t && t > 0) {
-              this.uploadProgress = Math.min(99, Math.round((100 * l) / t));
-            }
-          }
+        const keys = await this.uploadMediaDirect(
+          mbCreateDraftUploadTicket,
+          videoFile,
+          coverFile
+        );
+        await mbSaveVideoDraft({
+          title,
+          description: desc,
+          tags: [...this.tags],
+          zone: this.resolveStoredVideoZone(this.form.zone),
+          duration: this.currentVideoDuration(),
+          ...keys
         });
         sessionStorage.removeItem(STORAGE_PENDING);
         clearPendingVideoFile();
@@ -1997,8 +2131,9 @@ export default {
       }
     },
     /**
-     * SPEC F2：multipart file + title + description，可选 cover；
-     * 与后端 internal/handler/video.go UploadVideo 字段一致。
+     * SPEC F2（企业化）：视频在选完文件后已由 startBgUpload 后台直传 OSS，
+     * 这里只保证直传完成、补传封面（小文件），再以 JSON 提交元数据 +
+     * raw_key/cover_key；API 服务器不承接大文件字节。
      */
     async submitCakecakeUpload() {
       if (this.uploadSubmitting) return;
@@ -2053,39 +2188,53 @@ export default {
           return;
         }
       }
-      const fd = new FormData();
-      fd.append("title", title);
-      fd.append("description", desc);
-      fd.append("tags", JSON.stringify(this.tags || []));
-      fd.append("file", videoFile);
-      if (coverFile) {
-        fd.append("cover", coverFile);
-      }
-      this.appendVideoZone(fd);
       this.uploadSubmitting = true;
       this.uploadProgress = 0;
       this.mbUploadFinishedOk = false;
       try {
-        await mbUploadVideo(fd, {
-          onUploadProgress: e => {
-            const t = e.total;
-            const l = e.loaded;
-            if (t && t > 0) {
-              this.uploadProgress = Math.min(99, Math.round((100 * l) / t));
-            } else if (l > 0) {
-              this.uploadProgress = Math.max(this.uploadProgress, 1);
-            }
+        const ready = await this.ensureBgUploadReady();
+        if (!ready) {
+          ElMessage.error(this.bgUploadError || "视频上传失败，请重试");
+          return;
+        }
+        const coverType = (coverFile && coverFile.type) || "";
+        let coverKey = "";
+        if (coverFile) {
+          const rawRef = this.bgUploadFile || videoFile;
+          const rawType = (rawRef && rawRef.type) || videoFile.type || "";
+          const ticket = await mbCreateUploadTicket(
+            (rawRef && rawRef.name) || videoFile.name,
+            coverFile.name,
+            rawType,
+            coverType
+          );
+          if (ticket.cover_upload_url) {
+            await uploadToPresignedURL(
+              ticket.cover_upload_url,
+              coverFile,
+              (l, t) => this.uploadProgressFrom(t, l),
+              coverType
+            );
+            coverKey = ticket.cover_key || "";
           }
+        }
+        await mbCreateVideoDirect({
+          title,
+          description: desc,
+          tags: [...this.tags],
+          zone: this.resolveStoredVideoZone(this.form.zone),
+          raw_key: this.bgRawKey,
+          cover_key: coverKey || undefined,
+          duration: this.currentVideoDuration()
         });
         this.uploadProgress = 100;
         this.mbUploadFinishedOk = true;
         await this.$nextTick();
         await new Promise(resolve => {
           requestAnimationFrame(() => {
-            requestAnimationFrame(resolve);
+            resolve();
           });
         });
-        await new Promise(resolve => setTimeout(resolve, 200));
         sessionStorage.removeItem(STORAGE_PENDING);
         clearPendingVideoFile();
         this.publishCommitted = true;
@@ -2153,26 +2302,21 @@ export default {
           return;
         }
       }
-      const fd = new FormData();
-      fd.append("title", title);
-      fd.append("description", desc);
-      fd.append("tags", JSON.stringify(this.tags || []));
-      fd.append("file", this.localVideoFile);
-      if (coverFile) {
-        fd.append("cover", coverFile);
-      }
-      this.appendVideoZone(fd);
       this.uploadSubmitting = true;
       this.uploadProgress = 0;
       try {
-        await mbReplaceVideoMedia(id, fd, {
-          onUploadProgress: e => {
-            const t = e.total;
-            const l = e.loaded;
-            if (t && t > 0) {
-              this.uploadProgress = Math.min(99, Math.round((100 * l) / t));
-            }
-          }
+        const keys = await this.uploadMediaDirect(
+          mbCreateDraftUploadTicket,
+          this.localVideoFile,
+          coverFile
+        );
+        await mbReplaceVideoMedia(id, {
+          title,
+          description: desc,
+          tags: [...this.tags],
+          zone: this.resolveStoredVideoZone(this.form.zone),
+          duration: this.currentVideoDuration(),
+          ...keys
         });
         this.publishCommitted = true;
         this.editDirty = false;
@@ -2241,7 +2385,7 @@ export default {
           } catch (coverErr) {
             const cmsg =
               (coverErr && coverErr.message) ||
-              "封面未同步（常为跨域或网络问题），标题与简介已保存";
+              "封面未同步，标题与简介已保存";
             ElMessage.warning(String(cmsg));
           }
         }

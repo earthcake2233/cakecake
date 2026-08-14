@@ -119,7 +119,7 @@ func TestHandleDelivery_EmptyBody_Adv(t *testing.T) {
 
 func TestHandleDelivery_NilOSS_Adv(t *testing.T) {
 	db := setupWorkerDB_Adv(t)
-	db.Create(&video.Video{Title: "No OSS", Status: "transcoding"})
+	db.Create(&video.Video{Title: "No OSS", Status: video.StatusProcessing})
 	job := TranscodeJob{VideoID: 1, RawPath: "/tmp/v.mp4"}
 	body, _ := json.Marshal(job)
 	mockAck := &mockAcknowledger{}

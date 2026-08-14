@@ -307,9 +307,29 @@ Default `guest/guest` works locally; for production create a dedicated user and 
 
 All transcode queues (main queue, 30/60/90s delayed retry queues, dead-letter queue) are declared automatically by the application at startup — no manual creation is needed. After upgrading from an older version, just restart the app; the retry queues are created on first boot.
 
-Concurrency & observability: `TRANSCODE_CONCURRENCY` controls parallel consumers per instance (start with cores 2-4); `RABBITMQ_MGMT_URL` (e.g. `http://127.0.0.1:15672`) enables the queue-depth gauge and is disabled when empty.
+Concurrency & observability: `TRANSCODE_CONCURRENCY` controls parallel consumers per instance (defaults to min(cores, 4), overridable); `RABBITMQ_MGMT_URL` (e.g. `http://127.0.0.1:15672`) enables the queue-depth gauge and is disabled when empty; `TRANSCODE_MAX_QUEUE` sets the main-queue backpressure threshold (uploads return 503 above it; 0 disables).
 
-Browser direct upload requires OSS bucket CORS (allow PUT from your origin); when CORS/OSS is unavailable the frontend falls back to traditional multipart upload.
+Browser direct upload requires OSS bucket CORS (allow PUT and GET from your origin; GET powers the presigned draft preview redirect). When CORS/OSS is unavailable the frontend does **not** fall back to multipart — it shows an offline-handling notice. Direct upload is the only user upload path. Example rule (Aliyun OSS console → Bucket → Data Security → CORS; keep the `localhost` entries for local development):
+
+```json
+[
+  {
+    "allowedOrigin": ["http://localhost:8888", "http://127.0.0.1:8888", "https://your-production-domain"],
+    "allowedMethod": ["PUT", "GET", "HEAD"],
+    "allowedHeader": ["*"],
+    "exposeHeader": ["ETag", "Content-Length"],
+    "maxAgeSeconds": 600
+  }
+]
+```
+
+Typical symptom: the console shows `Response to preflight request doesn't pass access control check: No 'Access-Control-Allow-Origin' header` for a `*.oss-cn-*.aliyuncs.com/...?...&Signature=...` URL (presigned PUT/GET) — the origin or method is missing from the bucket CORS rule, not a code bug.
+
+Select-to-upload leaves orphan objects (abandoned submissions, file swaps, save-as-draft, or cancellation mid-upload — a ticket with no upload creates nothing, but a **partial upload leaves an object behind**). An in-app cleanup task now handles this: it scans `uploads/`/`drafts/` every hour (default) and deletes only objects **older than 24h with no DB reference** (draft keys, direct-upload claims, outbox and dead-letter payloads are all protected; uploaded-but-not-submitted objects are protected by the grace period). Tune it with `OSS_ORPHAN_RETENTION` (default 24h) and `OSS_ORPHAN_CLEAN_INTERVAL` (default 1h); deletions are exposed as `cakecake_upload_orphan_objects_deleted_total`. The OSS lifecycle rule is now an optional safety net — if configured, set its expiry **longer** than the in-app retention because it cannot check DB references.
+
+Database migration: `migrations/00013_draft_object_keys.sql` renames the draft columns `draft_raw_path/draft_cover_path` to `draft_raw_key/draft_cover_key` (now OSS object keys; legacy local path values are preserved in place; new drafts always store `drafts/{uid}/...` keys). Run `goose -dir migrations mysql "DSN" up` when upgrading.
+
+Transcode consistency: upload/direct-upload submits write the video row and a `transcode_outbox` row in one transaction; a relay publishes with confirm and exponential backoff. **Submits do HEAD-only validation (ownership/existence/size) and never download the OSS object**; the client duration hint is stored for display, then the worker re-probes with ffprobe after download (≤30 min; oversized/unreadable media fails permanently and `duration_sec` is written back). Workers dedup on `(job_id, retry_count)`, status changes pass state-machine validation with conditional updates and are audited in `transcode_events`, and logs carry `X-Trace-Id` end to end. Dead letters are auto-replayed by reason for transient failures (max 3, exponential backoff); permanent failures go through manual admin replay.
 
 ### 6.6 Nginx
 
@@ -495,7 +515,7 @@ In browser (via domain or IP):
 
 2. Set APP_ENV=production in .env (DB_AUTO_MIGRATE defaults to false -> goose SQL only)
 
-3. Start app: goose runs migrations/00001_baseline.sql, creates all 42+ tables automatically
+3. Start app: goose runs all migrations under migrations/ (00001 baseline plus incremental additions, including transcode outbox/dedup/audit tables), creating the full schema
 
 4. Verify: mysql -u root -p minibili -e "SHOW TABLES;"
 

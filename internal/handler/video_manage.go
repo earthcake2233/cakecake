@@ -443,7 +443,7 @@ func (a *API) DeleteMyVideo(c *gin.Context) {
 		resp.Err(c, http.StatusForbidden, errcode.CodeForbidden)
 		return
 	}
-	removeVideoDraftFiles(*v)
+	a.purgeDraftMedia(*v)
 	if err := a.VideoSvc.DeleteVideoWithCascade(c.Request.Context(), id, nil); err != nil {
 		a.Log.Error("delete my video", zap.Error(err), zap.Uint64("video_id", id))
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)

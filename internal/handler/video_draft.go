@@ -4,11 +4,11 @@ import (
 	"cakecake/internal/errcode"
 	"cakecake/internal/middleware"
 	"cakecake/internal/model/video"
-	"cakecake/internal/pkg/coverval"
 	"cakecake/internal/pkg/resp"
+	vsvc "cakecake/internal/service/video"
 	"context"
+	"errors"
 	"fmt"
-	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -45,27 +45,28 @@ type videoDraftStatusResponse struct {
 	Status string `json:"status"`
 }
 
-func videoDraftDir(cfgTemp string) string {
-	return filepath.Join(cfgTemp, "drafts")
+// draftCreateInput is the JSON create-draft payload. Media is referenced by
+// OSS object keys staged through the draft upload ticket endpoint.
+type draftCreateInput struct {
+	Title       string   `json:"title"`
+	Description string   `json:"description"`
+	Tags        []string `json:"tags"`
+	Zone        string   `json:"zone"`
+	RawKey      string   `json:"raw_key"`
+	CoverKey    string   `json:"cover_key,omitempty"`
+	Duration    float64  `json:"duration,omitempty"`
 }
 
-func videoDraftRawPath(dir string, videoID uint64, ext string) string {
-	ext = strings.TrimPrefix(strings.ToLower(ext), ".")
-	if ext == "" {
-		ext = "bin"
-	}
-	return filepath.Join(dir, fmt.Sprintf("%d.%s", videoID, ext))
-}
-
-func videoDraftCoverPath(dir string, videoID uint64, ext string) string {
-	ext = strings.TrimPrefix(strings.ToLower(ext), ".")
-	if ext == "" {
-		ext = "jpg"
-	}
-	if ext == "jpeg" {
-		ext = "jpg"
-	}
-	return filepath.Join(dir, fmt.Sprintf("%d_cover.%s", videoID, ext))
+// draftUpdateInput is the JSON update-draft payload; raw_key/cover_key are
+// optional media replacements.
+type draftUpdateInput struct {
+	Title       string   `json:"title"`
+	Description string   `json:"description"`
+	Tags        []string `json:"tags,omitempty"`
+	Zone        string   `json:"zone,omitempty"`
+	RawKey      string   `json:"raw_key,omitempty"`
+	CoverKey    string   `json:"cover_key,omitempty"`
+	Duration    float64  `json:"duration,omitempty"`
 }
 
 func validateVideoDraftContent(title, desc string, hasFile bool) bool {
@@ -95,183 +96,82 @@ func validateMetadataOnlyDraft(title, desc string) bool {
 	return true
 }
 
-func removeVideoDraftFiles(v video.Video) {
-	if p := strings.TrimSpace(v.DraftRawPath); p != "" {
-		_ = os.Remove(p)
+// isObjectKeyReference reports whether a stored draft source reference is an
+// OSS object key (new drafts) rather than a legacy absolute local path.
+func isObjectKeyReference(ref string) bool {
+	for _, p := range []string{"drafts/", "uploads/", "raws/", "covers/"} {
+		if strings.HasPrefix(ref, p) {
+			return true
+		}
 	}
-	if p := strings.TrimSpace(v.DraftCoverPath); p != "" {
-		_ = os.Remove(p)
-	}
+	return false
 }
 
-func (a *API) uploadDraftCoverToOSS(ctx context.Context, v *video.Video, coverPath string) error {
-	if !a.StorageSvc.Enabled() || coverPath == "" {
-		return nil
+func coverKeyExt(key string) string {
+	ext := strings.TrimPrefix(strings.ToLower(filepath.Ext(strings.TrimSpace(key))), ".")
+	if ext == "" {
+		ext = "jpg"
 	}
-	ext := strings.TrimPrefix(strings.ToLower(filepath.Ext(coverPath)), ".")
 	if ext == "jpeg" {
 		ext = "jpg"
 	}
-	key := fmt.Sprintf("covers/%d.%s", v.ID, ext)
-	if err := a.StorageSvc.UploadFile(key, coverPath); err != nil {
+	return ext
+}
+
+// mediaErrorStatus maps draft/direct media validation errors to HTTP status +
+// error code pairs.
+func mediaErrorStatus(err error) (int, int) {
+	switch {
+	case errors.Is(err, vsvc.ErrDraftMediaUnavailable):
+		return http.StatusServiceUnavailable, errcode.CodeDirectUploadUnavailable
+	case errors.Is(err, vsvc.ErrTranscodeQueueFull):
+		return http.StatusServiceUnavailable, errcode.CodeTranscodeQueueFull
+	case errors.Is(err, vsvc.ErrDraftMediaEmpty):
+		return http.StatusBadRequest, errcode.CodeUploadMissingFile
+	case errors.Is(err, vsvc.ErrDraftMediaInvalidKey):
+		return http.StatusBadRequest, errcode.CodeParamError
+	case errors.Is(err, vsvc.ErrDraftMediaMissing):
+		return http.StatusBadRequest, errcode.CodeDirectUploadSourceMissing
+	case errors.Is(err, vsvc.ErrDraftMediaTooLarge):
+		return http.StatusBadRequest, errcode.CodeVideoFileTooLarge
+	default:
+		return http.StatusInternalServerError, errcode.CodeInternalError
+	}
+}
+
+// copyDraftCoverToPublic copies the private draft cover object to the public
+// covers/{id}.{ext} key and records its URL. Server-side copy keeps the bytes
+// off the API server and leaves the draft object private.
+func (a *API) copyDraftCoverToPublic(ctx context.Context, v *video.Video, coverKey string) error {
+	coverKey = strings.TrimSpace(coverKey)
+	if coverKey == "" || !a.StorageSvc.Enabled() {
+		return nil
+	}
+	dst := fmt.Sprintf("covers/%d.%s", v.ID, coverKeyExt(coverKey))
+	if err := a.StorageSvc.CopyObject(coverKey, dst); err != nil {
 		return err
 	}
-	url := a.Cfg.OSSObjectURL(key)
-	return a.VideoDraftSvc.UpdateDraftField(ctx, v, "cover_url", url)
+	return a.VideoDraftSvc.UpdateDraftField(ctx, v, "cover_url", a.Cfg.OSSObjectURL(dst))
 }
 
-func (a *API) saveDraftVideoFile(fh *multipart.FileHeader, videoID uint64) (rawPath string, dur float64, err error) {
-	if err = os.MkdirAll(videoDraftDir(a.Cfg.TempUploadDir), 0o755); err != nil {
-		return "", 0, err
-	}
-	ext := filepath.Ext(fh.Filename)
-	rawPath = videoDraftRawPath(videoDraftDir(a.Cfg.TempUploadDir), videoID, ext)
-	if err = saveUploadedFile(fh, rawPath); err != nil {
-		return "", 0, err
-	}
-	dur, err = a.VideoDraftSvc.ProbeDurationSeconds(rawPath)
-	if err != nil {
-		_ = os.Remove(rawPath)
-		return "", 0, err
-	}
-	if dur > maxDurationSec {
-		_ = os.Remove(rawPath)
-		return "", 0, fmt.Errorf("duration exceeded")
-	}
-	return rawPath, dur, nil
-}
-
-func (a *API) saveDraftCoverFile(coverFh *multipart.FileHeader, videoID uint64) (coverPath string, err error) {
-	if code := coverval.ValidateCoverHeader(coverFh); code != 0 {
-		return "", errCoverValidation{code: code}
-	}
-	if err = os.MkdirAll(videoDraftDir(a.Cfg.TempUploadDir), 0o755); err != nil {
-		return "", err
-	}
-	ext := filepath.Ext(coverFh.Filename)
-	coverPath = videoDraftCoverPath(videoDraftDir(a.Cfg.TempUploadDir), videoID, ext)
-	if err = saveUploadedFile(coverFh, coverPath); err != nil {
-		return "", err
-	}
-	return coverPath, nil
-}
-
-type errCoverValidation struct{ code int }
-
-// Error implements the error interface for cover validation failures.
-func (e errCoverValidation) Error() string { return "cover validation" }
-
-type draftCreateInput struct {
-	metadataOnly bool
-	title        string
-	desc         string
-	tagsJSON     string
-	zone         string
-	fileFh       *multipart.FileHeader
-	coverFh      *multipart.FileHeader
-}
-
-// parseDraftCreateForm parses and validates the multipart create-draft form.
-// A non-zero return code means the request is invalid and should be rejected.
-func (a *API) parseDraftCreateForm(c *gin.Context) (draftCreateInput, int) {
-	var in draftCreateInput
-	if err := c.Request.ParseMultipartForm(maxVideoBytes + (12 << 20)); err != nil {
-		a.Log.Warn("parse multipart form", zap.Error(err))
-		return in, errcode.CodeMultipartParseError
-	}
-	in.title = strings.TrimSpace(c.PostForm("title"))
-	in.desc = strings.TrimSpace(c.PostForm("description"))
-	in.metadataOnly = a.Cfg != nil && a.Cfg.VideoUploadDisabled
-	fh, fileErr := c.FormFile("file")
-	if in.metadataOnly {
-		if fileErr == nil {
-			return in, errcode.CodeVideoUploadDisabled
+// purgeDraftMedia removes the previous draft media (OSS object or legacy local
+// file) once a draft has been replaced or deleted. Called only after the new
+// media has been durably recorded.
+func (a *API) purgeDraftMedia(v video.Video) {
+	for _, ref := range []string{v.DraftRawKey, v.DraftCoverKey} {
+		ref = strings.TrimSpace(ref)
+		if ref == "" {
+			continue
 		}
-		if !validateMetadataOnlyDraft(in.title, in.desc) {
-			return in, errcode.CodeTitleInvalid
+		if isObjectKeyReference(ref) {
+			if a.StorageSvc.Enabled() {
+				if err := a.StorageSvc.DeleteObject(ref); err != nil {
+					a.Log.Warn("delete draft object", zap.String("key", ref), zap.Error(err))
+				}
+			}
+			continue
 		}
-	} else {
-		if fileErr != nil {
-			return in, errcode.CodeUploadMissingFile
-		}
-		if fh.Size > maxVideoBytes {
-			return in, errcode.CodeVideoFileTooLarge
-		}
-		if !validateVideoDraftContent(in.title, in.desc, true) {
-			return in, errcode.CodeParamError
-		}
-	}
-	in.fileFh = fh
-	in.coverFh, _ = c.FormFile("cover")
-	if in.coverFh != nil {
-		if code := coverval.ValidateCoverHeader(in.coverFh); code != 0 {
-			return in, code
-		}
-	}
-	tagsJSON, err := parseTagsPostForm(c.PostForm("tags"))
-	if err != nil {
-		return in, errcode.CodeParamError
-	}
-	in.tagsJSON = tagsJSON
-	in.zone = normalizeVideoZone(c.PostForm("zone"))
-	return in, 0
-}
-
-// createDraftRecord persists a new draft row from parsed form input.
-func (a *API) createDraftRecord(ctx context.Context, uid uint64, in draftCreateInput) (*video.Video, int) {
-	v := &video.Video{
-		UserID:      uid,
-		Title:       in.title,
-		Description: in.desc,
-		Status:      videoStatusDraft,
-		TagsJSON:    in.tagsJSON,
-		Zone:        in.zone,
-	}
-	if err := a.VideoDraftSvc.CreateDraft(ctx, v); err != nil {
-		a.Log.Error("create draft video", zap.Error(err))
-		return nil, errcode.CodeInternalError
-	}
-	return v, 0
-}
-
-// saveDraftCoverFileChecked saves a cover file, mapping validation errors to error codes.
-func (a *API) saveDraftCoverFileChecked(coverFh *multipart.FileHeader, videoID uint64) (string, int) {
-	coverPath, err := a.saveDraftCoverFile(coverFh, videoID)
-	if err != nil {
-		if cv, ok := err.(errCoverValidation); ok {
-			return "", cv.code
-		}
-		return "", errcode.CodeInternalError
-	}
-	return coverPath, 0
-}
-
-// httpStatusForCode maps internal error codes to HTTP status for cover/file helpers.
-func httpStatusForCode(code int) int {
-	if code == errcode.CodeInternalError {
-		return http.StatusInternalServerError
-	}
-	return http.StatusBadRequest
-}
-
-// refetchDraft refreshes v from the DB when possible.
-func (a *API) refetchDraft(ctx context.Context, v *video.Video) {
-	if tmp, _ := a.VideoDraftSvc.RefetchDraft(ctx, v.ID); tmp != nil {
-		*v = *tmp
-	}
-}
-
-// uploadDraftCoverAndRefetch uploads a saved cover to OSS and refreshes the draft.
-func (a *API) uploadDraftCoverAndRefetch(ctx context.Context, v *video.Video, coverPath string) {
-	if coverPath == "" {
-		return
-	}
-	if err := a.uploadDraftCoverToOSS(ctx, v, coverPath); err != nil {
-		a.Log.Warn("draft cover oss", zap.Error(err), zap.Uint64("video_id", v.ID))
-		return
-	}
-	if tmp, _ := a.VideoDraftSvc.RefetchDraft(ctx, v.ID); tmp != nil {
-		*v = *tmp
+		_ = os.Remove(ref)
 	}
 }
 
@@ -299,87 +199,59 @@ func draftBriefResponse(v video.Video) videoDraftBriefResponse {
 	return out
 }
 
-type draftUpdateInput struct {
-	isMultipart bool
-	title       string
-	desc        string
-	tagsJSON    string
-	zoneRaw     string
-	jsonTags    *[]string
-	fileFh      *multipart.FileHeader
-	coverFh     *multipart.FileHeader
+// refetchDraft refreshes v from the DB when possible.
+func (a *API) refetchDraft(ctx context.Context, v *video.Video) {
+	if tmp, _ := a.VideoDraftSvc.RefetchDraft(ctx, v.ID); tmp != nil {
+		*v = *tmp
+	}
 }
 
-// parseDraftUpdateForm parses and validates an update request (JSON or multipart).
-func (a *API) parseDraftUpdateForm(c *gin.Context, existing *video.Video) (draftUpdateInput, int) {
-	var in draftUpdateInput
-	ct := c.ContentType()
-	in.isMultipart = strings.HasPrefix(ct, "multipart/form-data")
-	if in.isMultipart {
-		if err := c.Request.ParseMultipartForm(maxVideoBytes + (12 << 20)); err != nil {
-			a.Log.Warn("parse multipart form", zap.Error(err))
-			return in, errcode.CodeMultipartParseError
-		}
-		in.title = strings.TrimSpace(c.PostForm("title"))
-		in.desc = strings.TrimSpace(c.PostForm("description"))
-		in.zoneRaw = c.PostForm("zone")
-		tj, err := parseTagsPostForm(c.PostForm("tags"))
-		if err != nil {
-			return in, errcode.CodeParamError
-		}
-		in.tagsJSON = tj
-		in.fileFh, _ = c.FormFile("file")
-		in.coverFh, _ = c.FormFile("cover")
-		if in.coverFh != nil {
-			if code := coverval.ValidateCoverHeader(in.coverFh); code != 0 {
-				return in, code
-			}
-		}
-		return in, 0
+// CreateVideoDraftUploadTicket issues presigned PUT URLs so the browser can
+// stage draft media (raw video + optional cover) straight to OSS.
+// CreateVideoDraftUploadTicket godoc
+// @Summary      Create draft upload ticket
+// @Description  Get presigned upload URLs for draft media (direct-to-OSS)
+// @Tags         Videos
+// @Accept       json
+// @Produce      json
+// @Param        body body object{} true "filename and optional cover_filename"
+// @Success      200 {object} map[string]interface{}
+// @Router       /videos/draft/upload-ticket [post]
+func (a *API) CreateVideoDraftUploadTicket(c *gin.Context) {
+	if a.rejectVideoUploadDisabled(c) {
+		return
 	}
-	var req updateMyVideoJSON
-	if err := c.ShouldBindJSON(&req); err != nil {
-		return in, errcode.CodeParamError
+	uid, ok := middleware.UserID(c)
+	if !ok {
+		resp.Err(c, http.StatusUnauthorized, errcode.CodeUnauthorized)
+		return
 	}
-	if strings.TrimSpace(req.Title) != "" {
-		in.title = strings.TrimSpace(req.Title)
-	} else {
-		in.title = strings.TrimSpace(existing.Title)
+	var req createUploadTicketRequest
+	if err := c.ShouldBindJSON(&req); err != nil ||
+		(strings.TrimSpace(req.Filename) == "" && strings.TrimSpace(req.CoverFilename) == "") {
+		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
+		return
 	}
-	in.desc = strings.TrimSpace(req.Description)
-	in.jsonTags = req.Tags
-	in.zoneRaw = req.Zone
-	return in, 0
-}
-
-// applyDraftFileUpdate saves a replacement draft file, removing the old one.
-func (a *API) applyDraftFileUpdate(v *video.Video, fileFh *multipart.FileHeader, updates map[string]interface{}) int {
-	if a.Cfg != nil && a.Cfg.VideoUploadDisabled {
-		return errcode.CodeVideoUploadDisabled
-	}
-	if fileFh.Size > maxVideoBytes {
-		return errcode.CodeVideoFileTooLarge
-	}
-	rawPath, dur, err := a.saveDraftVideoFile(fileFh, v.ID)
+	ticket, err := a.VideoDraftSvc.CreateDraftUploadTicket(c.Request.Context(), uid, strings.TrimSpace(req.Filename), strings.TrimSpace(req.CoverFilename), strings.TrimSpace(req.ContentType), strings.TrimSpace(req.CoverContentType))
 	if err != nil {
-		if err.Error() == "duration exceeded" {
-			return errcode.CodeVideoDurationExceeded
+		if errors.Is(err, vsvc.ErrDraftMediaUnavailable) {
+			resp.Err(c, http.StatusServiceUnavailable, errcode.CodeDirectUploadUnavailable)
+			return
 		}
-		return errcode.CodeVideoProbeFailed
+		a.Log.Error("create draft upload ticket", zap.Uint64("uid", uid), zap.Error(err))
+		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
+		return
 	}
-	updates["draft_raw_path"] = rawPath
-	updates["duration_sec"] = dur
-	if oldRaw := v.DraftRawPath; oldRaw != "" && oldRaw != rawPath {
-		_ = os.Remove(oldRaw)
-	}
-	return 0
+	resp.JSON(c, http.StatusOK, errcode.CodeSuccess, ticket)
 }
 
-// SaveVideoDraft creates a draft video (multipart: file required unless VIDEO_UPLOAD_DISABLED).
+// SaveVideoDraft creates a draft. Metadata-only drafts are allowed when
+// VIDEO_UPLOAD_DISABLED; otherwise raw_key from the draft ticket is required.
 // SaveVideoDraft godoc
 // @Summary      Save video draft
 // @Description  Save a new video as draft without publishing
 // @Tags         Videos
+// @Accept       json
 // @Produce      json
 // @Param        body body object{} true "Draft data"
 // @Success      200 {object} map[string]interface{}
@@ -390,75 +262,84 @@ func (a *API) SaveVideoDraft(c *gin.Context) {
 		resp.Err(c, http.StatusUnauthorized, errcode.CodeUnauthorized)
 		return
 	}
-	in, code := a.parseDraftCreateForm(c)
-	if code != 0 {
-		resp.Err(c, http.StatusBadRequest, code)
+	var in draftCreateInput
+	if err := c.ShouldBindJSON(&in); err != nil {
+		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	v, code := a.createDraftRecord(c.Request.Context(), uid, in)
-	if code != 0 {
-		resp.Err(c, http.StatusInternalServerError, code)
+	in.Title = strings.TrimSpace(in.Title)
+	in.Description = strings.TrimSpace(in.Description)
+	in.RawKey = strings.TrimSpace(in.RawKey)
+	in.CoverKey = strings.TrimSpace(in.CoverKey)
+	disabled := a.Cfg != nil && a.Cfg.VideoUploadDisabled
+	if disabled && (in.RawKey != "" || in.CoverKey != "") {
+		resp.Err(c, http.StatusBadRequest, errcode.CodeVideoUploadDisabled)
 		return
 	}
-	if in.metadataOnly {
-		if in.coverFh != nil {
-			coverPath, cv := a.saveDraftCoverFileChecked(in.coverFh, v.ID)
-			if cv != 0 {
-				_ = a.VideoDraftSvc.DeleteDraft(c.Request.Context(), v.ID)
-				resp.Err(c, httpStatusForCode(cv), cv)
+	if in.RawKey == "" {
+		if disabled {
+			if !validateMetadataOnlyDraft(in.Title, in.Description) {
+				resp.Err(c, http.StatusBadRequest, errcode.CodeTitleInvalid)
 				return
 			}
-			if err := a.VideoDraftSvc.UpdateDraftField(c.Request.Context(), v, "draft_cover_path", coverPath); err != nil {
-				_ = os.Remove(coverPath)
-				_ = a.VideoDraftSvc.DeleteDraft(c.Request.Context(), v.ID)
-				resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
-				return
-			}
-			a.refetchDraft(c.Request.Context(), v)
-			a.uploadDraftCoverAndRefetch(c.Request.Context(), v, coverPath)
+		} else {
+			resp.Err(c, http.StatusBadRequest, errcode.CodeUploadMissingFile)
+			return
 		}
-		resp.JSON(c, http.StatusCreated, errcode.CodeSuccess, draftFullResponse(*v))
+	} else if !validateVideoDraftContent(in.Title, in.Description, true) {
+		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	rawPath, dur, err := a.saveDraftVideoFile(in.fileFh, v.ID)
+	tagsJSON, err := tagsJSONFromStringSlice(in.Tags)
 	if err != nil {
-		_ = a.VideoDraftSvc.DeleteDraft(c.Request.Context(), v.ID)
-		if err.Error() == "duration exceeded" {
-			resp.Err(c, http.StatusBadRequest, errcode.CodeVideoDurationExceeded)
-			return
-		}
-		a.Log.Warn("draft save video", zap.Error(err))
-		resp.Err(c, http.StatusBadRequest, errcode.CodeVideoProbeFailed)
+		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	updates := map[string]interface{}{"draft_raw_path": rawPath, "duration_sec": dur}
-	var coverPath string
-	if in.coverFh != nil {
-		coverPath, code = a.saveDraftCoverFileChecked(in.coverFh, v.ID)
-		if code != 0 {
-			_ = os.Remove(rawPath)
-			_ = a.VideoDraftSvc.DeleteDraft(c.Request.Context(), v.ID)
-			resp.Err(c, httpStatusForCode(code), code)
+	var media vsvc.DraftMedia
+	if in.RawKey != "" {
+		media, err = a.VideoDraftSvc.ValidateDraftMedia(c.Request.Context(), uid, in.RawKey, in.CoverKey)
+		if err != nil {
+			hs, code := mediaErrorStatus(err)
+			resp.Err(c, hs, code)
 			return
 		}
-		updates["draft_cover_path"] = coverPath
 	}
-	if err := a.VideoDraftSvc.UpdateDraft(c.Request.Context(), v, updates); err != nil {
-		removeVideoDraftFiles(video.Video{DraftRawPath: rawPath, DraftCoverPath: coverPath})
-		_ = a.VideoDraftSvc.DeleteDraft(c.Request.Context(), v.ID)
+	v := &video.Video{
+		UserID:        uid,
+		Title:         in.Title,
+		Description:   in.Description,
+		Status:        videoStatusDraft,
+		TagsJSON:      tagsJSON,
+		Zone:          normalizeVideoZone(in.Zone),
+		DraftRawKey:   media.RawKey,
+		DraftCoverKey: media.CoverKey,
+		DurationSec:   vsvc.NormalizeDurationHint(in.Duration),
+	}
+	if err := a.VideoDraftSvc.CreateDraft(c.Request.Context(), v); err != nil {
+		a.Log.Error("create draft video", zap.Error(err))
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	a.refetchDraft(c.Request.Context(), v)
-	a.uploadDraftCoverAndRefetch(c.Request.Context(), v, coverPath)
+	if media.CoverKey != "" {
+		if err := a.copyDraftCoverToPublic(c.Request.Context(), v, media.CoverKey); err != nil {
+			a.Log.Warn("draft cover oss copy", zap.Uint64("video_id", v.ID), zap.Error(err))
+			_ = a.VideoDraftSvc.DeleteDraft(c.Request.Context(), v.ID)
+			a.purgeDraftMedia(*v)
+			resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
+			return
+		}
+		a.refetchDraft(c.Request.Context(), v)
+	}
 	resp.JSON(c, http.StatusCreated, errcode.CodeSuccess, draftFullResponse(*v))
 }
 
-// UpdateVideoDraft updates metadata and optionally replaces file/cover on a draft.
+// UpdateVideoDraft updates metadata and optionally replaces draft media
+// (raw_key/cover_key from the draft ticket).
 // UpdateVideoDraft godoc
 // @Summary      Update video draft
 // @Description  Update an existing video draft
 // @Tags         Videos
+// @Accept       json
 // @Produce      json
 // @Param        id path int true "Video ID"
 // @Param        body body object{} true "Updated draft data"
@@ -484,62 +365,95 @@ func (a *API) UpdateVideoDraft(c *gin.Context) {
 		resp.Err(c, http.StatusForbidden, errcode.CodeForbidden)
 		return
 	}
-	in, code := a.parseDraftUpdateForm(c, v)
-	if code != 0 {
-		resp.Err(c, httpStatusForCode(code), code)
+	var in draftUpdateInput
+	if err := c.ShouldBindJSON(&in); err != nil {
+		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	hasFile := in.fileFh != nil || strings.TrimSpace(v.DraftRawPath) != ""
-	if !validateVideoDraftContent(in.title, in.desc, hasFile) {
+	in.Title = strings.TrimSpace(in.Title)
+	in.Description = strings.TrimSpace(in.Description)
+	in.RawKey = strings.TrimSpace(in.RawKey)
+	in.CoverKey = strings.TrimSpace(in.CoverKey)
+	disabled := a.Cfg != nil && a.Cfg.VideoUploadDisabled
+	if disabled && (in.RawKey != "" || in.CoverKey != "") {
+		resp.Err(c, http.StatusBadRequest, errcode.CodeVideoUploadDisabled)
+		return
+	}
+	title := in.Title
+	if title == "" {
+		title = strings.TrimSpace(v.Title)
+	}
+	desc := in.Description
+	var media *vsvc.DraftMedia
+	if in.RawKey != "" {
+		m, verr := a.VideoDraftSvc.ValidateDraftMedia(c.Request.Context(), uid, in.RawKey, in.CoverKey)
+		if verr != nil {
+			hs, code := mediaErrorStatus(verr)
+			resp.Err(c, hs, code)
+			return
+		}
+		media = &m
+	} else if in.CoverKey != "" {
+		if verr := a.VideoDraftSvc.ValidateDraftCover(c.Request.Context(), uid, in.CoverKey); verr != nil {
+			hs, code := mediaErrorStatus(verr)
+			resp.Err(c, hs, code)
+			return
+		}
+	}
+	hasFile := media != nil || strings.TrimSpace(v.DraftRawKey) != ""
+	if !validateVideoDraftContent(title, desc, hasFile) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
 	updates := map[string]interface{}{
-		"title":       in.title,
-		"description": in.desc,
+		"title":       title,
+		"description": desc,
 	}
-	if in.isMultipart {
-		updates["tags_json"] = in.tagsJSON
-	} else if in.jsonTags != nil {
-		tj, err := tagsJSONFromStringSlice(*in.jsonTags)
-		if err != nil {
+	if in.Tags != nil {
+		tj, terr := tagsJSONFromStringSlice(in.Tags)
+		if terr != nil {
 			resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 			return
 		}
 		updates["tags_json"] = tj
 	}
-	if z := normalizeVideoZone(in.zoneRaw); z != "" {
+	if z := normalizeVideoZone(in.Zone); z != "" {
 		updates["zone"] = z
 	}
-	if in.fileFh != nil {
-		if code := a.applyDraftFileUpdate(v, in.fileFh, updates); code != 0 {
-			resp.Err(c, httpStatusForCode(code), code)
-			return
-		}
-	}
-	var newCoverPath string
-	if in.coverFh != nil {
-		cp, code := a.saveDraftCoverFileChecked(in.coverFh, v.ID)
-		if code != 0 {
-			resp.Err(c, httpStatusForCode(code), code)
-			return
-		}
-		newCoverPath = cp
-		updates["draft_cover_path"] = cp
-		if oldCover := v.DraftCoverPath; oldCover != "" && oldCover != cp {
-			_ = os.Remove(oldCover)
-		}
+	oldRaw, oldCover := strings.TrimSpace(v.DraftRawKey), strings.TrimSpace(v.DraftCoverKey)
+	if media != nil {
+		updates["draft_raw_key"] = media.RawKey
+		updates["draft_cover_key"] = media.CoverKey
+		updates["duration_sec"] = vsvc.NormalizeDurationHint(in.Duration)
 	}
 	if err := a.VideoDraftSvc.UpdateDraft(c.Request.Context(), v, updates); err != nil {
+		a.Log.Error("update draft", zap.Uint64("video_id", id), zap.Error(err))
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
+	newCoverKey := ""
+	if media != nil {
+		newCoverKey = media.CoverKey
+		a.purgeDraftMedia(video.Video{DraftRawKey: oldRaw, DraftCoverKey: oldCover})
+	} else {
+		newCoverKey = in.CoverKey
+		if newCoverKey != "" && newCoverKey != oldCover {
+			a.purgeDraftMedia(video.Video{DraftCoverKey: oldCover})
+		}
+	}
+	if newCoverKey != "" {
+		if cerr := a.copyDraftCoverToPublic(c.Request.Context(), v, newCoverKey); cerr != nil {
+			a.Log.Warn("draft cover oss copy", zap.Uint64("video_id", id), zap.Error(cerr))
+			resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
+			return
+		}
+	}
 	a.refetchDraft(c.Request.Context(), v)
-	a.uploadDraftCoverAndRefetch(c.Request.Context(), v, newCoverPath)
 	resp.OK(c, draftBriefResponse(*v))
 }
 
-// PublishVideoDraft submits a draft for transcoding (F2).
+// PublishVideoDraft submits a draft for transcoding. OSS-keyed drafts are
+// validated and committed atomically (outbox row + status update).
 // PublishVideoDraft godoc
 // @Summary      Publish video draft
 // @Description  Publish a draft video to make it visible
@@ -582,27 +496,53 @@ func (a *API) PublishVideoDraft(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeIntroTooLong)
 		return
 	}
-	rawPath := strings.TrimSpace(v.DraftRawPath)
-	if rawPath == "" {
+	rawRef := strings.TrimSpace(v.DraftRawKey)
+	coverRef := strings.TrimSpace(v.DraftCoverKey)
+	if rawRef == "" {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeUploadMissingFile)
 		return
 	}
-	if _, err := os.Stat(rawPath); err != nil {
+	if isObjectKeyReference(rawRef) {
+		media, verr := a.VideoDraftSvc.ValidateDraftMedia(c.Request.Context(), uid, rawRef, coverRef)
+		if verr != nil {
+			hs, code := mediaErrorStatus(verr)
+			resp.Err(c, hs, code)
+			return
+		}
+		media.DurationSec = vsvc.NormalizeDurationHint(v.DurationSec)
+		if serr := a.VideoDraftSvc.SubmitDraft(c.Request.Context(), v, media); serr != nil {
+			if errors.Is(serr, vsvc.ErrTranscodeQueueFull) {
+				resp.Err(c, http.StatusServiceUnavailable, errcode.CodeTranscodeQueueFull)
+				return
+			}
+			a.Log.Error("publish draft from oss", zap.Uint64("video_id", id), zap.Error(serr))
+			resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
+			return
+		}
+		a.Log.Info("draft published to transcode outbox", zap.Uint64("video_id", v.ID))
+		resp.OK(c, videoDraftStatusResponse{ID: v.ID, Status: video.StatusProcessing})
+		return
+	}
+	// Legacy local-path draft (pre OSS migration): keep the single-host path
+	// working until the draft is resubmitted.
+	if _, err := os.Stat(rawRef); err != nil {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeUploadMissingFile)
 		return
 	}
-	coverPath := strings.TrimSpace(v.DraftCoverPath)
-	if err := a.VideoDraftSvc.EnqueueTranscode(c.Request.Context(), v.ID, rawPath, coverPath); err != nil {
+	if err := a.VideoDraftSvc.EnqueueTranscode(c.Request.Context(), v.ID, rawRef, coverRef); err != nil {
+		if errors.Is(err, vsvc.ErrTranscodeQueueFull) {
+			resp.Err(c, http.StatusServiceUnavailable, errcode.CodeTranscodeQueueFull)
+			return
+		}
 		a.Log.Error("publish transcode from draft", zap.Error(err))
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
-	updates := map[string]interface{}{
-		"status":           video.StatusProcessing,
-		"draft_raw_path":   "",
-		"draft_cover_path": "",
-	}
-	if err := a.VideoDraftSvc.UpdateDraft(c.Request.Context(), v, updates); err != nil {
+	if err := a.VideoDraftSvc.UpdateDraft(c.Request.Context(), v, map[string]interface{}{
+		"status":          video.StatusProcessing,
+		"draft_raw_key":   "",
+		"draft_cover_key": "",
+	}); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}

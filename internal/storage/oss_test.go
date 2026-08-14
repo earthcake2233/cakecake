@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 )
 
 // TestNewOSSIncompleteConfig verifies that NewOSS returns an error when
@@ -61,6 +62,29 @@ func TestDeleteObjectStripsLeadingSlash(t *testing.T) {
 	stripped := strings.TrimPrefix(strings.TrimSpace(key), "/")
 	if stripped != "some/path/to/file.jpg" {
 		t.Errorf("expected stripped key %q, got %q", "some/path/to/file.jpg", stripped)
+	}
+}
+
+// TestPresignGetEmptyKey verifies PresignGet guards against empty keys before
+// touching the (nil in tests) bucket handle.
+func TestPresignGetEmptyKey(t *testing.T) {
+	o := &OSS{}
+	if _, err := o.PresignGet("", time.Second); err == nil {
+		t.Fatal("expected error for empty key")
+	}
+	if _, err := o.PresignGet("/", time.Second); err == nil {
+		t.Fatal("expected error for slash-only key")
+	}
+}
+
+// TestCopyObjectEmptyKey verifies CopyObject guards against empty keys.
+func TestCopyObjectEmptyKey(t *testing.T) {
+	o := &OSS{}
+	if err := o.CopyObject("", "covers/1.jpg"); err == nil {
+		t.Fatal("expected error for empty src key")
+	}
+	if err := o.CopyObject("drafts/1/x/cover.png", ""); err == nil {
+		t.Fatal("expected error for empty dst key")
 	}
 }
 

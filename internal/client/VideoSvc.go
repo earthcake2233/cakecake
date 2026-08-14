@@ -14,16 +14,16 @@ import (
 type VideoSvc interface {
 	AdminDeleteVideoCascade(ctx context.Context, id uint64, fn func(tx dbtx.Tx) error) error
 	AdminListVideos(ctx context.Context, statuses []string, titleQ string, page int, pageSize int) (*servicevideo.AdminListVideosResult, error)
+	AdminRejectVideoWithAudit(ctx context.Context, id uint64, reason string, adminID uint64) error
 	AdminUpdateVideo(ctx context.Context, id uint64, updates map[string]interface{}) error
 	CountMyVideosByStatus(uid uint64) map[string]int64
 	CountPublishedVideos(ctx context.Context) int64
 	CountZoneVideos(zoneParent string) int64
 	CreateVideoRecord(ctx context.Context, v *video.Video) error
-	CreateDirectUploadTicket(ctx context.Context, uid uint64, filename string, coverFilename string) (*servicevideo.DirectUploadTicket, error)
-	CreateVideoFromDirectUpload(ctx context.Context, uid uint64, title string, description string, tagsJSON string, zone string, rawKey string, coverKey string) (*video.Video, error)
+	CreateDirectUploadTicket(ctx context.Context, uid uint64, filename string, coverFilename string, rawContentType string, coverContentType string) (*servicevideo.DirectUploadTicket, error)
+	CreateVideoFromDirectUpload(ctx context.Context, uid uint64, title string, description string, tagsJSON string, zone string, rawKey string, coverKey string, durationHint float64) (*video.Video, error)
 	DeleteVideoByID(ctx context.Context, id uint64) error
 	DeleteVideoWithCascade(ctx context.Context, id uint64, fn func(tx dbtx.Tx) error) error
-	EnqueueTranscode(ctx context.Context, videoID uint64, rawPath string, coverPath string) error
 	FFprobeExe() string
 	GetPublishedVideo(ctx context.Context, id uint64) (*video.Video, error)
 	GetVideoByID(ctx context.Context, id uint64) (*video.Video, error)
