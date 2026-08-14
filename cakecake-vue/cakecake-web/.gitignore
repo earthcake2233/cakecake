@@ -1,6 +1,8 @@
 .DS_Store
 node_modules
 /dist
+# 本项目统一使用 npm + package-lock.json；yarn.lock 不提交，避免与 npm 锁文件混用
+yarn.lock
 
 # local env files（含 .env / .env.production，仅提交 *.example）
 .env
