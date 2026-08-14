@@ -4,7 +4,6 @@ import (
 	"cakecake/internal/errcode"
 	"cakecake/internal/middleware"
 	"cakecake/internal/model/video"
-	"cakecake/internal/pkg/coverval"
 	"cakecake/internal/pkg/resp"
 	vsvc "cakecake/internal/service/video"
 	"errors"
@@ -12,49 +11,12 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
-
-// parseReplaceMediaForm parses and validates the replace-media multipart form.
-func (a *API) parseReplaceMediaForm(c *gin.Context) (draftCreateInput, int) {
-	var in draftCreateInput
-	if err := c.Request.ParseMultipartForm(maxVideoBytes + (12 << 20)); err != nil {
-		a.Log.Warn("parse multipart form", zap.Error(err))
-		return in, errcode.CodeMultipartParseError
-	}
-	in.title = strings.TrimSpace(c.PostForm("title"))
-	in.desc = strings.TrimSpace(c.PostForm("description"))
-	if utf8.RuneCountInString(in.title) < 1 || utf8.RuneCountInString(in.title) > 80 {
-		return in, errcode.CodeTitleInvalid
-	}
-	if utf8.RuneCountInString(in.desc) > 2000 {
-		return in, errcode.CodeIntroTooLong
-	}
-	fh, err := c.FormFile("file")
-	if err != nil {
-		return in, errcode.CodeUploadMissingFile
-	}
-	if fh.Size > maxVideoBytes {
-		return in, errcode.CodeVideoFileTooLarge
-	}
-	in.fileFh = fh
-	in.coverFh, _ = c.FormFile("cover")
-	if in.coverFh != nil {
-		if code := coverval.ValidateCoverHeader(in.coverFh); code != 0 {
-			return in, code
-		}
-	}
-	tagsJSON, err := parseTagsPostForm(c.PostForm("tags"))
-	if err != nil {
-		return in, errcode.CodeParamError
-	}
-	in.tagsJSON = tagsJSON
-	in.zone = normalizeVideoZone(c.PostForm("zone"))
-	return in, 0
-}
 
 func videoStatusAllowsMediaReplace(st string) bool {
 	switch st {
@@ -65,20 +27,22 @@ func videoStatusAllowsMediaReplace(st string) bool {
 	}
 }
 
-// ReplaceVideoMedia replaces the source file for failed/rejected videos: purge OSS, re-queue transcode.
+// ReplaceVideoMedia replaces the source media for failed/rejected videos: the
+// client stages a new raw (and optional cover) via the draft upload ticket,
+// then submits the object keys here. The outbox row and the video update
+// commit atomically; old objects are purged only after the new job is durable.
 // ReplaceVideoMedia godoc
 // @Summary      Replace video media
-// @Description  Upload a new media file to replace existing video
+// @Description  Replace failed/rejected video media and re-queue transcoding
 // @Tags         Videos
-// @Accept       multipart/form-data
+// @Accept       json
 // @Produce      json
 // @Param        id path int true "Video ID"
-// @Param        file formData file true "New video file"
+// @Param        body body object{} true "Title, description, tags, zone, raw_key, cover_key"
 // @Success      200 {object} map[string]interface{}
 // @Router       /videos/{id}/replace-media [post]
 func (a *API) ReplaceVideoMedia(c *gin.Context) {
-	if a.Cfg != nil && a.Cfg.VideoUploadDisabled {
-		resp.Err(c, http.StatusBadRequest, errcode.CodeVideoUploadDisabled)
+	if a.rejectVideoUploadDisabled(c) {
 		return
 	}
 	uid, ok := middleware.UserID(c)
@@ -100,56 +64,64 @@ func (a *API) ReplaceVideoMedia(c *gin.Context) {
 		resp.Err(c, http.StatusForbidden, errcode.CodeForbidden)
 		return
 	}
-	in, code := a.parseReplaceMediaForm(c)
-	if code != 0 {
-		resp.Err(c, http.StatusBadRequest, code)
+	var in draftCreateInput
+	if err := c.ShouldBindJSON(&in); err != nil {
+		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	a.StorageSvc.PurgeVideo(*v)
-	a.esDeleteVideo(id)
-	removeVideoDraftFiles(*v)
-
-	rawPath, dur, err := a.saveDraftVideoFile(in.fileFh, v.ID)
-	if err != nil {
-		if err.Error() == "duration exceeded" {
-			resp.Err(c, http.StatusBadRequest, errcode.CodeVideoDurationExceeded)
-			return
-		}
-		a.Log.Warn("replace video save file", zap.Error(err))
-		resp.Err(c, http.StatusBadRequest, errcode.CodeVideoProbeFailed)
+	in.Title = strings.TrimSpace(in.Title)
+	in.Description = strings.TrimSpace(in.Description)
+	in.RawKey = strings.TrimSpace(in.RawKey)
+	in.CoverKey = strings.TrimSpace(in.CoverKey)
+	if utf8.RuneCountInString(in.Title) < 1 || utf8.RuneCountInString(in.Title) > 80 {
+		resp.Err(c, http.StatusBadRequest, errcode.CodeTitleInvalid)
 		return
 	}
-
-	var coverPath string
-	if in.coverFh != nil {
-		coverPath, code = a.saveDraftCoverFileChecked(in.coverFh, v.ID)
-		if code != 0 {
-			_ = os.Remove(rawPath)
-			resp.Err(c, httpStatusForCode(code), code)
-			return
-		}
+	if utf8.RuneCountInString(in.Description) > 2000 {
+		resp.Err(c, http.StatusBadRequest, errcode.CodeIntroTooLong)
+		return
 	}
-
+	media, verr := a.VideoDraftSvc.ValidateDraftMedia(c.Request.Context(), uid, in.RawKey, in.CoverKey)
+	if verr != nil {
+		hs, code := mediaErrorStatus(verr)
+		resp.Err(c, hs, code)
+		return
+	}
+	tagsJSON, terr := tagsJSONFromStringSlice(in.Tags)
+	if terr != nil {
+		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
+		return
+	}
+	old := *v
 	if err := a.VideoDraftSvc.ReplaceMedia(c.Request.Context(), v, vsvc.ReplaceMediaOpts{
-		Title:       in.title,
-		Description: in.desc,
-		TagsJSON:    in.tagsJSON,
-		Zone:        in.zone,
-		RawPath:     rawPath,
-		CoverPath:   coverPath,
-		DurationSec: dur,
+		Title:       in.Title,
+		Description: in.Description,
+		TagsJSON:    tagsJSON,
+		Zone:        normalizeVideoZone(in.Zone),
+		RawKey:      media.RawKey,
+		CoverKey:    media.CoverKey,
+		DurationSec: vsvc.NormalizeDurationHint(in.Duration),
 	}); err != nil {
-		if errors.Is(err, vsvc.ErrReplaceMediaUpdate) {
-			removeVideoDraftFiles(video.Video{DraftRawPath: rawPath, DraftCoverPath: coverPath})
+		if errors.Is(err, vsvc.ErrTranscodeQueueFull) {
+			resp.Err(c, http.StatusServiceUnavailable, errcode.CodeTranscodeQueueFull)
+			return
 		}
+		a.Log.Error("replace video media", zap.Uint64("video_id", id), zap.Error(err))
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
+	// Old media is removed only after the new job is durable, so a failure
+	// never leaves the video without a recoverable source.
+	a.StorageSvc.PurgeVideo(old)
+	a.purgeDraftMedia(old)
+	a.esDeleteVideo(id)
 	a.Log.Info("video media replaced and queued for transcode", zap.Uint64("video_id", v.ID))
 	resp.OK(c, videoDraftStatusResponse{ID: v.ID, Status: video.StatusProcessing})
 }
 
-// GetMyVideoDraftSource streams the draft raw file for the uploader preview.
+// GetMyVideoDraftSource streams the draft raw media for the uploader preview:
+// OSS-keyed drafts redirect to a short-lived presigned GET URL; legacy
+// local-path drafts are served from disk.
 // GetMyVideoDraftSource godoc
 // @Summary      Get draft source
 // @Description  Get the original uploaded source info for a draft video
@@ -174,17 +146,30 @@ func (a *API) GetMyVideoDraftSource(c *gin.Context) {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
-
-	rawPath := strings.TrimSpace(v.DraftRawPath)
-	if rawPath == "" {
+	rawRef := strings.TrimSpace(v.DraftRawKey)
+	if rawRef == "" {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
-	if _, err := os.Stat(rawPath); err != nil {
+	if isObjectKeyReference(rawRef) {
+		if !a.StorageSvc.Enabled() {
+			resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
+			return
+		}
+		u, perr := a.StorageSvc.PresignGet(rawRef, 5*time.Minute)
+		if perr != nil {
+			a.Log.Warn("presign draft source", zap.Uint64("video_id", id), zap.Error(perr))
+			resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
+			return
+		}
+		c.Redirect(http.StatusTemporaryRedirect, u)
+		return
+	}
+	if _, err := os.Stat(rawRef); err != nil {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
 		return
 	}
 	c.Header("Content-Type", "application/octet-stream")
 	c.Header("Accept-Ranges", "bytes")
-	c.File(rawPath)
+	c.File(rawRef)
 }

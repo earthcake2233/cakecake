@@ -69,11 +69,35 @@ describe("mbListMyVideos",function(){it("GET /users/me/videos",async function(){
   expect(mockHttp.get).toHaveBeenCalledWith("/api/v1/users/me/videos",{params:{page:1},...A});
 });});
 
-describe("mbUploadVideo",function(){it("POST /videos with FormData",async function(){
+describe("mbCreateVideoDirect",function(){it("POST /videos with JSON keys",async function(){
   mockHttp.post.mockResolvedValue(ok({ id:1 }));
-  var fd=new FormData();fd.append("t","x");
-  await mb.mbUploadVideo(fd);
-  expect(mockHttp.post).toHaveBeenCalledWith("/api/v1/videos",fd,{timeout:6e5,skipGlobalErrorToast:true});
+  await mb.mbCreateVideoDirect({ title:"t", description:"d", tags:[], zone:"", raw_key:"uploads/1/x/source.mp4" });
+  expect(mockHttp.post).toHaveBeenCalledWith("/api/v1/videos",{title:"t",description:"d",tags:[],zone:"",raw_key:"uploads/1/x/source.mp4"},{timeout:6e5,skipGlobalErrorToast:true});
+});});
+
+describe("mbCreateDraftUploadTicket",function(){it("POST /videos/draft/upload-ticket",async function(){
+  mockHttp.post.mockResolvedValue(ok({ raw_key:"drafts/1/u/source.mp4", raw_upload_url:"https://oss/x" }));
+  var r=await mb.mbCreateDraftUploadTicket("clip.mp4","cover.png");
+  expect(mockHttp.post).toHaveBeenCalledWith("/api/v1/videos/draft/upload-ticket",{filename:"clip.mp4",cover_filename:"cover.png"},{skipGlobalErrorToast:true});
+  expect(r.raw_key).toBe("drafts/1/u/source.mp4");
+});});
+
+describe("mbSaveVideoDraft",function(){it("POST /videos/draft with JSON",async function(){
+  mockHttp.post.mockResolvedValue(ok({ id:1 }));
+  await mb.mbSaveVideoDraft({ title:"t", description:"d", tags:[], zone:"", raw_key:"drafts/1/u/source.mp4" });
+  expect(mockHttp.post).toHaveBeenCalledWith("/api/v1/videos/draft",{title:"t",description:"d",tags:[],zone:"",raw_key:"drafts/1/u/source.mp4"},{skipGlobalErrorToast:true});
+});});
+
+describe("mbUpdateVideoDraft",function(){it("PUT /videos/:id/draft with JSON",async function(){
+  mockHttp.put.mockResolvedValue(ok({ id:1 }));
+  await mb.mbUpdateVideoDraft(9,{ title:"t", cover_key:"drafts/1/u/cover.png" });
+  expect(mockHttp.put).toHaveBeenCalledWith("/api/v1/videos/9/draft",{title:"t",cover_key:"drafts/1/u/cover.png"},{skipGlobalErrorToast:true,headers:{"Content-Type":"application/json"}});
+});});
+
+describe("mbReplaceVideoMedia",function(){it("POST /videos/:id/replace-media with JSON",async function(){
+  mockHttp.post.mockResolvedValue(ok({ id:1 }));
+  await mb.mbReplaceVideoMedia(9,{ title:"t", description:"d", tags:[], zone:"", raw_key:"drafts/1/u/source.mp4" });
+  expect(mockHttp.post).toHaveBeenCalledWith("/api/v1/videos/9/replace-media",{title:"t",description:"d",tags:[],zone:"",raw_key:"drafts/1/u/source.mp4"},{skipGlobalErrorToast:true});
 });});
 
 describe("mbGetUserPublic",function(){it("GET /space/:userId",async function(){

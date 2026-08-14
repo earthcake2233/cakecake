@@ -51,10 +51,10 @@
 | 能力 | 普通仿 B 站教程项目 | cakecake |
 | --- | --- | --- |
 | 实时弹幕 | 轮询 / 伪实时 | WebSocket + Redis Pub/Sub，多实例可水平扩展 |
-| 异步转码 | 无 / 同步阻塞 | RabbitMQ 队列 + FFmpeg 流水线，上传即返回 |
+| 异步转码 | 无 / 同步阻塞 | RabbitMQ + Outbox 事务入队 + 消息去重 + 死信自动重试闭环 + FFmpeg 流水线，上传即返回 |
 | AI 助手 | 无 | DeepSeek Function Calling 结构化工具调用 |
 | 全文搜索 | 无 / MySQL LIKE | Elasticsearch 索引 |
-| 工程化 | CRUD 为主 | 版本化迁移、限流、优雅停机、可观测性、企业级 CI/CD |
+| 工程化 | CRUD 为主 | 版本化迁移（goose/GORM 一致性 CI 检查）、限流、优雅停机、可观测性、企业级 CI/CD |
 
 ---
 

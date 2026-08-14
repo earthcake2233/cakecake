@@ -3,8 +3,6 @@ package handler
 import (
 	"cakecake/internal/errcode"
 	"cakecake/internal/middleware"
-	"cakecake/internal/model/video"
-	"cakecake/internal/pkg/coverval"
 	"cakecake/internal/pkg/resp"
 	vsvc "cakecake/internal/service/video"
 	"encoding/json"
@@ -13,18 +11,12 @@ import (
 	"mime/multipart"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 	"go.uber.org/zap"
 )
-
-const maxVideoBytes = 500 << 20
-
-const maxDurationSec = 30 * 60
 
 const maxVideoTags = 10
 
@@ -63,19 +55,6 @@ func tagsJSONFromStringSlice(tags []string) (string, error) {
 	return string(b), nil
 }
 
-// parseTagsPostForm reads optional multipart field "tags" as JSON string array; empty/missing => "[]".
-func parseTagsPostForm(raw string) (string, error) {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return "[]", nil
-	}
-	var arr []string
-	if err := json.Unmarshal([]byte(raw), &arr); err != nil {
-		return "", err
-	}
-	return tagsJSONFromStringSlice(arr)
-}
-
 func videoTagsForResponse(tagsJSON string) []string {
 	tagsJSON = strings.TrimSpace(tagsJSON)
 	if tagsJSON == "" {
@@ -99,7 +78,10 @@ func (a *API) rejectVideoUploadDisabled(c *gin.Context) bool {
 	return false
 }
 
-// UploadVideo handles multipart upload (F2).
+// UploadVideo is the single user-facing upload entry point: the browser
+// stages the raw video (and optional cover) straight to OSS via the upload
+// ticket, then submits metadata + object keys here as JSON. Server-side
+// multipart upload is no longer exposed to users.
 func (a *API) UploadVideo(c *gin.Context) {
 	if a.rejectVideoUploadDisabled(c) {
 		return
@@ -113,129 +95,14 @@ func (a *API) UploadVideo(c *gin.Context) {
 		a.uploadVideoDirect(c, uid)
 		return
 	}
-	if err := c.Request.ParseMultipartForm(maxVideoBytes + (12 << 20)); err != nil {
-		a.Log.Warn("parse multipart form", zap.Error(err))
-		resp.Err(c, http.StatusBadRequest, errcode.CodeMultipartParseError)
-		return
-	}
-	title := strings.TrimSpace(c.PostForm("title"))
-	desc := strings.TrimSpace(c.PostForm("description"))
-	if utf8.RuneCountInString(title) < 1 || utf8.RuneCountInString(title) > 80 {
-		resp.Err(c, http.StatusBadRequest, errcode.CodeTitleInvalid)
-		return
-	}
-	if utf8.RuneCountInString(desc) > 2000 {
-		resp.Err(c, http.StatusBadRequest, errcode.CodeIntroTooLong)
-		return
-	}
-	fh, err := c.FormFile("file")
-	if err != nil {
-		resp.Err(c, http.StatusBadRequest, errcode.CodeUploadMissingFile)
-		return
-	}
-	if fh.Size > maxVideoBytes {
-		resp.Err(c, http.StatusBadRequest, errcode.CodeVideoFileTooLarge)
-		return
-	}
-	coverFh, _ := c.FormFile("cover")
-	if coverFh != nil {
-		if code := coverval.ValidateCoverHeader(coverFh); code != 0 {
-			resp.Err(c, http.StatusBadRequest, code)
-			return
-		}
-	}
-	if err := os.MkdirAll(a.Cfg.TempUploadDir, 0o755); err != nil {
-		a.Log.Error("mkdir temp", zap.Error(err))
-		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
-		return
-	}
-	rawName := uuid.NewString() + filepath.Ext(fh.Filename)
-	rawPath := filepath.Join(a.Cfg.TempUploadDir, rawName)
-	if err := saveUploadedFile(fh, rawPath); err != nil {
-		a.Log.Error("save raw video", zap.Error(err))
-		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
-		return
-	}
-	dur, err := a.VideoSvc.ProbeDurationSeconds(rawPath)
-	if err != nil {
-		_ = os.Remove(rawPath)
-		a.Log.Warn("ffprobe duration",
-			zap.Error(err),
-			zap.String("ffprobe", a.VideoSvc.FFprobeExe()),
-			zap.String("raw_path", rawPath),
-		)
-		resp.Err(c, http.StatusBadRequest, errcode.CodeVideoProbeFailed)
-		return
-	}
-	if dur > maxDurationSec {
-		_ = os.Remove(rawPath)
-		resp.Err(c, http.StatusBadRequest, errcode.CodeVideoDurationExceeded)
-		return
-	}
-	tagsJSON, err := parseTagsPostForm(c.PostForm("tags"))
-	if err != nil {
-		_ = os.Remove(rawPath)
-		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
-		return
-	}
-	var coverPath string
-	if coverFh != nil {
-		cn := uuid.NewString() + filepath.Ext(coverFh.Filename)
-		coverPath = filepath.Join(a.Cfg.TempUploadDir, cn)
-		if err := saveUploadedFile(coverFh, coverPath); err != nil {
-			_ = os.Remove(rawPath)
-			a.Log.Error("save cover", zap.Error(err))
-			resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
-			return
-		}
-	}
-	zone := normalizeVideoZone(c.PostForm("zone"))
-	v := video.Video{
-		UserID:       uid,
-		Title:        title,
-		Description:  desc,
-		DurationSec:  dur,
-		Status:       video.StatusProcessing,
-		PlayCount:    0,
-		DanmakuCount: 0,
-		CommentCount: 0,
-		TagsJSON:     tagsJSON,
-		Zone:         zone,
-	}
-	if err := a.VideoSvc.CreateVideoRecord(c.Request.Context(), &v); err != nil {
-		_ = os.Remove(rawPath)
-		if coverPath != "" {
-			_ = os.Remove(coverPath)
-		}
-		a.Log.Error("create video", zap.Error(err))
-		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
-		return
-	}
-	if err := a.VideoSvc.EnqueueTranscode(c.Request.Context(), v.ID, rawPath, coverPath); err != nil {
-		_ = a.VideoSvc.DeleteVideoByID(c.Request.Context(), v.ID)
-		_ = os.Remove(rawPath)
-		if coverPath != "" {
-			_ = os.Remove(coverPath)
-		}
-		a.Log.Error("publish transcode", zap.Error(err))
-		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
-		return
-	}
-	a.Log.Info("transcode job queued",
-		zap.Uint64("video_id", v.ID),
-	)
-	resp.JSON(c, http.StatusCreated, errcode.CodeSuccess, createVideoResponse{
-		ID:        v.ID,
-		Status:    v.Status,
-		Title:     v.Title,
-		Duration:  v.DurationSec,
-		CreatedAt: v.CreatedAt.Format("2006-01-02 15:04:05"),
-	})
+	resp.Err(c, http.StatusUnsupportedMediaType, errcode.CodeParamError)
 }
 
 type createUploadTicketRequest struct {
-	Filename      string `json:"filename"`
-	CoverFilename string `json:"cover_filename,omitempty"`
+	Filename         string `json:"filename"`
+	CoverFilename    string `json:"cover_filename,omitempty"`
+	ContentType      string `json:"content_type,omitempty"`
+	CoverContentType string `json:"cover_content_type,omitempty"`
 }
 
 // CreateVideoUploadTicket issues presigned PUT URLs so the browser can upload
@@ -255,7 +122,7 @@ func (a *API) CreateVideoUploadTicket(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	ticket, err := a.VideoSvc.CreateDirectUploadTicket(c.Request.Context(), uid, strings.TrimSpace(req.Filename), strings.TrimSpace(req.CoverFilename))
+	ticket, err := a.VideoSvc.CreateDirectUploadTicket(c.Request.Context(), uid, strings.TrimSpace(req.Filename), strings.TrimSpace(req.CoverFilename), strings.TrimSpace(req.ContentType), strings.TrimSpace(req.CoverContentType))
 	if err != nil {
 		if errors.Is(err, vsvc.ErrDirectUploadUnavailable) {
 			resp.Err(c, http.StatusServiceUnavailable, errcode.CodeDirectUploadUnavailable)
@@ -275,6 +142,7 @@ type directUploadSubmitRequest struct {
 	Zone        string   `json:"zone"`
 	RawKey      string   `json:"raw_key"`
 	CoverKey    string   `json:"cover_key,omitempty"`
+	Duration    float64  `json:"duration,omitempty"`
 }
 
 // uploadVideoDirect completes a direct upload: the source files were already
@@ -308,7 +176,7 @@ func (a *API) uploadVideoDirect(c *gin.Context, uid uint64) {
 		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		return
 	}
-	v, err := a.VideoSvc.CreateVideoFromDirectUpload(c.Request.Context(), uid, title, desc, tagsJSON, normalizeVideoZone(req.Zone), strings.TrimSpace(req.RawKey), strings.TrimSpace(req.CoverKey))
+	v, err := a.VideoSvc.CreateVideoFromDirectUpload(c.Request.Context(), uid, title, desc, tagsJSON, normalizeVideoZone(req.Zone), strings.TrimSpace(req.RawKey), strings.TrimSpace(req.CoverKey), req.Duration)
 	if err != nil {
 		switch {
 		case errors.Is(err, vsvc.ErrDirectUploadUnavailable):
@@ -321,6 +189,8 @@ func (a *API) uploadVideoDirect(c *gin.Context, uid uint64) {
 			resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
 		case errors.Is(err, vsvc.ErrDirectUploadAlreadyClaimed), errors.Is(err, vsvc.ErrDirectUploadInProgress):
 			resp.Err(c, http.StatusConflict, errcode.CodeDirectUploadConflict)
+		case errors.Is(err, vsvc.ErrTranscodeQueueFull):
+			resp.Err(c, http.StatusServiceUnavailable, errcode.CodeTranscodeQueueFull)
 		default:
 			a.Log.Error("direct upload submit", zap.Uint64("uid", uid), zap.String("raw_key", req.RawKey), zap.Error(err))
 			resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)

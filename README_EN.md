@@ -51,10 +51,10 @@ Versioned DB migrations, global rate limiting, graceful shutdown, observability,
 | Capability | Typical bilibili-clone tutorial | cakecake |
 | --- | --- | --- |
 | Real-time danmaku | Polling / fake real-time | WebSocket + Redis Pub/Sub, horizontally scalable |
-| Async transcoding | None / synchronous | RabbitMQ queue + FFmpeg pipeline, upload returns immediately |
+| Async transcoding | None / synchronous | RabbitMQ + Outbox transactional enqueue + message dedup + dead-letter auto-retry loop + FFmpeg pipeline, upload returns immediately |
 | AI assistant | None | DeepSeek Function Calling with structured tool use |
 | Full-text search | None / MySQL LIKE | Elasticsearch indexing |
-| Engineering | CRUD-first | Versioned migrations, rate limiting, graceful shutdown, observability, enterprise CI/CD |
+| Engineering | CRUD-first | Versioned migrations (goose/GORM consistency CI check), rate limiting, graceful shutdown, observability, enterprise CI/CD |
 
 ---
 

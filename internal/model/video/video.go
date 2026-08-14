@@ -42,9 +42,12 @@ type Video struct {
 	TagsJSON string `gorm:"type:text"`
 	// Zone is the publish partition, e.g. "anime" or "lifestyle-daily".
 	Zone string `gorm:"size:64"`
-	// DraftRawPath / DraftCoverPath: local staging paths when status=draft, used before submission transcoding.
-	DraftRawPath      string `gorm:"size:1024"`
-	DraftCoverPath    string `gorm:"size:1024"`
+	// DraftRawKey / DraftCoverKey: source references when status=draft.
+	// New drafts store OSS object keys under drafts/{uid}/...; legacy rows may
+	// still contain absolute local paths (single-host deployments) until the
+	// draft is resubmitted.
+	DraftRawKey       string `gorm:"size:1024"`
+	DraftCoverKey     string `gorm:"size:1024"`
 	ReviewedAt        *time.Time
 	ReviewedByAdminID *uint64   `gorm:"index"`
 	CreatedAt         time.Time `gorm:"index:idx_video_created"`

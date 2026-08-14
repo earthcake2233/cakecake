@@ -304,9 +304,29 @@ sudo rabbitmqctl status
 
 转码相关队列（主队列、30/60/90s 三级延迟重试队列、死信队列）由应用启动时自动声明，无需手工创建；升级旧版本后直接重启应用即可，重试队列会在首次启动时补建。
 
-转码并发与可观测：`TRANSCODE_CONCURRENCY`（单实例并发消费者，建议按核数 2-4）；`RABBITMQ_MGMT_URL`（如 `http://127.0.0.1:15672`）开启队列积压指标，为空则禁用该 gauge。
+转码并发与可观测：`TRANSCODE_CONCURRENCY`（单实例并发消费者，默认按 CPU 核数自动收敛为 min(cores,4)，可显式覆盖）；`RABBITMQ_MGMT_URL`（如 `http://127.0.0.1:15672`）开启队列积压指标，为空则禁用该 gauge；`TRANSCODE_MAX_QUEUE`（主队列积压阈值，超过后上传返回 503，0 禁用背压）。
 
-客户端直传：浏览器直传 OSS 需要给 bucket 配置 CORS（允许 PUT、来源域名），否则前端会自动回退传统 multipart 上传。
+客户端直传：浏览器直传 OSS 需要给 bucket 配置 CORS（允许 PUT 与 GET、来源域名）。GET 用于草稿预览的 presigned 跳转；CORS/OSS 不可用时前端**不再回退 multipart**，直接提示线下处理——上传链路只有直传一条。阿里云 OSS 控制台 → Bucket → 数据安全 → 跨域设置，规则示例（`localhost` 开发环境按需保留）：
+
+```json
+[
+  {
+    "allowedOrigin": ["http://localhost:8888", "http://127.0.0.1:8888", "https://你的线上域名"],
+    "allowedMethod": ["PUT", "GET", "HEAD"],
+    "allowedHeader": ["*"],
+    "exposeHeader": ["ETag", "Content-Length"],
+    "maxAgeSeconds": 600
+  }
+]
+```
+
+常见症状：控制台报 `Response to preflight request doesn't pass access control check: No 'Access-Control-Allow-Origin' header`，且请求地址是 `*.oss-cn-*.aliyuncs.com/...?...&Signature=...`（presigned PUT/GET）——说明该来源或方法不在跨域规则里，不是代码问题。
+
+选文件即传会产生未发布的孤儿对象（用户放弃投稿、换文件、改存草稿，或上传中途取消——ticket 未上传不产生对象，但**部分上传会残留**）。应用内已实现回收任务：默认每 1h 扫描 `uploads/`、`drafts/` 前缀，只删除**超过 24h 且 DB 无引用**的对象（草稿键、直传 claim、outbox、死信 payload 均保护，上传中/已传未提交的对象受宽限期保护）。可用 `OSS_ORPHAN_RETENTION`（默认 24h）与 `OSS_ORPHAN_CLEAN_INTERVAL`（默认 1h）调整，删除计数见 `cakecake_upload_orphan_objects_deleted_total`。OSS 生命周期规则降级为可选兜底：若配置，过期时间应**大于**应用内保留期，且注意它不检查 DB 引用。
+
+数据库迁移：`migrations/00013_draft_object_keys.sql` 把草稿列 `draft_raw_path/draft_cover_path` 改名为 `draft_raw_key/draft_cover_key`（语义变为 OSS 对象键，历史本地路径值原样保留；新草稿一律存 `drafts/{uid}/...` 对象键）。升级时执行 `goose -dir migrations mysql "DSN" up` 即可。
+
+转码一致性：上传/直传提交通过 Outbox 本地消息表与视频行同事务写入，relay 后台 confirm 发布（失败指数退避）；**提交只做 HEAD 校验（归属/存在/大小），不下载 OSS 原文件**，时长由前端提示值暂存、worker 下载后 ffprobe 复核（≤30 分钟，超限/不可读永久失败并回写 `duration_sec`）；worker 按 `(job_id, retry_count)` 去重，状态变更经状态机校验 + 条件更新并写入 `transcode_events` 审计，日志带 `X-Trace-Id` 贯穿；死信按原因自动重放瞬时失败（上限 3 次、指数退避），永久失败走管理后台人工重放。
 
 ### 6.6 Nginx
 
@@ -503,7 +523,7 @@ curl -sI http://127.0.0.1/
 
 2. 在 `.env` 中设置 `APP_ENV=production`（DB_AUTO_MIGRATE 默认 false，仅执行 goose SQL 迁移）
 
-3. 启动应用：goose 执行 `migrations/00001_baseline.sql`，自动创建全部 42+ 张表
+3. 启动应用：goose 执行 `migrations/` 下全部迁移（00001 基线 + 后续增量，含转码 outbox/去重/审计等表），自动创建全部表
 
 4. 验证：`mysql -u root -p minibili -e "SHOW TABLES;"`
 

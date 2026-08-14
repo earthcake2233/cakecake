@@ -42,6 +42,10 @@ func (writingFFmpeg) ScreenshotJPEG(_ context.Context, _ string, outJPEG string,
 
 func (writingFFmpeg) IsPermanentTranscodeFailure(string) bool { return false }
 
+func (writingFFmpeg) ProbeDurationSeconds(_ context.Context, _ string) (float64, error) {
+	return 60, nil
+}
+
 type recordingStore struct {
 	uploads []string
 	deleted []string
@@ -62,6 +66,28 @@ func (s *recordingStore) DeleteObject(objectKey string) error {
 	s.deleted = append(s.deleted, objectKey)
 	return nil
 }
+
+// fileCheckingStore writes downloaded sources as real files and verifies
+// every uploaded local path exists, catching "downloaded then deleted" bugs.
+type fileCheckingStore struct {
+	uploads []string
+	missing []string
+}
+
+func (s *fileCheckingStore) UploadFile(objectKey, localPath string) error {
+	if _, err := os.Stat(localPath); err != nil {
+		s.missing = append(s.missing, objectKey+" -> "+localPath)
+		return nil
+	}
+	s.uploads = append(s.uploads, objectKey)
+	return nil
+}
+
+func (s *fileCheckingStore) DownloadFile(_ string, localPath string) error {
+	return os.WriteFile(localPath, []byte("cover-bytes"), 0o644)
+}
+
+func (s *fileCheckingStore) DeleteObject(string) error { return nil }
 
 func newBehavioralWorkerDB(t *testing.T) *gorm.DB {
 	t.Helper()
@@ -232,6 +258,10 @@ func (s *spyFFmpeg) ScreenshotJPEG(_ context.Context, _, _ string, _ float64) (s
 
 func (s *spyFFmpeg) IsPermanentTranscodeFailure(string) bool { return false }
 
+func (s *spyFFmpeg) ProbeDurationSeconds(_ context.Context, _ string) (float64, error) {
+	return 60, nil
+}
+
 // TestBehavioral_TranscodeRedelivery_SkipsTerminalState verifies the
 // at-least-once idempotency guard: a redelivered job for a video that already
 // reached a terminal transcode state is acked and skipped without touching
@@ -345,6 +375,34 @@ func TestBehavioral_TranscodeSuccessWithOSSKeys(t *testing.T) {
 	require.Greater(t, testutil.ToFloat64(transcodeJobsTotal.WithLabelValues("success")), successBefore)
 }
 
+// TestBehavioral_TranscodeUserCoverSurvivesUpload guards the regression where
+// coverOut (default cover path) and the downloaded user cover share the same
+// file: removing coverOut deleted the downloaded cover before upload.
+func TestBehavioral_TranscodeUserCoverSurvivesUpload(t *testing.T) {
+	db := newBehavioralWorkerDB(t)
+	require.NoError(t, db.Create(&user.User{ID: 1, Username: "uploader", PasswordHash: "x"}).Error)
+	require.NoError(t, db.Create(&video.Video{ID: 70, UserID: 1, Title: "v", Status: video.StatusProcessing}).Error)
+
+	tmp := t.TempDir()
+	cfg := &config.C{
+		TempUploadDir:       tmp,
+		OSSPublicURLPrefix:  "https://cdn.example.com",
+		VideoReviewRequired: false,
+	}
+	store := &fileCheckingStore{}
+	ack := &fakeAck{}
+	body, _ := json.Marshal(TranscodeJob{VideoID: 70, RawKey: "raws/x/source.mp4", CoverKey: "raws/x/cover.jpg"})
+	handleDeliveryWith(context.Background(), cfg, db, nil, store, nil,
+		amqp.Delivery{Body: body, Acknowledger: ack}, writingFFmpeg{}, zap.NewNop())
+
+	require.Equal(t, 1, ack.acked)
+	require.Empty(t, store.missing, "every uploaded file must exist on disk: %v", store.missing)
+	require.Contains(t, store.uploads, "covers/70.jpg")
+	var v video.Video
+	require.NoError(t, db.First(&v, 70).Error)
+	require.Equal(t, video.StatusPublished, v.Status)
+}
+
 // TestBehavioral_TranscodeDownloadFailureRequeues verifies that a failed
 // source download schedules a retry with the OSS key intact: the object is
 // the compensation input and must survive, only the local copy is cleaned.
@@ -372,4 +430,81 @@ func TestBehavioral_TranscodeDownloadFailureRequeues(t *testing.T) {
 	require.Equal(t, "raws/31/source.mp4", requeued.RawKey, "OSS source key must survive retry scheduling")
 	require.Empty(t, store.deleted)
 	require.Greater(t, testutil.ToFloat64(transcodeRetriesScheduledTotal), retriesBefore)
+}
+
+// TestBehavioral_TranscodeDedupSkipsDuplicateJob verifies message-level
+// dedup: a redelivered (job_id, retry_count) pair is skipped before ffmpeg
+// runs, so an in-flight duplicate cannot double-transcode.
+func TestBehavioral_TranscodeDedupSkipsDuplicateJob(t *testing.T) {
+	db := newBehavioralWorkerDB(t)
+	require.NoError(t, db.Create(&user.User{ID: 1, Username: "u", PasswordHash: "x"}).Error)
+	require.NoError(t, db.Create(&video.Video{ID: 60, UserID: 1, Title: "v", Status: video.StatusProcessing}).Error)
+	require.NoError(t, db.Create(&video.TranscodeJobDedup{JobID: "job-x", RetryCount: 0, VideoID: 60}).Error)
+
+	tmp := t.TempDir()
+	raw := filepath.Join(tmp, "raw.mp4")
+	require.NoError(t, os.WriteFile(raw, []byte("raw"), 0o644))
+	ack := &fakeAck{}
+	body, _ := json.Marshal(TranscodeJob{VideoID: 60, RawPath: raw, JobID: "job-x", RetryCount: 0})
+	ff := &spyFFmpeg{}
+	store := &recordingStore{}
+	handleDeliveryWith(context.Background(), &config.C{TempUploadDir: tmp}, db, nil, store, nil,
+		amqp.Delivery{Body: body, Acknowledger: ack}, ff, zap.NewNop())
+
+	require.Equal(t, 1, ack.acked)
+	require.False(t, ff.called, "duplicate job must not run ffmpeg")
+	require.Empty(t, store.uploads)
+	var v video.Video
+	require.NoError(t, db.First(&v, 60).Error)
+	require.Equal(t, video.StatusProcessing, v.Status)
+}
+
+// TestBehavioral_TranscodeDedupAllowsNextRetry verifies the dedup key is
+// (job_id, retry_count): the next retry attempt is a new key and still runs.
+func TestBehavioral_TranscodeDedupAllowsNextRetry(t *testing.T) {
+	db := newBehavioralWorkerDB(t)
+	require.NoError(t, db.Create(&user.User{ID: 1, Username: "u", PasswordHash: "x"}).Error)
+	require.NoError(t, db.Create(&video.Video{ID: 61, UserID: 1, Title: "v", Status: video.StatusProcessing}).Error)
+	require.NoError(t, db.Create(&video.TranscodeJobDedup{JobID: "job-y", RetryCount: 0, VideoID: 61}).Error)
+
+	tmp := t.TempDir()
+	raw := filepath.Join(tmp, "raw.mp4")
+	require.NoError(t, os.WriteFile(raw, []byte("raw"), 0o644))
+	ack := &fakeAck{}
+	body, _ := json.Marshal(TranscodeJob{VideoID: 61, RawPath: raw, JobID: "job-y", RetryCount: 1})
+	ff := &writingFFmpeg{}
+	store := &recordingStore{}
+	cfg := &config.C{TempUploadDir: tmp, OSSPublicURLPrefix: "https://cdn.example.com", VideoReviewRequired: false}
+	handleDeliveryWith(context.Background(), cfg, db, nil, store, nil,
+		amqp.Delivery{Body: body, Acknowledger: ack}, ff, zap.NewNop())
+
+	require.Equal(t, 1, ack.acked)
+	require.Equal(t, []string{"videos/61.mp4", "covers/61.jpg"}, store.uploads)
+	var v video.Video
+	require.NoError(t, db.First(&v, 61).Error)
+	require.Equal(t, video.StatusPublished, v.Status)
+}
+
+// TestBehavioral_TranscodeFailureWritesAuditEvent verifies the state machine
+// audit trail records processing -> failed.
+func TestBehavioral_TranscodeFailureWritesAuditEvent(t *testing.T) {
+	db := newBehavioralWorkerDB(t)
+	require.NoError(t, db.Create(&user.User{ID: 1, Username: "u", PasswordHash: "x"}).Error)
+	require.NoError(t, db.Create(&video.Video{ID: 62, UserID: 1, Title: "v", Status: video.StatusProcessing}).Error)
+
+	tmp := t.TempDir()
+	raw := filepath.Join(tmp, "bad.mp4")
+	require.NoError(t, os.WriteFile(raw, []byte("raw"), 0o644))
+	ack := &fakeAck{}
+	body, _ := json.Marshal(TranscodeJob{VideoID: 62, RawPath: raw, JobID: "job-z"})
+	ff := &fakeFFmpeg{transcodeErr: errors.New("boom"), transcodeStderr: "corrupt", permStderr: "corrupt"}
+	handleDeliveryWith(context.Background(), &config.C{TempUploadDir: tmp}, db, nil, &recordingStore{}, nil,
+		amqp.Delivery{Body: body, Acknowledger: ack}, ff, zap.NewNop())
+
+	var ev video.TranscodeEvent
+	require.NoError(t, db.Where("video_id = ?", 62).First(&ev).Error)
+	require.Equal(t, video.StatusProcessing, ev.FromStatus)
+	require.Equal(t, video.StatusFailed, ev.ToStatus)
+	require.Equal(t, "job-z", ev.JobID)
+	require.NotEmpty(t, ev.Reason)
 }

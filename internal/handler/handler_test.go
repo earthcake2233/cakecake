@@ -3,7 +3,6 @@ package handler
 import (
 	"cakecake/internal/model/danmaku"
 	"cakecake/internal/model/user"
-	"path/filepath"
 	"testing"
 )
 
@@ -95,50 +94,6 @@ func TestValidateMetadataOnlyDraft(t *testing.T) {
 	}
 }
 
-func TestVideoDraftDir(t *testing.T) {
-	got := videoDraftDir("/tmp/uploads")
-	want := filepath.FromSlash("/tmp/uploads/drafts")
-	if got != want {
-		t.Errorf("videoDraftDir = %q, want %q", got, want)
-	}
-}
-
-func TestVideoDraftRawPath(t *testing.T) {
-	got := videoDraftRawPath("/drafts", 42, ".mp4")
-	want := filepath.FromSlash("/drafts/42.mp4")
-	if got != want {
-		t.Errorf("videoDraftRawPath = %q, want %q", got, want)
-	}
-	got = videoDraftRawPath("/drafts", 42, "")
-	want = filepath.FromSlash("/drafts/42.bin")
-	if got != want {
-		t.Errorf("videoDraftRawPath empty ext = %q, want %q", got, want)
-	}
-	got = videoDraftRawPath("/drafts", 42, "avi")
-	want = filepath.FromSlash("/drafts/42.avi")
-	if got != want {
-		t.Errorf("videoDraftRawPath = %q, want %q", got, want)
-	}
-}
-
-func TestVideoDraftCoverPath(t *testing.T) {
-	got := videoDraftCoverPath("/drafts", 42, ".png")
-	want := filepath.FromSlash("/drafts/42_cover.png")
-	if got != want {
-		t.Errorf("videoDraftCoverPath = %q, want %q", got, want)
-	}
-	got = videoDraftCoverPath("/drafts", 42, ".jpeg")
-	want = filepath.FromSlash("/drafts/42_cover.jpg")
-	if got != want {
-		t.Errorf("videoDraftCoverPath jpeg = %q, want %q", got, want)
-	}
-	got = videoDraftCoverPath("/drafts", 42, "")
-	want = filepath.FromSlash("/drafts/42_cover.jpg")
-	if got != want {
-		t.Errorf("videoDraftCoverPath empty = %q, want %q", got, want)
-	}
-}
-
 func TestNormalizeTagStrings(t *testing.T) {
 	tests := []struct {
 		name string
@@ -164,36 +119,6 @@ func TestNormalizeTagStrings(t *testing.T) {
 				}
 			}
 		})
-	}
-}
-
-func TestParseTagsPostForm(t *testing.T) {
-	tests := []struct {
-		input   string
-		want    string
-		wantErr bool
-	}{
-		{"", "[]", false},
-		{"  ", "[]", false},
-		{`["a", "b"]`, `["a","b"]`, false},
-		{`["  spaced  "]`, `["spaced"]`, false},
-		{"not json", "", true},
-	}
-	for _, tc := range tests {
-		got, err := parseTagsPostForm(tc.input)
-		if tc.wantErr {
-			if err == nil {
-				t.Errorf("parseTagsPostForm(%q) expected error", tc.input)
-			}
-			continue
-		}
-		if err != nil {
-			t.Errorf("parseTagsPostForm(%q) unexpected error: %v", tc.input, err)
-			continue
-		}
-		if got != tc.want {
-			t.Errorf("parseTagsPostForm(%q) = %q, want %q", tc.input, got, tc.want)
-		}
 	}
 }
 

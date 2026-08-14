@@ -1381,18 +1381,6 @@ export interface UploadVideoResult {
   created_at: string;
 }
 
-export async function mbUploadVideo(
-  form: FormData,
-  opts?: Pick<AxiosRequestConfig, "onUploadProgress" | "signal">
-): Promise<UploadVideoResult> {
-  const r = await http.post("/api/v1/videos", form, {
-    timeout: 600000,
-    skipGlobalErrorToast: true,
-    ...opts
-  });
-  return unwrap<UploadVideoResult>(r);
-}
-
 export interface DirectUploadTicket {
   raw_key: string;
   raw_upload_url: string;
@@ -1408,15 +1396,24 @@ export interface DirectUploadSubmit {
   zone: string;
   raw_key: string;
   cover_key?: string;
+  /** 客户端探测到的时长（秒），仅作展示提示；服务端由转码 worker 复核 */
+  duration?: number;
 }
 
 export async function mbCreateUploadTicket(
   filename: string,
-  coverFilename = ""
+  coverFilename = "",
+  contentType = "",
+  coverContentType = ""
 ): Promise<DirectUploadTicket> {
   const r = await http.post(
     "/api/v1/videos/upload-ticket",
-    { filename, cover_filename: coverFilename },
+    {
+      filename,
+      cover_filename: coverFilename,
+      content_type: contentType || undefined,
+      cover_content_type: coverContentType || undefined
+    },
     { skipGlobalErrorToast: true }
   );
   return unwrap<DirectUploadTicket>(r);
@@ -1432,6 +1429,45 @@ export async function mbCreateVideoDirect(
   return unwrap<UploadVideoResult>(r);
 }
 
+export interface DraftUploadTicket {
+  raw_key: string;
+  raw_upload_url: string;
+  cover_key?: string;
+  cover_upload_url?: string;
+  expires_in: number;
+}
+
+export interface DraftMediaSubmit {
+  title: string;
+  description: string;
+  tags: string[];
+  zone: string;
+  raw_key?: string;
+  cover_key?: string;
+  /** 客户端探测到的时长（秒），仅作展示提示；服务端由转码 worker 复核 */
+  duration?: number;
+}
+
+/** POST /videos/draft/upload-ticket — 草稿/换源媒体直传 OSS 的预签名 PUT ticket */
+export async function mbCreateDraftUploadTicket(
+  filename: string,
+  coverFilename = "",
+  contentType = "",
+  coverContentType = ""
+): Promise<DraftUploadTicket> {
+  const r = await http.post(
+    "/api/v1/videos/draft/upload-ticket",
+    {
+      filename,
+      cover_filename: coverFilename,
+      content_type: contentType || undefined,
+      cover_content_type: coverContentType || undefined
+    },
+    { skipGlobalErrorToast: true }
+  );
+  return unwrap<DraftUploadTicket>(r);
+}
+
 export interface SaveVideoDraftResult {
   id: number;
   status: string;
@@ -1441,35 +1477,21 @@ export interface SaveVideoDraftResult {
   created_at: string;
 }
 
-/** POST /videos/draft — 存草稿（multipart，须含 file） */
+/** POST /videos/draft — 存草稿（JSON；媒体先直传 OSS，再提交 raw_key/cover_key） */
 export async function mbSaveVideoDraft(
-  form: FormData,
-  opts?: Pick<AxiosRequestConfig, "onUploadProgress" | "signal">
+  body: DraftMediaSubmit
 ): Promise<SaveVideoDraftResult> {
-  const r = await http.post("/api/v1/videos/draft", form, {
-    timeout: 600000,
-    skipGlobalErrorToast: true,
-    ...opts
+  const r = await http.post("/api/v1/videos/draft", body, {
+    skipGlobalErrorToast: true
   });
   return unwrap<SaveVideoDraftResult>(r);
 }
 
-/** PUT /videos/:id/draft — 更新草稿（multipart 或 JSON） */
+/** PUT /videos/:id/draft — 更新草稿（JSON，可选 raw_key/cover_key 换源） */
 export async function mbUpdateVideoDraft(
   videoId: number,
-  body:
-    | FormData
-    | { title: string; description: string; tags?: string[]; zone?: string },
-  opts?: Pick<AxiosRequestConfig, "onUploadProgress" | "signal">
+  body: Partial<DraftMediaSubmit>
 ): Promise<{ id: number; status: string; title: string; cover_url?: string }> {
-  if (body instanceof FormData) {
-    const r = await http.post(`/api/v1/videos/${videoId}/draft`, body, {
-      timeout: 600000,
-      skipGlobalErrorToast: true,
-      ...opts
-    });
-    return unwrap(r);
-  }
   const r = await http.put(`/api/v1/videos/${videoId}/draft`, body, {
     ...authAxiosOpts,
     headers: { "Content-Type": "application/json" }
@@ -1489,16 +1511,13 @@ export async function mbPublishVideoDraft(
   return unwrap(r);
 }
 
-/** POST /videos/:id/replace-media — 审核/转码未通过时更换视频并重新转码 */
+/** POST /videos/:id/replace-media — 换源（JSON；媒体先直传 OSS，再提交 raw_key/cover_key） */
 export async function mbReplaceVideoMedia(
   videoId: number,
-  form: FormData,
-  opts?: Pick<AxiosRequestConfig, "onUploadProgress" | "signal">
+  body: DraftMediaSubmit
 ): Promise<{ id: number; status: string }> {
-  const r = await http.post(`/api/v1/videos/${videoId}/replace-media`, form, {
-    timeout: 600000,
-    skipGlobalErrorToast: true,
-    ...opts
+  const r = await http.post(`/api/v1/videos/${videoId}/replace-media`, body, {
+    skipGlobalErrorToast: true
   });
   return unwrap(r);
 }

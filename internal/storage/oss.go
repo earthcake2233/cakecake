@@ -16,6 +16,12 @@ type OSS struct {
 	bucket *oss.Bucket
 }
 
+// ObjectMeta describes one listed object.
+type ObjectMeta struct {
+	Key          string
+	LastModified time.Time
+}
+
 // NewOSS builds a client. endpoint must be the regional host only, e.g.
 // https://oss-cn-beijing.aliyuncs.com — not https://bucket.oss-cn-beijing.aliyuncs.com
 // (the SDK prepends the bucket name for virtual-hosted requests).
@@ -98,18 +104,92 @@ func (o *OSS) Size(objectKey string) (int64, error) {
 	return 0, fmt.Errorf("content-length missing for %s", key)
 }
 
+// ListObjects returns object metadata under prefix (paged). maxKeys bounds
+// each page; the total is capped so a single cleanup run cannot enumerate an
+// unbounded bucket.
+func (o *OSS) ListObjects(prefix string, maxKeys int) ([]ObjectMeta, error) {
+	prefix = strings.TrimPrefix(strings.TrimSpace(prefix), "/")
+	if prefix == "" {
+		return nil, nil
+	}
+	if maxKeys <= 0 {
+		maxKeys = 1000
+	}
+	const totalCap = 20000
+	var out []ObjectMeta
+	marker := ""
+	for {
+		opts := []oss.Option{oss.Prefix(prefix), oss.MaxKeys(maxKeys)}
+		if marker != "" {
+			opts = append(opts, oss.Marker(marker))
+		}
+		res, err := o.bucket.ListObjects(opts...)
+		if err != nil {
+			return nil, err
+		}
+		for _, obj := range res.Objects {
+			out = append(out, ObjectMeta{Key: obj.Key, LastModified: obj.LastModified})
+		}
+		if !res.IsTruncated {
+			break
+		}
+		marker = res.NextMarker
+		if marker == "" {
+			break
+		}
+		if len(out) >= totalCap {
+			break
+		}
+	}
+	return out, nil
+}
+
 // PresignPut returns a time-limited HTTP PUT URL for client-side direct
 // upload. The browser uploads straight to OSS, bypassing the API server.
-func (o *OSS) PresignPut(objectKey string, expiry time.Duration) (string, error) {
+// contentType must match the Content-Type header the browser will send:
+// OSS includes it in the signature (StringToSign), so signing with an empty
+// type but uploading with e.g. image/jpeg yields SignatureDoesNotMatch.
+func (o *OSS) PresignPut(objectKey string, expiry time.Duration, contentType string) (string, error) {
 	key := strings.TrimPrefix(strings.TrimSpace(objectKey), "/")
 	if key == "" {
 		return "", fmt.Errorf("empty object key")
 	}
-	u, err := o.bucket.SignURL(key, oss.HTTPPut, int64(expiry.Seconds()))
+	opts := []oss.Option{}
+	if contentType != "" {
+		opts = append(opts, oss.ContentType(contentType))
+	}
+	u, err := o.bucket.SignURL(key, oss.HTTPPut, int64(expiry.Seconds()), opts...)
 	if err != nil {
 		return "", err
 	}
 	return u, nil
+}
+
+// PresignGet returns a time-limited HTTP GET URL for a private object. It is
+// used to preview draft media without proxying the bytes through the API
+// server or making the object publicly readable.
+func (o *OSS) PresignGet(objectKey string, expiry time.Duration) (string, error) {
+	key := strings.TrimPrefix(strings.TrimSpace(objectKey), "/")
+	if key == "" {
+		return "", fmt.Errorf("empty object key")
+	}
+	u, err := o.bucket.SignURL(key, oss.HTTPGet, int64(expiry.Seconds()))
+	if err != nil {
+		return "", err
+	}
+	return u, nil
+}
+
+// CopyObject copies an existing object to a new key in the same bucket
+// (server-side copy: no bytes traverse the API server).
+func (o *OSS) CopyObject(srcKey, dstKey string) error {
+	src := strings.TrimPrefix(strings.TrimSpace(srcKey), "/")
+	dst := strings.TrimPrefix(strings.TrimSpace(dstKey), "/")
+	if src == "" || dst == "" {
+		return fmt.Errorf("copy object: empty key")
+	}
+	_, err := o.bucket.CopyObject(src, dst)
+	return err
 }
 
 // DeleteObject removes one object from the bucket. Missing keys are ignored.

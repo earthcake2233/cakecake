@@ -1,16 +1,13 @@
 package handler
 
 import (
-	"bytes"
 	"cakecake/internal/model/video"
 	vsvc "cakecake/internal/service/video"
 	"context"
 	"encoding/json"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
-	"mime/multipart"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"testing"
 	"time"
@@ -104,8 +101,10 @@ func TestVideoEngagementAndComments(t *testing.T) {
 func TestVideoUploadFlows(t *testing.T) {
 	api, r, _ := newTestAPI(t)
 	// Replace the video service with one wired to a no-op transcode publisher
-	// and stub the media probe so the upload pipeline runs without ffmpeg.
-	api.VideoSvc = vsvc.NewVideoService(api.DB, api.Redis, zap.NewNop(), nil, noopMQ{}, nil)
+	// and a fake object store so the direct-upload pipeline runs without ffmpeg.
+	oss := &fakeVideoOSS{allowAll: true}
+	api.VideoSvc = vsvc.NewVideoService(api.DB, api.Redis, zap.NewNop(), nil, noopMQ{}, oss)
+	api.VideoDraftSvc = vsvc.NewVideoDraftService(api.DB, api.Redis, zap.NewNop(), noopMQ{}, oss)
 	oldProbe := vsvc.VideoProbe
 	vsvc.VideoProbe = func(context.Context, string) (float64, error) { return 12.5, nil }
 	defer func() { vsvc.VideoProbe = oldProbe }()
@@ -113,85 +112,91 @@ func TestVideoUploadFlows(t *testing.T) {
 	tokenA, uidA := covRegister(t, r, "covup", "password12")
 	_ = uidA
 
-	// UploadVideo multipart
-	body := &bytes.Buffer{}
-	mw := multipart.NewWriter(body)
-	require.NoError(t, mw.WriteField("title", "uploaded video"))
-	require.NoError(t, mw.WriteField("description", "desc"))
-	require.NoError(t, mw.WriteField("tags", `["a","b"]`))
-	require.NoError(t, mw.WriteField("zone", "动画"))
-	fw, err := mw.CreateFormFile("file", "clip.mp4")
-	require.NoError(t, err)
-	_, err = fw.Write([]byte("fake mp4 bytes"))
-	require.NoError(t, err)
-	require.NoError(t, mw.Close())
-	req := httptest.NewRequest("POST", "/api/v1/videos", body)
-	req.Header.Set("Content-Type", mw.FormDataContentType())
-	req.Header.Set("Authorization", "Bearer "+tokenA)
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
+	// Direct upload: ticket then JSON submit.
+	w := covReq(t, r, "POST", "/api/v1/videos/upload-ticket", tokenA, map[string]any{
+		"filename": "clip.mp4",
+	})
+	covOK(t, w, http.StatusOK)
+	var ticket struct {
+		Data struct {
+			RawKey string `json:"raw_key"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &ticket))
+	uploadKey := ticket.Data.RawKey
+	w = covReq(t, r, "POST", "/api/v1/videos", tokenA, map[string]any{
+		"title":       "uploaded video",
+		"description": "desc",
+		"tags":        []string{"a", "b"},
+		"zone":        "动画",
+		"raw_key":     uploadKey,
+	})
 	covOK(t, w, http.StatusCreated)
 
-	// Draft with file (multipart)
-	body2 := &bytes.Buffer{}
-	mw2 := multipart.NewWriter(body2)
-	require.NoError(t, mw2.WriteField("title", "draft with file"))
-	require.NoError(t, mw2.WriteField("description", "d"))
-	fw2, err := mw2.CreateFormFile("file", "draft.mp4")
-	require.NoError(t, err)
-	_, err = fw2.Write([]byte("fake bytes"))
-	require.NoError(t, err)
-	require.NoError(t, mw2.Close())
-	req2 := httptest.NewRequest("POST", "/api/v1/videos/draft", body2)
-	req2.Header.Set("Content-Type", mw2.FormDataContentType())
-	req2.Header.Set("Authorization", "Bearer "+tokenA)
-	w2 := httptest.NewRecorder()
-	r.ServeHTTP(w2, req2)
-	covOK(t, w2, http.StatusCreated)
+	// Draft with OSS media: draft ticket then JSON create.
+	w = covReq(t, r, "POST", "/api/v1/videos/draft/upload-ticket", tokenA, map[string]any{
+		"filename": "draft.mp4",
+	})
+	covOK(t, w, http.StatusOK)
+	var draftTicket struct {
+		Data struct {
+			RawKey string `json:"raw_key"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &draftTicket))
+	draftRawKey := draftTicket.Data.RawKey
+	w = covReq(t, r, "POST", "/api/v1/videos/draft", tokenA, map[string]any{
+		"title":       "draft with file",
+		"description": "d",
+		"raw_key":     draftRawKey,
+	})
+	covOK(t, w, http.StatusCreated)
 	var dOut struct {
 		Data struct {
 			ID uint64 `json:"id"`
 		} `json:"data"`
 	}
-	require.NoError(t, json.Unmarshal(w2.Body.Bytes(), &dOut))
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &dOut))
 	draftID := dOut.Data.ID
 
-	// Update draft with a replacement file (multipart)
-	body3 := &bytes.Buffer{}
-	mw3 := multipart.NewWriter(body3)
-	require.NoError(t, mw3.WriteField("title", "updated draft"))
-	fw3, err := mw3.CreateFormFile("file", "update.mp4")
-	require.NoError(t, err)
-	_, err = fw3.Write([]byte("update bytes"))
-	require.NoError(t, err)
-	require.NoError(t, mw3.Close())
-	req3 := httptest.NewRequest("PUT", "/api/v1/videos/"+u64s(draftID)+"/draft", body3)
-	req3.Header.Set("Content-Type", mw3.FormDataContentType())
-	req3.Header.Set("Authorization", "Bearer "+tokenA)
-	w3 := httptest.NewRecorder()
-	r.ServeHTTP(w3, req3)
-	covOK(t, w3, http.StatusOK)
+	// Update draft with a replacement media key.
+	w = covReq(t, r, "POST", "/api/v1/videos/draft/upload-ticket", tokenA, map[string]any{
+		"filename": "update.mp4",
+	})
+	covOK(t, w, http.StatusOK)
+	var updateTicket struct {
+		Data struct {
+			RawKey string `json:"raw_key"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &updateTicket))
+	w = covReq(t, r, "PUT", "/api/v1/videos/"+u64s(draftID)+"/draft", tokenA, map[string]any{
+		"title":   "updated draft",
+		"raw_key": updateTicket.Data.RawKey,
+	})
+	covOK(t, w, http.StatusOK)
 
 	// Replace media on a seeded draft
-	draft := video.Video{UserID: uidA, Title: "replace me", Description: "d", Status: video.StatusFailed, DraftRawPath: "/tmp/x.mp4"}
+	draft := video.Video{UserID: uidA, Title: "replace me", Description: "d", Status: video.StatusFailed}
 	require.NoError(t, api.DB.Create(&draft).Error)
-	body4 := &bytes.Buffer{}
-	mw4 := multipart.NewWriter(body4)
-	require.NoError(t, mw4.WriteField("title", "replaced"))
-	require.NoError(t, mw4.WriteField("description", "d2"))
-	fw4, err := mw4.CreateFormFile("file", "replace.mp4")
-	require.NoError(t, err)
-	_, err = fw4.Write([]byte("replace bytes"))
-	require.NoError(t, err)
-	require.NoError(t, mw4.Close())
-	req4 := httptest.NewRequest("POST", "/api/v1/videos/"+u64s(draft.ID)+"/replace-media", body4)
-	req4.Header.Set("Content-Type", mw4.FormDataContentType())
-	req4.Header.Set("Authorization", "Bearer "+tokenA)
-	w4 := httptest.NewRecorder()
-	r.ServeHTTP(w4, req4)
-	covOK(t, w4, http.StatusOK)
+	w = covReq(t, r, "POST", "/api/v1/videos/draft/upload-ticket", tokenA, map[string]any{
+		"filename": "replace.mp4",
+	})
+	covOK(t, w, http.StatusOK)
+	var replaceTicket struct {
+		Data struct {
+			RawKey string `json:"raw_key"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &replaceTicket))
+	w = covReq(t, r, "POST", "/api/v1/videos/"+u64s(draft.ID)+"/replace-media", tokenA, map[string]any{
+		"title":       "replaced",
+		"description": "d2",
+		"raw_key":     replaceTicket.Data.RawKey,
+	})
+	covOK(t, w, http.StatusOK)
 
-	// Publish draft (multipart draft now has a raw path -> succeeds)
+	// Publish draft (OSS-keyed draft -> outbox row + processing)
 	covOK(t, covReq(t, r, "POST", "/api/v1/videos/"+u64s(draftID)+"/publish", tokenA, map[string]any{}), http.StatusOK)
 }
 
@@ -216,6 +221,15 @@ func (f *fakeOSSBackend) Size(string) (int64, error) {
 	return 1024, f.err
 }
 
-func (f *fakeOSSBackend) PresignPut(key string, _ time.Duration) (string, error) {
+func (f *fakeOSSBackend) PresignPut(key string, _ time.Duration, _ string) (string, error) {
 	return "https://oss.example.com/" + key, f.err
+}
+
+func (f *fakeOSSBackend) PresignGet(key string, _ time.Duration) (string, error) {
+	return "https://oss.example.com/" + key + "?x-oss-process=preview", f.err
+}
+
+func (f *fakeOSSBackend) CopyObject(srcKey, dstKey string) error {
+	f.uploads = append(f.uploads, dstKey)
+	return f.err
 }

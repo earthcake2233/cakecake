@@ -11,6 +11,7 @@ import (
 // VideoDraftSvc is the client-side contract for cakecake/internal/service/video.VideoDraftService.
 // Local implementation: servicevideo.VideoDraftService (see the assertion below). A future gRPC client must implement this interface.
 type VideoDraftSvc interface {
+	CreateDraftUploadTicket(ctx context.Context, uid uint64, filename string, coverFilename string, rawContentType string, coverContentType string) (*servicevideo.DraftUploadTicket, error)
 	CreateDraft(ctx context.Context, v *video.Video) error
 	DeleteDraft(ctx context.Context, id uint64) error
 	EnqueueTranscode(ctx context.Context, videoID uint64, rawPath string, coverPath string) error
@@ -20,8 +21,11 @@ type VideoDraftSvc interface {
 	ProbeDurationSeconds(path string) (float64, error)
 	RefetchDraft(ctx context.Context, id uint64) (*video.Video, error)
 	ReplaceMedia(ctx context.Context, v *video.Video, opts servicevideo.ReplaceMediaOpts) error
+	SubmitDraft(ctx context.Context, v *video.Video, media servicevideo.DraftMedia) error
 	UpdateDraft(ctx context.Context, v *video.Video, updates map[string]interface{}) error
 	UpdateDraftField(ctx context.Context, v *video.Video, field string, value interface{}) error
+	ValidateDraftCover(ctx context.Context, uid uint64, coverKey string) error
+	ValidateDraftMedia(ctx context.Context, uid uint64, rawKey string, coverKey string) (servicevideo.DraftMedia, error)
 }
 
 var _ VideoDraftSvc = (*servicevideo.VideoDraftService)(nil)

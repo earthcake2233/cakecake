@@ -48,6 +48,8 @@ type fakeFFmpeg struct {
 	shotStderr      string
 	shotErr         error
 	permStderr      string
+	probeDuration   float64
+	probeErr        error
 }
 
 func (f *fakeFFmpeg) TranscodeToH264MP4(_ context.Context, _, _ string) (string, error) {
@@ -60,6 +62,16 @@ func (f *fakeFFmpeg) ScreenshotJPEG(_ context.Context, _, _ string, _ float64) (
 
 func (f *fakeFFmpeg) IsPermanentTranscodeFailure(stderr string) bool {
 	return stderr != "" && stderr == f.permStderr
+}
+
+func (f *fakeFFmpeg) ProbeDurationSeconds(_ context.Context, _ string) (float64, error) {
+	if f.probeErr != nil {
+		return 0, f.probeErr
+	}
+	if f.probeDuration > 0 {
+		return f.probeDuration, nil
+	}
+	return 60, nil
 }
 
 type fakePublisher struct {
@@ -120,6 +132,16 @@ func expectProcessingVideo(mock sqlmock.Sqlmock, id uint64) {
 			AddRow(id, 1, "processing"))
 }
 
+func expectFailVideo(mock sqlmock.Sqlmock, id uint64) {
+	mock.ExpectQuery("SELECT \\* FROM `videos`").
+		WithArgs(id, 1).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "status"}).AddRow(id, "processing"))
+	mock.ExpectExec("UPDATE `videos` SET .*fail_reason.* WHERE id = .*").
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec("INSERT INTO `transcode_events`").
+		WillReturnResult(sqlmock.NewResult(1, 1))
+}
+
 func deliveryFor(job queue.TranscodeJob, ack *fakeAck) amqp.Delivery {
 	body, _ := json.Marshal(job)
 	return amqp.Delivery{Body: body, Acknowledger: ack}
@@ -127,15 +149,25 @@ func deliveryFor(job queue.TranscodeJob, ack *fakeAck) amqp.Delivery {
 
 func TestFailVideo(t *testing.T) {
 	db, mock := newMockDB(t)
+	mock.ExpectQuery("SELECT \\* FROM `videos`").
+		WithArgs(7, 1).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "status"}).AddRow(7, "processing"))
 	mock.ExpectExec("UPDATE `videos` SET .*fail_reason.* WHERE id = .*").
 		WillReturnResult(sqlmock.NewResult(1, 1))
-	failVideo(db, 7, "   ")
+	mock.ExpectExec("INSERT INTO `transcode_events`").
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	failVideo(context.Background(), db, 7, "job-7", "   ")
 	require.NoError(t, mock.ExpectationsWereMet())
 
 	db2, mock2 := newMockDB(t)
+	mock2.ExpectQuery("SELECT \\* FROM `videos`").
+		WithArgs(8, 1).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "status"}).AddRow(8, "processing"))
 	mock2.ExpectExec("UPDATE `videos` SET .*fail_reason.* WHERE id = .*").
 		WillReturnResult(sqlmock.NewResult(1, 1))
-	failVideo(db2, 8, "bad reason")
+	mock2.ExpectExec("INSERT INTO `transcode_events`").
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	failVideo(context.Background(), db2, 8, "job-8", "bad reason")
 	require.NoError(t, mock2.ExpectationsWereMet())
 }
 
@@ -153,8 +185,7 @@ func TestHandleDelivery_BadJSON(t *testing.T) {
 func TestHandleDelivery_OSSNotConfigured(t *testing.T) {
 	db, mock := newMockDB(t)
 	expectProcessingVideo(mock, 1)
-	mock.ExpectExec("UPDATE `videos` SET .*fail_reason.* WHERE id = .*").
-		WillReturnResult(sqlmock.NewResult(1, 1))
+	expectFailVideo(mock, 1)
 	ack := &fakeAck{}
 	d := amqp.Delivery{Body: []byte(`{"video_id":1,"raw_path":"/tmp/x.mp4"}`), Acknowledger: ack}
 	handleDeliveryWith(context.Background(), &config.C{}, db, nil, nil, nil, d, &fakeFFmpeg{}, zap.NewNop())
@@ -167,8 +198,7 @@ func TestHandleDelivery_OSSNotConfigured(t *testing.T) {
 func TestHandleDelivery_TranscodePermanent(t *testing.T) {
 	db, mock := newMockDB(t)
 	expectProcessingVideo(mock, 5)
-	mock.ExpectExec("UPDATE `videos` SET .*fail_reason.* WHERE id = .*").
-		WillReturnResult(sqlmock.NewResult(1, 1))
+	expectFailVideo(mock, 5)
 	ack := &fakeAck{}
 	job := queue.TranscodeJob{VideoID: 5, RawPath: "/tmp/r.mp4"}
 	d := deliveryFor(job, ack)
@@ -180,13 +210,42 @@ func TestHandleDelivery_TranscodePermanent(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestHandleDelivery_DurationExceedsLimit_FailsPermanently(t *testing.T) {
+	db, mock := newMockDB(t)
+	expectProcessingVideo(mock, 12)
+	expectFailVideo(mock, 12)
+	ack := &fakeAck{}
+	store := &fakeObjectStore{}
+	job := queue.TranscodeJob{VideoID: 12, RawKey: "uploads/1/x/source.mp4"}
+	d := deliveryFor(job, ack)
+	ff := &fakeFFmpeg{probeDuration: 30*60 + 1}
+	handleDeliveryWith(context.Background(), &config.C{TempUploadDir: t.TempDir()}, db, nil, store, nil, d, ff, zap.NewNop())
+	require.Equal(t, 1, ack.acked)
+	require.Contains(t, store.deleted, job.RawKey)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestHandleDelivery_ProbeFailure_FailsPermanently(t *testing.T) {
+	db, mock := newMockDB(t)
+	expectProcessingVideo(mock, 13)
+	expectFailVideo(mock, 13)
+	ack := &fakeAck{}
+	store := &fakeObjectStore{}
+	job := queue.TranscodeJob{VideoID: 13, RawKey: "uploads/1/x/source.mp4"}
+	d := deliveryFor(job, ack)
+	ff := &fakeFFmpeg{probeErr: errors.New("unreadable")}
+	handleDeliveryWith(context.Background(), &config.C{TempUploadDir: t.TempDir()}, db, nil, store, nil, d, ff, zap.NewNop())
+	require.Equal(t, 1, ack.acked)
+	require.Contains(t, store.deleted, job.RawKey)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestHandleDelivery_TranscodeRetryableExhausted(t *testing.T) {
 	db, mock := newMockDB(t)
 	expectProcessingVideo(mock, 6)
 	mock.ExpectExec("INSERT INTO `transcode_dead_letters`").
 		WillReturnResult(sqlmock.NewResult(1, 1))
-	mock.ExpectExec("UPDATE `videos` SET .*fail_reason.* WHERE id = .*").
-		WillReturnResult(sqlmock.NewResult(1, 1))
+	expectFailVideo(mock, 6)
 	ack := &fakeAck{}
 	job := queue.TranscodeJob{VideoID: 6, RawPath: "/tmp/r.mp4", RetryCount: 3}
 	d := deliveryFor(job, ack)
@@ -229,8 +288,7 @@ func TestHandleDelivery_RepublishFailure(t *testing.T) {
 	expectProcessingVideo(mock, 10)
 	mock.ExpectExec("INSERT INTO `transcode_dead_letters`").
 		WillReturnResult(sqlmock.NewResult(1, 1))
-	mock.ExpectExec("UPDATE `videos` SET .*fail_reason.* WHERE id = .*").
-		WillReturnResult(sqlmock.NewResult(1, 1))
+	expectFailVideo(mock, 10)
 
 	ack := &fakeAck{}
 	job := queue.TranscodeJob{VideoID: 10, RawPath: "/tmp/r.mp4"}
@@ -249,8 +307,7 @@ func TestHandleDelivery_UploadVideoFailsExhausted(t *testing.T) {
 	expectProcessingVideo(mock, 11)
 	mock.ExpectExec("INSERT INTO `transcode_dead_letters`").
 		WillReturnResult(sqlmock.NewResult(1, 1))
-	mock.ExpectExec("UPDATE `videos` SET .*fail_reason.* WHERE id = .*").
-		WillReturnResult(sqlmock.NewResult(1, 1))
+	expectFailVideo(mock, 11)
 	ack := &fakeAck{}
 	job := queue.TranscodeJob{VideoID: 11, RawPath: "/tmp/r.mp4", CoverPath: "/tmp/c.jpg", RetryCount: 3}
 	d := deliveryFor(job, ack)
@@ -339,7 +396,7 @@ func TestHandleDelivery_PublishVideoErrorRequeues(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id", "status", "created_at"}).
 			AddRow(14, 1, "processing", time.Now()))
 	// video.PublishVideo: UPDATE status fails
-	mock.ExpectExec("UPDATE `videos` SET .* WHERE `id` = .*").
+	mock.ExpectExec("UPDATE `videos` SET .* WHERE id = .*").
 		WillReturnError(errors.New("db down"))
 
 	ack := &fakeAck{}
@@ -364,6 +421,29 @@ func TestHandleDelivery_PublishVideoErrorRequeues(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestHandleDelivery_SuccessStatusChangedConcurrently(t *testing.T) {
+	db, mock := newMockDB(t)
+	expectProcessingVideo(mock, 15)
+	// Conditional update on processing: 0 rows means a concurrent admin
+	// reject (or another job) already moved the video; the worker must not
+	// overwrite it, requeue, or publish.
+	mock.ExpectExec("UPDATE `videos` SET .* WHERE id = .* AND status = .*").
+		WillReturnResult(sqlmock.NewResult(0, 0))
+
+	ack := &fakeAck{}
+	job := queue.TranscodeJob{VideoID: 15, RawPath: "/tmp/r.mp4"}
+	d := deliveryFor(job, ack)
+	ff := &fakeFFmpeg{}
+	store := &fakeObjectStore{}
+	pub := &fakePublisher{}
+	cfg := &config.C{TempUploadDir: t.TempDir(), VideoReviewRequired: true}
+	handleDeliveryWith(context.Background(), cfg, db, pub, store, nil, d, ff, zap.NewNop())
+
+	require.Equal(t, 1, ack.acked)
+	require.Empty(t, pub.published, "must not requeue or publish after a concurrent status change")
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestHandleDelivery_SuccessScreenshotPublish(t *testing.T) {
 	db, mock := newMockDB(t)
 	expectProcessingVideo(mock, 13)
@@ -375,7 +455,7 @@ func TestHandleDelivery_SuccessScreenshotPublish(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id", "status", "created_at"}).
 			AddRow(13, 1, "processing", time.Now()))
 	// video.PublishVideo: UPDATE status
-	mock.ExpectExec("UPDATE `videos` SET .* WHERE `id` = .*").
+	mock.ExpectExec("UPDATE `videos` SET .* WHERE .*").
 		WillReturnResult(sqlmock.NewResult(1, 1))
 	// video.PublishVideo: first_published_at backfill
 	mock.ExpectExec("UPDATE `users` SET .*first_published_at.* WHERE .*").

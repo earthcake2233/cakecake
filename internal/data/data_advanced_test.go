@@ -70,6 +70,26 @@ func TestAutoMigrateAll_RecreatesMissingTranscodeDeadLetters(t *testing.T) {
 	require.True(t, db.Migrator().HasColumn(&video.TranscodeDeadLetter{}, "requeued_count"))
 	require.True(t, db.Migrator().HasColumn(&video.TranscodeDeadLetter{}, "archived_at"))
 	require.True(t, db.Migrator().HasTable(&video.DirectUploadClaim{}))
+	require.True(t, db.Migrator().HasTable(&video.TranscodeOutbox{}))
+	require.True(t, db.Migrator().HasTable(&video.TranscodeJobDedup{}))
+	require.True(t, db.Migrator().HasTable(&video.TranscodeEvent{}))
+}
+
+// TestAutoMigrateAll_RecreatesPinnedOutboxTables simulates an install whose
+// schema_versions already recorded v26/v27 (plural table names) but whose
+// pinned single-name tables are missing: v29 must rebuild them.
+func TestAutoMigrateAll_RecreatesPinnedOutboxTables(t *testing.T) {
+	db := setupDataDB(t)
+	require.NoError(t, AutoMigrateAll(db, zap.NewNop()))
+
+	require.NoError(t, db.Migrator().DropTable(&video.TranscodeOutbox{}))
+	require.NoError(t, db.Migrator().DropTable(&video.TranscodeJobDedup{}))
+	// Keep v26/v27 recorded (skipped), remove only the repair migration.
+	require.NoError(t, db.Where("version = ?", 29).Delete(&system.SchemaVersion{}).Error)
+
+	require.NoError(t, AutoMigrateAll(db, zap.NewNop()))
+	require.True(t, db.Migrator().HasTable(&video.TranscodeOutbox{}))
+	require.True(t, db.Migrator().HasTable(&video.TranscodeJobDedup{}))
 }
 
 func TestAutoMigrateAll_Idempotent(t *testing.T) {

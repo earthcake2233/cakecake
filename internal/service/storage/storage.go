@@ -34,7 +34,9 @@ type StorageBackend interface {
 	DownloadFile(objectKey, localPath string) error
 	Exists(objectKey string) (bool, error)
 	Size(objectKey string) (int64, error)
-	PresignPut(objectKey string, expiry time.Duration) (string, error)
+	PresignPut(objectKey string, expiry time.Duration, contentType string) (string, error)
+	PresignGet(objectKey string, expiry time.Duration) (string, error)
+	CopyObject(srcKey, dstKey string) error
 	DeleteObject(objectKey string) error
 	DeleteObjects(objectKeys []string) error
 }
@@ -104,11 +106,36 @@ func (s *StorageService) Size(objectKey string) (int64, error) {
 }
 
 // PresignPut returns a time-limited PUT URL for browser direct upload.
-func (s *StorageService) PresignPut(objectKey string, expiry time.Duration) (string, error) {
+// contentType is included in the signature and must match the request header.
+func (s *StorageService) PresignPut(objectKey string, expiry time.Duration, contentType string) (string, error) {
 	if s.backend() == nil {
 		return "", fmt.Errorf("oss not configured")
 	}
-	return s.backend().PresignPut(objectKey, expiry)
+	return s.backend().PresignPut(objectKey, expiry, contentType)
+}
+
+// PresignGet returns a time-limited GET URL for a private object.
+func (s *StorageService) PresignGet(objectKey string, expiry time.Duration) (string, error) {
+	if s.backend() == nil {
+		return "", fmt.Errorf("oss not configured")
+	}
+	return s.backend().PresignGet(objectKey, expiry)
+}
+
+// CopyObject copies an object to another key inside the same bucket.
+func (s *StorageService) CopyObject(srcKey, dstKey string) error {
+	if s.backend() == nil {
+		return fmt.Errorf("oss not configured")
+	}
+	return s.backend().CopyObject(srcKey, dstKey)
+}
+
+// DeleteObject removes one object; missing keys are ignored.
+func (s *StorageService) DeleteObject(objectKey string) error {
+	if s.backend() == nil {
+		return fmt.Errorf("oss not configured")
+	}
+	return s.backend().DeleteObject(objectKey)
 }
 
 // PurgeAgentAvatar removes a replaced agent avatar object.

@@ -197,7 +197,11 @@
             />
           </div>
 
-          <div class="video-toolbar-wrap">
+          <div v-if="mbVideoUnpublishedNotice" class="mb-video-unpublished" role="alert">
+            {{ mbVideoUnpublishedNotice }}
+          </div>
+
+          <div v-if="mbVideoPublished" class="video-toolbar-wrap">
             <div class="video-toolbar">
               <div class="toolbar-share">
                 <span class="share-label">分享</span>
@@ -336,7 +340,7 @@
               </div>
               <div class="side-scroll">
                 <div
-                  v-if="isMb && mbNumericId && sideTab === 'dm'"
+                  v-if="isMb && mbNumericId && mbVideoPublished && sideTab === 'dm'"
                   class="side-scroll-dm-wrap"
                 >
                   <CakecakeDanmakuFeed
@@ -703,7 +707,7 @@
                     </div>
                   </div>
                 </div>
-                <div class="vd-cmt-live-mount">
+                <div v-if="mbVideoPublished" class="vd-cmt-live-mount">
                   <CakecakeCommentsLive
                     ref="mbCommentsLive"
                     embedded
@@ -1109,6 +1113,23 @@ import { videoZoneCrumbs as buildVideoZoneCrumbs } from "@/utils/videoZone.js";
 import VideoPlayerBox from "@/components/video/VideoPlayerBox.vue";
 import VideoCoinDialog from "@/components/video/VideoCoinDialog.vue";
 import VideoFavoriteFolderDialog from "@/components/video/VideoFavoriteFolderDialog.vue";
+
+function mbUnpublishedVideoNotice(status) {
+  switch (status) {
+    case "pending_review":
+      return "视频审核中，仅作者可见";
+    case "processing":
+      return "视频转码中，完成后将自动进入审核";
+    case "failed":
+      return "视频处理失败，请到创作中心查看原因";
+    case "rejected":
+      return "视频未通过审核";
+    case "private":
+      return "视频已设为私密";
+    default:
+      return "视频暂不可播放";
+  }
+}
 import CakecakeCommentsLive from "@/pages/cakecake/CakecakeCommentsLive.vue";
 import {
   MB_COMMENT_CURATED_LABEL,
@@ -1139,6 +1160,8 @@ export default {
       MB_COMMENT_CURATED_LABEL,
       thumbLaterIco,
       apiDetail: null,
+      mbVideoPublished: false,
+      mbVideoUnpublishedNotice: "",
       _mbRecGen: 0,
       relatedWatchLaterPending: {},
       alsoCarouselIndex: 0,
@@ -1946,7 +1969,7 @@ export default {
       const id = String(idNum);
       this.upMeta.bio = "";
       http
-        .get(`/api/v1/videos/${id}`)
+        .get(`/api/v1/videos/${id}`, { skipGlobalErrorToast: true })
         .then(body => {
           if (!body || body.code !== 0 || !body.data) {
             this.mbDetailLoadError = "视频不存在或暂不可播放";
@@ -1956,6 +1979,10 @@ export default {
           }
           const d = body.data;
           this.apiDetail = d;
+          this.mbVideoPublished = String(d.status || "") === "published";
+          this.mbVideoUnpublishedNotice = this.mbVideoPublished
+            ? ""
+            : mbUnpublishedVideoNotice(String(d.status || ""));
           const url = (d.video_url && String(d.video_url).trim()) || "";
           this.mbVideoUrl = url;
           this.stats.play = String(d.play_count ?? 0);
@@ -1968,7 +1995,7 @@ export default {
           if (d.in_watch_later && getAccessToken()) {
             void mbMarkWatchLaterWatched(id).catch(() => {});
           }
-          if (getAccessToken()) {
+          if (getAccessToken() && this.mbVideoPublished) {
             const dur = Number(d.duration_sec ?? d.duration ?? 0);
             void mbPostViewHistory(idNum, {
               progress_sec: 0,
@@ -2903,6 +2930,17 @@ $video-col-width: 819px;
   color: #fff;
   text-align: center;
   background: #111;
+}
+
+.mb-video-unpublished {
+  padding: 10px 16px;
+  margin: 12px 0;
+  background: #fff7e6;
+  border: 1px solid #ffd591;
+  border-radius: 4px;
+  color: #ad6800;
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .video-load-error__text {

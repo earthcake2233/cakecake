@@ -11,7 +11,7 @@
       <VideoUploadMaintenanceNotice />
       <h1 class="mb-up__title">上传视频</h1>
       <p class="mb-up__tip">
-        将提交至转码队列；需后端 FFmpeg、RabbitMQ、OSS 等已配置。封面为可选项。
+        提交后将自动处理并发布，请耐心等待；封面为可选项。
       </p>
       <el-form label-width="88px" class="mb-up__form">
         <el-form-item label="标题" required>
@@ -48,8 +48,7 @@
 import { ElMessage } from "element-plus";
 import {
   mbCreateUploadTicket,
-  mbCreateVideoDirect,
-  mbUploadVideo
+  mbCreateVideoDirect
 } from "@/api/cakecake";
 import { getAccessToken } from "@/utils/authTokens";
 import { openCakecakeLoginModal } from "@/utils/cakecakeLoginModal";
@@ -116,40 +115,51 @@ export default {
       this.result = "";
       try {
         let data;
-        let ticket = null;
         try {
           // 首选客户端直传：浏览器把文件 PUT 到 OSS，再提交元数据。
-          ticket = await mbCreateUploadTicket(
+          const ticket = await mbCreateUploadTicket(
             this.videoFile.name,
-            this.coverFile ? this.coverFile.name : ""
+            this.coverFile ? this.coverFile.name : "",
+            this.videoFile.type || "",
+            this.coverFile ? this.coverFile.type || "" : ""
           );
-        } catch (ticketErr) {
-          // 直传不可用（如 OSS 未配置），回退传统 multipart 上传。
-        }
-        if (ticket) {
-          await uploadToPresignedURL(ticket.raw_upload_url, this.videoFile);
-          let coverKey = "";
+          // 视频与封面并行直传，缩短整体上传耗时。
+          const jobs = [
+            uploadToPresignedURL(
+              ticket.raw_upload_url,
+              this.videoFile,
+              undefined,
+              this.videoFile.type || ""
+            ).then(() => ticket.raw_key)
+          ];
           if (this.coverFile && ticket.cover_upload_url) {
-            await uploadToPresignedURL(ticket.cover_upload_url, this.coverFile);
-            coverKey = ticket.cover_key || "";
+            jobs.push(
+              uploadToPresignedURL(
+                ticket.cover_upload_url,
+                this.coverFile,
+                undefined,
+                this.coverFile.type || ""
+              ).then(() => ticket.cover_key || "")
+            );
           }
+          const [rawKey, coverKey] = await Promise.all(jobs);
           data = await mbCreateVideoDirect({
             title,
             description,
             tags: [],
             zone: "",
-            raw_key: ticket.raw_key,
+            raw_key: rawKey,
             cover_key: coverKey || undefined
           });
-        } else {
-          const fd = new FormData();
-          fd.append("title", title);
-          fd.append("description", description);
-          fd.append("file", this.videoFile);
-          if (this.coverFile) {
-            fd.append("cover", this.coverFile);
-          }
-          data = await mbUploadVideo(fd);
+        } catch (directErr) {
+          // OSS 是转码硬依赖：直传不可用时不再回退 multipart（那样只会
+          // 产生一个必然失败的转码任务），而是明确提示线下处理。
+          ElMessage.error(
+            (directErr && directErr.message) ||
+              "上传服务暂不可用，视频文件需线下处理",
+            { duration: 8000 }
+          );
+          return;
         }
         this.result = JSON.stringify(data, null, 2);
       } catch (e) {

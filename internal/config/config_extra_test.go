@@ -4,6 +4,8 @@ import (
 	"os"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 // --- Helper functions ---
@@ -33,6 +35,27 @@ func TestMustParseDuration(t *testing.T) {
 	}
 	if got := mustParseDuration("10s", 1*time.Second); got != 10*time.Second {
 		t.Errorf("mustParseDuration(10s, 1s) = %v; want 10s", got)
+	}
+}
+
+func TestDefaultTranscodeConcurrency(t *testing.T) {
+	n := defaultTranscodeConcurrency()
+	if n < 1 || n > 4 {
+		t.Fatalf("defaultTranscodeConcurrency() = %d, want 1..4", n)
+	}
+}
+
+func TestLoad_TranscodeConcurrencyDefaultAndEnv(t *testing.T) {
+	old := os.Getenv("TRANSCODE_CONCURRENCY")
+	t.Cleanup(func() { _ = os.Setenv("TRANSCODE_CONCURRENCY", old) })
+	require.NoError(t, os.Setenv("TRANSCODE_CONCURRENCY", ""))
+	cfg := Load()
+	if cfg.TranscodeConcurrency != defaultTranscodeConcurrency() {
+		t.Fatalf("default concurrency = %d, want %d", cfg.TranscodeConcurrency, defaultTranscodeConcurrency())
+	}
+	require.NoError(t, os.Setenv("TRANSCODE_CONCURRENCY", "3"))
+	if cfg := Load(); cfg.TranscodeConcurrency != 3 {
+		t.Fatalf("env concurrency = %d, want 3", cfg.TranscodeConcurrency)
 	}
 }
 

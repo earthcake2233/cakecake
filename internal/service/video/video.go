@@ -3,6 +3,7 @@ package video
 import (
 	"cakecake/internal/model/video"
 	"cakecake/internal/pkg/dbtx"
+	"cakecake/internal/pkg/traceid"
 	"context"
 	"encoding/json"
 	"errors"
@@ -30,6 +31,8 @@ type VideoService struct {
 	es     *search.Client
 	mq     queue.TranscodePublisher
 	oss    SourceObjectStore
+	// backpressure rejects new enqueues when the transcode queue is full.
+	backpressure BackpressureChecker
 }
 
 // ErrRequeueSourceMissing reports that the raw media (or user cover) behind a
@@ -40,12 +43,9 @@ var ErrRequeueSourceMissing = errors.New("requeue source media missing")
 // works across instances and container rebuilds instead of depending on a
 // single-host local path.
 type SourceObjectStore interface {
-	UploadFile(objectKey, localPath string) error
-	DownloadFile(objectKey, localPath string) error
 	Exists(objectKey string) (bool, error)
 	Size(objectKey string) (int64, error)
-	PresignPut(objectKey string, expiry time.Duration) (string, error)
-	DeleteObject(objectKey string) error
+	PresignPut(objectKey string, expiry time.Duration, contentType string) (string, error)
 }
 
 // ErrDirectUploadUnavailable reports that OSS is not configured for
@@ -62,8 +62,17 @@ var ErrDirectUploadSourceMissing = errors.New("direct upload source object missi
 var ErrDirectUploadTooLarge = errors.New("direct upload source object too large")
 
 // ErrDirectUploadInvalidKey reports that a submitted object key is outside
-// the raws/ namespace.
+// the uploads/{uid}/ namespace.
 var ErrDirectUploadInvalidKey = errors.New("direct upload object key invalid")
+
+// ErrTranscodeQueueFull reports that the transcode queue is over capacity
+// (backpressure); uploads should be retried later.
+var ErrTranscodeQueueFull = errors.New("transcode queue full")
+
+// BackpressureChecker rejects transcode enqueues when capacity is exhausted.
+type BackpressureChecker interface {
+	CheckTranscodeCapacity(ctx context.Context) error
+}
 
 // ErrDirectUploadAlreadyClaimed reports that the raw object belongs to a
 // different user's claim.
@@ -76,6 +85,24 @@ var ErrDirectUploadInProgress = errors.New("direct upload object claim in progre
 // directUploadMaxBytes matches the multipart upload limit (500 MB) so both
 // upload paths enforce the same ceiling.
 const directUploadMaxBytes int64 = 500 << 20
+
+// maxMediaDurationSec caps the media duration hint stored at submit time.
+// The authoritative duration check happens in the transcode worker, which
+// already downloads the source; the hint is only used for the player UI.
+const maxMediaDurationSec = 30 * 60
+
+// NormalizeDurationHint clamps a client-provided duration to a safe display
+// value. It is advisory: the worker re-probes and overwrites it, and rejects
+// media that actually exceeds the limit.
+func NormalizeDurationHint(d float64) float64 {
+	if d < 0 || d != d { // negative or NaN
+		return 0
+	}
+	if d > maxMediaDurationSec {
+		return maxMediaDurationSec
+	}
+	return d
+}
 
 // directUploadExpiry bounds the presigned PUT URLs issued by
 // CreateDirectUploadTicket.
@@ -103,8 +130,12 @@ var probeTimeout = 15 * time.Second
 
 // NewVideoService creates a VideoService with storage, cache, logger,
 // optional search client, and optional transcode queue publisher.
-func NewVideoService(db *gorm.DB, rdb *redis.Client, log *zap.Logger, es *search.Client, mq queue.TranscodePublisher, oss SourceObjectStore) *VideoService {
-	return &VideoService{videos: NewVideoProvider(db), rdb: rdb, log: log, es: es, mq: mq, oss: oss}
+func NewVideoService(db *gorm.DB, rdb *redis.Client, log *zap.Logger, es *search.Client, mq queue.TranscodePublisher, oss SourceObjectStore, backpressure ...BackpressureChecker) *VideoService {
+	s := &VideoService{videos: NewVideoProvider(db), rdb: rdb, log: log, es: es, mq: mq, oss: oss}
+	if len(backpressure) > 0 {
+		s.backpressure = backpressure[0]
+	}
+	return s
 }
 
 // Publish marks a video published and re-indexes search (post-review or direct publish).
@@ -120,38 +151,19 @@ func (s *VideoService) PublishTranscode(ctx context.Context, body []byte) error 
 	return s.mq.PublishTranscode(ctx, body)
 }
 
-// EnqueueTranscode builds the transcode job and publishes it to the queue.
-func (s *VideoService) EnqueueTranscode(ctx context.Context, videoID uint64, rawPath, coverPath string) error {
-	return enqueueTranscodeJob(ctx, s.mq, s.oss, videoID, rawPath, coverPath)
-}
-
-// EnqueueTranscodeWithKeys publishes a job whose source media already lives in
-// OSS (client direct upload), so no local path is involved.
-func (s *VideoService) EnqueueTranscodeWithKeys(ctx context.Context, videoID uint64, rawKey, coverKey string) error {
-	if s.mq == nil {
-		return fmt.Errorf("transcode queue not configured")
-	}
-	job := queue.TranscodeJob{VideoID: videoID, RawKey: rawKey, CoverKey: coverKey, RetryCount: 0}
-	body, err := json.Marshal(job)
-	if err != nil {
-		return err
-	}
-	return s.mq.PublishTranscode(ctx, body)
-}
-
 // CreateDirectUploadTicket issues presigned PUT URLs for a direct upload:
 // the browser uploads the source files straight to OSS, then submits the
 // metadata via CreateVideoFromDirectUpload. This keeps large files off the
 // API server's bandwidth. Object keys are namespaced by the owning user
 // (uploads/{uid}/{uuid}/...) so a later submit cannot reference someone
 // else's objects.
-func (s *VideoService) CreateDirectUploadTicket(_ context.Context, uid uint64, filename, coverFilename string) (*DirectUploadTicket, error) {
+func (s *VideoService) CreateDirectUploadTicket(_ context.Context, uid uint64, filename, coverFilename, rawContentType, coverContentType string) (*DirectUploadTicket, error) {
 	if s.oss == nil {
 		return nil, ErrDirectUploadUnavailable
 	}
 	prefix := directUploadKeyPrefix(uid)
 	rawKey := fmt.Sprintf("%s%s/source%s", prefix, uuid.NewString(), safeObjectExt(filename))
-	rawURL, err := s.oss.PresignPut(rawKey, directUploadExpiry)
+	rawURL, err := s.oss.PresignPut(rawKey, directUploadExpiry, uploadContentType(rawContentType))
 	if err != nil {
 		return nil, fmt.Errorf("presign raw upload: %w", err)
 	}
@@ -162,7 +174,7 @@ func (s *VideoService) CreateDirectUploadTicket(_ context.Context, uid uint64, f
 	}
 	if strings.TrimSpace(coverFilename) != "" {
 		coverKey := fmt.Sprintf("%s%s/cover%s", prefix, uuid.NewString(), safeObjectExt(coverFilename))
-		coverURL, err := s.oss.PresignPut(coverKey, directUploadExpiry)
+		coverURL, err := s.oss.PresignPut(coverKey, directUploadExpiry, uploadContentType(coverContentType))
 		if err != nil {
 			return nil, fmt.Errorf("presign cover upload: %w", err)
 		}
@@ -172,12 +184,28 @@ func (s *VideoService) CreateDirectUploadTicket(_ context.Context, uid uint64, f
 	return ticket, nil
 }
 
-// CreateVideoFromDirectUpload validates an OSS-uploaded source (existence +
-// size limit + ffprobe duration), creates the video row and enqueues
-// transcoding with the object keys.
-func (s *VideoService) CreateVideoFromDirectUpload(ctx context.Context, uid uint64, title, description, tagsJSON, zone, rawKey, coverKey string) (*video.Video, error) {
+// uploadContentType normalizes the browser-reported MIME type. The value is
+// signed into the presigned PUT URL, so it must exactly match the
+// Content-Type header the browser sends.
+func uploadContentType(ct string) string {
+	ct = strings.TrimSpace(ct)
+	if ct == "" {
+		return "application/octet-stream"
+	}
+	return ct
+}
+
+// CreateVideoFromDirectUpload validates an OSS-uploaded source with cheap
+// HEAD checks only (existence + size limit — no full download), creates the
+// video row with the client-provided duration hint and enqueues transcoding.
+// The authoritative duration check is done by the worker after it downloads
+// the source.
+func (s *VideoService) CreateVideoFromDirectUpload(ctx context.Context, uid uint64, title, description, tagsJSON, zone, rawKey, coverKey string, durationHint float64) (*video.Video, error) {
 	if s.oss == nil {
 		return nil, ErrDirectUploadUnavailable
+	}
+	if err := s.checkCapacity(ctx); err != nil {
+		return nil, err
 	}
 	prefix := directUploadKeyPrefix(uid)
 	if !strings.HasPrefix(rawKey, prefix) {
@@ -200,17 +228,7 @@ func (s *VideoService) CreateVideoFromDirectUpload(ctx context.Context, uid uint
 	if size > directUploadMaxBytes {
 		return nil, fmt.Errorf("%w: %d bytes", ErrDirectUploadTooLarge, size)
 	}
-	tmp := filepath.Join(os.TempDir(), fmt.Sprintf("direct_%d_%s", time.Now().UnixNano(), filepath.Base(rawKey)))
-	defer func() { _ = os.Remove(tmp) }()
-	if err := s.oss.DownloadFile(rawKey, tmp); err != nil {
-		return nil, fmt.Errorf("download raw object for probe: %w", err)
-	}
-	dur, err := s.ProbeDurationSeconds(tmp)
-	if err != nil {
-		return nil, err
-	}
 	var v video.Video
-	created := false
 	err = s.videos.WithTx(ctx, func(tx dbtx.Tx) error {
 		claim := video.DirectUploadClaim{RawKey: rawKey, UserID: uid}
 		if err := tx.Create(&claim).Error; err != nil {
@@ -232,12 +250,11 @@ func (s *VideoService) CreateVideoFromDirectUpload(ctx context.Context, uid uint
 			}
 			return nil
 		}
-		created = true
 		v = video.Video{
 			UserID:      uid,
 			Title:       title,
 			Description: description,
-			DurationSec: dur,
+			DurationSec: NormalizeDurationHint(durationHint),
 			Status:      video.StatusProcessing,
 			TagsJSON:    tagsJSON,
 			Zone:        zone,
@@ -245,20 +262,38 @@ func (s *VideoService) CreateVideoFromDirectUpload(ctx context.Context, uid uint
 		if err := tx.Create(&v).Error; err != nil {
 			return err
 		}
-		return tx.Model(&video.DirectUploadClaim{}).Where("id = ?", claim.ID).
-			Updates(map[string]interface{}{"video_id": v.ID}).Error
+		if err := tx.Model(&video.DirectUploadClaim{}).Where("id = ?", claim.ID).
+			Updates(map[string]interface{}{"video_id": v.ID}).Error; err != nil {
+			return err
+		}
+		// Outbox: the video row, the claim and the pending job are committed
+		// atomically; the relay publishes it later.
+		job := buildTranscodeJob(v.ID, rawKey, coverKey, "", "", traceid.FromContext(ctx))
+		payload, err := json.Marshal(job)
+		if err != nil {
+			return err
+		}
+		return tx.Create(&video.TranscodeOutbox{
+			JobID:   job.JobID,
+			VideoID: v.ID,
+			Payload: string(payload),
+			Status:  video.OutboxStatusPending,
+		}).Error
 	})
 	if err != nil {
 		return nil, err
 	}
-	if err := s.EnqueueTranscodeWithKeys(ctx, v.ID, rawKey, coverKey); err != nil {
-		if created {
-			_ = s.DeleteVideoByID(ctx, v.ID)
-			_ = s.videos.DeleteDirectUploadClaim(ctx, rawKey)
-		}
-		return nil, err
-	}
 	return &v, nil
+}
+
+func (s *VideoService) checkCapacity(ctx context.Context) error {
+	if s.backpressure == nil {
+		return nil
+	}
+	if err := s.backpressure.CheckTranscodeCapacity(ctx); err != nil {
+		return fmt.Errorf("%w: %v", ErrTranscodeQueueFull, err)
+	}
+	return nil
 }
 
 func directUploadKeyPrefix(uid uint64) string {
@@ -278,49 +313,47 @@ func safeObjectExt(filename string) string {
 	return ext
 }
 
-// enqueueTranscodeJob uploads the original media to object storage when OSS is
-// configured, then publishes the job. The job carries object keys (RawKey /
-// CoverKey) so a worker on any host can download and retry them; without OSS
-// it falls back to the legacy local-path payload.
-//
-// Failure safety: the local temp files are deleted ONLY after the publish is
-// confirmed, and already-uploaded source objects are KEPT on any failure. A
-// transient broker error therefore never destroys the user's video: the OSS
-// object (or the local file, in fallback mode) always survives for retry or
-// manual compensation.
-func enqueueTranscodeJob(ctx context.Context, mq queue.TranscodePublisher, oss SourceObjectStore, videoID uint64, rawPath, coverPath string) error {
-	if mq == nil {
-		return fmt.Errorf("transcode queue not configured")
-	}
-	job := queue.TranscodeJob{VideoID: videoID, RawPath: rawPath, CoverPath: coverPath, RetryCount: 0}
-	if oss != nil && rawPath != "" {
-		rawKey := fmt.Sprintf("raws/%d/source%s", videoID, filepath.Ext(rawPath))
-		if err := oss.UploadFile(rawKey, rawPath); err != nil {
-			return fmt.Errorf("upload raw source: %w", err)
-		}
-		job.RawKey, job.RawPath = rawKey, ""
-	}
-	if oss != nil && coverPath != "" {
-		coverKey := fmt.Sprintf("raws/%d/cover%s", videoID, filepath.Ext(coverPath))
-		if err := oss.UploadFile(coverKey, coverPath); err != nil {
-			return fmt.Errorf("upload cover source: %w", err)
-		}
-		job.CoverKey, job.CoverPath = coverKey, ""
-	}
-	body, err := json.Marshal(job)
+// enqueueOutboxJob writes a pending outbox row for a legacy local-path job
+// (pre-migration local drafts / server-side ingest). The background relay
+// publishes it to RabbitMQ with publisher confirm. Local files are the source
+// of truth for these jobs and are kept until the worker consumes them.
+func enqueueOutboxJob(ctx context.Context, videos VideoProvider, oss SourceObjectStore, videoID uint64, rawPath, coverPath, traceID string) error {
+	job := buildTranscodeJob(videoID, "", "", rawPath, coverPath, traceID)
+	payload, err := json.Marshal(job)
 	if err != nil {
 		return err
 	}
-	if err := mq.PublishTranscode(ctx, body); err != nil {
+	if err := videos.CreateTranscodeOutbox(ctx, &video.TranscodeOutbox{
+		JobID:   job.JobID,
+		VideoID: videoID,
+		Payload: string(payload),
+		Status:  video.OutboxStatusPending,
+	}); err != nil {
 		return err
 	}
-	// Publish confirmed: the OSS objects are now the authoritative source.
-	// Local temp copies are no longer needed on this host.
-	if oss != nil {
-		_ = os.Remove(rawPath)
-		_ = os.Remove(coverPath)
-	}
 	return nil
+}
+
+// buildTranscodeJob assembles the durable job payload with a stable JobID for
+// dedup and an optional trace ID for end-to-end correlation.
+func buildTranscodeJob(videoID uint64, rawKey, coverKey, rawPath, coverPath, traceID string) queue.TranscodeJob {
+	job := queue.TranscodeJob{
+		VideoID:    videoID,
+		RawPath:    rawPath,
+		CoverPath:  coverPath,
+		RawKey:     rawKey,
+		CoverKey:   coverKey,
+		JobID:      uuid.NewString(),
+		TraceID:    traceID,
+		RetryCount: 0,
+	}
+	if rawKey != "" {
+		job.RawPath = ""
+	}
+	if coverKey != "" {
+		job.CoverPath = ""
+	}
+	return job
 }
 
 // ListTranscodeDeadLetters returns dead-letter audit rows with pagination.
@@ -360,6 +393,10 @@ func (s *VideoService) RequeueTranscodeDeadLetter(ctx context.Context, id uint64
 	}
 	job := payload.Job
 	job.RetryCount = 0
+	// A replay is a brand-new execution: mint a fresh JobID so the worker's
+	// (job_id, retry_count) dedup row from the original attempt does not
+	// swallow this job. TraceID is kept for end-to-end correlation.
+	job.JobID = uuid.NewString()
 	body, err := json.Marshal(job)
 	if err != nil {
 		return err
@@ -587,6 +624,31 @@ func (s *VideoService) CountByStatus(ctx context.Context, status string) (int64,
 // AdminUpdateVideo updates video fields by ID (admin operation).
 func (s *VideoService) AdminUpdateVideo(ctx context.Context, id uint64, updates map[string]interface{}) error {
 	return s.videos.UpdateVideoByID(ctx, id, updates)
+}
+
+// AdminRejectVideoWithAudit rejects a pending-review video and records the
+// status transition in the transcode audit trail.
+func (s *VideoService) AdminRejectVideoWithAudit(ctx context.Context, id uint64, reason string, adminID uint64) error {
+	v, err := s.videos.GetVideoByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	now := time.Now()
+	if err := s.videos.UpdateVideoByID(ctx, id, map[string]interface{}{
+		"status":               video.StatusRejected,
+		"fail_reason":          reason,
+		"reviewed_at":          now,
+		"reviewed_by_admin_id": adminID,
+	}); err != nil {
+		return err
+	}
+	ev := video.TranscodeEvent{
+		VideoID:    id,
+		FromStatus: v.Status,
+		ToStatus:   video.StatusRejected,
+		Reason:     reason,
+	}
+	return s.videos.RecordTranscodeEvent(ctx, &ev)
 }
 
 // AdminDeleteVideoCascade deletes a video and cascades to related data within a transaction.

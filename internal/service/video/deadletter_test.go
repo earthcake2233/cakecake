@@ -30,13 +30,14 @@ func (f *fakeTranscodePublisher) PublishTranscode(_ context.Context, body []byte
 }
 
 type fakeSourceStore struct {
-	uploaded   []string
-	deleted    []string
-	exist      map[string]bool
-	sizes      map[string]int64
-	uploadErr  error
-	presignErr error
-	failOn     int // 1-based: fail the N-th UploadFile call
+	uploaded        []string
+	deleted         []string
+	putContentTypes []string
+	exist           map[string]bool
+	sizes           map[string]int64
+	uploadErr       error
+	presignErr      error
+	failOn          int // 1-based: fail the N-th UploadFile call
 }
 
 func (f *fakeSourceStore) UploadFile(key, _ string) error {
@@ -65,10 +66,11 @@ func (f *fakeSourceStore) DownloadFile(_ string, localPath string) error {
 	return os.WriteFile(localPath, []byte("media"), 0o644)
 }
 
-func (f *fakeSourceStore) PresignPut(key string, _ time.Duration) (string, error) {
+func (f *fakeSourceStore) PresignPut(key string, _ time.Duration, contentType string) (string, error) {
 	if f.presignErr != nil {
 		return "", f.presignErr
 	}
+	f.putContentTypes = append(f.putContentTypes, contentType)
 	return "https://oss.example.com/" + key, nil
 }
 
@@ -102,7 +104,7 @@ func TestRequeueTranscodeDeadLetter_ResetsAndPublishes(t *testing.T) {
 	require.NoError(t, db.Create(&video.Video{ID: 10, UserID: 1, Title: "v", Status: video.StatusFailed, FailReason: "oss down"}).Error)
 	dl := video.TranscodeDeadLetter{
 		VideoID: 10, RetryCount: 3, Reason: "oss down",
-		PayloadJSON: deadLetterPayload(t, queue.TranscodeJob{VideoID: 10, RawPath: tempMedia(t, "raw.mp4"), RetryCount: 3}),
+		PayloadJSON: deadLetterPayload(t, queue.TranscodeJob{VideoID: 10, RawPath: tempMedia(t, "raw.mp4"), JobID: "original-job", RetryCount: 3}),
 	}
 	require.NoError(t, db.Create(&dl).Error)
 
@@ -113,6 +115,8 @@ func TestRequeueTranscodeDeadLetter_ResetsAndPublishes(t *testing.T) {
 	require.NoError(t, json.Unmarshal(mq.bodies[0], &job))
 	require.Equal(t, uint64(10), job.VideoID)
 	require.Zero(t, job.RetryCount)
+	require.NotEmpty(t, job.JobID, "replay must carry a fresh job_id")
+	require.NotEqual(t, "original-job", job.JobID, "replay must not reuse the original job_id (dedup collision)")
 
 	var v video.Video
 	require.NoError(t, db.First(&v, 10).Error)
@@ -125,70 +129,49 @@ func TestRequeueTranscodeDeadLetter_ResetsAndPublishes(t *testing.T) {
 	require.Equal(t, 1, row.RequeuedCount)
 }
 
-func TestEnqueueTranscode_UploadsSourceObjects(t *testing.T) {
+func TestEnqueueTranscode_WritesOutbox(t *testing.T) {
 	db := servicetest.NewDB(t)
 	_, rdb := servicetest.NewRedis(t)
 	mq := &fakeTranscodePublisher{}
 	oss := &fakeSourceStore{}
-	svc := NewVideoService(db, rdb, zap.NewNop(), nil, mq, oss)
+	svc := NewVideoDraftService(db, rdb, zap.NewNop(), mq, oss)
 	rawPath := tempMedia(t, "raw.mp4")
 	coverPath := tempMedia(t, "cover.png")
 
 	require.NoError(t, svc.EnqueueTranscode(context.Background(), 9, rawPath, coverPath))
-	require.Equal(t, []string{"raws/9/source.mp4", "raws/9/cover.png"}, oss.uploaded)
-	require.Empty(t, oss.deleted)
+	require.Empty(t, oss.uploaded, "legacy local-path jobs never upload to OSS")
+	require.Empty(t, mq.bodies, "outbox defers publishing to the relay")
 
-	require.Len(t, mq.bodies, 1)
+	var ob video.TranscodeOutbox
+	require.NoError(t, db.Where("video_id = ?", 9).First(&ob).Error)
+	require.Equal(t, video.OutboxStatusPending, ob.Status)
+	require.NotEmpty(t, ob.JobID)
 	var job queue.TranscodeJob
-	require.NoError(t, json.Unmarshal(mq.bodies[0], &job))
-	require.Equal(t, "raws/9/source.mp4", job.RawKey)
-	require.Equal(t, "raws/9/cover.png", job.CoverKey)
-	require.Empty(t, job.RawPath)
-	require.Empty(t, job.CoverPath)
+	require.NoError(t, json.Unmarshal([]byte(ob.Payload), &job))
+	require.Empty(t, job.RawKey)
+	require.Empty(t, job.CoverKey)
+	require.Equal(t, rawPath, job.RawPath)
+	require.Equal(t, coverPath, job.CoverPath)
+	require.Equal(t, ob.JobID, job.JobID)
 	_, err := os.Stat(rawPath)
-	require.ErrorIs(t, err, os.ErrNotExist, "local raw temp file is removed after confirmed publish")
+	require.NoError(t, err, "local raw file is the source of truth and must be kept for the worker")
 	_, err = os.Stat(coverPath)
-	require.ErrorIs(t, err, os.ErrNotExist, "local cover temp file is removed after confirmed publish")
+	require.NoError(t, err, "local cover file is the source of truth and must be kept for the worker")
 }
 
-func TestEnqueueTranscode_PublishFailureKeepsSource(t *testing.T) {
+func TestEnqueueTranscode_WritesOutboxWithoutMQ(t *testing.T) {
 	db := servicetest.NewDB(t)
 	_, rdb := servicetest.NewRedis(t)
-	mq := &fakeTranscodePublisher{err: errors.New("broker down")}
 	oss := &fakeSourceStore{}
-	svc := NewVideoService(db, rdb, zap.NewNop(), nil, mq, oss)
+	svc := NewVideoDraftService(db, rdb, zap.NewNop(), nil, oss)
 	rawPath := tempMedia(t, "raw.mp4")
 	coverPath := tempMedia(t, "cover.png")
 
-	err := svc.EnqueueTranscode(context.Background(), 11, rawPath, coverPath)
-	require.Error(t, err)
-	require.Equal(t, []string{"raws/11/source.mp4", "raws/11/cover.png"}, oss.uploaded)
-	require.Empty(t, oss.deleted, "uploaded source objects must be kept when publish fails")
-	require.Empty(t, mq.bodies)
-	_, statErr := os.Stat(rawPath)
-	require.NoError(t, statErr, "local raw source must survive a publish failure")
-	_, statErr = os.Stat(coverPath)
-	require.NoError(t, statErr, "local cover source must survive a publish failure")
-}
-
-func TestEnqueueTranscode_CoverUploadFailureKeepsRawSource(t *testing.T) {
-	db := servicetest.NewDB(t)
-	_, rdb := servicetest.NewRedis(t)
-	mq := &fakeTranscodePublisher{}
-	oss := &fakeSourceStore{failOn: 2} // raw upload succeeds, cover upload fails
-	svc := NewVideoService(db, rdb, zap.NewNop(), nil, mq, oss)
-	rawPath := tempMedia(t, "raw.mp4")
-	coverPath := tempMedia(t, "cover.png")
-
-	err := svc.EnqueueTranscode(context.Background(), 12, rawPath, coverPath)
-	require.Error(t, err)
-	require.Equal(t, []string{"raws/12/source.mp4"}, oss.uploaded)
-	require.Empty(t, oss.deleted, "already-uploaded raw object must be kept for compensation")
-	require.Empty(t, mq.bodies)
-	_, statErr := os.Stat(rawPath)
-	require.NoError(t, statErr, "local raw source must survive a cover upload failure")
-	_, statErr = os.Stat(coverPath)
-	require.NoError(t, statErr, "local cover source must survive its own upload failure")
+	require.NoError(t, svc.EnqueueTranscode(context.Background(), 11, rawPath, coverPath))
+	require.Empty(t, oss.uploaded)
+	var ob video.TranscodeOutbox
+	require.NoError(t, db.Where("video_id = ?", 11).First(&ob).Error)
+	require.Equal(t, video.OutboxStatusPending, ob.Status)
 }
 
 func TestRequeueTranscodeDeadLetter_ChecksOSSObject(t *testing.T) {

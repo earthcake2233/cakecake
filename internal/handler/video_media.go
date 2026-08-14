@@ -138,7 +138,7 @@ func (a *API) GetVideo(c *gin.Context) {
 	eng := a.getVideoEngagementFlags(c.Request.Context(), viewer, v.ID)
 	detail := videoDetail(*v, u, pc, watching, eng)
 	if v.Status == videoStatusDraft && viewer == v.UserID {
-		draftHasSource := strings.TrimSpace(v.DraftRawPath) != ""
+		draftHasSource := strings.TrimSpace(v.DraftRawKey) != ""
 		detail.DraftHasSource = &draftHasSource
 	}
 	_, followerCnt := a.getFollowCounts(c.Request.Context(), v.UserID)

@@ -8,6 +8,7 @@ import (
 	"cakecake/internal/search"
 	"cakecake/internal/service/queryutil"
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -462,6 +463,17 @@ func (p *VideoProviderImpl) DeleteDirectUploadClaim(ctx context.Context, rawKey 
 	return p.db.WithContext(ctx).Where("raw_key = ?", rawKey).Delete(&video.DirectUploadClaim{}).Error
 }
 
+// CreateTranscodeOutbox writes a pending outbox row (the local message table
+// for the transcode queue).
+func (p *VideoProviderImpl) CreateTranscodeOutbox(ctx context.Context, outbox *video.TranscodeOutbox) error {
+	return p.db.WithContext(ctx).Create(outbox).Error
+}
+
+// RecordTranscodeEvent appends an audit row for a transcode status change.
+func (p *VideoProviderImpl) RecordTranscodeEvent(ctx context.Context, ev *video.TranscodeEvent) error {
+	return p.db.WithContext(ctx).Create(ev).Error
+}
+
 // PublishVideo marks a video published, stamps review metadata, and indexes it in Elasticsearch.
 func (p *VideoProviderImpl) PublishVideo(ctx context.Context, esc *search.Client, log *zap.Logger, videoID uint64, adminID *uint64) error {
 	var v video.Video
@@ -471,6 +483,9 @@ func (p *VideoProviderImpl) PublishVideo(ctx context.Context, esc *search.Client
 	if v.Status == video.StatusPublished {
 		return nil
 	}
+	if !ValidateTranscodeStatusTransition(v.Status, video.StatusPublished) {
+		return fmt.Errorf("illegal transcode status transition %s -> %s", v.Status, video.StatusPublished)
+	}
 	now := time.Now()
 	updates := map[string]any{
 		"status":      video.StatusPublished,
@@ -479,8 +494,16 @@ func (p *VideoProviderImpl) PublishVideo(ctx context.Context, esc *search.Client
 	if adminID != nil && *adminID > 0 {
 		updates["reviewed_by_admin_id"] = *adminID
 	}
-	if err := p.db.WithContext(ctx).Model(&v).Updates(updates).Error; err != nil {
-		return err
+	// Conditional update on the status read moments ago: a concurrent
+	// reject/update must not be overwritten by a stale publish.
+	res := p.db.WithContext(ctx).Model(&video.Video{}).
+		Where("id = ? AND status = ?", videoID, v.Status).
+		Updates(updates)
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return fmt.Errorf("video status changed concurrently while publishing")
 	}
 	_ = p.db.WithContext(ctx).Model(&user.User{}).
 		Where("id = ? AND first_published_at IS NULL", v.UserID).
@@ -492,6 +515,7 @@ func (p *VideoProviderImpl) PublishVideo(ctx context.Context, esc *search.Client
 			log.Warn("elasticsearch index video on publish", zap.Uint64("video_id", videoID), zap.Error(err))
 		}
 	}
+	RecordTranscodeEvent(ctx, p.db, videoID, "", v.Status, video.StatusPublished, "publish")
 	return nil
 }
 

@@ -21,8 +21,10 @@ import (
 // fakeVideoOSS implements the service-level SourceObjectStore seam used by the
 // direct-upload ticket/submit flows.
 type fakeVideoOSS struct {
-	exist map[string]bool
-	sizes map[string]int64
+	exist           map[string]bool
+	sizes           map[string]int64
+	allowAll        bool
+	putContentTypes []string
 }
 
 func (f *fakeVideoOSS) UploadFile(string, string) error { return nil }
@@ -32,6 +34,9 @@ func (f *fakeVideoOSS) DownloadFile(_ string, localPath string) error {
 }
 
 func (f *fakeVideoOSS) Exists(key string) (bool, error) {
+	if f.allowAll {
+		return true, nil
+	}
 	if f.exist == nil {
 		return false, nil
 	}
@@ -39,13 +44,23 @@ func (f *fakeVideoOSS) Exists(key string) (bool, error) {
 }
 
 func (f *fakeVideoOSS) Size(key string) (int64, error) {
+	if f.allowAll {
+		if f.sizes == nil {
+			return 1024, nil
+		}
+		if v, ok := f.sizes[key]; ok {
+			return v, nil
+		}
+		return 1024, nil
+	}
 	if f.sizes == nil {
 		return 0, nil
 	}
 	return f.sizes[key], nil
 }
 
-func (f *fakeVideoOSS) PresignPut(key string, _ time.Duration) (string, error) {
+func (f *fakeVideoOSS) PresignPut(key string, _ time.Duration, contentType string) (string, error) {
+	f.putContentTypes = append(f.putContentTypes, contentType)
 	return "https://oss.example.com/" + key, nil
 }
 
@@ -56,17 +71,20 @@ func TestDirectUploadTicketAndSubmit(t *testing.T) {
 	tokenA, uidA := covRegister(t, r, "covdirect", "password12")
 	rawKey := fmt.Sprintf("uploads/%d/abc/source.mp4", uidA)
 	coverKey := fmt.Sprintf("uploads/%d/abc/cover.png", uidA)
-	api.VideoSvc = vsvc.NewVideoService(api.DB, api.Redis, zap.NewNop(), nil, noopMQ{}, &fakeVideoOSS{
+	oss := &fakeVideoOSS{
 		exist: map[string]bool{rawKey: true},
-	})
+	}
+	api.VideoSvc = vsvc.NewVideoService(api.DB, api.Redis, zap.NewNop(), nil, noopMQ{}, oss)
 	oldProbe := vsvc.VideoProbe
 	vsvc.VideoProbe = func(context.Context, string) (float64, error) { return 12.5, nil }
 	defer func() { vsvc.VideoProbe = oldProbe }()
 
 	// Presigned ticket with raw + cover.
 	w := covReq(t, r, "POST", "/api/v1/videos/upload-ticket", tokenA, map[string]any{
-		"filename":       "clip.mp4",
-		"cover_filename": "cover.png",
+		"filename":           "clip.mp4",
+		"cover_filename":     "cover.png",
+		"content_type":       "video/mp4",
+		"cover_content_type": "image/png",
 	})
 	covOK(t, w, http.StatusOK)
 	var ticketResp struct {
@@ -82,6 +100,7 @@ func TestDirectUploadTicketAndSubmit(t *testing.T) {
 	require.True(t, strings.HasSuffix(ticketResp.Data.RawKey, "/source.mp4"))
 	require.Contains(t, ticketResp.Data.RawURL, ticketResp.Data.RawKey)
 	require.Contains(t, ticketResp.Data.CoverURL, ticketResp.Data.CoverKey)
+	require.Equal(t, []string{"video/mp4", "image/png"}, oss.putContentTypes)
 
 	// Submit direct upload: object exists -> video created and enqueued.
 	w = covReq(t, r, "POST", "/api/v1/videos", tokenA, map[string]any{
@@ -199,6 +218,41 @@ func TestDirectUploadRespectsUploadDisabled(t *testing.T) {
 	})
 	covOK(t, w, http.StatusBadRequest)
 	require.Equal(t, errcode.CodeVideoUploadDisabled, codeOf(w))
+}
+
+func TestDirectUploadSubmit_StoresDurationHintWithoutProbe(t *testing.T) {
+	api, r, _ := newTestAPI(t)
+	tokenA, uidA := covRegister(t, r, "covlong", "password12")
+	rawKey := fmt.Sprintf("uploads/%d/long/source.mp4", uidA)
+	probed := false
+	api.VideoSvc = vsvc.NewVideoService(api.DB, api.Redis, zap.NewNop(), nil, noopMQ{}, &fakeVideoOSS{
+		exist: map[string]bool{rawKey: true},
+	})
+	oldProbe := vsvc.VideoProbe
+	vsvc.VideoProbe = func(context.Context, string) (float64, error) {
+		probed = true
+		return 99, nil
+	}
+	defer func() { vsvc.VideoProbe = oldProbe }()
+
+	w := covReq(t, r, "POST", "/api/v1/videos", tokenA, map[string]any{
+		"title":    "long video",
+		"raw_key":  rawKey,
+		"duration": 30*60 + 1,
+	})
+	covOK(t, w, http.StatusCreated)
+	var created struct {
+		Data struct {
+			ID uint64 `json:"id"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &created))
+	var row video.Video
+	require.NoError(t, api.DB.First(&row, created.Data.ID).Error)
+	// Hint is clamped for display; the worker re-probes and rejects the real
+	// duration. Submit itself never downloads or probes the object.
+	require.Equal(t, float64(30*60), row.DurationSec)
+	require.False(t, probed)
 }
 
 func countVideos(t *testing.T, api *API) int64 {
