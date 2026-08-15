@@ -187,6 +187,8 @@ func (a *API) uploadVideoDirect(c *gin.Context, uid uint64) {
 			resp.Err(c, http.StatusBadRequest, errcode.CodeVideoFileTooLarge)
 		case errors.Is(err, vsvc.ErrDirectUploadInvalidKey):
 			resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
+		case errors.Is(err, vsvc.ErrDirectUploadInvalidCover):
+			resp.Err(c, http.StatusBadRequest, errcode.CodeCoverFormat)
 		case errors.Is(err, vsvc.ErrDirectUploadAlreadyClaimed), errors.Is(err, vsvc.ErrDirectUploadInProgress):
 			resp.Err(c, http.StatusConflict, errcode.CodeDirectUploadConflict)
 		case errors.Is(err, vsvc.ErrTranscodeQueueFull):

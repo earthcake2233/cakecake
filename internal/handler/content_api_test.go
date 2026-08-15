@@ -141,7 +141,7 @@ func TestCommentAndFolderFlows(t *testing.T) {
 	require.NoError(t, mw.WriteField("title", "mc folder 2"))
 	cfw, err := mw.CreateFormFile("cover", "fc.jpg")
 	require.NoError(t, err)
-	_, err = cfw.Write([]byte("jpeg"))
+	_, err = cfw.Write([]byte{0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 'J', 'F', 'I', 'F'})
 	require.NoError(t, err)
 	require.NoError(t, mw.Close())
 	req := httptest.NewRequest("PUT", "/api/v1/users/me/favorite-folders/"+u64s(fOut.Data.ID), body)

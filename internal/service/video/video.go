@@ -2,6 +2,7 @@ package video
 
 import (
 	"cakecake/internal/model/video"
+	"cakecake/internal/pkg/coverval"
 	"cakecake/internal/pkg/dbtx"
 	"cakecake/internal/pkg/traceid"
 	"context"
@@ -45,6 +46,7 @@ var ErrRequeueSourceMissing = errors.New("requeue source media missing")
 type SourceObjectStore interface {
 	Exists(objectKey string) (bool, error)
 	Size(objectKey string) (int64, error)
+	ReadPrefix(objectKey string, n int64) ([]byte, error)
 	PresignPut(objectKey string, expiry time.Duration, contentType string) (string, error)
 }
 
@@ -64,6 +66,10 @@ var ErrDirectUploadTooLarge = errors.New("direct upload source object too large"
 // ErrDirectUploadInvalidKey reports that a submitted object key is outside
 // the uploads/{uid}/ namespace.
 var ErrDirectUploadInvalidKey = errors.New("direct upload object key invalid")
+
+// ErrDirectUploadInvalidCover reports that the submitted cover object is not
+// a real image (extension/MIME alone is not trusted; magic bytes are checked).
+var ErrDirectUploadInvalidCover = errors.New("direct upload cover is not a supported image")
 
 // ErrTranscodeQueueFull reports that the transcode queue is over capacity
 // (backpressure); uploads should be retried later.
@@ -85,6 +91,10 @@ var ErrDirectUploadInProgress = errors.New("direct upload object claim in progre
 // directUploadMaxBytes matches the multipart upload limit (500 MB) so both
 // upload paths enforce the same ceiling.
 const directUploadMaxBytes int64 = 500 << 20
+
+// directUploadCoverMaxBytes caps direct-to-OSS covers (aligned with the
+// multipart cover limit).
+const directUploadCoverMaxBytes int64 = 10 << 20
 
 // maxMediaDurationSec caps the media duration hint stored at submit time.
 // The authoritative duration check happens in the transcode worker, which
@@ -227,6 +237,31 @@ func (s *VideoService) CreateVideoFromDirectUpload(ctx context.Context, uid uint
 	}
 	if size > directUploadMaxBytes {
 		return nil, fmt.Errorf("%w: %d bytes", ErrDirectUploadTooLarge, size)
+	}
+	if coverKey != "" {
+		ok, err := s.oss.Exists(coverKey)
+		if err != nil {
+			return nil, fmt.Errorf("check cover object: %w", err)
+		}
+		if !ok {
+			return nil, fmt.Errorf("%w: %s", ErrDirectUploadSourceMissing, coverKey)
+		}
+		coverSize, err := s.oss.Size(coverKey)
+		if err != nil {
+			return nil, fmt.Errorf("check cover object size: %w", err)
+		}
+		if coverSize > directUploadCoverMaxBytes {
+			return nil, fmt.Errorf("%w: cover %d bytes", ErrDirectUploadTooLarge, coverSize)
+		}
+		// Extension/MIME from the client is not trusted: sniff the object's
+		// first bytes (range read, no full download) for a real image header.
+		head, err := s.oss.ReadPrefix(coverKey, 16)
+		if err != nil {
+			return nil, fmt.Errorf("read cover head: %w", err)
+		}
+		if !coverval.IsAllowedImageMagic(head) {
+			return nil, fmt.Errorf("%w: %s", ErrDirectUploadInvalidCover, coverKey)
+		}
 	}
 	var v video.Video
 	err = s.videos.WithTx(ctx, func(tx dbtx.Tx) error {

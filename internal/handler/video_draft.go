@@ -134,6 +134,8 @@ func mediaErrorStatus(err error) (int, int) {
 		return http.StatusBadRequest, errcode.CodeDirectUploadSourceMissing
 	case errors.Is(err, vsvc.ErrDraftMediaTooLarge):
 		return http.StatusBadRequest, errcode.CodeVideoFileTooLarge
+	case errors.Is(err, vsvc.ErrDirectUploadInvalidCover):
+		return http.StatusBadRequest, errcode.CodeCoverFormat
 	default:
 		return http.StatusInternalServerError, errcode.CodeInternalError
 	}
