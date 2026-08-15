@@ -636,12 +636,18 @@ export default {
     /** 父级已知精选状态时可传入，避免首屏闪烁 */
     initialCommentsCurated: { type: Boolean, default: null },
     /** 父级已知关闭评论时可传入，避免请求评论列表报 403 */
-    initialCommentsClosed: { type: Boolean, default: null }
+    initialCommentsClosed: { type: Boolean, default: null },
+    /** 根评论分页：> 0 时按页切片展示（列表仍一次加载，适配中小评论量） */
+    page: { type: Number, default: 0 },
+    /** 每页根评论条数 */
+    pageSize: { type: Number, default: 20 }
   },
   emits: ["counts"],
   data() {
     return {
       items: [],
+      total: 0,
+      totalPages: 1,
       draft: "",
       loading: false,
       posting: false,
@@ -824,6 +830,9 @@ export default {
     dynamicId() {
       this.onTargetChange();
     },
+    page() {
+      this.load({ soft: true, preserveExpand: true });
+    },
     "$store.state.login.signIn"(v) {
       if (String(v) === "1" && getAccessToken()) {
         this.load({ soft: true, preserveExpand: true });
@@ -831,6 +840,7 @@ export default {
     },
     commentSort() {
       this.recomputeRootDisplayOrder();
+      this.load({ soft: true, preserveExpand: true });
     },
     highlightCommentId: {
       handler() {
@@ -1112,9 +1122,15 @@ export default {
         this.loading = true;
       }
       try {
+        const page = this.page > 0 ? this.page : 1;
+        const params = {
+          page,
+          page_size: this.pageSize,
+          sort: this.commentSort
+        };
         let res;
         if (this.isDynamic) {
-          res = await mbListDynamicComments(this.dynamicId);
+          res = await mbListDynamicComments(this.dynamicId, params);
           this.commentsClosedLocal = !!res.comments_closed;
           if (
             this.initialCommentsCurated === null ||
@@ -1123,7 +1139,7 @@ export default {
             this.commentsCuratedLocal = !!res.comments_curated;
           }
         } else if (this.isArticle) {
-          res = await mbListArticleComments(this.articleId);
+          res = await mbListArticleComments(this.articleId, params);
           this.commentsClosedLocal = !!res.comments_closed;
           if (
             this.initialCommentsCurated === null ||
@@ -1132,7 +1148,7 @@ export default {
             this.commentsCuratedLocal = !!res.comments_curated;
           }
         } else {
-          res = await mbListComments(this.videoId);
+          res = await mbListComments(this.videoId, params);
           this.commentsClosedLocal = !!res.comments_closed;
           if (
             this.initialCommentsCurated === null ||
@@ -1142,11 +1158,18 @@ export default {
           }
         }
         this.items = res.items || [];
+        const total = Number(res.total ?? this.items.length);
+        this.total = Number.isFinite(total) ? total : this.items.length;
+        this.totalPages = Math.max(
+          1,
+          Number(res.total_pages) ||
+            Math.ceil(this.total / Math.max(1, this.pageSize))
+        );
         if (!soft && !opts.preserveExpand) {
           this.expandedReplyThreads = {};
         }
         this.recomputeRootDisplayOrder();
-        this.$emit("counts", this.items.length);
+        this.$emit("counts", this.total, this.totalPages);
       } catch (e) {
         const apiCode =
           e && typeof e.cakecakeApiCode === "number" ? e.cakecakeApiCode : 0;
@@ -1154,7 +1177,7 @@ export default {
           this.commentsClosedLocal = true;
           this.items = [];
           this.loadError = "";
-          this.$emit("counts", 0);
+          this.$emit("counts", 0, 1);
           return;
         }
         this.loadError = (e && e.message) || "加载评论失败";
