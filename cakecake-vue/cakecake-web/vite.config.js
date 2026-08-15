@@ -105,7 +105,29 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: "dist",
       assetsDir: "static",
-      sourcemap: false
+      sourcemap: false,
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (id.includes("node_modules/highlight.js") ||
+                id.includes("node_modules/markdown-it") ||
+                id.includes("node_modules/dompurify")) {
+              return "markdown-highlight";
+            }
+            if (id.includes("node_modules/element-plus")) {
+              return "element-plus";
+            }
+            if (id.includes("node_modules/vue") ||
+                id.includes("node_modules/vue-router") ||
+                id.includes("node_modules/vuex") ||
+                id.includes("node_modules/axios") ||
+                id.includes("node_modules/@vue")) {
+              return "vue-vendor";
+            }
+            return undefined;
+          }
+        }
+      }
     },
     css: {
       preprocessorOptions: {

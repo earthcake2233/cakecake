@@ -7,10 +7,6 @@
     <img src="https://img.shields.io/badge/🇨🇳中文-999999?style=flat-square" alt="中文">
   </a>
   <strong><img src="https://img.shields.io/badge/🇬🇧English-00a1d6?style=flat-square" alt="English"></strong>
-    
-  <a href="https://chengzisoft.top/swagger/index.html">
-    <img src="https://img.shields.io/badge/API-Swagger-85EA2D?style=flat-square&logo=swagger" alt="API Docs">
-  </a>
 </p>
 
 # cakecake
@@ -232,6 +228,7 @@ air    # run at repo root; loads .env (see .air.toml)
 - Prefix: `/api/v1`
 - Response: `{ "code": number, "msg": string, "data": object | null }` (Rule **R-API-1**)
 - Writes & WebSocket: `Authorization: Bearer <access_token>`
+- Swagger API docs: enabled in development only; open `http://localhost:8080/swagger/index.html` with the backend running locally (the route is not registered in production)
 
 Full routes and behavior follow **SPEC**.
 

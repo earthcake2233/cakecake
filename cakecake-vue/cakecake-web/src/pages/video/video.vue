@@ -715,9 +715,9 @@
                     ref="mbCommentsLive"
                     embedded
                     hide-composer
-                    :video-id="mbNumericId"
-                    :video-author-id="mbVideoAuthorId"
-                    :highlight-comment-id="mbHighlightCommentId"
+                    :video-id="mbNumericId ?? undefined"
+                    :video-author-id="mbVideoAuthorId ?? undefined"
+                    :highlight-comment-id="mbHighlightCommentId ?? undefined"
                     :initial-comments-curated="!!(apiDetail && apiDetail.comments_curated)"
                     :page="commentCurrentPage"
                     :page-size="commentPageSize"
@@ -1078,7 +1078,7 @@
 
     <VideoFavoriteFolderDialog
       v-model="favDialogOpen"
-      :video-id="mbNumericId"
+      :video-id="mbNumericId ?? undefined"
       :loading="fav.dialogLoading"
       @confirm="onFavDialogConfirm"
       @cancel="favDialogOpen = false"
@@ -1086,7 +1086,7 @@
   </div>
 </template>
 
-<script>
+<script lang="ts">
 import { createNamespacedHelpers } from "vuex";
 import akariCover from "@/assets/akari.jpg";
 import thumbLaterIco from "@/assets/personal_space/latertowatch.png";
@@ -1122,7 +1122,7 @@ import VideoPlayerBox from "@/components/video/VideoPlayerBox.vue";
 import VideoCoinDialog from "@/components/video/VideoCoinDialog.vue";
 import VideoFavoriteFolderDialog from "@/components/video/VideoFavoriteFolderDialog.vue";
 
-function mbUnpublishedVideoNotice(status) {
+function mbUnpublishedVideoNotice(status: string) {
   switch (status) {
     case "pending_review":
       return "视频审核中，仅作者可见";
@@ -1137,6 +1137,27 @@ function mbUnpublishedVideoNotice(status) {
     default:
       return "视频暂不可播放";
   }
+}
+
+function errMsg(e: unknown): string {
+  if (e && typeof e === "object" && "message" in e) {
+    const m = (e as { message?: unknown }).message;
+    if (typeof m === "string") return m;
+  }
+  return "";
+}
+
+function apiErrMsg(e: unknown, fallback: string): string {
+  const data = (
+    e as { response?: { data?: { code?: number; message?: string; msg?: string } } } | null
+  )?.response?.data;
+  if (data && data.code === 40400) {
+    return "原评论已不存在，可删除该通知";
+  }
+  const msg =
+    (data && (typeof data.message === "string" ? data.message : data.msg)) ||
+    errMsg(e);
+  return msg || fallback;
 }
 import CakecakeCommentsLive from "@/pages/cakecake/CakecakeCommentsLive.vue";
 import {
@@ -1167,31 +1188,31 @@ export default {
     return {
       MB_COMMENT_CURATED_LABEL,
       thumbLaterIco,
-      apiDetail: null,
+      apiDetail: null as any,
       mbVideoPublished: false,
       mbVideoUnpublishedNotice: "",
       _mbRecGen: 0,
-      relatedWatchLaterPending: {},
+      relatedWatchLaterPending: {} as Record<string, boolean>,
       alsoCarouselIndex: 0,
       alsoScrollStep: 0,
       alsoVisibleCount: 5,
-      _alsoResizeBound: null,
+      _alsoResizeBound: null as (() => void) | null,
       mbVideoUrl: "",
       /** 稿件加载失败时在播放区展示，不跳转 404（避免污染浏览器历史） */
       mbDetailLoadError: "",
       /** 侧栏 Tab：related | dm | block */
       sideTab: "related",
       /** WebSocket 同步的弹幕（供列表 + 播放器 Canvas） */
-      mbDanmakuCatalog: [],
+      mbDanmakuCatalog: [] as any[],
       mbDanmakuWsHint: "",
-      _mbDmWs: null,
+      _mbDmWs: null as WebSocket | null,
       _seekTime: 0,
       playerWide: false,
       /** 侧栏「正在看」：cakecake 下为真实人数（详情 + WS）；非 MB 见 sideWatchingDisplay */
       watching: 0,
       followed: false,
       follow: { pending: false, hover: false, hint: "" },
-      _followHintTimer: null,
+      _followHintTimer: null as number | null,
       upMeta: {
         name: "",
         bio: "",
@@ -1229,7 +1250,7 @@ export default {
       openCommentMenuKey: "",
       videoDescText:
         "据美国国防部消息，美方近期公布了部分与不明飞行物（UFO）相关的调查文件，相关内容在网络上引发热烈讨论。本文为本地静态演示页文案占位，用于还原播放页下方信息区布局。",
-      alsoLikedVideos: mbOn ? [] : [
+      alsoLikedVideos: (mbOn ? [] : [
         {
           title: "每天一杯奶茶，血液竟会变成乳白色？",
           duration: "04:49",
@@ -1271,7 +1292,7 @@ export default {
           duration: "09:41",
           cover: demoCover
         }
-      ],
+      ]) as any[],
       commentTotal: 2753,
       commentTotalPages: 138,
       /** 评论区页码（当前列表未接后端分页时仅用于顶栏/底栏展示与跳转） */
@@ -1431,7 +1452,7 @@ export default {
           ]
         }
       ],
-      relatedVideos: mbOn ? [] : [
+      relatedVideos: (mbOn ? [] : [
         {
           title: "【演示】本地静态相关视频样式占位 ①",
           duration: "12:08",
@@ -1558,13 +1579,13 @@ export default {
           dm: "99",
           cover: demoCover
         }
-      ]
+      ]) as any[],
     };
   },
   computed: {
     ...mapState({
-      proInfo: state => state.proInfo,
-      cakecakeMe: state => state.cakecakeMe
+      proInfo: (state: any) => state.proInfo,
+      cakecakeMe: (state: any) => state.cakecakeMe
     }),
     aidParam() {
       return this.$route.params.aid || "";
@@ -1604,7 +1625,7 @@ export default {
       return this.watching;
     },
     mbNumericId() {
-      return parseVideoIdFromRoute(this.aidParam);
+      return parseVideoIdFromRoute(this.aidParam) ?? undefined;
     },
     videoBvidDisplay() {
       const id = this.mbNumericId;
@@ -1627,7 +1648,7 @@ export default {
       if (!d || !Array.isArray(d.tags)) {
         return [];
       }
-      return d.tags.map(t => String(t).trim()).filter(Boolean);
+      return d.tags.map((t: any) => String(t).trim()).filter(Boolean);
     },
     /** 稿件 UP 主头像（cakecake 详情 uploader_avatar_url） */
     upFaceSrc() {
@@ -1662,9 +1683,9 @@ export default {
     },
     mbVideoAuthorId() {
       const d = this.apiDetail;
-      if (!d || d.user_id == null) return null;
+      if (!d || d.user_id == null) return undefined;
       const n = Number(d.user_id);
-      return Number.isFinite(n) ? n : null;
+      return Number.isFinite(n) ? n : undefined;
     },
     mbVideoAuthorRoute() {
       if (!this.isMb || this.mbVideoAuthorId == null) {
@@ -1819,7 +1840,7 @@ export default {
       this.syncMbDanmakuWs();
     },
     "$route.query.t": {
-      handler(t) {
+      handler(t: string) {
         var tq = Number(t);
         if (Number.isFinite(tq) && tq > 0) this._seekTime = tq;
       }
@@ -1874,7 +1895,7 @@ export default {
   },
   methods: {
     ...mapActions(["refreshCakecakeMe"]),
-    normalizeDanmakuRow(it) {
+    normalizeDanmakuRow(it: any) {
       const rawFs = String((it && it.font_size) || "").trim().toLowerCase();
       let font_size = "md";
       if (rawFs === "sm" || rawFs === "small") font_size = "sm";
@@ -1890,16 +1911,16 @@ export default {
         created_at: String(it.created_at || "")
       };
     },
-    mergeMbHistory(items) {
+    mergeMbHistory(items: any[]) {
       const rows = (items || []).map(it => this.normalizeDanmakuRow(it));
       rows.sort((a, b) => b.id - a.id);
       this.mbDanmakuCatalog = rows.slice(0, 400);
     },
-    onMbDanmakuCommitted(row) {
+    onMbDanmakuCommitted(row: any) {
       if (!row || row.id == null) return;
       this.pushMbLive(row);
     },
-    pushMbLive(d) {
+    pushMbLive(d: any) {
       const row = this.normalizeDanmakuRow(d);
       if (!row.id) return;
       const ix = this.mbDanmakuCatalog.findIndex(x => x.id === row.id);
@@ -1995,7 +2016,7 @@ export default {
       this.upMeta.bio = "";
       http
         .get(`/api/v1/videos/${id}`, { skipGlobalErrorToast: true })
-        .then(body => {
+        .then((body: any) => {
           if (!body || body.code !== 0 || !body.data) {
             this.mbDetailLoadError = "视频不存在或暂不可播放";
             this.apiDetail = null;
@@ -2018,11 +2039,11 @@ export default {
           this.applyCoinStateFromDetail(d);
           this.wait.done = !!d.in_watch_later;
           if (d.in_watch_later && getAccessToken()) {
-            void mbMarkWatchLaterWatched(id).catch(() => {});
+            void mbMarkWatchLaterWatched(Number(id)).catch(() => {});
           }
           if (getAccessToken() && this.mbVideoPublished) {
             const dur = Number(d.duration_sec ?? d.duration ?? 0);
-            void mbPostViewHistory(idNum, {
+            void mbPostViewHistory(Number(idNum), {
               progress_sec: 0,
               duration_sec: Number.isFinite(dur) && dur > 0 ? dur : 0,
               device: "web"
@@ -2070,7 +2091,7 @@ export default {
         });
     },
     /** 推荐视频（全站热榜）与同分区/同 UP 稿件交替合并，分别填入侧栏与下方还喜欢 */
-    async loadMbRecommendFeeds(detail) {
+    async loadMbRecommendFeeds(detail: any) {
       if (!this.isMb || this.mbNumericId == null) return;
       const gen = ++this._mbRecGen;
       const excludeId = this.mbNumericId;
@@ -2117,7 +2138,7 @@ export default {
         /* 保留空列表或上一批数据 */
       }
     },
-    onMbCommentCounts(total, totalPages) {
+    onMbCommentCounts(total: number, totalPages?: number) {
       const v = Number(total);
       if (Number.isNaN(v)) return;
       this.commentTotal = v;
@@ -2130,7 +2151,7 @@ export default {
       }
       this.commentPageJumpDraft = String(this.commentCurrentPage);
     },
-    setCommentPage(n) {
+    setCommentPage(n: number | string | null | undefined) {
       const t = Math.max(
         1,
         parseInt(String(this.displayCommentTotalPages), 10) || 1
@@ -2169,7 +2190,7 @@ export default {
     async submitMbComment() {
       if (this.mbCommentPosting) return;
       if (!getAccessToken() || !this.mbCommentDraft.trim()) return;
-      const ref = this.$refs.mbCommentsLive;
+      const ref = this.$refs.mbCommentsLive as any;
       if (!ref) return;
       this.mbCommentPosting = true;
       try {
@@ -2179,10 +2200,10 @@ export default {
         this.mbCommentPosting = false;
       }
     },
-    cmtMenuKey(ti, ri = null) {
+    cmtMenuKey(ti: number, ri: number | null = null) {
       return ri == null ? `t-${ti}` : `t-${ti}-r-${ri}`;
     },
-    toggleCommentMenu(key, e) {
+    toggleCommentMenu(key: string, e?: Event) {
       if (e) e.stopPropagation();
       this.openCommentMenuKey =
         this.openCommentMenuKey === key ? "" : key;
@@ -2191,8 +2212,8 @@ export default {
       this.openCommentMenuKey = "";
     },
     /** 本地 `public/user-profile/level_0～level_6.svg`（与主站同源）；等级 >6 仍用 level_6 */
-    levelIconUrl(lv) {
-      const n = Math.min(Math.max(parseInt(lv, 10) || 0, 0), 6);
+    levelIconUrl(lv: string | number) {
+      const n = Math.min(Math.max(parseInt(String(lv), 10) || 0, 0), 6);
       const base = import.meta.env.BASE_URL;
       return `${base}user-profile/level_${n}.svg`;
     },
@@ -2263,7 +2284,7 @@ export default {
       this.fav.animating = false;
       this.favDialogOpen = true;
     },
-    async onFavDialogConfirm(folderIds) {
+    async onFavDialogConfirm(folderIds: number[]) {
       if (!this.isMb || this.mbNumericId == null) return;
       if (this.fav.dialogLoading) return;
       this.fav.dialogLoading = true;
@@ -2285,15 +2306,15 @@ export default {
         ElMessage.success(this.fav.done ? "已添加到收藏夹" : "已取消收藏");
       } catch (e) {
         const msg =
-          (e && e.response && e.response.data && e.response.data.message) ||
-          (e && e.message) ||
+          apiErrMsg(e, "") ||
+          errMsg(e) ||
           "收藏操作失败";
         ElMessage.error(String(msg));
       } finally {
         this.fav.dialogLoading = false;
       }
     },
-    applyCoinStateFromDetail(d) {
+    applyCoinStateFromDetail(d: any) {
       if (!d || typeof d !== "object") {
         return;
       }
@@ -2321,7 +2342,7 @@ export default {
       }
       this.coinDialogOpen = true;
     },
-    async onCoinDialogConfirm(amount) {
+    async onCoinDialogConfirm(amount: number) {
       if (!this.isMb || this.mbNumericId == null) return;
       const n = this.coin.myAmount >= 1 ? 1 : amount === 2 ? 2 : 1;
       this.coin.dialogLoading = true;
@@ -2350,7 +2371,7 @@ export default {
         ElMessage.success(`已成功投出 ${n} 枚硬币`);
         await this.refreshCakecakeMe();
       } catch (e) {
-        ElMessage.error((e && e.message) || "投币失败");
+        ElMessage.error(errMsg(e) || "投币失败");
       } finally {
         this.coin.dialogLoading = false;
       }
@@ -2361,7 +2382,7 @@ export default {
         this._followHintTimer = null;
       }
     },
-    showFollowHint(message) {
+    showFollowHint(message: string) {
       this.follow.hint = String(message || "");
       this.clearFollowHintTimer();
       if (!this.follow.hint) {
@@ -2380,7 +2401,7 @@ export default {
     onFollowBtnLeave() {
       this.follow.hover = false;
     },
-    onUpHoverFollowChange(payload) {
+    onUpHoverFollowChange(payload: { followed?: boolean; follower_count?: number }) {
       if (!payload || !this.isMb) return;
       this.followed = !!payload.followed;
       const fans = Number(payload.follower_count);
@@ -2448,8 +2469,8 @@ export default {
         this.follow.hover = false;
       } catch (e) {
         const msg =
-          (e && e.response && e.response.data && e.response.data.message) ||
-          (e && e.message) ||
+          apiErrMsg(e, "") ||
+          errMsg(e) ||
           "操作失败";
         this.showFollowHint(msg);
       } finally {
@@ -2457,7 +2478,7 @@ export default {
       }
     },
     syncAlsoCarouselMetrics() {
-      const el = this.$refs.alsoViewport;
+      const el = this.$refs.alsoViewport as HTMLElement | null;
       if (!el) return;
       const gap = 12;
       const n = this.alsoVisibleCount;
@@ -2465,7 +2486,7 @@ export default {
       if (!Number.isFinite(w) || w <= 0) return;
       const itemW = (w - gap * (n - 1)) / n;
       const stage = el.closest(".vd-also-stage");
-      const host = stage || el;
+      const host = (stage || el) as HTMLElement;
       host.style.setProperty("--vd-also-item-w", `${itemW}px`);
       host.style.setProperty("--vd-also-gap", `${gap}px`);
       this.alsoScrollStep = itemW + gap;
@@ -2486,8 +2507,8 @@ export default {
         this.alsoCarouselIndex + this.alsoVisibleCount
       );
     },
-    patchMbWatchLaterInLists(id, on) {
-      const patchList = list => {
+    patchMbWatchLaterInLists(id: number, on: boolean) {
+      const patchList = (list: any[]) => {
         for (let i = 0; i < list.length; i++) {
           if (Number(list[i].id) === id) {
             list.splice(i, 1, { ...list[i], inWatchLater: on });
@@ -2503,7 +2524,7 @@ export default {
         }
       }
     },
-    async toggleMbWatchLater(videoId) {
+    async toggleMbWatchLater(videoId: number | string | null | undefined) {
       if (!this.isMb) return null;
       if (!this.mbLoggedIn) {
         this.openMbLoginModal();
@@ -2523,7 +2544,7 @@ export default {
         ElMessage.success(on ? "已加入稍后再看" : "已移出稍后再看");
         return on;
       } catch (e) {
-        ElMessage.error((e && e.message) || "稍后再看操作失败");
+        ElMessage.error(errMsg(e) || "稍后再看操作失败");
         return null;
       } finally {
         const next = { ...this.relatedWatchLaterPending };
@@ -2531,10 +2552,10 @@ export default {
         this.relatedWatchLaterPending = next;
       }
     },
-    onRelatedWatchLater(item) {
+    onRelatedWatchLater(item: { id?: number | string } | null) {
       void this.toggleMbWatchLater(item && item.id);
     },
-    onAlsoWatchLater(item) {
+    onAlsoWatchLater(item: { id?: number | string } | null) {
       void this.toggleMbWatchLater(item && item.id);
     },
     async onWaitClick() {
@@ -2559,7 +2580,7 @@ export default {
           this.wait.done ? "已加入稍后再看" : "已从稍后再看移除"
         );
       } catch (e) {
-        ElMessage.error((e && e.message) || "稍后再看操作失败");
+        ElMessage.error(errMsg(e) || "稍后再看操作失败");
       } finally {
         this.wait.pending = false;
       }

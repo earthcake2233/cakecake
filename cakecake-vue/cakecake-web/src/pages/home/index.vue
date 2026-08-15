@@ -49,7 +49,7 @@
     -->
     <donghua
       :scrollTop="scrollTop"
-      v-for="item in module.filter((ele, index) => index > 2)"
+      v-for="item in module.filter((ele: any, index: number) => index > 2)"
       :key="item.ref"
       :ref="item.ref"
       :id="item.ref"
@@ -80,11 +80,11 @@
   </div>
 </template>
 
-<script>
-import Slide from "../../components/slide/slide";
-import Recommend from "../../components/recommend/recommend";
-import Popularize from "../../components/popularize/popularize";
-import Donghua from "../../components/home/donghua/donghua";
+<script lang="ts">
+import Slide from "../../components/slide/slide.vue";
+import Recommend from "../../components/recommend/recommend.vue";
+import Popularize from "../../components/popularize/popularize.vue";
+import Donghua from "../../components/home/donghua/donghua.vue";
 // import Bangumi from "../../components/home/bangumi/bangumi";
 // import Guochuang from "../../components/home/guochuang/guochuang";
 
@@ -128,9 +128,9 @@ export default {
   data() {
     return {
       loading: true,
-      videodata: [],
+      videodata: [] as any,
       videoinforShow: false,
-      videoinforitem: []
+      videoinforitem: [] as any
     };
   },
   methods: {
@@ -149,8 +149,8 @@ export default {
     ]),
     checkEleOffsetTop() {
       if (this.loading == true) {
-        this.module.forEach((ele, index) => {
-          const _ref = this.$refs[ele.ref];
+        this.module.forEach((ele: any, index: number) => {
+          const _ref = this.$refs[ele.ref] as any;
           if (!_ref) {
             return;
           }
@@ -180,25 +180,25 @@ export default {
     },
     videotest() {
       if (this.videodata.ranknowtab === 0 && this.videodata.rankselect === 0) {
-        this.videoinforitem = this.mainData[0].rankThreeAllList;
+        this.videoinforitem = (this as any).mainData[0].rankThreeAllList;
       } else if (
         this.videodata.ranknowtab === 1 &&
         this.videodata.rankselect === 0
       ) {
-        this.videoinforitem = this.mainData[0].rankThreeOriginalList;
+        this.videoinforitem = (this as any).mainData[0].rankThreeOriginalList;
       } else if (
         this.videodata.ranknowtab === 0 &&
         this.videodata.rankselect === 1
       ) {
-        this.videoinforitem = this.mainData[0].rankSevenAllList;
+        this.videoinforitem = (this as any).mainData[0].rankSevenAllList;
       } else if (
         this.videodata.ranknowtab === 1 &&
         this.videodata.rankselect === 1
       ) {
-        this.videoinforitem = this.mainData[0].rankSevenOriginalList;
+        this.videoinforitem = (this as any).mainData[0].rankSevenOriginalList;
       }
     },
-    videoinforevent(data) {
+    videoinforevent(data: any) {
       this.videodata = data;
       this.videoinforShow = data.videoinforShow;
       this.videotest();

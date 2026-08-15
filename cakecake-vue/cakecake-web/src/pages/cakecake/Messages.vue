@@ -845,7 +845,7 @@
   </div>
 </template>
 
-<script>
+<script lang="ts">
 import { ElMessage } from "element-plus";
 import {
   mbListNotifications,
@@ -886,7 +886,7 @@ const INBOX_AUTO_READ_CATS = new Set([
 const REPLY_PLACEHOLDER =
   "请自觉遵守互联网相关的政策法规，严禁发布色情、暴力、反动的言论。";
 
-const CAT_TO_TITLE = {
+const CAT_TO_TITLE: Record<string, string> = {
   my_message: "我的消息",
   reply_received: "回复我的",
   at_me: "@ 我的",
@@ -894,7 +894,45 @@ const CAT_TO_TITLE = {
   system_notice: "系统通知"
 };
 
-function parseApiTime(s) {
+/** 消息中心列表项（通知/私信/点赞聚合等共用一份宽松结构）。 */
+interface MessageListItem {
+  id?: number | string;
+  user_id?: number;
+  avatar_url?: string;
+  username?: string;
+  created_at?: string;
+  followed_by_me?: boolean;
+  message?: string;
+  comment_preview?: string;
+  sender_names?: string[];
+  sender_avatar_urls?: string[];
+  sender_user_ids?: number[];
+  total_likes?: number;
+  video_id?: number;
+  article_id?: number;
+  liked_comment_id?: number;
+  comment_full_text?: string;
+  like_target?: string;
+  article_cover_url?: string;
+  face?: string;
+  content?: string;
+  is_mine?: boolean;
+  is_read?: boolean;
+  likes_muted?: boolean;
+  sender_username?: string;
+  sender_avatar_url?: string;
+  reply_content?: string;
+  type?: string;
+  inbox_kind?: string;
+  video_cover_url?: string;
+  parent_content_preview?: string;
+  reply_comment_id?: number;
+  liked_by_me?: boolean;
+  isVideoComment?: boolean;
+  isArticleComment?: boolean;
+}
+
+function parseApiTime(s: string = "") {
   if (!s) return new Date();
   const m = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/.exec(String(s));
   if (!m) return new Date(s);
@@ -908,6 +946,14 @@ function parseApiTime(s) {
   );
 }
 
+function errMsg(e: unknown): string {
+  if (e && typeof e === "object" && "message" in e) {
+    const m = (e as { message?: unknown }).message;
+    if (typeof m === "string") return m;
+  }
+  return "";
+}
+
 export default {
   name: "CakecakeMessages",
   components: { MbDmChatPanel },
@@ -919,11 +965,15 @@ export default {
       loadingTvImg,
       activeCat: "my_message",
       sidebarNav: SIDEBAR,
-      msgUnread: {},
-      items: [],
+      msgUnread: {} as Record<string, number>,
+      items: [] as MessageListItem[],
       nextCursor: "",
       listLoading: false,
-      _backdropRestore: null,
+      _backdropRestore: null as
+        | null
+        | { html: string; body: string; app: string; appBody: string },
+      _msgModalEscHandler: null as ((_e: KeyboardEvent) => void) | null,
+      defaultFace,
       replyComposerNotifId: 0,
       replyComposerText: "",
       replySubmitting: false,
@@ -934,7 +984,7 @@ export default {
       muteConfirmId: 0,
       muteSubmitting: false,
       likeDetailNotifId: 0,
-      likeDetailItems: [],
+      likeDetailItems: [] as MessageListItem[],
       likeDetailNextCursor: "",
       likeDetailLoading: false,
       likeDetailLoadingMore: false,
@@ -977,7 +1027,7 @@ export default {
         const rawAvatars = Array.isArray(n.sender_avatar_urls)
           ? n.sender_avatar_urls
           : [];
-        const pickFace = i => {
+        const pickFace = (i: number) => {
           const u = String(rawAvatars[i] || "").trim();
           return u || defaultFace;
         };
@@ -1232,7 +1282,7 @@ export default {
       const summary = await refreshMessageUnread();
       this.msgUnread = summary || {};
     },
-    formatTimeZh(createdAt) {
+    formatTimeZh(createdAt?: string) {
       const d = parseApiTime(createdAt);
       const y = d.getFullYear();
       const mo = d.getMonth() + 1;
@@ -1241,20 +1291,20 @@ export default {
       const mi = String(d.getMinutes()).padStart(2, "0");
       return `${y}年${mo}月${day}日 ${h}:${mi}`;
     },
-    syncCatFromRoute(cat) {
+    syncCatFromRoute(cat: unknown) {
       const c = String(cat || "");
       const ok = SIDEBAR.some(s => s.cat === c);
       this.activeCat = ok ? c : "my_message";
     },
     formatMessageUnreadBadge,
-    onSidebarClick(cat) {
+    onSidebarClick(cat: string) {
       this.$router.replace({ path: "/cakecake/messages", query: { cat } });
     },
     applyMsgPageBackdrop() {
       const html = document.documentElement;
       const body = document.body;
       const app = document.getElementById("app");
-      const appBody = document.querySelector(".app-body");
+      const appBody = document.querySelector(".app-body") as HTMLElement | null;
       if (!this._backdropRestore) {
         this._backdropRestore = {
           html: html.style.backgroundColor,
@@ -1275,7 +1325,7 @@ export default {
       const html = document.documentElement;
       const body = document.body;
       const app = document.getElementById("app");
-      const appBody = document.querySelector(".app-body");
+      const appBody = document.querySelector(".app-body") as HTMLElement | null;
       html.style.backgroundColor = r.html;
       body.style.backgroundColor = r.body;
       if (app) app.style.backgroundColor = r.app;
@@ -1303,7 +1353,7 @@ export default {
         this.nextCursor = next || "";
         await this.markVisibleNotificationsRead();
       } catch (e) {
-        ElMessage.error((e && e.message) || "加载通知失败");
+        ElMessage.error(errMsg(e) || "加载通知失败");
       } finally {
         this.listLoading = false;
         if (this.activeCat === "like_aggregation") {
@@ -1324,13 +1374,13 @@ export default {
         this.nextCursor = next || "";
         await this.markVisibleNotificationsRead(more);
       } catch (e) {
-        ElMessage.error((e && e.message) || "加载失败");
+        ElMessage.error(errMsg(e) || "加载失败");
       } finally {
         this.listLoading = false;
       }
     },
     /** 当前分类内通知标为已读（SPEC F9） */
-    async markVisibleNotificationsRead(onlyItems) {
+    async markVisibleNotificationsRead(onlyItems?: MessageListItem[]) {
       if (!INBOX_AUTO_READ_CATS.has(this.activeCat)) return;
       if (this.activeCat === "like_aggregation") {
         try {
@@ -1359,10 +1409,10 @@ export default {
         /* 已读失败不阻断列表展示 */
       }
     },
-    async onReplyRowClick(row) {
+    async onReplyRowClick(row: MessageListItem) {
       if (!row.id) return;
       try {
-        await mbMarkNotificationRead(row.id);
+        await mbMarkNotificationRead(Number(row.id));
         const ix = this.items.findIndex(x => Number(x.id) === row.id);
         if (ix >= 0) this.items.splice(ix, 1, { ...this.items[ix], is_read: true });
         void this.fetchMsgUnread();
@@ -1371,10 +1421,10 @@ export default {
       }
     },
     /** 点击通知栏非功能区域：新开视频页并定位评论（与 pushVideoWithComment 一致） */
-    onReplyRowShellClick(row, e) {
+    onReplyRowShellClick(row: MessageListItem, e: MouseEvent) {
       if (!row || !row.id) return;
-      const el = e && e.target;
-      if (!(el instanceof Node)) return;
+      const el = e && (e.target as Element);
+      if (!(el instanceof Element)) return;
       if (el.closest("button, textarea, a[href], input, select, .msg-reply-compose")) {
         return;
       }
@@ -1387,21 +1437,25 @@ export default {
       }
     },
     /** 发送者头像 / 昵称：预留个人空间入口（后续接路由） */
-    onReplySenderProfile(_row) {
+    onReplySenderProfile(_row: MessageListItem) {
       /* TODO: 跳转 cakecake 个人空间 /up/{uid}，需通知接口带 sender_user_id */
     },
-    likeSenderSpaceTo(userId) {
+    likeSenderSpaceTo(userId: number | string | undefined) {
       const id = Number(userId) || 0;
       return {
         name: "cakecakeUserSpace",
         params: { userId: String(id) }
       };
     },
-    onLikeSenderNav(row) {
+    onLikeSenderNav(row: MessageListItem) {
       void this.onLikeRowClick(row);
     },
-    closeLikeDetail(options) {
-      const skipRouter = options && options.skipRouter === true;
+    closeLikeDetail(options?: unknown) {
+      const skipRouter =
+        options &&
+        typeof options === "object" &&
+        "skipRouter" in options &&
+        (options as { skipRouter?: boolean }).skipRouter === true;
       this.likeDetailNotifId = 0;
       this.likeDetailItems = [];
       this.likeDetailNextCursor = "";
@@ -1436,7 +1490,7 @@ export default {
       void this.loadLikeLikers(true);
       void this.onLikeRowClick(row);
     },
-    openLikeDetail(row) {
+    openLikeDetail(row: MessageListItem) {
       const id = Number(row && row.id) || 0;
       if (!id) return;
       this.likeDetailNotifId = id;
@@ -1451,7 +1505,7 @@ export default {
         });
       }
     },
-    async loadLikeLikers(isReset) {
+    async loadLikeLikers(isReset?: boolean) {
       const nid = Number(this.likeDetailNotifId) || 0;
       if (!nid) return;
       if (isReset) {
@@ -1476,16 +1530,16 @@ export default {
           : [...this.likeDetailItems, ...list];
         this.likeDetailNextCursor = next || "";
       } catch (e) {
-        ElMessage.error((e && e.message) || "加载失败");
+        ElMessage.error(errMsg(e) || "加载失败");
       } finally {
         this.likeDetailLoading = false;
         this.likeDetailLoadingMore = false;
       }
     },
-    onLikeRowShellClick(row, e) {
+    onLikeRowShellClick(row: MessageListItem, e: MouseEvent) {
       if (!row || !row.id) return;
-      const el = e && e.target;
-      if (!(el instanceof Node)) return;
+      const el = e && (e.target as Element);
+      if (!(el instanceof Element)) return;
       if (
         el.closest(
           "button, a[href], .msg-like-row__face-link, .msg-like-row__nick-link"
@@ -1495,11 +1549,11 @@ export default {
       }
       this.openLikeDetail(row);
     },
-    onLikePreviewToContent(row) {
+    onLikePreviewToContent(row: MessageListItem) {
       void this.onLikeRowClick(row);
       this.pushLikeCommentTarget(row);
     },
-    pushLikeCommentTarget(row) {
+    pushLikeCommentTarget(row: MessageListItem) {
       if (!row) return;
       if (row.isArticleComment) {
         this.pushArticleWithComment(row);
@@ -1515,18 +1569,18 @@ export default {
       void this.onLikeRowClick(row);
       this.pushLikeCommentTarget(row);
     },
-    likeLikerIsSelf(lk) {
+    likeLikerIsSelf(lk: MessageListItem) {
       const uid = Number(lk && lk.user_id) || 0;
       return uid > 0 && uid === this.meUserId;
     },
-    likeFollowButtonLabel(lk) {
+    likeFollowButtonLabel(lk: MessageListItem) {
       const uid = Number(lk && lk.user_id) || 0;
       if (this.likeFollowPendingId === uid) return "…";
       if (!lk || !lk.followed_by_me) return "+ 关注";
       if (this.likeFollowHoverId === uid) return "取消关注";
       return "已关注";
     },
-    onLikeFollowHover(lk, enter) {
+    onLikeFollowHover(lk: MessageListItem, enter: boolean) {
       const uid = Number(lk && lk.user_id) || 0;
       if (!uid || !lk || !lk.followed_by_me) {
         if (!enter) this.likeFollowHoverId = 0;
@@ -1534,7 +1588,7 @@ export default {
       }
       this.likeFollowHoverId = enter ? uid : 0;
     },
-    async onLikeFollowClick(lk) {
+    async onLikeFollowClick(lk: MessageListItem) {
       const uid = Number(lk && lk.user_id) || 0;
       if (!uid || this.likeLikerIsSelf(lk)) return;
       if (!getAccessToken()) {
@@ -1559,17 +1613,17 @@ export default {
           this.likeFollowHoverId = 0;
         }
       } catch (e) {
-        ElMessage.error((e && e.message) || "关注失败");
+        ElMessage.error(errMsg(e) || "关注失败");
       } finally {
         if (this.likeFollowPendingId === uid) {
           this.likeFollowPendingId = 0;
         }
       }
     },
-    onLikeRowClick(row) {
+    onLikeRowClick(row: MessageListItem) {
       void this.onReplyRowClick(row);
     },
-    onToggleReplyComposer(row) {
+    onToggleReplyComposer(row: MessageListItem) {
       const id = Number(row.id) || 0;
       if (!id) return;
       if (this.replyComposerNotifId === id) {
@@ -1581,15 +1635,15 @@ export default {
       this.replyComposerText = "";
       if (!row.is_read) void this.onReplyRowClick(row);
     },
-    onGoToVideoComment(row) {
+    onGoToVideoComment(row: MessageListItem) {
       if (!row.isVideoComment) return;
       this.pushVideoWithComment(row);
     },
-    onGoToArticleComment(row) {
+    onGoToArticleComment(row: MessageListItem) {
       if (!row.isArticleComment) return;
       this.pushArticleWithComment(row);
     },
-    pushVideoWithComment(row) {
+    pushVideoWithComment(row: MessageListItem) {
       void this.onReplyRowClick(row);
       const vid = row.video_id;
       if (!vid) {
@@ -1613,7 +1667,7 @@ export default {
             ).href;
       window.open(url, "_blank", "noopener,noreferrer");
     },
-    pushArticleWithComment(row) {
+    pushArticleWithComment(row: MessageListItem) {
       void this.onReplyRowClick(row);
       const aid = Number(row.article_id) || 0;
       if (!aid) {
@@ -1636,15 +1690,17 @@ export default {
             ).href;
       window.open(url, "_blank", "noopener,noreferrer");
     },
-    apiErrMsg(e, fallback) {
-      const data = e && e.response && e.response.data;
+    apiErrMsg(e: unknown, fallback: string) {
+      const data = (
+        e as { response?: { data?: { code?: number; msg?: string } } } | null
+      )?.response?.data;
       if (data && data.code === 40400) {
         return "原评论已不存在，可删除该通知";
       }
       const msg = data && typeof data.msg === "string" ? data.msg : "";
-      return msg || (e && e.message) || fallback;
+      return msg || errMsg(e) || fallback;
     },
-    async onLikeReply(row) {
+    async onLikeReply(row: MessageListItem) {
       const nid = Number(row.id) || 0;
       if (!nid) {
         ElMessage.warning("缺少通知信息");
@@ -1666,16 +1722,16 @@ export default {
     /**
      * 「回复我的」列表：评论/预览文案最多展示前 15 个字符（SPEC F9 / Skill S-010 与 replyCharCount 一致按 Unicode 码位计）。
      */
-    msgReplyPreview15(text) {
+    msgReplyPreview15(text: unknown) {
       const raw = String(text ?? "");
       const chars = Array.from(raw);
       if (chars.length <= 15) return raw;
       return `${chars.slice(0, 15).join("")}…`;
     },
-    replyCharCount(text) {
+    replyCharCount(text: unknown) {
       return Array.from(String(text || "")).length;
     },
-    async submitInlineReply(row) {
+    async submitInlineReply(row: MessageListItem) {
       const nid = Number(row.id) || 0;
       if (!nid) {
         ElMessage.warning("缺少通知信息");
@@ -1700,7 +1756,7 @@ export default {
         this.replySubmitting = false;
       }
     },
-    onDeleteNotif(row) {
+    onDeleteNotif(row: MessageListItem) {
       const id = Number(row.id) || 0;
       if (!id) return;
       this.deleteConfirmId = id;
@@ -1729,7 +1785,7 @@ export default {
       if (this.muteSubmitting) return;
       this.muteConfirmId = 0;
     },
-    openMuteConfirm(row) {
+    openMuteConfirm(row: MessageListItem) {
       const id = Number(row.id) || 0;
       if (!id) return;
       this.muteConfirmId = id;
@@ -1750,7 +1806,7 @@ export default {
         this.muteConfirmId = 0;
         ElMessage({ type: "success", message: "已关闭点赞通知", duration: 1600 });
       } catch (e) {
-        ElMessage.error((e && e.message) || "操作失败");
+        ElMessage.error(errMsg(e) || "操作失败");
       } finally {
         this.muteSubmitting = false;
       }
@@ -1774,7 +1830,7 @@ export default {
         ElMessage({ type: "success", message: "已删除", duration: 1600 });
         void this.fetchMsgUnread();
       } catch (e) {
-        ElMessage.error((e && e.message) || "删除失败");
+        ElMessage.error(errMsg(e) || "删除失败");
       } finally {
         this.deleteSubmitting = false;
       }
