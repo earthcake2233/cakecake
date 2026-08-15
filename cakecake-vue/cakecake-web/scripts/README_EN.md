@@ -13,14 +13,6 @@
 |--------|---------|
 | `npm run check:encoding` | Check `src/pages/cakecake`, `src/i18n`, etc. for `????` / garbled characters |
 
-## Maintenance (Generally Not Needed)
-
-| Script | Description |
-|--------|-------------|
-| `python scripts/rebuild-personal-space.py` | Historical: rebuild `PersonalSpace.vue` from snapshot (depends on deleted `.broken` reference files, **do NOT run casually**) |
-| `python scripts/restore-personal-space-encoding.py` | Historical: line-by-line merge fix for garbled encoding (same as above, reference files removed) |
-| `python scripts/patch-collect-video-menu.py` | One-time patch script, not needed for new feature development |
-
 When editing Chinese text in `PersonalSpace.vue`, prefer editing **`src/i18n/*.zh-CN.ts`** and run `npm run check:encoding` before committing. See the **Encoding Notes** section above.
 
 ---

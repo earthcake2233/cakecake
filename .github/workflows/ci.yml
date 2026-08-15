@@ -32,9 +32,9 @@ jobs:
         working-directory: cakecake-vue/cakecake-web
         run: npm run lint
 
-      - name: Run frontend typecheck (vue-tsc)
+      - name: Run frontend typecheck (vue-tsc --noEmit)
         working-directory: cakecake-vue/cakecake-web
-        run: npm run typecheck
+        run: npx vue-tsc --noEmit -p tsconfig.typecheck.json
 
       - name: Audit npm dependencies (high+ advisories)
         working-directory: cakecake-vue/cakecake-web
