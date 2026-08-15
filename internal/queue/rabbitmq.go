@@ -1,6 +1,7 @@
 package queue
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"sync"
@@ -66,6 +67,26 @@ const publishConfirmTimeout = 5 * time.Second
 // variable for tests.
 var rabbitmqReconnectDelay = 3 * time.Second
 
+// publishKey identifies one in-flight publish by channel generation and
+// delivery tag. Generation separates confirmations of a replaced channel from
+// publishes on the current one (both channels restart their tags at 1).
+type publishKey struct {
+	gen uint64
+	seq uint64
+}
+
+// publishWaiter is one in-flight publish waiting for its broker confirmation.
+// The per-generation confirm reader resolves it; a confirmation that arrives
+// after the caller gave up finds no waiter and is ignored.
+type publishWaiter struct {
+	gen      uint64
+	seq      uint64
+	exchange string
+	key      string
+	body     []byte
+	done     chan error
+}
+
 // amqpChannel is the subset of *amqp.Channel needed by Client.
 type amqpChannel interface {
 	PublishWithContext(ctx context.Context, exchange, key string, mandatory, immediate bool, msg amqp.Publishing) error
@@ -90,6 +111,13 @@ type Client struct {
 	mu       sync.Mutex
 	confirms <-chan amqp.Confirmation
 	returns  <-chan amqp.Return
+
+	// pending maps delivery tags to in-flight publishes. It is guarded by
+	// pendingMu so a publish call only holds mu for the (fast) channel write,
+	// not for the whole broker round-trip.
+	pendingMu sync.Mutex
+	pending   map[publishKey]*publishWaiter
+	gen       uint64
 
 	closed        bool
 	reconnectWait time.Duration
@@ -195,7 +223,122 @@ func (c *Client) initChannelLocked() error {
 	c.ch = ch
 	c.confirms = confirms
 	c.returns = returns
+	c.gen++
+	c.startConfirmReader(c.gen, confirms, returns)
 	return nil
+}
+
+// startConfirmReader spawns the goroutine that resolves pending publishes of
+// one channel generation. The reader owns only pendingMu, so it never blocks
+// publishing.
+func (c *Client) startConfirmReader(gen uint64, confirms <-chan amqp.Confirmation, returns <-chan amqp.Return) {
+	go c.watchPublishConfirms(gen, confirms, returns)
+}
+
+// watchPublishConfirms resolves pending publishes as confirmations and
+// basic.returns arrive. It exits when the generation's channels close or the
+// client is cancelled, failing every still-pending publish of that generation
+// so no caller waits forever.
+func (c *Client) watchPublishConfirms(gen uint64, confirms <-chan amqp.Confirmation, returns <-chan amqp.Return) {
+	for {
+		select {
+		case <-c.ctx.Done():
+			c.failPendingGen(gen, fmt.Errorf("publish confirm: client closed"))
+			return
+		case conf, ok := <-confirms:
+			if !ok {
+				c.failPendingGen(gen, fmt.Errorf("publish confirm channel closed"))
+				return
+			}
+			c.deliverConfirm(gen, returns, conf)
+		case ret, ok := <-returns:
+			if !ok {
+				c.failPendingGen(gen, fmt.Errorf("publish return channel closed"))
+				return
+			}
+			c.deliverReturn(gen, ret)
+		}
+	}
+}
+
+func (c *Client) deliverConfirm(gen uint64, returns <-chan amqp.Return, conf amqp.Confirmation) {
+	key := publishKey{gen: gen, seq: conf.DeliveryTag}
+	c.pendingMu.Lock()
+	w := c.pending[key]
+	if w != nil {
+		delete(c.pending, key)
+	}
+	c.pendingMu.Unlock()
+	if w == nil {
+		// Late confirmation from an earlier timed-out publish (or an unknown
+		// tag); nothing is attributed to it.
+		return
+	}
+	if !conf.Ack {
+		w.done <- fmt.Errorf("publish nacked by broker")
+		return
+	}
+	// RabbitMQ sends basic.return before basic.ack for unroutable messages,
+	// so the waiter is normally already resolved by deliverReturn. Drain a
+	// matching return defensively in case ordering surprised us.
+	select {
+	case ret, ok := <-returns:
+		if ok && ret.Exchange == w.exchange && ret.RoutingKey == w.key && bytes.Equal(ret.Body, w.body) {
+			w.done <- fmt.Errorf("publish returned by broker: %s (code %d)", ret.ReplyText, ret.ReplyCode)
+			return
+		}
+	default:
+	}
+	w.done <- nil
+}
+
+func (c *Client) deliverReturn(gen uint64, ret amqp.Return) {
+	c.pendingMu.Lock()
+	var best *publishWaiter
+	for key, w := range c.pending {
+		if key.gen != gen || w.exchange != ret.Exchange || w.key != ret.RoutingKey || !bytes.Equal(w.body, ret.Body) {
+			continue
+		}
+		if best == nil || key.seq < best.seq {
+			best = w
+		}
+	}
+	if best != nil {
+		delete(c.pending, publishKey{gen: gen, seq: best.seq})
+	}
+	c.pendingMu.Unlock()
+	if best == nil {
+		return
+	}
+	best.done <- fmt.Errorf("publish returned by broker: %s (code %d)", ret.ReplyText, ret.ReplyCode)
+}
+
+func (c *Client) failPendingGen(gen uint64, err error) {
+	c.pendingMu.Lock()
+	var failed []*publishWaiter
+	for key, w := range c.pending {
+		if key.gen == gen {
+			delete(c.pending, key)
+			failed = append(failed, w)
+		}
+	}
+	c.pendingMu.Unlock()
+	for _, w := range failed {
+		w.done <- err
+	}
+}
+
+func (c *Client) failAllPending(err error) {
+	c.pendingMu.Lock()
+	failed := make([]*publishWaiter, 0, len(c.pending))
+	for key, w := range c.pending {
+		delete(c.pending, key)
+		failed = append(failed, w)
+	}
+	c.pendingMu.Unlock()
+	for _, w := range failed {
+		w.done <- err
+	}
 }
 
 // watchConnection waits for the underlying connection to die and rebuilds it
@@ -308,8 +451,9 @@ func (c *Client) Close() error {
 		_ = ch.Close()
 	}
 	if conn != nil {
-		return conn.Close()
+		_ = conn.Close()
 	}
+	c.failAllPending(fmt.Errorf("publish confirm: client closed"))
 	return nil
 }
 
@@ -331,57 +475,65 @@ func (c *Client) PublishTranscode(ctx context.Context, body []byte) error {
 // misattributed to the next call.
 func (c *Client) PublishConfirmed(ctx context.Context, exchange, key string, mandatory bool, msg amqp.Publishing) error {
 	c.mu.Lock()
-	defer c.mu.Unlock()
 	if c.closed {
+		c.mu.Unlock()
 		return fmt.Errorf("client closed")
 	}
 	if c.ch == nil || c.confirms == nil {
+		c.mu.Unlock()
 		return fmt.Errorf("publisher confirm not enabled")
 	}
 	seq := c.ch.GetNextPublishSeqNo()
 	if err := c.ch.PublishWithContext(ctx, exchange, key, mandatory, false, msg); err != nil {
+		c.mu.Unlock()
 		return err
 	}
+	w := &publishWaiter{
+		gen:      c.gen,
+		seq:      seq,
+		exchange: exchange,
+		key:      key,
+		body:     msg.Body,
+		done:     make(chan error, 1),
+	}
+	c.pendingMu.Lock()
+	if c.pending == nil {
+		c.pending = make(map[publishKey]*publishWaiter)
+	}
+	c.pending[publishKey{gen: w.gen, seq: seq}] = w
+	c.pendingMu.Unlock()
+	c.mu.Unlock()
+	return c.waitConfirm(ctx, w)
+}
+
+// waitConfirm blocks until the broker confirms this publish, the caller's
+// context expires, or the 5s confirm window elapses. Timeout/cancel removes
+// the waiter so a late confirmation is ignored instead of misattributed.
+func (c *Client) waitConfirm(ctx context.Context, w *publishWaiter) error {
 	timeout := time.NewTimer(publishConfirmTimeout)
 	defer timeout.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return fmt.Errorf("publish confirm: %w", ctx.Err())
-		case ret, ok := <-c.returns:
-			if ok {
-				return fmt.Errorf("publish returned by broker: %s (code %d)", ret.ReplyText, ret.ReplyCode)
-			}
-			return fmt.Errorf("publish return channel closed")
-		case conf, ok := <-c.confirms:
-			if !ok {
-				return fmt.Errorf("publish confirm channel closed")
-			}
-			if conf.DeliveryTag < seq {
-				// Late confirmation from an earlier timed-out publish;
-				// ignore it and keep waiting for ours.
-				continue
-			}
-			if conf.DeliveryTag > seq {
-				return fmt.Errorf("publish confirm tag mismatch: got %d, want %d", conf.DeliveryTag, seq)
-			}
-			if !conf.Ack {
-				return fmt.Errorf("publish nacked by broker")
-			}
-			// RabbitMQ sends basic.return before basic.ack for unroutable
-			// messages; drain a return that is already buffered.
-			select {
-			case ret, ok := <-c.returns:
-				if ok {
-					return fmt.Errorf("publish returned by broker: %s (code %d)", ret.ReplyText, ret.ReplyCode)
-				}
-			default:
-			}
-			return nil
-		case <-timeout.C:
-			return fmt.Errorf("publish confirm timeout after %s", publishConfirmTimeout)
+	select {
+	case <-ctx.Done():
+		c.dropPending(w)
+		return fmt.Errorf("publish confirm: %w", ctx.Err())
+	case err := <-w.done:
+		if err != nil {
+			return err
 		}
+		return nil
+	case <-timeout.C:
+		c.dropPending(w)
+		return fmt.Errorf("publish confirm timeout after %s", publishConfirmTimeout)
 	}
+}
+
+func (c *Client) dropPending(w *publishWaiter) {
+	key := publishKey{gen: w.gen, seq: w.seq}
+	c.pendingMu.Lock()
+	if c.pending[key] == w {
+		delete(c.pending, key)
+	}
+	c.pendingMu.Unlock()
 }
 
 // connSnapshot returns the current connection under lock, or nil when closed.

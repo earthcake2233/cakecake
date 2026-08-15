@@ -3,6 +3,8 @@ package queue
 import (
 	"context"
 	"errors"
+	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -70,6 +72,18 @@ func (m *mockChannel) NotifyPublish(ch chan amqp.Confirmation) chan amqp.Confirm
 func (m *mockChannel) NotifyReturn(ch chan amqp.Return) chan amqp.Return {
 	m.returnCh = ch
 	return ch
+}
+
+// newConfirmClient builds a Client whose confirm reader is already running,
+// mirroring what initChannelLocked does after Dial.
+func newConfirmClient(t *testing.T, mc *mockChannel, confirms chan amqp.Confirmation, returns chan amqp.Return) *Client {
+	t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
+	c := &Client{ch: mc, confirms: confirms, returns: returns, gen: 1, ctx: ctx, cancel: cancel}
+	c.pending = make(map[publishKey]*publishWaiter)
+	c.startConfirmReader(1, confirms, returns)
+	t.Cleanup(cancel)
+	return c
 }
 
 // ---------- unit tests ----------
@@ -157,7 +171,7 @@ func TestPublishTranscode_Success(t *testing.T) {
 	confirms := make(chan amqp.Confirmation, 1)
 	returns := make(chan amqp.Return, 1)
 	confirms <- amqp.Confirmation{DeliveryTag: 1, Ack: true}
-	c := &Client{ch: mc, confirms: confirms, returns: returns}
+	c := newConfirmClient(t, mc, confirms, returns)
 	body := []byte(`{"video_id":123}`)
 	err := c.PublishTranscode(context.Background(), body)
 	if err != nil {
@@ -201,7 +215,7 @@ func TestPublishConfirmed_Success(t *testing.T) {
 	confirms := make(chan amqp.Confirmation, 1)
 	returns := make(chan amqp.Return, 1)
 	confirms <- amqp.Confirmation{DeliveryTag: 1, Ack: true}
-	c := &Client{ch: mc, confirms: confirms, returns: returns}
+	c := newConfirmClient(t, mc, confirms, returns)
 
 	err := c.PublishConfirmed(context.Background(), "", TranscodeDeadQueue, true, amqp.Publishing{
 		DeliveryMode: amqp.Persistent,
@@ -223,7 +237,7 @@ func TestPublishConfirmed_Nack(t *testing.T) {
 	confirms := make(chan amqp.Confirmation, 1)
 	returns := make(chan amqp.Return, 1)
 	confirms <- amqp.Confirmation{DeliveryTag: 1, Ack: false}
-	c := &Client{ch: mc, confirms: confirms, returns: returns}
+	c := newConfirmClient(t, mc, confirms, returns)
 
 	err := c.PublishConfirmed(context.Background(), "", TranscodeQueue, true, amqp.Publishing{Body: []byte("x")})
 	if err == nil {
@@ -235,8 +249,14 @@ func TestPublishConfirmed_Return(t *testing.T) {
 	mc := &mockChannel{t: t}
 	confirms := make(chan amqp.Confirmation, 1)
 	returns := make(chan amqp.Return, 1)
-	returns <- amqp.Return{ReplyCode: 404, ReplyText: "NOT_FOUND"}
-	c := &Client{ch: mc, confirms: confirms, returns: returns}
+	returns <- amqp.Return{
+		ReplyCode:  404,
+		ReplyText:  "NOT_FOUND",
+		Exchange:   "",
+		RoutingKey: TranscodeQueue,
+		Body:       []byte("x"),
+	}
+	c := newConfirmClient(t, mc, confirms, returns)
 
 	err := c.PublishConfirmed(context.Background(), "", TranscodeQueue, true, amqp.Publishing{Body: []byte("x")})
 	if err == nil {
@@ -248,7 +268,7 @@ func TestPublishConfirmed_ContextTimeout(t *testing.T) {
 	mc := &mockChannel{t: t}
 	confirms := make(chan amqp.Confirmation, 1)
 	returns := make(chan amqp.Return, 1)
-	c := &Client{ch: mc, confirms: confirms, returns: returns}
+	c := newConfirmClient(t, mc, confirms, returns)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
 	defer cancel()
@@ -262,7 +282,7 @@ func TestPublishConfirmed_LateAckIgnoredByNextPublish(t *testing.T) {
 	mc := &mockChannel{t: t}
 	confirms := make(chan amqp.Confirmation, 2)
 	returns := make(chan amqp.Return, 1)
-	c := &Client{ch: mc, confirms: confirms, returns: returns}
+	c := newConfirmClient(t, mc, confirms, returns)
 
 	// First publish times out without a broker confirmation.
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
@@ -293,6 +313,82 @@ func TestPublishConfirmed_LateAckIgnoredByNextPublish(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("second publish did not complete after its own ack")
+	}
+}
+
+func TestPublishConfirmed_ConcurrentOutOfOrder(t *testing.T) {
+	mc := &mockChannel{t: t}
+	confirms := make(chan amqp.Confirmation, 2)
+	returns := make(chan amqp.Return, 1)
+	c := newConfirmClient(t, mc, confirms, returns)
+
+	var wg sync.WaitGroup
+	errs := make([]error, 2)
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			errs[i] = c.PublishConfirmed(context.Background(), "", TranscodeQueue, true,
+				amqp.Publishing{Body: []byte(fmt.Sprintf("m%d", i))})
+		}(i)
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		c.pendingMu.Lock()
+		n := len(c.pending)
+		c.pendingMu.Unlock()
+		if n == 2 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("concurrent publishes did not register")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	// Deliver out of order: tag 2 first, then tag 1. Both must be attributed
+	// to their own publish instead of being rejected as tag mismatches.
+	confirms <- amqp.Confirmation{DeliveryTag: 2, Ack: true}
+	confirms <- amqp.Confirmation{DeliveryTag: 1, Ack: true}
+	wg.Wait()
+	for i, err := range errs {
+		if err != nil {
+			t.Fatalf("publish %d failed: %v", i, err)
+		}
+	}
+}
+
+func TestPublishConfirmed_ChannelCloseFailsPending(t *testing.T) {
+	mc := &mockChannel{t: t}
+	confirms := make(chan amqp.Confirmation)
+	returns := make(chan amqp.Return)
+	c := newConfirmClient(t, mc, confirms, returns)
+
+	done := make(chan error, 1)
+	go func() {
+		done <- c.PublishConfirmed(context.Background(), "", TranscodeQueue, true,
+			amqp.Publishing{Body: []byte("x")})
+	}()
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		c.pendingMu.Lock()
+		n := len(c.pending)
+		c.pendingMu.Unlock()
+		if n == 1 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("publish did not register")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	close(confirms)
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("expected error when the confirm channel closes")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("pending publish was not failed on channel close")
 	}
 }
 

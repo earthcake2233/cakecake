@@ -75,6 +75,35 @@ func TestPublishConfirmed_Integration(t *testing.T) {
 	}
 }
 
+func TestPublishConfirmed_Concurrent_Integration(t *testing.T) {
+	url := rabbitmqURL(t)
+	c, err := Dial(url)
+	if err != nil {
+		t.Fatalf("Dial failed: %v", err)
+	}
+	defer func() { _ = c.Close() }()
+
+	const n = 8
+	var wg sync.WaitGroup
+	errs := make([]error, n)
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			errs[i] = c.PublishConfirmed(context.Background(), "", TranscodeQueue, true, amqp.Publishing{
+				DeliveryMode: amqp.Persistent,
+				Body:         []byte(fmt.Sprintf(`{"concurrent":%d}`, i)),
+			})
+		}(i)
+	}
+	wg.Wait()
+	for i, err := range errs {
+		if err != nil {
+			t.Fatalf("concurrent publish %d failed: %v", i, err)
+		}
+	}
+}
+
 func TestRetryQueueDeclaration_Integration(t *testing.T) {
 	url := rabbitmqURL(t)
 	c, err := Dial(url)
