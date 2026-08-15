@@ -23,8 +23,10 @@ var _ TranscodePublisher = (*Client)(nil)
 // TranscodeQueue is the durable queue name for video transcoding jobs.
 const TranscodeQueue = "mini_bili_transcode"
 
-// TranscodeDeadQueue receives jobs whose retries were exhausted, so failed
-// transcodes are observable and compensable instead of silently dropped.
+// TranscodeDeadQueue receives jobs that hit a terminal transcode failure
+// (retries exhausted, or the retry scheduling publish itself failed), so
+// failed transcodes are observable and compensable instead of silently
+// dropped.
 const TranscodeDeadQueue = "mini_bili_transcode_dead"
 
 // Retry queues carry jobs that failed with a retryable error. Each queue has
