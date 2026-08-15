@@ -35,6 +35,7 @@ type fakeSourceStore struct {
 	putContentTypes []string
 	exist           map[string]bool
 	sizes           map[string]int64
+	readPrefixBytes []byte
 	uploadErr       error
 	presignErr      error
 	failOn          int // 1-based: fail the N-th UploadFile call
@@ -60,6 +61,14 @@ func (f *fakeSourceStore) Size(key string) (int64, error) {
 		return 0, nil
 	}
 	return f.sizes[key], nil
+}
+
+func (f *fakeSourceStore) ReadPrefix(_ string, _ int64) ([]byte, error) {
+	if f.readPrefixBytes != nil {
+		return f.readPrefixBytes, nil
+	}
+	// JPEG magic bytes by default; requeue tests only assert source retention.
+	return []byte{0xFF, 0xD8, 0xFF}, nil
 }
 
 func (f *fakeSourceStore) DownloadFile(_ string, localPath string) error {

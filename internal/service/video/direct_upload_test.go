@@ -60,7 +60,7 @@ func TestCreateVideoFromDirectUpload_CreatesVideoAndOutbox(t *testing.T) {
 	_, rdb := servicetest.NewRedis(t)
 	rawKey := "uploads/7/abc/source.mp4"
 	coverKey := "uploads/7/abc/cover.png"
-	oss := &fakeSourceStore{exist: map[string]bool{rawKey: true}}
+	oss := &fakeSourceStore{exist: map[string]bool{rawKey: true, coverKey: true}}
 	svc := NewVideoService(db, rdb, zap.NewNop(), nil, &fakeTranscodePublisher{}, oss)
 
 	servicetest.SeedUser(t, db, 7, "uploader")

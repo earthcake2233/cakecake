@@ -2,6 +2,7 @@ package video
 
 import (
 	"cakecake/internal/model/video"
+	"cakecake/internal/pkg/coverval"
 	"context"
 	"encoding/json"
 	"errors"
@@ -185,6 +186,9 @@ func (s *VideoDraftService) ValidateDraftMedia(ctx context.Context, uid uint64, 
 		if coverSize > draftCoverMaxBytes {
 			return DraftMedia{}, fmt.Errorf("%w: cover %d bytes", ErrDraftMediaTooLarge, coverSize)
 		}
+		if err := checkCoverMagic(s.oss, coverKey); err != nil {
+			return DraftMedia{}, err
+		}
 	}
 	return DraftMedia{RawKey: rawKey, CoverKey: coverKey}, nil
 }
@@ -215,6 +219,23 @@ func (s *VideoDraftService) ValidateDraftCover(ctx context.Context, uid uint64, 
 	}
 	if size > draftCoverMaxBytes {
 		return fmt.Errorf("%w: cover %d bytes", ErrDraftMediaTooLarge, size)
+	}
+	if err := checkCoverMagic(s.oss, coverKey); err != nil {
+		return err
+	}
+	return nil
+}
+
+// checkCoverMagic range-reads the first bytes of a cover object and rejects
+// anything that is not a real image, so extension/MIME from the client is
+// never trusted for direct-to-OSS covers.
+func checkCoverMagic(oss SourceObjectStore, coverKey string) error {
+	head, err := oss.ReadPrefix(coverKey, 16)
+	if err != nil {
+		return fmt.Errorf("read cover head: %w", err)
+	}
+	if !coverval.IsAllowedImageMagic(head) {
+		return fmt.Errorf("%w: %s", ErrDirectUploadInvalidCover, coverKey)
 	}
 	return nil
 }

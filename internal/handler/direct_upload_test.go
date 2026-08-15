@@ -59,6 +59,10 @@ func (f *fakeVideoOSS) Size(key string) (int64, error) {
 	return f.sizes[key], nil
 }
 
+func (f *fakeVideoOSS) ReadPrefix(_ string, _ int64) ([]byte, error) {
+	return []byte{0xFF, 0xD8, 0xFF}, nil // JPEG magic
+}
+
 func (f *fakeVideoOSS) PresignPut(key string, _ time.Duration, contentType string) (string, error) {
 	f.putContentTypes = append(f.putContentTypes, contentType)
 	return "https://oss.example.com/" + key, nil
@@ -72,7 +76,7 @@ func TestDirectUploadTicketAndSubmit(t *testing.T) {
 	rawKey := fmt.Sprintf("uploads/%d/abc/source.mp4", uidA)
 	coverKey := fmt.Sprintf("uploads/%d/abc/cover.png", uidA)
 	oss := &fakeVideoOSS{
-		exist: map[string]bool{rawKey: true},
+		exist: map[string]bool{rawKey: true, coverKey: true},
 	}
 	api.VideoSvc = vsvc.NewVideoService(api.DB, api.Redis, zap.NewNop(), nil, noopMQ{}, oss)
 	oldProbe := vsvc.VideoProbe

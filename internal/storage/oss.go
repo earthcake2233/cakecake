@@ -104,6 +104,22 @@ func (o *OSS) Size(objectKey string) (int64, error) {
 	return 0, fmt.Errorf("content-length missing for %s", key)
 }
 
+// ReadPrefix downloads the first n bytes of an object via a range request.
+// It is the cheap way to validate content (e.g. cover magic bytes) without
+// pulling the whole object into the API process.
+func (o *OSS) ReadPrefix(objectKey string, n int64) ([]byte, error) {
+	key := strings.TrimPrefix(strings.TrimSpace(objectKey), "/")
+	if key == "" {
+		return nil, fmt.Errorf("empty object key")
+	}
+	body, err := o.bucket.GetObject(key, oss.Range(0, n-1))
+	if err != nil {
+		return nil, err
+	}
+	defer body.Close()
+	return io.ReadAll(io.LimitReader(body, n))
+}
+
 // ListObjects returns object metadata under prefix (paged). maxKeys bounds
 // each page; the total is capped so a single cleanup run cannot enumerate an
 // unbounded bucket.
