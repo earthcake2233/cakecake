@@ -572,6 +572,16 @@ func deadLetterTranscode(ctx context.Context, db *gorm.DB, pubCh transcodePublis
 	}
 	if err := db.Create(&rec).Error; err != nil {
 		lg.Warn("record transcode dead letter", zap.Uint64("video_id", job.VideoID), zap.Error(err))
+		return
+	}
+	// Every failed replay creates a NEW dead-letter row. Close all older
+	// unresolved rows of the same video: the current row is the only one the
+	// auto-retry loop (or an operator) should act on. Without this, superseded
+	// rows stay pending forever and can never be archived.
+	if err := db.Model(&video.TranscodeDeadLetter{}).
+		Where("video_id = ? AND id <> ? AND processed_at IS NULL AND requeued_at IS NULL AND archived_at IS NULL", job.VideoID, rec.ID).
+		Update("processed_at", time.Now()).Error; err != nil {
+		lg.Warn("close superseded transcode dead letters", zap.Uint64("video_id", job.VideoID), zap.Error(err))
 	}
 }
 
@@ -663,9 +673,12 @@ func consumeTranscodeDead(ctx context.Context, ch interface{ Close() error }, ms
 	}
 }
 
-// handleTranscodeDeadLetter marks the matching audit row processed and only
-// then acks the message. A DB failure leaves the message unacked so it is
-// redelivered and retried instead of being observably lost.
+// handleTranscodeDeadLetter resolves the matching audit row and only then
+// acks the message. Rows whose reason is transient are deliberately left
+// pending (processed_at IS NULL) so the auto-retry loop can see and act on
+// them; the loop or a superseding dead letter closes them later. A DB
+// failure leaves the message unacked so it is redelivered and retried
+// instead of being observably lost.
 func handleTranscodeDeadLetter(d amqp.Delivery, lg *zap.Logger, db *gorm.DB) {
 	var job TranscodeJob
 	_ = json.Unmarshal(d.Body, &job)
@@ -677,17 +690,40 @@ func handleTranscodeDeadLetter(d amqp.Delivery, lg *zap.Logger, db *gorm.DB) {
 		zap.Int("retry_count", job.RetryCount),
 	)
 	if db != nil {
-		if err := db.Model(&video.TranscodeDeadLetter{}).
-			Where("video_id = ? AND retry_count = ? AND processed_at IS NULL", job.VideoID, job.RetryCount).
+		var row video.TranscodeDeadLetter
+		err := db.Where("video_id = ? AND retry_count = ? AND processed_at IS NULL AND archived_at IS NULL", job.VideoID, job.RetryCount).
 			Order("id DESC").
 			Limit(1).
-			Update("processed_at", time.Now()).Error; err != nil {
+			First(&row).Error
+		if err != nil {
+			if !errors.Is(err, gorm.ErrRecordNotFound) {
+				lg.Warn("load transcode dead letter", zap.Uint64("video_id", job.VideoID), zap.Error(err))
+				_ = d.Nack(false, true)
+				return
+			}
+		} else if autoRetryableReason(row.Reason) {
+			// Leave the row pending: the auto-retry loop owns transient
+			// failures and must still be able to see them (processed_at IS
+			// NULL). The loop resolves the row when it schedules a replay or
+			// when the row turns terminal.
+			_ = d.Ack(false)
+			return
+		} else if err := db.Model(&row).Update("processed_at", time.Now()).Error; err != nil {
 			lg.Warn("mark transcode dead letter processed", zap.Uint64("video_id", job.VideoID), zap.Error(err))
 			_ = d.Nack(false, true)
 			return
 		}
 	}
 	_ = d.Ack(false)
+}
+
+// resolveTranscodeDeadLetter closes a still-pending dead letter so retention
+// can eventually archive it. It is a conditional update: a row that was
+// manually requeued (requeued_at) or already resolved is left untouched.
+func resolveTranscodeDeadLetter(db *gorm.DB, id uint64) error {
+	return db.Model(&video.TranscodeDeadLetter{}).
+		Where("id = ? AND processed_at IS NULL AND requeued_at IS NULL AND archived_at IS NULL", id).
+		Update("processed_at", time.Now()).Error
 }
 
 const (

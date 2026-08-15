@@ -91,6 +91,20 @@ func TestHandleTranscodeDeadLetter_MarksProcessed(t *testing.T) {
 	require.NotNil(t, rec.ProcessedAt)
 }
 
+func TestHandleTranscodeDeadLetter_LeavesTransientPending(t *testing.T) {
+	db := newBehavioralWorkerDB(t)
+	require.NoError(t, db.Create(&video.TranscodeDeadLetter{
+		VideoID: 43, RetryCount: 3, Reason: "oss upload failed", PayloadJSON: "{}",
+	}).Error)
+	ack := &fakeAck{}
+	body, _ := json.Marshal(TranscodeJob{VideoID: 43, RetryCount: 3})
+	handleTranscodeDeadLetter(amqp.Delivery{Body: body, Acknowledger: ack}, zap.NewNop(), db)
+	require.Equal(t, 1, ack.acked)
+	var rec video.TranscodeDeadLetter
+	require.NoError(t, db.First(&rec).Error)
+	require.Nil(t, rec.ProcessedAt, "transient rows must stay visible to the auto-retry loop")
+}
+
 func TestConsumeTranscodeDead_AcksAndCloses(t *testing.T) {
 	ack := &fakeAck{}
 	body, _ := json.Marshal(TranscodeJob{VideoID: 7, RetryCount: 2})
