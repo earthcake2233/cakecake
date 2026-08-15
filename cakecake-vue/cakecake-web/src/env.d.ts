@@ -8,6 +8,7 @@ declare module "*.vue" {
   export default component;
 }
 
+
 interface ImportMetaEnv {
   readonly VITE_MINIBILI_API?: string;
   readonly VITE_REMOTE_API_BASE?: string;
