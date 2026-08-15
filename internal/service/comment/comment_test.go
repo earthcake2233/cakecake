@@ -86,7 +86,7 @@ func TestCommentService_PostAndList(t *testing.T) {
 	require.NoError(t, db.Model(&video.Video{}).Where("id = ?", 10).Update("comments_closed", true).Error)
 	_, err = s.PostComment(ctx, 2, 10, PostCommentReq{Content: "x"}, "")
 	require.ErrorIs(t, err, service.ErrCommentsClosed)
-	res, err := s.ListComments(ctx, 10, 2)
+	res, err := s.ListComments(ctx, 10, 2, CommentListQuery{})
 	require.NoError(t, err)
 	require.True(t, res.CommentsClosed)
 	require.Empty(t, res.Items)
@@ -94,7 +94,7 @@ func TestCommentService_PostAndList(t *testing.T) {
 
 	// List with reactions.
 	require.NoError(t, db.Create(&comment.CommentLike{UserID: 2, CommentID: cm.ID}).Error)
-	res, err = s.ListComments(ctx, 10, 2)
+	res, err = s.ListComments(ctx, 10, 2, CommentListQuery{})
 	require.NoError(t, err)
 	require.Len(t, res.Items, 2)
 	require.False(t, res.CommentsClosed)
@@ -104,7 +104,7 @@ func TestCommentService_PostAndList(t *testing.T) {
 	curated, err := s.PostComment(ctx, 2, 10, PostCommentReq{Content: "pending"}, "")
 	require.NoError(t, err)
 	require.False(t, curated.Approved)
-	res, err = s.ListComments(ctx, 10, 2)
+	res, err = s.ListComments(ctx, 10, 2, CommentListQuery{})
 	require.NoError(t, err)
 	require.True(t, res.CommentsCurated)
 	require.Len(t, res.Items, 2) // only approved
@@ -221,14 +221,14 @@ func TestCommentService_ArticleAndDynamic(t *testing.T) {
 	ac, err := s.PostArticleComment(ctx, 2, 20, PostCommentReq{Content: "article cmt"}, "")
 	require.NoError(t, err)
 	require.NotZero(t, ac.ID)
-	ares, err := s.ListArticleComments(ctx, 20, 2)
+	ares, err := s.ListArticleComments(ctx, 20, 2, CommentListQuery{})
 	require.NoError(t, err)
 	require.Len(t, ares.Items, 1)
 
 	// Missing article.
 	_, err = s.PostArticleComment(ctx, 2, 999, PostCommentReq{Content: "x"}, "")
 	require.ErrorIs(t, err, service.ErrNotFound)
-	_, err = s.ListArticleComments(ctx, 999, 2)
+	_, err = s.ListArticleComments(ctx, 999, 2, CommentListQuery{})
 	require.ErrorIs(t, err, service.ErrNotFound)
 
 	pinned, err := s.PinArticleComment(ctx, 20, ac.ID)
@@ -250,12 +250,12 @@ func TestCommentService_ArticleAndDynamic(t *testing.T) {
 
 	dc, err := s.PostDynamicComment(ctx, 2, 30, PostCommentReq{Content: "dyn cmt"}, "")
 	require.NoError(t, err)
-	dres, err := s.ListDynamicComments(ctx, 30, 2)
+	dres, err := s.ListDynamicComments(ctx, 30, 2, CommentListQuery{})
 	require.NoError(t, err)
 	require.Len(t, dres.Items, 1)
 	_, err = s.PostDynamicComment(ctx, 2, 999, PostCommentReq{Content: "x"}, "")
 	require.ErrorIs(t, err, service.ErrNotFound)
-	_, err = s.ListDynamicComments(ctx, 999, 2)
+	_, err = s.ListDynamicComments(ctx, 999, 2, CommentListQuery{})
 	require.ErrorIs(t, err, service.ErrNotFound)
 
 	liked, count, err := s.ToggleDynamicCommentReaction(ctx, 2, dc.ID, true)

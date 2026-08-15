@@ -71,18 +71,28 @@ func (s *CommentService) buildCommentList(
 	ctx context.Context,
 	targetID, viewerID, ownerID uint64,
 	curated, closed bool,
-	load func(ctx context.Context, targetID uint64, curated bool) ([]commentListRow, error),
+	q CommentListQuery,
+	load func(ctx context.Context, targetID uint64, curated bool, q CommentListQuery) (*CommentPage, error),
 	react commentReactionLoader,
 ) (*CommentListResult, error) {
-	r := &CommentListResult{CommentsCurated: curated, CommentsClosed: closed}
+	page, pageSize, sort := q.Normalized()
+	r := &CommentListResult{
+		CommentsCurated: curated,
+		CommentsClosed:  closed,
+		Page:            page,
+		PageSize:        pageSize,
+	}
 	if closed {
 		r.Items = []CommentItem{}
 		return r, nil
 	}
-	list, err := load(ctx, targetID, curated)
+	pg, err := load(ctx, targetID, curated, CommentListQuery{Page: page, PageSize: pageSize, Sort: sort})
 	if err != nil {
 		return nil, service.ErrInternalError
 	}
+	r.Total = pg.Total
+	r.TotalPages = commentTotalPages(pg.Total, pageSize)
+	list := pg.Rows
 	if len(list) == 0 {
 		r.Items = []CommentItem{}
 		return r, nil
@@ -126,6 +136,17 @@ func (s *CommentService) buildCommentList(
 	}
 	r.Items = out
 	return r, nil
+}
+
+// commentTotalPages returns the page count for a total, at least 1.
+func commentTotalPages(total int64, pageSize int) int {
+	if total <= 0 {
+		return 1
+	}
+	if pageSize <= 0 {
+		pageSize = 20
+	}
+	return int((total + int64(pageSize) - 1) / int64(pageSize))
 }
 
 func (s *CommentService) loadCommentLikesByIDs(ctx context.Context, viewerID uint64, ids []uint64) (map[uint64]bool, error) {

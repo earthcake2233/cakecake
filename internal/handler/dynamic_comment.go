@@ -37,6 +37,10 @@ type dynamicCommentListResponse struct {
 	Items           []dynamicCommentItemDTO `json:"items"`
 	CommentsCurated bool                    `json:"comments_curated"`
 	CommentsClosed  bool                    `json:"comments_closed"`
+	Page            int                     `json:"page"`
+	PageSize        int                     `json:"page_size"`
+	Total           int64                   `json:"total"`
+	TotalPages      int                     `json:"total_pages"`
 }
 
 type postDynamicCommentResponse struct {
@@ -55,7 +59,7 @@ func (a *API) ListDynamicComments(c *gin.Context) {
 		return
 	}
 	uid, _ := middleware.UserID(c)
-	result, svcErr := a.CommentSvc.ListDynamicComments(c.Request.Context(), did, uid)
+	result, svcErr := a.CommentSvc.ListDynamicComments(c.Request.Context(), did, uid, parseCommentListQuery(c))
 	if svcErr != nil {
 		resp.Err(c, httpStatusFromSvc(errCodeFromSvc(svcErr)), errCodeFromSvc(svcErr))
 		return
@@ -71,7 +75,10 @@ func (a *API) ListDynamicComments(c *gin.Context) {
 			IPLocation: iplocate.DisplayLabel(item.IPLocation), IsByUploader: item.IsByUploader,
 		})
 	}
-	resp.OK(c, dynamicCommentListResponse{Items: out, CommentsCurated: result.CommentsCurated, CommentsClosed: result.CommentsClosed})
+	resp.OK(c, dynamicCommentListResponse{
+		Items: out, CommentsCurated: result.CommentsCurated, CommentsClosed: result.CommentsClosed,
+		Page: result.Page, PageSize: result.PageSize, Total: result.Total, TotalPages: result.TotalPages,
+	})
 }
 
 // PostDynamicComment creates a comment on a dynamic.

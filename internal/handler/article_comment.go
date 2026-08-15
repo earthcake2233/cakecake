@@ -37,6 +37,10 @@ type articleCommentListResponse struct {
 	Items           []articleCommentItemDTO `json:"items"`
 	CommentsCurated bool                    `json:"comments_curated"`
 	CommentsClosed  bool                    `json:"comments_closed"`
+	Page            int                     `json:"page"`
+	PageSize        int                     `json:"page_size"`
+	Total           int64                   `json:"total"`
+	TotalPages      int                     `json:"total_pages"`
 }
 
 type postArticleCommentResponse struct {
@@ -57,7 +61,7 @@ func (a *API) ListArticleComments(c *gin.Context) {
 		return
 	}
 	uid, _ := middleware.UserID(c)
-	result, svcErr := a.CommentSvc.ListArticleComments(c.Request.Context(), aid, uid)
+	result, svcErr := a.CommentSvc.ListArticleComments(c.Request.Context(), aid, uid, parseCommentListQuery(c))
 	if svcErr != nil {
 		resp.Err(c, httpStatusFromSvc(errCodeFromSvc(svcErr)), errCodeFromSvc(svcErr))
 		return
@@ -74,7 +78,10 @@ func (a *API) ListArticleComments(c *gin.Context) {
 			IPLocation: iplocate.DisplayLabel(item.IPLocation),
 		})
 	}
-	resp.OK(c, articleCommentListResponse{Items: out, CommentsCurated: result.CommentsCurated, CommentsClosed: result.CommentsClosed})
+	resp.OK(c, articleCommentListResponse{
+		Items: out, CommentsCurated: result.CommentsCurated, CommentsClosed: result.CommentsClosed,
+		Page: result.Page, PageSize: result.PageSize, Total: result.Total, TotalPages: result.TotalPages,
+	})
 }
 
 // PostArticleComment creates a comment on an article.

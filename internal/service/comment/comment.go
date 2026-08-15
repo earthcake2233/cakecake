@@ -59,17 +59,50 @@ type CommentListResult struct {
 	Items           []CommentItem
 	CommentsCurated bool
 	CommentsClosed  bool
+	Page            int
+	PageSize        int
+	Total           int64
+	TotalPages      int
+}
+
+// CommentListQuery carries the pagination and ordering of a public comment
+// list. Zero values fall back to page 1 / 20 items / hot ordering.
+type CommentListQuery struct {
+	Page     int
+	PageSize int
+	Sort     string
+}
+
+// Normalized returns the query with safe defaults applied.
+func (q CommentListQuery) Normalized() (page, pageSize int, sort string) {
+	page = q.Page
+	if page < 1 {
+		page = 1
+	}
+	pageSize = q.PageSize
+	if pageSize < 1 {
+		pageSize = 20
+	}
+	if pageSize > 50 {
+		pageSize = 50
+	}
+	sort = q.Sort
+	if sort != "time" {
+		sort = "hot"
+	}
+	return page, pageSize, sort
 }
 
 // ListComments lists comments on a video with viewer interaction flags.
-func (s *CommentService) ListComments(ctx context.Context, videoID, viewerID uint64) (*CommentListResult, error) {
+func (s *CommentService) ListComments(ctx context.Context, videoID, viewerID uint64, q CommentListQuery) (*CommentListResult, error) {
 	v, err := s.videos.GetPublishedVideo(ctx, videoID)
 	if err != nil {
 		return nil, service.ErrNotFound
 	}
 	return s.buildCommentList(ctx, videoID, viewerID, v.UserID, v.CommentsCurated, v.CommentsClosed,
-		func(ctx context.Context, targetID uint64, curated bool) ([]commentListRow, error) {
-			return s.comments.ListComments(ctx, CommentVideo, targetID, curated)
+		q,
+		func(ctx context.Context, targetID uint64, curated bool, q CommentListQuery) (*CommentPage, error) {
+			return s.comments.ListCommentsPage(ctx, CommentVideo, targetID, curated, q)
 		},
 		func(ctx context.Context, viewerID uint64, ids []uint64) (map[uint64]bool, map[uint64]bool, error) {
 			liked, err := s.loadCommentLikesByIDs(ctx, viewerID, ids)
@@ -210,14 +243,15 @@ func (s *CommentService) GetDynamicCommentByID(ctx context.Context, commentID ui
 // ─── Article Comments ───
 
 // ListArticleComments lists comments on an article with viewer interaction flags.
-func (s *CommentService) ListArticleComments(ctx context.Context, articleID, viewerID uint64) (*CommentListResult, error) {
+func (s *CommentService) ListArticleComments(ctx context.Context, articleID, viewerID uint64, q CommentListQuery) (*CommentListResult, error) {
 	a, err := s.articles.GetPublishedArticle(ctx, articleID)
 	if err != nil {
 		return nil, service.ErrNotFound
 	}
 	return s.buildCommentList(ctx, articleID, viewerID, a.UserID, a.CommentsCurated, a.CommentsClosed,
-		func(ctx context.Context, targetID uint64, curated bool) ([]commentListRow, error) {
-			return s.comments.ListComments(ctx, CommentArticle, targetID, curated)
+		q,
+		func(ctx context.Context, targetID uint64, curated bool, q CommentListQuery) (*CommentPage, error) {
+			return s.comments.ListCommentsPage(ctx, CommentArticle, targetID, curated, q)
 		},
 		func(ctx context.Context, viewerID uint64, ids []uint64) (map[uint64]bool, map[uint64]bool, error) {
 			return s.loadArticleReactionsByIDs(ctx, viewerID, ids)
@@ -343,14 +377,15 @@ func (s *CommentService) GetArticleComment(ctx context.Context, commentID uint64
 // ─── Dynamic Comments ───
 
 // ListDynamicComments lists comments on a dynamic with viewer interaction flags.
-func (s *CommentService) ListDynamicComments(ctx context.Context, dynamicID, viewerID uint64) (*CommentListResult, error) {
+func (s *CommentService) ListDynamicComments(ctx context.Context, dynamicID, viewerID uint64, q CommentListQuery) (*CommentListResult, error) {
 	d, err := s.dynamics.GetPublishedDynamic(ctx, dynamicID)
 	if err != nil {
 		return nil, service.ErrNotFound
 	}
 	return s.buildCommentList(ctx, dynamicID, viewerID, d.UserID, d.CommentsCurated, d.CommentsClosed,
-		func(ctx context.Context, targetID uint64, curated bool) ([]commentListRow, error) {
-			return s.comments.ListComments(ctx, CommentDynamic, targetID, curated)
+		q,
+		func(ctx context.Context, targetID uint64, curated bool, q CommentListQuery) (*CommentPage, error) {
+			return s.comments.ListCommentsPage(ctx, CommentDynamic, targetID, curated, q)
 		},
 		nil)
 }

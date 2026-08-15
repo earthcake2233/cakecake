@@ -48,6 +48,28 @@ type commentListResponse struct {
 	Items           []commentItemDTO `json:"items"`
 	CommentsCurated bool             `json:"comments_curated"`
 	CommentsClosed  bool             `json:"comments_closed"`
+	Page            int              `json:"page"`
+	PageSize        int              `json:"page_size"`
+	Total           int64            `json:"total"`
+	TotalPages      int              `json:"total_pages"`
+}
+
+// parseCommentListQuery reads page/page_size/sort with safe defaults.
+func parseCommentListQuery(c *gin.Context) comment.CommentListQuery {
+	parse := func(raw string, def int) int {
+		n, err := strconv.Atoi(raw)
+		if err != nil {
+			return def
+		}
+		return n
+	}
+	q := comment.CommentListQuery{
+		Page:     parse(c.DefaultQuery("page", "1"), 1),
+		PageSize: parse(c.DefaultQuery("page_size", "20"), 20),
+		Sort:     c.DefaultQuery("sort", "hot"),
+	}
+	page, pageSize, sort := q.Normalized()
+	return comment.CommentListQuery{Page: page, PageSize: pageSize, Sort: sort}
 }
 
 type postCommentResponse struct {
@@ -154,7 +176,7 @@ func (a *API) ListComments(c *gin.Context) {
 		return
 	}
 	uid, _ := middleware.UserID(c)
-	result, svcErr := a.CommentSvc.ListComments(c.Request.Context(), vid, uid)
+	result, svcErr := a.CommentSvc.ListComments(c.Request.Context(), vid, uid, parseCommentListQuery(c))
 	if svcErr != nil {
 		resp.Err(c, httpStatusFromSvc(errCodeFromSvc(svcErr)), errCodeFromSvc(svcErr))
 		return
@@ -171,7 +193,10 @@ func (a *API) ListComments(c *gin.Context) {
 			IPLocation: iplocate.DisplayLabel(item.IPLocation),
 		})
 	}
-	resp.OK(c, commentListResponse{Items: out, CommentsCurated: result.CommentsCurated, CommentsClosed: result.CommentsClosed})
+	resp.OK(c, commentListResponse{
+		Items: out, CommentsCurated: result.CommentsCurated, CommentsClosed: result.CommentsClosed,
+		Page: result.Page, PageSize: result.PageSize, Total: result.Total, TotalPages: result.TotalPages,
+	})
 }
 
 // PostComment creates a comment or reply.
