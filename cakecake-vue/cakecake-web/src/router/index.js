@@ -1,6 +1,5 @@
 import { createRouter, createWebHashHistory } from "vue-router";
 import { nextTick } from "vue";
-import { ElMessageBox } from "element-plus";
 import { clearStuckPageOverlays } from "@/utils/clearPageOverlays";
 import { getAccessToken, getRefreshToken } from "@/utils/authTokens";
 import { isAdminLoggedIn } from "@/utils/adminAuth";
@@ -17,6 +16,17 @@ import {
 const cakecakeEnv =
   import.meta.env.VITE_MINIBILI_API === "true" ||
   import.meta.env.VITE_MINIBILI_API === "1";
+
+// element-plus is heavy (~900KB min); keep it out of the initial bundle by
+// loading ElMessageBox lazily, only when leaving the publish/edit pages.
+let elMessageBoxRef = null;
+async function closeElMessageBox() {
+  if (!elMessageBoxRef) {
+    const ep = await import("element-plus");
+    elMessageBoxRef = ep.ElMessageBox;
+  }
+  elMessageBoxRef.close();
+}
 
 const routes = [
   {
@@ -398,7 +408,7 @@ router.afterEach((to, from) => {
         String(to.query.success || "").toLowerCase() === "publish") ||
       (to.name === "manuscript" && String(to.query.reviewNotice) === "1");
     if (!keepReviewNotice) {
-      ElMessageBox.close();
+      void closeElMessageBox();
       nextTick(() => {
         document.body.classList.remove("el-popup-parent--hidden");
         document.body.style.removeProperty("width");
