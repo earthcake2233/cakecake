@@ -970,14 +970,27 @@ export async function mbPostDanmaku(
   return unwrap(r);
 }
 
-export async function mbListComments(
-  videoId: number
-): Promise<{
+export interface CommentListQuery {
+  page?: number;
+  page_size?: number;
+  sort?: "hot" | "time";
+}
+
+export interface CommentListResult {
   items: CommentItem[];
   comments_closed?: boolean;
   comments_curated?: boolean;
-}> {
-  const r = await http.get(`/api/v1/videos/${videoId}/comments`);
+  page: number;
+  page_size: number;
+  total: number;
+  total_pages: number;
+}
+
+export async function mbListComments(
+  videoId: number,
+  params?: CommentListQuery
+): Promise<CommentListResult> {
+  const r = await http.get(`/api/v1/videos/${videoId}/comments`, { params });
   return unwrap(r);
 }
 
@@ -2125,13 +2138,10 @@ export async function mbListUserArticleFavorites(
 }
 
 export async function mbListArticleComments(
-  articleId: number
-): Promise<{
-  items: CommentItem[];
-  comments_closed?: boolean;
-  comments_curated?: boolean;
-}> {
-  const r = await http.get(`/api/v1/articles/${articleId}/comments`);
+  articleId: number,
+  params?: CommentListQuery
+): Promise<CommentListResult> {
+  const r = await http.get(`/api/v1/articles/${articleId}/comments`, { params });
   return unwrap(r);
 }
 
@@ -2225,13 +2235,12 @@ export async function mbGetUserDynamic(id: number): Promise<UserDynamicDetail> {
 }
 
 export async function mbListDynamicComments(
-  dynamicId: number
-): Promise<{
-  items: CommentItem[];
-  comments_closed?: boolean;
-  comments_curated?: boolean;
-}> {
-  const r = await http.get(`/api/v1/user-dynamics/${dynamicId}/comments`);
+  dynamicId: number,
+  params?: CommentListQuery
+): Promise<CommentListResult> {
+  const r = await http.get(`/api/v1/user-dynamics/${dynamicId}/comments`, {
+    params
+  });
   return unwrap(r);
 }
 

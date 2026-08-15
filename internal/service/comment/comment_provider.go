@@ -18,13 +18,20 @@ const (
 	CommentDynamic
 )
 
+// CommentPage is one page of root comments plus their full reply subtrees.
+type CommentPage struct {
+	Rows  []commentListRow
+	Total int64
+}
+
 // CommentProvider is the comment domain storage boundary.
 // Phase 1: *gorm.DB impl. Phase 2+: replaced by gRPC client / per-domain store.
 type CommentProvider interface {
 	// WithTx runs fn inside a database transaction (Phase 1 monolith seam).
 	WithTx(ctx context.Context, fn func(tx *gorm.DB) error) error
-	// ListComments returns the target's comment rows (approved-filtered when curated).
-	ListComments(ctx context.Context, kind CommentKind, targetID uint64, curated bool) ([]commentListRow, error)
+	// ListCommentsPage returns one page of root comments with their full reply
+	// subtrees (approved-filtered when curated).
+	ListCommentsPage(ctx context.Context, kind CommentKind, targetID uint64, curated bool, q CommentListQuery) (*CommentPage, error)
 
 	// Typed creates.
 	CreateVideoComment(ctx context.Context, cm *comment.Comment) error
@@ -130,34 +137,110 @@ func commentDislikeModel(kind CommentKind) interface{} {
 	}
 }
 
-// ListComments lists comments of the given kind for a target media id,
-// optionally filtering to curated-approved rows.
-func (p *CommentProviderImpl) ListComments(ctx context.Context, kind CommentKind, targetID uint64, curated bool) ([]commentListRow, error) {
+// ListCommentsPage lists one page of root comments of the given kind for a
+// target media id, together with every descendant reply of those roots, so the
+// client can rebuild complete threads without loading the whole table.
+func (p *CommentProviderImpl) ListCommentsPage(ctx context.Context, kind CommentKind, targetID uint64, curated bool, q CommentListQuery) (*CommentPage, error) {
+	page, pageSize, sort := q.Normalized()
 	col := commentTargetColumn(kind)
-	q := p.db.WithContext(ctx).Where(col+" = ?", targetID)
-	if curated {
-		q = q.Where("approved = ?", true)
-	}
 	switch kind {
 	case CommentArticle:
-		var list []comment.ArticleComment
-		if err := q.Order("id ASC").Find(&list).Error; err != nil {
-			return nil, err
-		}
-		return toArticleCommentRows(list), nil
+		return listCommentPage(ctx, p.db, col, targetID, curated, page, pageSize, sort,
+			toArticleCommentRows,
+			func(c *comment.ArticleComment) uint64 { return c.ID })
 	case CommentDynamic:
-		var list []comment.DynamicComment
-		if err := q.Order("id ASC").Find(&list).Error; err != nil {
-			return nil, err
-		}
-		return toDynamicCommentRows(list), nil
+		return listCommentPage(ctx, p.db, col, targetID, curated, page, pageSize, sort,
+			toDynamicCommentRows,
+			func(c *comment.DynamicComment) uint64 { return c.ID })
 	default:
-		var list []comment.Comment
-		if err := q.Order("id ASC").Find(&list).Error; err != nil {
+		return listCommentPage(ctx, p.db, col, targetID, curated, page, pageSize, sort,
+			toCommentRows,
+			func(c *comment.Comment) uint64 { return c.ID })
+	}
+}
+
+// commentRootOrder returns the stable DB ordering for root comments:
+// pinned first, then hot (like count) or time (created_at).
+func commentRootOrder(sort string) string {
+	if sort == "time" {
+		return "pinned DESC, created_at DESC, id DESC"
+	}
+	return "pinned DESC, like_count DESC, id DESC"
+}
+
+// listCommentPage is the shared paged root-comment query for one comment table.
+func listCommentPage[R any](
+	ctx context.Context,
+	db *gorm.DB,
+	targetCol string,
+	targetID uint64,
+	curated bool,
+	page, pageSize int,
+	sort string,
+	mapper func([]R) []commentListRow,
+	idOf func(*R) uint64,
+) (*CommentPage, error) {
+	base := func() *gorm.DB {
+		q := db.WithContext(ctx).Model(new(R)).Where(targetCol+" = ?", targetID)
+		if curated {
+			q = q.Where("approved = ?", true)
+		}
+		return q
+	}
+
+	var total int64
+	if err := base().Where("parent_id = ?", 0).Count(&total).Error; err != nil {
+		return nil, err
+	}
+	if total == 0 {
+		return &CommentPage{Rows: []commentListRow{}, Total: 0}, nil
+	}
+
+	var roots []R
+	if err := base().
+		Where("parent_id = ?", 0).
+		Order(commentRootOrder(sort)).
+		Limit(pageSize).
+		Offset((page - 1) * pageSize).
+		Find(&roots).Error; err != nil {
+		return nil, err
+	}
+	if len(roots) == 0 {
+		return &CommentPage{Rows: []commentListRow{}, Total: total}, nil
+	}
+
+	all := make([]R, 0, len(roots))
+	seen := make(map[uint64]bool, len(roots))
+	parentIDs := make([]uint64, 0, len(roots))
+	for i := range roots {
+		all = append(all, roots[i])
+		id := idOf(&roots[i])
+		seen[id] = true
+		parentIDs = append(parentIDs, id)
+	}
+	// Replies are nested at most a few levels; a small iteration cap keeps the
+	// query bounded even if the data ever contains a deep chain.
+	for depth := 0; depth < 6 && len(parentIDs) > 0; depth++ {
+		var kids []R
+		if err := base().
+			Where("parent_id IN ?", parentIDs).
+			Order("id ASC").
+			Find(&kids).Error; err != nil {
 			return nil, err
 		}
-		return toCommentRows(list), nil
+		next := make([]uint64, 0, len(kids))
+		for i := range kids {
+			id := idOf(&kids[i])
+			if seen[id] {
+				continue
+			}
+			seen[id] = true
+			all = append(all, kids[i])
+			next = append(next, id)
+		}
+		parentIDs = next
 	}
+	return &CommentPage{Rows: mapper(all), Total: total}, nil
 }
 
 // CreateVideoComment inserts a video comment row.

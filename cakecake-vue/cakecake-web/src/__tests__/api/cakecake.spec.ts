@@ -42,7 +42,13 @@ describe("mbListVideos",function(){it("GET /videos with params",async function()
 describe("mbListComments",function(){it("GET /videos/:id/comments",async function(){
   mockHttp.get.mockResolvedValue(ok({ items:[], comments_closed:false }));
   mb.mbListComments(42);
-  expect(mockHttp.get).toHaveBeenCalledWith("/api/v1/videos/42/comments");
+  expect(mockHttp.get).toHaveBeenCalledWith("/api/v1/videos/42/comments", {
+    params: undefined
+  });
+  mb.mbListComments(42, { page: 2, page_size: 20, sort: "time" });
+  expect(mockHttp.get).toHaveBeenCalledWith("/api/v1/videos/42/comments", {
+    params: { page: 2, page_size: 20, sort: "time" }
+  });
 });});
 
 describe("mbToggleVideoLike",function(){it("POST /videos/:id/like",async function(){

@@ -23,9 +23,9 @@ type CommentSvc interface {
 	IgnoreArticleComment(ctx context.Context, commentID uint64) error
 	IgnoreCuratedComment(ctx context.Context, commentID uint64) error
 	IgnoreDynComment(ctx context.Context, commentID uint64) error
-	ListArticleComments(ctx context.Context, articleID uint64, viewerID uint64) (*servicecomment.CommentListResult, error)
-	ListComments(ctx context.Context, videoID uint64, viewerID uint64) (*servicecomment.CommentListResult, error)
-	ListDynamicComments(ctx context.Context, dynamicID uint64, viewerID uint64) (*servicecomment.CommentListResult, error)
+	ListArticleComments(ctx context.Context, articleID uint64, viewerID uint64, q servicecomment.CommentListQuery) (*servicecomment.CommentListResult, error)
+	ListComments(ctx context.Context, videoID uint64, viewerID uint64, q servicecomment.CommentListQuery) (*servicecomment.CommentListResult, error)
+	ListDynamicComments(ctx context.Context, dynamicID uint64, viewerID uint64, q servicecomment.CommentListQuery) (*servicecomment.CommentListResult, error)
 	PinArticleComment(ctx context.Context, articleID uint64, commentID uint64) (bool, error)
 	PinComment(ctx context.Context, videoID uint64, commentID uint64) (bool, error)
 	PostArticleComment(ctx context.Context, userID uint64, articleID uint64, req servicecomment.PostCommentReq, ipLocation string) (*comment.ArticleComment, error)

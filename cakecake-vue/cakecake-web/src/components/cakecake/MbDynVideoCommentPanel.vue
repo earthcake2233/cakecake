@@ -278,6 +278,8 @@
           :article-author-id="isArticle ? articleAuthorId : 0"
           :dynamic-author-id="isDynamic ? dynamicAuthorId : 0"
           :comment-sort="commentSort"
+          :page="commentCurrentPage"
+          :page-size="COMMENT_PAGE_SIZE"
           :initial-comments-curated="commentsCurated"
           :initial-comments-closed="commentsClosed"
           @counts="onLiveCounts"
@@ -565,10 +567,14 @@ export default {
       }
       return String(v);
     },
-    applyCommentTotal(n) {
+    applyCommentTotal(n, totalPages) {
       const v = Number(n) || 0;
       this.commentTotal = v;
-      this.commentTotalPages = Math.max(1, Math.ceil(v / COMMENT_PAGE_SIZE));
+      const pages = Number(totalPages);
+      this.commentTotalPages =
+        Number.isFinite(pages) && pages >= 1
+          ? Math.floor(pages)
+          : Math.max(1, Math.ceil(v / COMMENT_PAGE_SIZE));
       if (this.commentCurrentPage > this.commentTotalPages) {
         this.commentCurrentPage = this.commentTotalPages;
       }
@@ -623,9 +629,9 @@ export default {
       }
       return Promise.resolve();
     },
-    onLiveCounts(n) {
-      const count = Number(n) || 0;
-      this.applyCommentTotal(count);
+    onLiveCounts(total, totalPages) {
+      const count = Number(total) || 0;
+      this.applyCommentTotal(count, totalPages);
       this.emitPatch({ comment_count: count });
       this.$emit("counts", count);
     },

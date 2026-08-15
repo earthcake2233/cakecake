@@ -596,10 +596,13 @@
                     </button>
                   </template>
                 </div>
-                <div class="vd-cmt-page-top vd-cmt-page-top--links">
-                  <span class="vd-page-info">共{{ commentTotalPages }}页</span>
+                <div
+                  v-if="isMb"
+                  class="vd-cmt-page-top vd-cmt-page-top--links"
+                >
+                  <span class="vd-page-info">共{{ displayCommentTotalPages }}页</span>
                   <template
-                    v-for="(it, pidx) in commentPagerItems"
+                    v-for="(it, pidx) in displayCommentPagerItems"
                     :key="'vd-cmt-page-top-' + pidx"
                   >
                     <span
@@ -620,7 +623,7 @@
                   <button
                     type="button"
                     class="vd-page-next vd-page-next--link"
-                    :disabled="commentCurrentPage >= commentTotalPages"
+                    :disabled="commentCurrentPage >= displayCommentTotalPages"
                     @click="setCommentPage(commentCurrentPage + 1)"
                   >
                     下一页
@@ -716,13 +719,15 @@
                     :video-author-id="mbVideoAuthorId"
                     :highlight-comment-id="mbHighlightCommentId"
                     :initial-comments-curated="!!(apiDetail && apiDetail.comments_curated)"
+                    :page="commentCurrentPage"
+                    :page-size="commentPageSize"
                     @counts="onMbCommentCounts"
                   />
                 </div>
                 <div class="vd-cmt-page-bottom vd-cmt-page-bottom--mb">
                   <div class="vd-cmt-page-bottom-left">
                     <template
-                      v-for="(it, pidx) in commentPagerItems"
+                      v-for="(it, pidx) in displayCommentPagerItems"
                       :key="'vd-cmt-page-mb-' + pidx"
                     >
                       <span
@@ -743,7 +748,7 @@
                     <button
                       type="button"
                       class="vd-page-next vd-page-next--boxed"
-                      :disabled="commentCurrentPage >= commentTotalPages"
+                      :disabled="commentCurrentPage >= displayCommentTotalPages"
                       @click="setCommentPage(commentCurrentPage + 1)"
                     >
                       下一页
@@ -751,7 +756,7 @@
                   </div>
                   <div class="vd-cmt-page-bottom-right">
                     <span class="vd-page-bottom-meta"
-                      >共{{ commentTotalPages }}页，跳至</span
+                      >共{{ displayCommentTotalPages }}页，跳至</span
                     >
                     <input
                       v-model="commentPageJumpDraft"
@@ -794,7 +799,7 @@
 
             <ul class="vd-cmt-list">
               <li
-                v-for="(thread, ti) in commentThreads"
+                v-for="(thread, ti) in mockCommentThreads"
                 :key="ti"
                 class="vd-cmt-thread"
               >
@@ -1006,10 +1011,13 @@
               </li>
             </ul>
 
-            <div class="vd-cmt-page-bottom vd-cmt-page-bottom--mock">
+            <div
+              v-if="isMb"
+              class="vd-cmt-page-bottom vd-cmt-page-bottom--mock"
+            >
               <div class="vd-cmt-page-bottom-left">
                 <template
-                  v-for="(it, pidx) in commentPagerItems"
+                  v-for="(it, pidx) in displayCommentPagerItems"
                   :key="'vd-cmt-page-bot-' + pidx"
                 >
                   <span
@@ -1030,7 +1038,7 @@
                 <button
                   type="button"
                   class="vd-page-next vd-page-next--boxed"
-                  :disabled="commentCurrentPage >= commentTotalPages"
+                  :disabled="commentCurrentPage >= displayCommentTotalPages"
                   @click="setCommentPage(commentCurrentPage + 1)"
                 >
                   下一页
@@ -1038,7 +1046,7 @@
               </div>
               <div class="vd-cmt-page-bottom-right">
                 <span class="vd-page-bottom-meta"
-                  >共{{ commentTotalPages }}页，跳至</span
+                  >共{{ displayCommentTotalPages }}页，跳至</span
                 >
                 <input
                   v-model="commentPageJumpDraft"
@@ -1268,6 +1276,7 @@ export default {
       commentTotalPages: 138,
       /** 评论区页码（当前列表未接后端分页时仅用于顶栏/底栏展示与跳转） */
       commentCurrentPage: 1,
+      commentPageSize: 20,
       commentPageJumpDraft: "1",
       commentPlaceholder:
         "只是一直在等你而已，才不是想被评论呢~",
@@ -1717,10 +1726,26 @@ export default {
         !this.mbCommentPosting
       );
     },
-    commentPagerItems() {
+    mockCommentTotalPages() {
+      const n = (this.commentThreads || []).length;
+      return Math.max(1, Math.ceil(n / this.commentPageSize));
+    },
+    /** 当前展示形态下的总页数：移动端真实评论用接口计数，桌面演示评论用演示数据条数 */
+    displayCommentTotalPages() {
+      return this.isMb ? this.commentTotalPages : this.mockCommentTotalPages;
+    },
+    /** 桌面演示评论区：按当前页切片（移动端走 CakecakeCommentsLive 内部切片） */
+    mockCommentThreads() {
+      const start = (this.commentCurrentPage - 1) * this.commentPageSize;
+      return (this.commentThreads || []).slice(
+        start,
+        start + this.commentPageSize
+      );
+    },
+    displayCommentPagerItems() {
       const total = Math.max(
         1,
-        parseInt(String(this.commentTotalPages), 10) || 1
+        parseInt(String(this.displayCommentTotalPages), 10) || 1
       );
       const cur = Math.min(
         Math.max(1, parseInt(String(this.commentCurrentPage), 10) || 1),
@@ -2092,11 +2117,14 @@ export default {
         /* 保留空列表或上一批数据 */
       }
     },
-    onMbCommentCounts(n) {
-      const v = Number(n);
+    onMbCommentCounts(total, totalPages) {
+      const v = Number(total);
       if (Number.isNaN(v)) return;
       this.commentTotal = v;
-      this.commentTotalPages = Math.max(1, Math.ceil(v / 20));
+      const pages = Number(totalPages);
+      this.commentTotalPages = Number.isFinite(pages) && pages >= 1
+        ? Math.floor(pages)
+        : Math.max(1, Math.ceil(v / 20));
       if (this.commentCurrentPage > this.commentTotalPages) {
         this.commentCurrentPage = this.commentTotalPages;
       }
@@ -2105,7 +2133,7 @@ export default {
     setCommentPage(n) {
       const t = Math.max(
         1,
-        parseInt(String(this.commentTotalPages), 10) || 1
+        parseInt(String(this.displayCommentTotalPages), 10) || 1
       );
       const raw = parseInt(String(n), 10);
       const p = Number.isFinite(raw)

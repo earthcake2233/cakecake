@@ -145,6 +145,8 @@
             :article-author-id="articleId ? authorId : null"
             :dynamic-author-id="dynamicId ? authorId : null"
             :comment-sort="commentSort"
+            :page="commentCurrentPage"
+            :page-size="commentPageSize"
             :highlight-comment-id="highlightCommentId"
             :initial-comments-curated="commentsCurated"
             :initial-comments-closed="commentsClosed"
@@ -230,6 +232,7 @@ export default {
       MB_COMMENT_CURATED_LABEL,
       commentTotal: 0,
       commentTotalPages: 1,
+      commentPageSize: 20,
       commentCurrentPage: 1,
       commentPageJumpDraft: "1",
       commentDraft: "",
@@ -324,19 +327,23 @@ export default {
     }
   },
   methods: {
-    applyCommentTotal(n) {
+    applyCommentTotal(n, totalPages) {
       const v = Number(n);
       if (!Number.isFinite(v) || v < 0) return;
       this.commentTotal = v;
-      this.commentTotalPages = Math.max(1, Math.ceil(v / 20));
+      const pages = Number(totalPages);
+      this.commentTotalPages =
+        Number.isFinite(pages) && pages >= 1
+          ? Math.floor(pages)
+          : Math.max(1, Math.ceil(v / 20));
       if (this.commentCurrentPage > this.commentTotalPages) {
         this.commentCurrentPage = this.commentTotalPages;
       }
       this.commentPageJumpDraft = String(this.commentCurrentPage);
     },
-    onCommentCounts(n) {
-      this.applyCommentTotal(n);
-      this.$emit("counts", n);
+    onCommentCounts(total, totalPages) {
+      this.applyCommentTotal(total, totalPages);
+      this.$emit("counts", total, totalPages);
     },
     setCommentPage(n) {
       const t = Math.max(
