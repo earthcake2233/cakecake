@@ -7,10 +7,6 @@
   <a href="README_EN.md">
     <img src="https://img.shields.io/badge/🇬🇧English-999999?style=flat-square" alt="English">
   </a>
-    
-  <a href="https://chengzisoft.top/swagger/index.html">
-    <img src="https://img.shields.io/badge/API-Swagger-85EA2D?style=flat-square&logo=swagger" alt="API Docs">
-  </a>
 </p>
 
 # cakecake
@@ -232,6 +228,7 @@ air    # 在仓库根执行；见 .air.toml，会加载 .env
 - 前缀：`/api/v1`
 - 响应：`{ "code": number, "msg": string, "data": object | null }`（Rule **R-API-1**）
 - 写操作与 WebSocket：`Authorization: Bearer <access_token>`
+- Swagger API 文档：仅开发环境启用，本地启动后端后访问 `http://localhost:8080/swagger/index.html`（生产环境不注册该路由）
 
 完整路由与行为以 **SPEC** 为准。
 
