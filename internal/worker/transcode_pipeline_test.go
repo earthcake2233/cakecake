@@ -245,6 +245,8 @@ func TestHandleDelivery_TranscodeRetryableExhausted(t *testing.T) {
 	expectProcessingVideo(mock, 6)
 	mock.ExpectExec("INSERT INTO `transcode_dead_letters`").
 		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec("UPDATE `transcode_dead_letters`").
+		WillReturnResult(sqlmock.NewResult(0, 0))
 	expectFailVideo(mock, 6)
 	ack := &fakeAck{}
 	job := queue.TranscodeJob{VideoID: 6, RawPath: "/tmp/r.mp4", RetryCount: 3}
@@ -288,6 +290,8 @@ func TestHandleDelivery_RepublishFailure(t *testing.T) {
 	expectProcessingVideo(mock, 10)
 	mock.ExpectExec("INSERT INTO `transcode_dead_letters`").
 		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec("UPDATE `transcode_dead_letters`").
+		WillReturnResult(sqlmock.NewResult(0, 0))
 	expectFailVideo(mock, 10)
 
 	ack := &fakeAck{}
@@ -307,6 +311,8 @@ func TestHandleDelivery_UploadVideoFailsExhausted(t *testing.T) {
 	expectProcessingVideo(mock, 11)
 	mock.ExpectExec("INSERT INTO `transcode_dead_letters`").
 		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec("UPDATE `transcode_dead_letters`").
+		WillReturnResult(sqlmock.NewResult(0, 0))
 	expectFailVideo(mock, 11)
 	ack := &fakeAck{}
 	job := queue.TranscodeJob{VideoID: 11, RawPath: "/tmp/r.mp4", CoverPath: "/tmp/c.jpg", RetryCount: 3}
@@ -324,6 +330,11 @@ func TestDeadLetterTranscode_PersistsAndPublishes(t *testing.T) {
 	db := newBehavioralWorkerDB(t)
 	pub := &fakePublisher{}
 	job := queue.TranscodeJob{VideoID: 7, RawPath: "/tmp/r.mp4", RetryCount: 3}
+	// An older unresolved row for the same video exists: it must be closed as
+	// superseded, otherwise pending rows accumulate forever.
+	require.NoError(t, db.Create(&video.TranscodeDeadLetter{
+		VideoID: 7, RetryCount: 2, Reason: "oss down", PayloadJSON: "{}",
+	}).Error)
 	deadLetterTranscode(context.Background(), db, pub, zap.NewNop(), job, "oss down")
 
 	require.Len(t, pub.published, 1)
@@ -332,11 +343,14 @@ func TestDeadLetterTranscode_PersistsAndPublishes(t *testing.T) {
 	require.NoError(t, json.Unmarshal(pub.published[0].Body, &dead))
 	require.Equal(t, uint64(7), dead.VideoID)
 
-	var rec video.TranscodeDeadLetter
-	require.NoError(t, db.Where("video_id = ?", 7).First(&rec).Error)
-	require.Equal(t, "oss down", rec.Reason)
-	require.Equal(t, 3, rec.RetryCount)
-	require.Contains(t, rec.PayloadJSON, "oss down")
+	var recs []video.TranscodeDeadLetter
+	require.NoError(t, db.Where("video_id = ?", 7).Order("id ASC").Find(&recs).Error)
+	require.Len(t, recs, 2)
+	require.NotNil(t, recs[0].ProcessedAt, "superseded row must be closed")
+	require.Nil(t, recs[1].ProcessedAt, "the current dead letter stays pending for auto retry")
+	require.Equal(t, "oss down", recs[1].Reason)
+	require.Equal(t, 3, recs[1].RetryCount)
+	require.Contains(t, recs[1].PayloadJSON, "oss down")
 }
 
 func TestTruncate_RuneSafeUTF8(t *testing.T) {

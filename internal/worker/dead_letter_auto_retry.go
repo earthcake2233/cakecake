@@ -41,10 +41,15 @@ var autoRetryNonRetryableKeywords = []string{
 	"OSS 未配置", "未配置", "not configured", "configuration",
 }
 
-// errAutoRetrySkip rolls back the per-row transaction when the video is not
-// in a retryable state (deleted or already terminal), without counting it as
-// an error.
-var errAutoRetrySkip = errors.New("auto retry skip: video not retryable")
+// errAutoRetrySkip rolls back the per-row transaction when another replay is
+// already in flight (video is processing); the row is left pending so the
+// in-flight job's outcome decides its fate.
+var errAutoRetrySkip = errors.New("auto retry skip: replay already in flight")
+
+// errAutoRetryResolve rolls back the per-row transaction when the video is
+// deleted or in a terminal state; the row is then marked processed so it can
+// be archived instead of dangling as pending forever.
+var errAutoRetryResolve = errors.New("auto retry resolve: video not retryable")
 
 // StartTranscodeDeadLetterAutoRetry periodically requeues unresolved dead
 // letters whose reason is transient. Each row gets a bounded number of auto
@@ -74,16 +79,29 @@ func StartTranscodeDeadLetterAutoRetry(ctx context.Context, db *gorm.DB, lg *zap
 func autoRetryDeadLettersOnce(ctx context.Context, db *gorm.DB, lg *zap.Logger) (int, error) {
 	var rows []video.TranscodeDeadLetter
 	if err := db.WithContext(ctx).
-		Where("archived_at IS NULL AND processed_at IS NULL AND requeued_at IS NULL AND auto_retry_count < ?", deadLetterAutoRetryMax).
+		Where("archived_at IS NULL AND processed_at IS NULL AND requeued_at IS NULL").
 		Order("id ASC").
 		Limit(deadLetterAutoRetryBatch).
 		Find(&rows).Error; err != nil {
 		return 0, err
 	}
 	requeued := 0
+	resolve := func(rowID uint64, why string) {
+		if err := resolveTranscodeDeadLetter(db.WithContext(ctx), rowID); err != nil {
+			lg.Warn("resolve transcode dead letter",
+				zap.Uint64("dead_letter_id", rowID),
+				zap.String("why", why),
+				zap.Error(err))
+		}
+	}
 	for i := range rows {
 		row := rows[i]
 		if !autoRetryableReason(row.Reason) {
+			resolve(row.ID, "not transient")
+			continue
+		}
+		if row.AutoRetryCount >= deadLetterAutoRetryMax {
+			resolve(row.ID, "per-row budget exhausted")
 			continue
 		}
 		backoff := deadLetterAutoRetryBase << row.AutoRetryCount
@@ -97,6 +115,7 @@ func autoRetryDeadLettersOnce(ctx context.Context, db *gorm.DB, lg *zap.Logger) 
 			Job queue.TranscodeJob `json:"job"`
 		}
 		if err := json.Unmarshal([]byte(row.PayloadJSON), &payload); err != nil || payload.Job.VideoID == 0 {
+			resolve(row.ID, "invalid payload")
 			continue
 		}
 		// Lifetime bound: sum auto retries across all un-archived dead-letter
@@ -111,6 +130,7 @@ func autoRetryDeadLettersOnce(ctx context.Context, db *gorm.DB, lg *zap.Logger) 
 			continue
 		}
 		if totalAutoRetries >= deadLetterAutoRetryTotalMax {
+			resolve(row.ID, "lifetime budget exhausted")
 			continue
 		}
 		job := payload.Job
@@ -128,14 +148,20 @@ func autoRetryDeadLettersOnce(ctx context.Context, db *gorm.DB, lg *zap.Logger) 
 			// the transaction so the state we validated is the state we update.
 			var v video.Video
 			if err := tx.WithContext(ctx).First(&v, job.VideoID).Error; err != nil {
-				return errAutoRetrySkip
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					return errAutoRetryResolve
+				}
+				return err
 			}
 			// Only failed videos are retryable. processing means a replay (or
 			// a normal job) is already in flight; scheduling again here would
 			// double-transcode the same video in the minute-level window
-			// before the dead letter is marked processed.
+			// before the in-flight job resolves this row.
 			if v.Status != video.StatusFailed {
-				return errAutoRetrySkip
+				if v.Status == video.StatusProcessing {
+					return errAutoRetrySkip
+				}
+				return errAutoRetryResolve
 			}
 			if err := tx.WithContext(ctx).Create(&video.TranscodeOutbox{
 				JobID:   job.JobID,
@@ -172,6 +198,10 @@ func autoRetryDeadLettersOnce(ctx context.Context, db *gorm.DB, lg *zap.Logger) 
 			}).Error
 		})
 		if errors.Is(txErr, errAutoRetrySkip) {
+			continue
+		}
+		if errors.Is(txErr, errAutoRetryResolve) {
+			resolve(row.ID, "video terminal or missing")
 			continue
 		}
 		if txErr != nil {

@@ -61,6 +61,7 @@ func TestAutoRetryDeadLettersOnce_RequeuesTransient(t *testing.T) {
 	require.NoError(t, db.First(&row).Error)
 	require.Equal(t, 1, row.AutoRetryCount)
 	require.NotNil(t, row.LastAutoRetryAt)
+	require.Nil(t, row.ProcessedAt, "a scheduled replay leaves the row pending until its outcome is known")
 	var v video.Video
 	require.NoError(t, db.First(&v, 80).Error)
 	require.Equal(t, video.StatusProcessing, v.Status)
@@ -83,6 +84,10 @@ func TestAutoRetryDeadLettersOnce_SkipsPermanent(t *testing.T) {
 	require.NoError(t, err)
 	require.Zero(t, n)
 	require.Zero(t, countOutbox(t, db))
+	var row video.TranscodeDeadLetter
+	require.NoError(t, db.First(&row).Error)
+	require.NotNil(t, row.ProcessedAt, "permanent reasons must be resolved so retention can archive the row")
+	require.Zero(t, row.AutoRetryCount)
 }
 
 func TestAutoRetryDeadLettersOnce_RespectsMaxAndBackoff(t *testing.T) {
@@ -109,6 +114,12 @@ func TestAutoRetryDeadLettersOnce_RespectsMaxAndBackoff(t *testing.T) {
 	require.NoError(t, err)
 	require.Zero(t, n, "maxed-out and backoff-pending rows must not be requeued")
 	require.Zero(t, countOutbox(t, db))
+	var maxed video.TranscodeDeadLetter
+	require.NoError(t, db.Where("video_id = ?", 82).First(&maxed).Error)
+	require.NotNil(t, maxed.ProcessedAt, "a maxed-out row is terminal and must be resolved")
+	var backoff video.TranscodeDeadLetter
+	require.NoError(t, db.Where("video_id = ?", 83).First(&backoff).Error)
+	require.Nil(t, backoff.ProcessedAt, "a row inside its backoff window stays pending for the next scan")
 }
 
 func TestAutoRetryDeadLettersOnce_SkipsTerminalOrMissingVideo(t *testing.T) {
@@ -134,6 +145,10 @@ func TestAutoRetryDeadLettersOnce_SkipsTerminalOrMissingVideo(t *testing.T) {
 	var row video.TranscodeDeadLetter
 	require.NoError(t, db.Where("video_id = ?", 84).First(&row).Error)
 	require.Zero(t, row.AutoRetryCount, "skipped rows must not consume retry budget")
+	require.NotNil(t, row.ProcessedAt, "a terminal video resolves the row so it can archive")
+	var missing video.TranscodeDeadLetter
+	require.NoError(t, db.Where("video_id = ?", 85).First(&missing).Error)
+	require.NotNil(t, missing.ProcessedAt, "a missing video resolves the row so it can archive")
 }
 
 func TestAutoRetryDeadLettersOnce_SkipsProcessingVideo(t *testing.T) {
@@ -152,6 +167,10 @@ func TestAutoRetryDeadLettersOnce_SkipsProcessingVideo(t *testing.T) {
 	require.NoError(t, err)
 	require.Zero(t, n)
 	require.Zero(t, countOutbox(t, db))
+	var row video.TranscodeDeadLetter
+	require.NoError(t, db.Where("video_id = ?", 86).First(&row).Error)
+	require.Nil(t, row.ProcessedAt, "an in-flight replay leaves the row pending; its outcome resolves it")
+	require.Zero(t, row.AutoRetryCount)
 }
 
 func TestAutoRetryDeadLettersOnce_LifetimeBudgetStopsNewRows(t *testing.T) {
@@ -178,6 +197,12 @@ func TestAutoRetryDeadLettersOnce_LifetimeBudgetStopsNewRows(t *testing.T) {
 	require.NoError(t, err)
 	require.Zero(t, n, "lifetime budget exhausted: fresh rows must not restart retries")
 	require.Zero(t, countOutbox(t, db))
+	var rows []video.TranscodeDeadLetter
+	require.NoError(t, db.Where("video_id = ?", 87).Order("id ASC").Find(&rows).Error)
+	require.Len(t, rows, 2)
+	for _, r := range rows {
+		require.NotNil(t, r.ProcessedAt, "rows whose lifetime budget is exhausted must be resolved")
+	}
 }
 
 func TestAutoRetryDeadLettersOnce_LifetimeBudgetStillAllowsWithinLimit(t *testing.T) {
