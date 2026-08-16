@@ -37,6 +37,7 @@ type Gateway struct {
 	LLM           *Client
 	Redis         *redis.Client
 	MaxHistory    int
+	MaxTokens     int
 	HistoryTTL    time.Duration
 	SystemPrompt  string
 	HistoryPrefix string

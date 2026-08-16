@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
@@ -21,10 +22,33 @@ func ListHotSearchMergedDetail(ctx context.Context, db *gorm.DB, rec *SearchHotR
 	if limit > 20 {
 		limit = 20
 	}
-	if out, ok := mergeHotSearchFromLayout(ctx, db, rec, limit); ok {
-		return out, nil
+	var rdb *redis.Client
+	cacheEnabled := true
+	if rec != nil {
+		rdb = rec.Rdb
+		if rec.CacheEnabled != nil {
+			cacheEnabled = rec.CacheEnabled()
+		}
 	}
-	return listHotSearchMergedDetailFromOps(ctx, db, rec, limit)
+	if cacheEnabled {
+		if items, ok := cachedMergedDetail(ctx, rdb, limit); ok {
+			return items, nil
+		}
+	}
+	var out []HotSearchMergedDetail
+	if merged, ok := mergeHotSearchFromLayout(ctx, db, rec, limit); ok {
+		out = merged
+	} else {
+		var err error
+		out, err = listHotSearchMergedDetailFromOps(ctx, db, rec, limit)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if cacheEnabled {
+		storeMergedDetail(ctx, rdb, limit, out)
+	}
+	return out, nil
 }
 
 // listHotSearchMergedDetailFromOps merges DB ops (pin/block/manual) with the Redis auto rank

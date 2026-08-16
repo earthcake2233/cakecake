@@ -54,6 +54,9 @@ type HotSearchMergedDetail struct {
 type SearchHotRecorder struct {
 	Rdb  *redis.Client
 	Sens *sensitive.Filter
+	// CacheEnabled, when non-nil, toggles the merged-detail Redis cache at
+	// runtime (used to reproduce before/after benchmark without a redeploy).
+	CacheEnabled func() bool
 }
 
 // normalizeSearchKeyword lowercases and strips spaces for dedup / ZSET member.
