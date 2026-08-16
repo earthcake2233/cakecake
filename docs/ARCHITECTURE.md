@@ -305,7 +305,7 @@ graph TB
 | **Redis Pub/Sub 做弹幕广播中继，而非 WebSocket 直发** | 解耦广播与 HTTP handler。多副本订阅同一 Redis 频道，无需共享内存即可水平扩展                                                    |
 | **AI 事件/控制走 Redis Pub/Sub + 生成快照（owner/genID 守卫）** | 多副本下 WS 与生成解耦：事件扇出到用户所在副本，暂停/继续路由到 owner；热路径缓冲留在 owner 内存保证性能                     |
 | **转码用 RabbitMQ 而非 Redis List**                   | RabbitMQ 提供消息持久化、消费确认、publisher confirm、TTL/DLX 延迟重试与死信——视频处理不可接受数据丢失，延迟重试不能靠业务层 sleep                                                           |
-| **GORM AutoMigrate + goose 版本化迁移**                | 开发环境 GORM AutoMigrate 自动建表（V1-V19），生产环境 APP_ENV=production 默认走 goose SQL 迁移（V20+），支持 up/down 回滚 |      |
+| **GORM 版本化迁移 + goose SQL 迁移**                   | 开发环境 GORM 版本化迁移启动时自动建表；生产环境 APP_ENV=production 默认走 goose SQL 迁移（按序执行 `migrations/` 下全部 `.sql`），支持 up/down 回滚 |      |
 | **ES 可选而非强制依赖**                               | 降低上手门槛，未配置时搜索页优雅降级                                                                                            |
 | **Redis 令牌桶做全局限流**                            | 保护列表、搜索、空间等公开接口不受突发/爬虫打垮；按 IP 维度限流；Lua 脚本保证令牌桶原子性；桶容量支持短时突发，速率限制稳态 QPS |
 | **bcrypt + 双 Token JWT**                             | 行业标准认证方案，Access/Refresh 双 Token + Redis 管理 Refresh Token 轮转                                                       |

@@ -305,7 +305,7 @@ graph TB
 | **Redis Pub/Sub over direct WebSocket fan-out** | Decouples broadcast from the HTTP handler. Multiple replicas subscribe to the same Redis channel, enabling horizontal scaling without shared memory.  |
 | **AI events/controls via Redis Pub/Sub + generation snapshot (owner/genID-guarded)** | Decouples WS from generation under multiple replicas: events fan out to the replica holding the user's WS, pause/resume route to the owner; the hot-path buffer stays in the owner's memory for performance. |
 | **RabbitMQ over Redis List for transcode**      | RabbitMQ provides message persistence, consumer acknowledgments, publisher confirm, TTL/DLX delayed retry, and dead-lettering — video processing cannot tolerate data loss, and delayed retry must not rely on worker sleep.  |
-| **GORM AutoMigrate + goose versioned migrations** | Dev: GORM AutoMigrate (V1-V19). Prod (APP_ENV=production): goose SQL migrations (V20+) with up/down rollback. |                                                    |
+| **GORM versioned migrations + goose SQL migrations** | Dev: GORM versioned migrations build the schema on startup. Prod (APP_ENV=production): goose applies every `.sql` under `migrations/` in order, with up/down rollback. |                                                    |
 | **ES optional, not mandatory**                  | Reduces onboarding friction. The search page degrades gracefully when ES is not configured.                                                           |
 | **bcrypt + dual-token JWT**                     | Industry standard for auth. Access/Refresh token pattern with Redis-managed refresh token rotation.                                                   |
 
