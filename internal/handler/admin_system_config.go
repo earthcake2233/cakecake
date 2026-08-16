@@ -11,14 +11,15 @@ import (
 
 // knownConfigKeys defines the set of valid runtime config keys.
 var knownConfigKeys = map[string]bool{
-	"agent_enabled":         true,
-	"agent_daily_quota":     true,
-	"agent_max_history":     true,
-	"agent_history_ttl":     true,
-	"agent_request_timeout": true,
-	"rate_limit_enabled":    true,
-	"rate_limit_rate":       true,
-	"rate_limit_burst":      true,
+	"agent_enabled":           true,
+	"agent_daily_quota":       true,
+	"agent_max_history":       true,
+	"agent_history_ttl":       true,
+	"agent_request_timeout":   true,
+	"rate_limit_enabled":      true,
+	"rate_limit_rate":         true,
+	"rate_limit_burst":        true,
+	"hotsearch_cache_enabled": true,
 }
 
 // AdminListSystemConfigs returns all runtime system configs from the cache.

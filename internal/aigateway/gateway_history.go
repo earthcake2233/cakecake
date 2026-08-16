@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"time"
+	"unicode/utf8"
 )
 
 // HistoryStore owns short-term conversation history persistence for the gateway.
@@ -87,5 +88,39 @@ func (h *HistoryStore) BuildMessages(ctx context.Context, conversationID uint64,
 		}
 	}
 	msgs = append(msgs, ChatMessage{Role: "user", Content: userText})
-	return msgs, nil
+	return trimMessagesToTokenBudget(msgs, h.gw.MaxTokens), nil
+}
+
+// estimatedTokens is a cheap heuristic (≈ 4 runes/token) used only to bound
+// the prompt size; it is not an exact tokenizer count.
+func estimatedTokens(s string) int {
+	return (utf8.RuneCountInString(s) + 3) / 4
+}
+
+// trimMessagesToTokenBudget keeps the system message plus the newest messages
+// that fit within maxTokens. The most recent user message is always kept, so a
+// single oversized message is still delivered. maxTokens <= 0 disables trimming.
+func trimMessagesToTokenBudget(msgs []ChatMessage, maxTokens int) []ChatMessage {
+	if maxTokens <= 0 || len(msgs) <= 1 {
+		return msgs
+	}
+	keep := make([]ChatMessage, 0, len(msgs)-1)
+	total := 0
+	for i := len(msgs) - 1; i >= 1; i-- {
+		cost := estimatedTokens(msgs[i].Content)
+		for _, tc := range msgs[i].ToolCalls {
+			cost += estimatedTokens(tc.Function.Arguments)
+		}
+		if len(keep) > 0 && total+cost > maxTokens {
+			break
+		}
+		total += cost
+		keep = append(keep, msgs[i])
+	}
+	out := make([]ChatMessage, 0, len(keep)+1)
+	out = append(out, msgs[0]) // system
+	for i := len(keep) - 1; i >= 0; i-- {
+		out = append(out, keep[i])
+	}
+	return out
 }

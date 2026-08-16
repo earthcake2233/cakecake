@@ -27,6 +27,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"strconv"
@@ -145,14 +146,15 @@ func main() {
 
 	// Runtime config: seeded from env, periodically refreshed from DB.
 	runtimeCfg := config.NewRuntimeConfig(db, map[string]string{
-		"agent_enabled":         strconv.FormatBool(cfg.AgentEnabled),
-		"agent_daily_quota":     strconv.Itoa(cfg.AgentDailyQuota),
-		"agent_max_history":     strconv.Itoa(cfg.AgentMaxHistory),
-		"agent_history_ttl":     cfg.AgentHistoryTTL.String(),
-		"agent_request_timeout": cfg.AgentRequestTimeout.String(),
-		"rate_limit_enabled":    strconv.FormatBool(cfg.RateLimitEnabled),
-		"rate_limit_rate":       strconv.FormatFloat(cfg.RateLimitRate, 'f', -1, 64),
-		"rate_limit_burst":      strconv.Itoa(cfg.RateLimitBurst),
+		"agent_enabled":           strconv.FormatBool(cfg.AgentEnabled),
+		"agent_daily_quota":       strconv.Itoa(cfg.AgentDailyQuota),
+		"agent_max_history":       strconv.Itoa(cfg.AgentMaxHistory),
+		"agent_history_ttl":       cfg.AgentHistoryTTL.String(),
+		"agent_request_timeout":   cfg.AgentRequestTimeout.String(),
+		"rate_limit_enabled":      strconv.FormatBool(cfg.RateLimitEnabled),
+		"rate_limit_rate":         strconv.FormatFloat(cfg.RateLimitRate, 'f', -1, 64),
+		"rate_limit_burst":        strconv.Itoa(cfg.RateLimitBurst),
+		"hotsearch_cache_enabled": "true",
 	})
 	runtimeCtx, runtimeCancel := context.WithCancel(context.Background())
 	defer runtimeCancel()
@@ -267,6 +269,9 @@ func main() {
 	}
 
 	searchHot := &hotsearch.SearchHotRecorder{Rdb: rdb, Sens: sens}
+	searchHot.CacheEnabled = func() bool {
+		return runtimeCfg.GetBool("hotsearch_cache_enabled", true)
+	}
 
 	var agentGW *aigateway.Gateway
 	if cfg.DeepSeekAPIKey != "" {
@@ -279,6 +284,7 @@ func main() {
 			},
 			Redis:      rdb,
 			MaxHistory: cfg.AgentMaxHistory,
+			MaxTokens:  cfg.AgentMaxTokens,
 			HistoryTTL: cfg.AgentHistoryTTL,
 		}
 		log.Info("ai gateway enabled",
@@ -396,6 +402,20 @@ func main() {
 		}
 	}()
 	log.Info("cakecake listening", zap.String("addr", cfg.HTTPAddr))
+
+	// ── Optional pprof (PPROF_ADDR, e.g. 127.0.0.1:8082) ──
+	// Loopback-only listener; keep disabled in production unless profiling.
+	if pprofAddr := os.Getenv("PPROF_ADDR"); pprofAddr != "" {
+		pprofSrv := &http.Server{Addr: pprofAddr, Handler: http.DefaultServeMux}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			log.Info("pprof enabled", zap.String("addr", pprofAddr))
+			if err := pprofSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				log.Warn("pprof server", zap.Error(err))
+			}
+		}()
+	}
 
 	// ── Graceful shutdown ──
 	ch := make(chan os.Signal, 1)

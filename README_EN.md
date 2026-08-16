@@ -143,7 +143,7 @@ go build -o ./bin/cakecake ./cmd/cakecake/
 ./bin/cakecake               # default :8080; health check: GET /api/v1/health
 ```
 
-MySQL database must exist first (e.g., `cakecake`); in development GORM AutoMigrate creates tables (V1-V19), in production (APP_ENV=production) goose SQL migrations run (V20+), with rollback support.
+MySQL database must exist first (e.g., `cakecake`); in development GORM runs its versioned migrations on startup (incremental, recorded in `schema_versions`), in production (`APP_ENV=production`) goose applies every `.sql` under `migrations/` in order, with rollback support.
 
 **2. Frontend**
 

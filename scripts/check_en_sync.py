@@ -25,6 +25,10 @@ SKIP_PATTERNS = [
     # 个人面试准备材料，不要求英文对照，也不提交仓库
     "interview-testing*.md",
     "interview-core-chains*.md",
+    "INTERVIEW_SPRINT*.md",
+    "resume-optimized-go-intern*.md",
+    "skill_frequency*.md",
+    "onsite_shortlist*.md",
 ]
 
 def extract_heading_levels(text):

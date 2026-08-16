@@ -136,6 +136,8 @@ type C struct {
 
 	AgentMaxHistory int `json:"agent_max_history"`
 
+	AgentMaxTokens int `json:"agent_max_tokens"`
+
 	AgentHistoryTTL time.Duration `json:"agent_history_ttl"`
 
 	AgentDailyQuota int `json:"agent_daily_quota"`
@@ -286,6 +288,7 @@ func Load() *C {
 		AgentBotUsername:    getenv("AGENT_BOT_USERNAME", "minibili_ai"),
 		AgentEnabled:        parseBoolEnv("AGENT_ENABLED", strings.TrimSpace(os.Getenv("DEEPSEEK_API_KEY")) != ""),
 		AgentMaxHistory:     atoi(os.Getenv("AGENT_MAX_HISTORY"), 20),
+		AgentMaxTokens:      atoi(os.Getenv("AGENT_MAX_TOKENS"), 6000),
 		AgentHistoryTTL:     mustParseDuration(os.Getenv("AGENT_HISTORY_TTL"), 30*24*time.Hour),
 		AgentDailyQuota:     atoi(os.Getenv("AGENT_DAILY_QUOTA"), 80),
 		RateLimitEnabled:    parseBoolEnv("RATE_LIMIT_ENABLED", false),
@@ -335,6 +338,7 @@ func (c *C) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	enc.AddString("agent_bot_username", c.AgentBotUsername)
 	enc.AddBool("agent_enabled", c.AgentEnabled)
 	enc.AddInt("agent_max_history", c.AgentMaxHistory)
+	enc.AddInt("agent_max_tokens", c.AgentMaxTokens)
 	enc.AddDuration("agent_history_ttl", c.AgentHistoryTTL)
 	enc.AddInt("agent_daily_quota", c.AgentDailyQuota)
 	enc.AddDuration("agent_request_timeout", c.AgentRequestTimeout)

@@ -20,6 +20,14 @@ func NewHotSearchService(db *gorm.DB, rec *SearchHotRecorder) *HotSearchService 
 	return &HotSearchService{store: NewHotSearchProvider(db), rec: rec}
 }
 
+// invalidateMerged drops cached merged lists after any ops/layout/rank change.
+func (s *HotSearchService) invalidateMerged(ctx context.Context) {
+	if s.rec == nil {
+		return
+	}
+	invalidateMergedCache(ctx, s.rec.Rdb)
+}
+
 // ---------------------------------------------------------------------------
 // HotSearchOp CRUD
 // ---------------------------------------------------------------------------
@@ -31,7 +39,11 @@ func (s *HotSearchService) ListOps(ctx context.Context) ([]admin.HotSearchOp, er
 
 // CreateOp creates a new HotSearchOp.
 func (s *HotSearchService) CreateOp(ctx context.Context, op *admin.HotSearchOp) error {
-	return s.store.CreateOp(ctx, op)
+	if err := s.store.CreateOp(ctx, op); err != nil {
+		return err
+	}
+	s.invalidateMerged(ctx)
+	return nil
 }
 
 // GetOp retrieves a HotSearchOp by ID.
@@ -41,12 +53,20 @@ func (s *HotSearchService) GetOp(ctx context.Context, id uint64) (*admin.HotSear
 
 // UpdateOp updates fields of a HotSearchOp.
 func (s *HotSearchService) UpdateOp(ctx context.Context, id uint64, updates map[string]any) error {
-	return s.store.UpdateOp(ctx, id, updates)
+	if err := s.store.UpdateOp(ctx, id, updates); err != nil {
+		return err
+	}
+	s.invalidateMerged(ctx)
+	return nil
 }
 
 // DeleteOp deletes a HotSearchOp by ID.
 func (s *HotSearchService) DeleteOp(ctx context.Context, id uint64) error {
-	return s.store.DeleteOp(ctx, id)
+	if err := s.store.DeleteOp(ctx, id); err != nil {
+		return err
+	}
+	s.invalidateMerged(ctx)
+	return nil
 }
 
 // FindAllOps returns all ops without ordering (for reorder logic).
@@ -62,6 +82,7 @@ func (s *HotSearchService) FindAllOps(ctx context.Context) ([]admin.HotSearchOp,
 // then create or update, syncing layout as needed.
 // Returns the op, whether it was newly created, and any error.
 func (s *HotSearchService) QuickOpCreateOrUpdate(ctx context.Context, opType, keyword, displayTitle, badge string, pinRank int) (*admin.HotSearchOp, bool, error) {
+	defer s.invalidateMerged(ctx)
 	kw := strings.TrimSpace(keyword)
 	norm := normalizeSearchKeyword(kw)
 
@@ -181,7 +202,11 @@ func (s *HotSearchService) ReorderItems(ctx context.Context, items []ReorderItem
 	for i, it := range items {
 		layout[i] = HotSearchLayoutEntry{Keyword: it.Keyword, Title: it.Title}
 	}
-	return s.store.SaveLayout(ctx, layout)
+	if err := s.store.SaveLayout(ctx, layout); err != nil {
+		return err
+	}
+	s.invalidateMerged(ctx)
+	return nil
 }
 
 // syncLayoutAfterOp mirrors the original syncHotSearchLayoutAfterOp helper.
@@ -229,27 +254,47 @@ func (s *HotSearchService) HasDisplayLayout(ctx context.Context) bool {
 
 // SaveDisplayLayout persists drag order.
 func (s *HotSearchService) SaveDisplayLayout(ctx context.Context, entries []HotSearchLayoutEntry) error {
-	return s.store.SaveLayout(ctx, entries)
+	if err := s.store.SaveLayout(ctx, entries); err != nil {
+		return err
+	}
+	s.invalidateMerged(ctx)
+	return nil
 }
 
 // ClearDisplayLayout removes custom drag order.
 func (s *HotSearchService) ClearDisplayLayout(ctx context.Context) error {
-	return s.store.ClearLayout(ctx)
+	if err := s.store.ClearLayout(ctx); err != nil {
+		return err
+	}
+	s.invalidateMerged(ctx)
+	return nil
 }
 
 // ApplyLayoutMove reorders one keyword in drag layout.
 func (s *HotSearchService) ApplyLayoutMove(ctx context.Context, keyword, title string, targetRank int) error {
-	return s.store.ApplyLayoutMove(ctx, keyword, title, targetRank)
+	if err := s.store.ApplyLayoutMove(ctx, keyword, title, targetRank); err != nil {
+		return err
+	}
+	s.invalidateMerged(ctx)
+	return nil
 }
 
 // RemoveLayoutEntry drops one keyword from drag layout.
 func (s *HotSearchService) RemoveLayoutEntry(ctx context.Context, keyword string) error {
-	return s.store.RemoveLayoutEntry(ctx, keyword)
+	if err := s.store.RemoveLayoutEntry(ctx, keyword); err != nil {
+		return err
+	}
+	s.invalidateMerged(ctx)
+	return nil
 }
 
 // EnsureLayoutFromMerged seeds layout when absent.
 func (s *HotSearchService) EnsureLayoutFromMerged(ctx context.Context, limit int) error {
-	return s.store.EnsureLayoutFromMerged(ctx, s.rec, limit)
+	if err := s.store.EnsureLayoutFromMerged(ctx, s.rec, limit); err != nil {
+		return err
+	}
+	s.invalidateMerged(ctx)
+	return nil
 }
 
 // ---------------------------------------------------------------------------
@@ -269,7 +314,11 @@ func (s *HotSearchService) RemoveKeywordFromRedis(ctx context.Context, keyword s
 	if s.rec == nil {
 		return nil
 	}
-	return s.rec.RemoveKeyword(ctx, keyword)
+	if err := s.rec.RemoveKeyword(ctx, keyword); err != nil {
+		return err
+	}
+	s.invalidateMerged(ctx)
+	return nil
 }
 
 // BoostKeyword increases Redis hot-search score.
@@ -277,7 +326,11 @@ func (s *HotSearchService) BoostKeyword(ctx context.Context, keyword string, del
 	if s.rec == nil {
 		return nil
 	}
-	return s.rec.BoostKeyword(ctx, keyword, delta)
+	if err := s.rec.BoostKeyword(ctx, keyword, delta); err != nil {
+		return err
+	}
+	s.invalidateMerged(ctx)
+	return nil
 }
 
 // ---------------------------------------------------------------------------
