@@ -153,7 +153,7 @@ func runHTTP(ctx context.Context, args []string) {
 					errCount.Add(1)
 					continue
 				}
-				io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
+				_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
 				resp.Body.Close()
 				code := fmt.Sprintf("%d", resp.StatusCode)
 				v, _ := statuses.LoadOrStore(code, 0)
@@ -381,7 +381,7 @@ func runWS(ctx context.Context, args []string) {
 				req.Header.Set("Authorization", "Bearer "+tok)
 				resp, err := client.Do(req)
 				if err == nil {
-					io.Copy(io.Discard, io.LimitReader(resp.Body, 512))
+					_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 512))
 					resp.Body.Close()
 					if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 						sendOK.Add(1)
