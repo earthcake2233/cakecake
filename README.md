@@ -262,6 +262,24 @@ go test -tags=integration ./internal/handler/... -count=1
 
 ---
 
+## 性能压测
+
+> 数据来自生产 ECS（2C/2G，压测机与服务器同机，为保守下界），全部可用仓库内工具复现。
+
+- 测试覆盖率：单元测试语句覆盖率 **67.4%**，含集成标签测试总覆盖率 **70.7%**（`go test -cover` 实测，241 个测试文件）
+- 热榜接口缓存优化：merged 布局缓存进 Redis（TTL 30s、admin 变更即失效），同环境复测 **412 → 3,601 QPS（8.7x）**、P99 329 → 30ms（-91%）；同机压测下倍率随机器状态波动约 6-9x
+- WebSocket 弹幕：100 连接压测 **0 意外错误**（吞吐约 400-500 msg/s，随弹幕历史量波动）
+- 瓶颈定位（pprof，30s 采样）：系统调用占 38%、GORM/MySQL 查询链累计 56%、JSON 序列化 <5%、GC 几乎为 0
+
+复现：
+
+```bash
+./scripts/loadtest/reproduce.sh coverage   # 覆盖率（任意机器）
+./scripts/loadtest/reproduce.sh bench      # 热榜前后对比 + WS 强压（在服务器上运行，自动开关并恢复限流/缓存）
+```
+
+---
+
 ## 生产部署
 
 见 **[deploy/DEPLOY.md](./deploy/DEPLOY.md)**（静态资源目录常为 `/opt/minibili/www`）。可选 **[GitHub Actions](./.github/workflows/deploy.yml)** 在 CI 通过后经人工审批自动构建并 SSH 部署（Secrets 见 workflow 注释）。
