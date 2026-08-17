@@ -262,6 +262,32 @@ go test -tags=integration ./internal/handler/... -count=1
 
 ---
 
+## Performance Benchmark
+
+> Numbers were collected on the production ECS (2C/2G, generator on the same
+> host, so they are conservative lower bounds); all of them are reproducible
+> with the tooling in this repo.
+
+- Test coverage: **67.4%** unit-test statement coverage, **70.7%** with the
+  integration-tag suite (`go test -cover`, 241 test files)
+- Hot-search cache optimization: merged layout cached in Redis (TTL 30s,
+  invalidated on admin changes); same-environment retest **412 → 3,601 QPS
+  (8.7x)** with P99 329 → 30ms (-91%); the multiplier varies roughly 6-9x
+  with machine state under same-host testing
+- WebSocket danmaku: **0 unexpected errors** at 100 connections (throughput
+  roughly 400-500 msg/s, depends on danmaku history volume)
+- Bottleneck analysis (pprof, 30s sample): syscalls 38%, GORM/MySQL query
+  chain 56% cumulative, JSON serialization <5%, GC ~0
+
+Reproduce:
+
+```bash
+./scripts/loadtest/reproduce.sh coverage   # coverage (any machine)
+./scripts/loadtest/reproduce.sh bench      # hot-search before/after + WS (run on the server; toggles and restores limiter/cache)
+```
+
+---
+
 ## Production Deployment
 
 See **[deploy/DEPLOY.md](./deploy/DEPLOY.md)** (static assets usually live in `/opt/minibili/www`). Optional **[GitHub Actions](./.github/workflows/deploy.yml)** builds and deploys over SSH after CI passes, gated by manual approval (see workflow comments for Secrets).
