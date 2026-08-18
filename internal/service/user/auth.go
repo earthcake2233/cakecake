@@ -201,6 +201,18 @@ func (s *AuthService) Refresh(ctx context.Context, refreshToken string) (*Refres
 	return &RefreshResult{AccessToken: access, RefreshToken: refresh}, nil
 }
 
+// Logout invalidates a refresh token server-side so it can no longer mint a
+// new pair. Idempotent: an already-invalid or unparsable token still returns
+// success, because the client clears local state regardless.
+func (s *AuthService) Logout(ctx context.Context, refreshToken string) error {
+	_, tokenID, err := s.jwt.ParseRefresh(strings.TrimSpace(refreshToken))
+	if err != nil {
+		return nil
+	}
+	_ = s.rdb.Set(ctx, data.RefreshInvalidKey(tokenID), "1", data.RefreshInvalidTTL).Err()
+	return nil
+}
+
 // FindAdminByUsername looks up an admin by username.
 func (s *AuthService) FindAdminByUsername(ctx context.Context, username string) (*admin.Admin, error) {
 	return s.admins.FindAdminByUsername(ctx, username)

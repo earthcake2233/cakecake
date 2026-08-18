@@ -88,6 +88,25 @@ func TestAuthService_Refresh(t *testing.T) {
 	require.ErrorIs(t, err, service.ErrUnauthorized)
 }
 
+func TestAuthService_Logout(t *testing.T) {
+	s, _ := newAuthService(t)
+	ctx := context.Background()
+	res, err := s.Register(ctx, "alice", "password123")
+	require.NoError(t, err)
+	authRes, err := s.Authenticate(ctx, res.UserID, "password123")
+	require.NoError(t, err)
+
+	// Logout invalidates the refresh token server-side.
+	require.NoError(t, s.Logout(ctx, authRes.RefreshToken))
+	_, err = s.Refresh(ctx, authRes.RefreshToken)
+	require.ErrorIs(t, err, service.ErrUnauthorized)
+
+	// Idempotent: logging out again is still a success.
+	require.NoError(t, s.Logout(ctx, authRes.RefreshToken))
+	// Garbage token: no error, client-side cleanup still proceeds.
+	require.NoError(t, s.Logout(ctx, "not-a-jwt"))
+}
+
 func TestAuthService_AdminTokens(t *testing.T) {
 	s, db := newAuthService(t)
 	ctx := context.Background()

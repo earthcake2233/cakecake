@@ -25,6 +25,10 @@ type refreshReq struct {
 	RefreshToken string `json:"refresh_token"`
 }
 
+type logoutReq struct {
+	RefreshToken string `json:"refresh_token"`
+}
+
 type tokenPairResp struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
@@ -112,4 +116,19 @@ func (a *API) Refresh(c *gin.Context) {
 		return
 	}
 	resp.OK(c, tokenPairResp{AccessToken: result.AccessToken, RefreshToken: result.RefreshToken})
+}
+
+// Logout invalidates the user's refresh token server-side.
+func (a *API) Logout(c *gin.Context) {
+	var req logoutReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		resp.Err(c, http.StatusBadRequest, errcode.CodeParamError)
+		return
+	}
+	if err := a.AuthSvc.Logout(c.Request.Context(), req.RefreshToken); err != nil {
+		a.Log.Error("logout", zap.Error(err))
+		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
+		return
+	}
+	resp.OK(c, nil)
 }
