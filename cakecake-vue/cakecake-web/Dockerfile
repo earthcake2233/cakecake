@@ -15,6 +15,9 @@ RUN printf 'VITE_MINIBILI_API=true\nVITE_USE_REMOTE_API=false\nVITE_VIDEO_UPLOAD
 
 FROM nginx:1.27-alpine
 
+# Upgrade all OS packages (openssl/libexpat/c-ares) to patched versions.
+RUN apk upgrade --no-cache
+
 COPY deploy/nginx-compose.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist /usr/share/nginx/html
 

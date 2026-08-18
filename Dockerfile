@@ -17,7 +17,9 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/cakecak
 
 FROM alpine:3.22
 
-RUN apk add --no-cache ca-certificates tzdata ffmpeg
+# Upgrade all OS packages to patched versions before installing (container
+# CVE hygiene: the base tag's snapshot may still ship vulnerable packages).
+RUN apk upgrade --no-cache && apk add --no-cache ca-certificates tzdata ffmpeg
 
 WORKDIR /app
 
