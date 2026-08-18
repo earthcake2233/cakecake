@@ -553,6 +553,11 @@ export async function mbRefresh(): Promise<TokenPair> {
 }
 
 export function mbLogout(): void {
+  // 通知服务端把 refresh token 标记失效（尽力而为，失败也照常清本地）。
+  const refreshToken = getRefreshToken();
+  if (refreshToken) {
+    void http.post("/api/v1/auth/logout", { refresh_token: refreshToken }).catch(() => {});
+  }
   clearTokens();
 }
 

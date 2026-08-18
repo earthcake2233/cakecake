@@ -97,6 +97,7 @@ func registerUserRoutes(r *gin.Engine, pub, admin, authd *gin.RouterGroup, a *AP
 	pub.POST("/users", a.Register)
 	pub.POST("/auth/login", a.Login)
 	pub.POST("/auth/refresh", a.Refresh)
+	pub.POST("/auth/logout", a.Logout)
 	pub.GET("/space/:userId", middleware.OptionalJWT(jwtm), a.GetUserPublic)
 	pub.GET("/space/:userId/recent-coins", middleware.OptionalJWT(jwtm), a.ListUserRecentCoinVideos)
 	pub.GET("/space/:userId/following", middleware.OptionalJWT(jwtm), a.ListUserFollowing)

@@ -17,6 +17,7 @@ type AuthSvc interface {
 	FindAdminByUsername(ctx context.Context, username string) (*admin.Admin, error)
 	GetAdminByID(ctx context.Context, id uint64) (*admin.Admin, error)
 	LookupUser(ctx context.Context, reqUsername string) (*user.UserBrief, error)
+	Logout(ctx context.Context, refreshToken string) error
 	MarkAdminRefreshTokenInvalid(ctx context.Context, tokenID string) error
 	Refresh(ctx context.Context, refreshToken string) (*user.RefreshResult, error)
 	Register(ctx context.Context, reqUsername string, reqPassword string) (*user.RegisterResult, error)
