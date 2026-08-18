@@ -160,7 +160,7 @@ func (s *AuthService) Authenticate(ctx context.Context, userID uint64, password 
 	if bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(password)) != nil {
 		return nil, &service.SvcError{Code: 40100, Msg: "invalid credentials"}
 	}
-	access, refresh, _, err := s.jwt.IssuePair(u.ID)
+	access, refresh, _, err := s.jwt.IssuePairEpoch(u.ID, uint64(s.refreshEpoch(ctx, u.ID)))
 	if err != nil {
 		return nil, service.ErrInternalError
 	}
@@ -182,7 +182,7 @@ type RefreshResult struct {
 
 // Refresh rotates a refresh token, invalidating the old one.
 func (s *AuthService) Refresh(ctx context.Context, refreshToken string) (*RefreshResult, error) {
-	uid, tokenID, err := s.jwt.ParseRefresh(strings.TrimSpace(refreshToken))
+	uid, tokenID, tokenEpoch, err := s.jwt.ParseRefreshEpoch(strings.TrimSpace(refreshToken))
 	if err != nil {
 		return nil, service.ErrUnauthorized
 	}
@@ -193,12 +193,36 @@ func (s *AuthService) Refresh(ctx context.Context, refreshToken string) (*Refres
 	if s.rdb.Exists(ctx, data.RefreshInvalidKey(tokenID)).Val() == 1 {
 		return nil, service.ErrUnauthorized
 	}
+	epoch := s.refreshEpoch(ctx, uid)
+	if uint64(epoch) > tokenEpoch {
+		// Password was changed after this token was issued: reject stale refreshes.
+		return nil, service.ErrUnauthorized
+	}
 	_ = s.rdb.Set(ctx, data.RefreshInvalidKey(tokenID), "1", data.RefreshInvalidTTL).Err()
-	access, refresh, _, err := s.jwt.IssuePair(uid)
+	access, refresh, _, err := s.jwt.IssuePairEpoch(uid, uint64(epoch))
 	if err != nil {
 		return nil, service.ErrInternalError
 	}
 	return &RefreshResult{AccessToken: access, RefreshToken: refresh}, nil
+}
+
+// refreshEpoch returns the current refresh epoch for a user (0 when absent).
+func (s *AuthService) refreshEpoch(ctx context.Context, userID uint64) int64 {
+	v, err := s.rdb.Get(ctx, data.RefreshUserEpochKey(userID)).Int64()
+	if err != nil {
+		return 0
+	}
+	return v
+}
+
+// BumpRefreshEpoch invalidates every previously issued refresh token for a
+// user by advancing the epoch (e.g. after a password change).
+func (s *AuthService) BumpRefreshEpoch(ctx context.Context, userID uint64) error {
+	key := data.RefreshUserEpochKey(userID)
+	if err := s.rdb.Incr(ctx, key).Err(); err != nil {
+		return err
+	}
+	return s.rdb.Expire(ctx, key, data.RefreshInvalidTTL).Err()
 }
 
 // Logout invalidates a refresh token server-side so it can no longer mint a

@@ -34,6 +34,7 @@ const (
 	PrefixDanmakuCooldown     = "danmaku:cooldown:"
 	PrefixRefreshInvalid      = "refresh_token:invalid:"
 	PrefixAdminRefreshInvalid = "refresh_token:admin:invalid:"
+	PrefixRefreshEpoch        = "refresh_token:epoch:"
 	// PrefixVideoPlayDelta stores incremental views since last flush to MySQL.
 	PrefixVideoPlayDelta = "videodelta:"
 	SetPlayDirty         = "playcount:dirty"
@@ -62,6 +63,13 @@ func DanmakuCooldownKey(userID, videoID uint64) string {
 // RefreshInvalidKey returns the Redis key marking a user's refresh token invalid.
 func RefreshInvalidKey(tokenID string) string {
 	return PrefixRefreshInvalid + tokenID
+}
+
+// RefreshUserEpochKey returns the Redis key storing a user's refresh epoch.
+// Password changes INCR this key; refresh tokens minted before the bump are
+// rejected because their embedded epoch is now stale.
+func RefreshUserEpochKey(userID uint64) string {
+	return fmt.Sprintf("%s%d", PrefixRefreshEpoch, userID)
 }
 
 // AdminRefreshInvalidKey returns the Redis key marking an admin's refresh token invalid.

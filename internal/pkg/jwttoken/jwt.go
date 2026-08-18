@@ -18,10 +18,11 @@ const (
 
 // Claims is the JWT payload (Skill S-009).
 type Claims struct {
-	Principal string `json:"principal,omitempty"` // user | admin; empty legacy tokens = user
-	UserID    uint64 `json:"user_id"`
-	TokenID   string `json:"token_id"`
-	Type      string `json:"type"`
+	Principal    string `json:"principal,omitempty"` // user | admin; empty legacy tokens = user
+	UserID       uint64 `json:"user_id"`
+	TokenID      string `json:"token_id"`
+	Type         string `json:"type"`
+	RefreshEpoch uint64 `json:"refresh_epoch,omitempty"` // bumped on password change; older refreshes rejected
 	jwt.RegisteredClaims
 }
 
@@ -40,6 +41,12 @@ func NewManager(secret string) (*Manager, error) {
 
 // IssuePair returns access token, refresh token, and token id (Skill S-009).
 func (m *Manager) IssuePair(userID uint64) (access string, refresh string, tokenID string, err error) {
+	return m.IssuePairEpoch(userID, 0)
+}
+
+// IssuePairEpoch issues a pair whose refresh token carries the current refresh
+// epoch. Password changes bump the epoch, invalidating all older refreshes.
+func (m *Manager) IssuePairEpoch(userID, epoch uint64) (access string, refresh string, tokenID string, err error) {
 	tokenID = uuid.NewString()
 	now := time.Now()
 	accessClaims := Claims{
@@ -53,10 +60,11 @@ func (m *Manager) IssuePair(userID uint64) (access string, refresh string, token
 		},
 	}
 	refreshClaims := Claims{
-		Principal: PrincipalUser,
-		UserID:    userID,
-		TokenID:   tokenID,
-		Type:      claimTypeRefresh,
+		Principal:    PrincipalUser,
+		UserID:       userID,
+		TokenID:      tokenID,
+		Type:         claimTypeRefresh,
+		RefreshEpoch: epoch,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(now.Add(30 * 24 * time.Hour)),
 			IssuedAt:  jwt.NewNumericDate(now),
@@ -92,17 +100,23 @@ func (m *Manager) ParseAccess(token string) (userID uint64, tokenID string, err 
 
 // ParseRefresh validates a refresh token.
 func (m *Manager) ParseRefresh(token string) (userID uint64, tokenID string, err error) {
+	uid, tid, _, e := m.ParseRefreshEpoch(token)
+	return uid, tid, e
+}
+
+// ParseRefreshEpoch validates a refresh token and returns its refresh epoch.
+func (m *Manager) ParseRefreshEpoch(token string) (userID uint64, tokenID string, epoch uint64, err error) {
 	claims, err := m.parse(token)
 	if err != nil {
-		return 0, "", err
+		return 0, "", 0, err
 	}
 	if claims.Type != claimTypeRefresh {
-		return 0, "", fmt.Errorf("not refresh token")
+		return 0, "", 0, fmt.Errorf("not refresh token")
 	}
 	if claims.Principal != "" && claims.Principal != PrincipalUser {
-		return 0, "", fmt.Errorf("not user token")
+		return 0, "", 0, fmt.Errorf("not user token")
 	}
-	return claims.UserID, claims.TokenID, nil
+	return claims.UserID, claims.TokenID, claims.RefreshEpoch, nil
 }
 
 func (m *Manager) parse(token string) (*Claims, error) {
