@@ -15,7 +15,7 @@ COPY docs ./docs
 
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/cakecake ./cmd/cakecake
 
-FROM alpine:3.20
+FROM alpine:3.22
 
 RUN apk add --no-cache ca-certificates tzdata ffmpeg
 

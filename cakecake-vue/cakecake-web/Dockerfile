@@ -1,6 +1,6 @@
 # cakecake frontend image: Vite build + Nginx hosting (proxies /api and WebSocket to backend)
 # Build context is the repo root; see docker-compose.yml.
-FROM node:20-alpine AS build
+FROM node:22-alpine AS build
 
 WORKDIR /app
 
