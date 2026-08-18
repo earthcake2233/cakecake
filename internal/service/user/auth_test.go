@@ -107,6 +107,31 @@ func TestAuthService_Logout(t *testing.T) {
 	require.NoError(t, s.Logout(ctx, "not-a-jwt"))
 }
 
+func TestAuthService_PasswordChangeInvalidatesRefresh(t *testing.T) {
+	s, _ := newAuthService(t)
+	ctx := context.Background()
+	res, err := s.Register(ctx, "alice", "password123")
+	require.NoError(t, err)
+	authRes, err := s.Authenticate(ctx, res.UserID, "password123")
+	require.NoError(t, err)
+
+	// Rotate once: ref1 is a fresh token at epoch 0, not yet blacklisted.
+	ref1, err := s.Refresh(ctx, authRes.RefreshToken)
+	require.NoError(t, err)
+
+	// Password change bumps the epoch: ref1 (epoch 0) must now be rejected.
+	require.NoError(t, s.BumpRefreshEpoch(ctx, res.UserID))
+	_, err = s.Refresh(ctx, ref1.RefreshToken)
+	require.ErrorIs(t, err, service.ErrUnauthorized)
+
+	// A token minted after the bump refreshes normally.
+	auth2, err := s.Authenticate(ctx, res.UserID, "password123")
+	require.NoError(t, err)
+	ref2, err := s.Refresh(ctx, auth2.RefreshToken)
+	require.NoError(t, err)
+	require.NotEmpty(t, ref2.RefreshToken)
+}
+
 func TestAuthService_AdminTokens(t *testing.T) {
 	s, db := newAuthService(t)
 	ctx := context.Background()

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 	"golang.org/x/crypto/bcrypt"
 
 	"cakecake/internal/errcode"
@@ -208,6 +209,10 @@ func (a *API) UpdateMePassword(c *gin.Context) {
 	if err := a.UserSvc.UpdatePassword(c.Request.Context(), uid, string(hash)); err != nil {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
+	}
+	// 改密后使该用户所有旧 Refresh Token 失效。
+	if err := a.AuthSvc.BumpRefreshEpoch(c.Request.Context(), uid); err != nil {
+		a.Log.Error("bump refresh epoch after password change", zap.Uint64("user_id", uid), zap.Error(err))
 	}
 	resp.OK(c, okResponse{OK: true})
 }

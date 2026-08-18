@@ -14,6 +14,7 @@ import (
 type AuthSvc interface {
 	AdminRefreshTokenInvalid(ctx context.Context, tokenID string) bool
 	Authenticate(ctx context.Context, userID uint64, password string) (*user.AuthenticateResult, error)
+	BumpRefreshEpoch(ctx context.Context, userID uint64) error
 	FindAdminByUsername(ctx context.Context, username string) (*admin.Admin, error)
 	GetAdminByID(ctx context.Context, id uint64) (*admin.Admin, error)
 	LookupUser(ctx context.Context, reqUsername string) (*user.UserBrief, error)
