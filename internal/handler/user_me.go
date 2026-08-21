@@ -135,6 +135,7 @@ func (a *API) UpdateMeProfile(c *gin.Context) {
 		resp.Err(c, http.StatusInternalServerError, errcode.CodeInternalError)
 		return
 	}
+	a.esIndexUser(uid) // nickname/sign 都在 ES 用户文档里，改后异步重建索引
 	profile, err := a.UserSvc.GetMe(c.Request.Context(), uid)
 	if err != nil {
 		resp.Err(c, http.StatusNotFound, errcode.CodeNotFound)
@@ -168,6 +169,7 @@ func (a *API) UpdateMeUsername(c *gin.Context) {
 		resp.Err(c, http.StatusConflict, errcode.CodeUsernameExists)
 		return
 	}
+	a.esIndexUser(uid) // username 在 ES 用户文档里，改名后异步重建索引
 	resp.OK(c, okResponse{OK: true})
 }
 

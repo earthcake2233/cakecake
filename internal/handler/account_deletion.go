@@ -110,6 +110,8 @@ func maybeFinalizeAccountDeletion(ctx context.Context, a *API, uid uint64) error
 		a.StorageSvc.PurgeVideo(v)
 		a.esDeleteVideo(v.ID)
 	}
+	// 用户已匿名化：IndexUserFromDB 对匿名用户会删除 ES 文档，复用同一入口。
+	a.esIndexUser(uid)
 	return nil
 }
 
