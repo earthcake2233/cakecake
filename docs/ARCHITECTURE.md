@@ -223,6 +223,7 @@ sequenceDiagram
 - **高亮**：返回 `<em class="keyword">命中词</em>` 片段
 - **排序**：默认（相关性）、发布日期、播放量、点赞数
 - **可选降级**：ES 未配置时搜索页提示"搜索服务未就绪"，不影响其他功能
+- **数据同步**：业务写 MySQL 后写入 outbox 式待同步表（`search_sync_outbox`），后台 worker 每 5 秒执行并按指数退避重试（10s 起、5min 封顶），成功后标记 done；启动时 `ReindexAll` 全量重建兜底，最终一致
 
 ---
 

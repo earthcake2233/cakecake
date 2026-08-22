@@ -10,6 +10,7 @@ import (
 	"cakecake/internal/model/dynamic"
 	"cakecake/internal/model/extra"
 	"cakecake/internal/model/notification"
+	"cakecake/internal/model/search"
 	"cakecake/internal/model/system"
 	"cakecake/internal/model/user"
 	"cakecake/internal/model/video"
@@ -59,7 +60,18 @@ func RegisteredMigrations() []Migration {
 		{29, "transcode_outbox_pinned_names", "recreate outbox/dedup tables with pinned single names", migrateTranscodeOutboxPinnedNames},
 		{30, "transcode_dead_letter_auto_retry", "add auto retry fields to transcode_dead_letters", migrateTranscodeDeadLetterAutoRetry},
 		{31, "draft_object_keys", "rename draft staging paths to OSS object keys", migrateDraftObjectKeys},
+		{32, "search_sync_outbox", "create search_sync_outbox sync table", migrateSearchSyncOutbox},
 	}
+}
+
+func migrateSearchSyncOutbox(db *gorm.DB, lg *zap.Logger) error {
+	if err := db.AutoMigrate(&search.SearchSyncJob{}); err != nil {
+		return err
+	}
+	if lg != nil {
+		lg.Info("created search_sync_outbox table")
+	}
+	return nil
 }
 
 // migrateDraftObjectKeys renames the draft staging columns so the field name
