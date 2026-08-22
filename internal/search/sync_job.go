@@ -9,15 +9,22 @@ import (
 )
 
 const (
-	SyncJobEntityVideo   = "video"
+	// SyncJobEntityVideo identifies video documents.
+	SyncJobEntityVideo = "video"
+	// SyncJobEntityArticle identifies article documents.
 	SyncJobEntityArticle = "article"
-	SyncJobEntityUser    = "user"
+	// SyncJobEntityUser identifies user documents.
+	SyncJobEntityUser = "user"
 
+	// SyncJobActionUpsert indexes or replaces a document.
 	SyncJobActionUpsert = "upsert"
+	// SyncJobActionDelete removes a document.
 	SyncJobActionDelete = "delete"
 
+	// SyncJobStatusPending marks a job awaiting execution.
 	SyncJobStatusPending = "pending"
-	SyncJobStatusDone    = "done"
+	// SyncJobStatusDone marks a successfully executed job.
+	SyncJobStatusDone = "done"
 )
 
 // EnqueueSyncJob records a pending ES sync job. An existing pending row for
@@ -62,6 +69,7 @@ type ESClientExecutor struct {
 	DB     *gorm.DB
 }
 
+// Exec executes one sync job against the Elasticsearch client.
 func (e *ESClientExecutor) Exec(ctx context.Context, entityType string, entityID uint64, action string) error {
 	if e == nil || e.Client == nil || !e.Client.Enabled() {
 		return nil
