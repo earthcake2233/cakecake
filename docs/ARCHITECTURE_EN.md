@@ -223,6 +223,7 @@ Every publish (upload enqueue, retry scheduling, dead-lettering, admin requeue) 
 - **Highlight**: returns `<em class="keyword">hit</em>` fragments for title and excerpt
 - **Sort support**: default (relevance), pubdate, play_count, like count
 - **Optional**: degrades gracefully when ES is not configured — search page shows "not available" prompt
+- **Data sync**: after a MySQL write, a job is recorded in an outbox-style table (`search_sync_outbox`); a background worker runs every 5s with exponential backoff (10s base, 5min cap) and marks it done on success; startup `ReindexAll` remains the final fallback (eventual consistency)
 
 ---
 

@@ -226,6 +226,13 @@ func main() {
 		defer wg.Done()
 		worker.StartTranscodeOutboxRelay(ctx, db, mq, log)
 	}()
+	if esc != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			worker.StartSearchSyncRetry(ctx, db, &search.ESClientExecutor{Client: esc, DB: db}, log)
+		}()
+	}
 
 	pc := &playcount.PlayCounter{Rdb: rdb, Store: playcount.NewPlayCountStore(db)}
 	wg.Add(1)
