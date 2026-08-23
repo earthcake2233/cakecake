@@ -147,3 +147,45 @@ jobs:
         uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  backend-mq-integration:
+    # 独立门禁：用真实 RabbitMQ broker 跑 queue 包集成测试，并断言"未被跳过"。
+    # test-backend 已用 -tags=integration ./... + RABBITMQ_URL 跑全量，这里
+    # 单独拎出来做一个可见、可复现的绿色检查，面试可直接引用"CI 里真连 MQ 跑过"。
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      rabbitmq:
+        image: rabbitmq:3-alpine
+        ports:
+          - 5672:5672
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Run real RabbitMQ integration tests (assert not skipped)
+        env:
+          RABBITMQ_URL: amqp://guest:guest@localhost:5672/
+        run: |
+          rc=0
+          out=$(go test -tags=integration -v ./internal/queue/... -count=1 2>&1) || rc=$?
+          printf '%s\n' "$out"
+          skipped=$(printf '%s\n' "$out" | grep -cE '^--- SKIP:' || true)
+          passed=$(printf '%s\n' "$out" | grep -cE '^--- PASS:' || true)
+          echo "queue integration: rc=$rc passed=$passed skipped=$skipped"
+          if [ "$rc" -ne 0 ]; then
+            echo "FAIL: go test exited $rc" >&2
+            exit 1
+          fi
+          if [ "$skipped" -ne 0 ]; then
+            echo "FAIL: expected real RabbitMQ integration tests to RUN (skipped=$skipped)" >&2
+            exit 1
+          fi
+          if [ "$passed" -eq 0 ]; then
+            echo "FAIL: no queue integration test passed" >&2
+            exit 1
+          fi
