@@ -23,6 +23,7 @@ SKIP_PATTERNS = [
     "docker-config*.md",
     "ci-checks*.md",
     # 个人面试准备材料，不要求英文对照，也不提交仓库
+    "interview-*.md",
     "interview-testing*.md",
     "interview-core-chains*.md",
     "INTERVIEW_SPRINT*.md",

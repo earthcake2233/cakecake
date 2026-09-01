@@ -1038,6 +1038,9 @@ export default {
       maxDraftImages: 9,
       publishSubmitting: false,
       loading: false,
+      /** keep-alive 下 mounted+activated 会双触发，用 in-flight + 冷却窗口去重 */
+      _pageEnterInFlight: false,
+      _pageEnterCooldownUntil: 0,
       activeTab: "all",
       activeFollowId: "all",
       me: null,
@@ -1156,9 +1159,6 @@ export default {
       );
     }
   },
-  mounted() {
-    this.onPageEnter();
-  },
   activated() {
     this.onPageEnter();
   },
@@ -1171,11 +1171,20 @@ export default {
     cakecakeArticleReadRoute,
     cakecakeDynamicReadRoute,
     onPageEnter() {
-      document.title = PAGE_TITLE;
-      void this.loadHotSearch();
-      if (this.token) {
-        void this.loadFeed();
+      const now = Date.now();
+      if (this._pageEnterInFlight || now < this._pageEnterCooldownUntil) {
+        return;
       }
+      this._pageEnterInFlight = true;
+      this._pageEnterCooldownUntil = now + 2000;
+      document.title = PAGE_TITLE;
+      const tasks = [this.loadHotSearch()];
+      if (this.token) {
+        tasks.push(this.loadFeed());
+      }
+      Promise.all(tasks).finally(() => {
+        this._pageEnterInFlight = false;
+      });
     },
     async loadHotSearch() {
       try {
@@ -1890,28 +1899,34 @@ export default {
         ];
 
         const feedRows = [];
-        await Promise.all(
-          authors.slice(0, 8).map(async author => {
-            try {
-              const [videos, articles, dynamics] = await Promise.all([
-                mbListUserPublishedVideos(author.userId, { limit: 8 }),
-                mbListUserPublishedArticles(author.userId, { limit: 8 }),
-                mbListUserPublishedDynamics(author.userId, { limit: 8 })
-              ]);
-              for (const item of videos.items || []) {
-                feedRows.push(this.videoRowFromItem(author, item));
+        // Bounded fan-out: at most 3 authors in flight, each with 3 parallel
+        // endpoints (~9 concurrent), instead of 8×3 = 24, to stay under the
+        // per-IP rate limit burst.
+        const feedAuthors = authors.slice(0, 8);
+        for (let i = 0; i < feedAuthors.length; i += 3) {
+          await Promise.all(
+            feedAuthors.slice(i, i + 3).map(async author => {
+              try {
+                const [videos, articles, dynamics] = await Promise.all([
+                  mbListUserPublishedVideos(author.userId, { limit: 8 }),
+                  mbListUserPublishedArticles(author.userId, { limit: 8 }),
+                  mbListUserPublishedDynamics(author.userId, { limit: 8 })
+                ]);
+                for (const item of videos.items || []) {
+                  feedRows.push(this.videoRowFromItem(author, item));
+                }
+                for (const item of articles.items || []) {
+                  feedRows.push(this.articleRowFromItem(author, item));
+                }
+                for (const item of dynamics.items || []) {
+                  feedRows.push(this.imageRowFromItem(author, item));
+                }
+              } catch {
+                /* 单个 UP 失败不影响整页 */
               }
-              for (const item of articles.items || []) {
-                feedRows.push(this.articleRowFromItem(author, item));
-              }
-              for (const item of dynamics.items || []) {
-                feedRows.push(this.imageRowFromItem(author, item));
-              }
-            } catch {
-              /* 单个 UP 失败不影响整页 */
-            }
-          })
-        );
+            })
+          );
+        }
 
         this.feedAll = feedRows.sort((a, b) => (b.ts || 0) - (a.ts || 0));
       } catch {
