@@ -31,6 +31,12 @@ type meResponse struct {
 	Birthday     string `json:"birthday"`
 	AvatarURL    string `json:"avatar_url"`
 	CreatedAt    string `json:"created_at"`
+	// FirstPublishedAt is the creation time of the user's first successfully
+	// published video (RFC3339), retained even if that video is later deleted.
+	FirstPublishedAt *string `json:"first_published_at,omitempty"`
+	// CreatorUpDays is the inclusive day count since FirstPublishedAt (day 1
+	// starts on the anchor date); 0 when the user has never published a video.
+	CreatorUpDays int `json:"creator_up_days"`
 	// PendingDeletion is true during the account-deletion cooling-off period.
 	PendingDeletion     bool    `json:"pending_deletion,omitempty"`
 	DeletionEffectiveAt *string `json:"deletion_effective_at,omitempty"`
@@ -91,6 +97,11 @@ func (a *API) GetMe(c *gin.Context) {
 		out.SpacePrivacy = &sp
 		out.LevelInfo = &li
 		out.CoinBalance = &cb
+		if userModel.FirstPublishedAt != nil && !userModel.FirstPublishedAt.IsZero() {
+			fp := userModel.FirstPublishedAt.Format(time.RFC3339)
+			out.FirstPublishedAt = &fp
+			out.CreatorUpDays = creatorUpInclusiveDays(userModel.FirstPublishedAt)
+		}
 		if userModel.DeletionRequestedAt != nil && userModel.DeletionEffectiveAt != nil &&
 			time.Now().Before(*userModel.DeletionEffectiveAt) {
 			eff := userModel.DeletionEffectiveAt.Format(time.RFC3339)
