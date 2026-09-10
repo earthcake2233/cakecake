@@ -212,6 +212,32 @@ func TestIntegration_MeEndpoint(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code)
 }
 
+func TestIntegration_MeEndpoint_CreatorUpDays(t *testing.T) {
+	api, r, token := setupHandlerIntegrationDB(t)
+
+	first := time.Now().AddDate(0, 0, -30)
+	require.NoError(t, api.DB.Create(&user.User{
+		ID: 1, Username: "metest", Nickname: "MeTest",
+		FirstPublishedAt: &first,
+	}).Error)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/api/v1/users/me", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+
+	var body struct {
+		Data struct {
+			FirstPublishedAt *string `json:"first_published_at"`
+			CreatorUpDays    int     `json:"creator_up_days"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
+	require.NotNil(t, body.Data.FirstPublishedAt)
+	require.GreaterOrEqual(t, body.Data.CreatorUpDays, 30)
+}
+
 func TestIntegration_SearchHistory_NoAuth(t *testing.T) {
 	_, r, _ := setupHandlerIntegrationDB(t)
 
