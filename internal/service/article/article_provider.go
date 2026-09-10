@@ -127,13 +127,13 @@ func (p *ArticleStoreImpl) CountArticlesByStatus(ctx context.Context, userID uin
 	for _, r := range rows {
 		switch r.Status {
 		case article.StatusDraft:
-			out["draft"] = r.N
-		case article.StatusProcessing:
-			out["processing"] = r.N
-		case article.StatusPublished:
-			out["passed"] = r.N
-		case article.StatusRejected:
-			out["rejected"] = r.N
+			out["draft"] += r.N
+		case article.StatusProcessing, article.StatusPendingReview:
+			out["processing"] += r.N
+		case article.StatusPassed, article.StatusPublished:
+			out["passed"] += r.N
+		case article.StatusRejected, article.StatusFailed:
+			out["rejected"] += r.N
 		}
 	}
 	return out

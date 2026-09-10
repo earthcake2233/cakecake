@@ -178,3 +178,33 @@ func TestArticleService_AdminAndDelete(t *testing.T) {
 	}))
 	require.True(t, called)
 }
+
+func TestArticleService_CountsAndProcessingFilter(t *testing.T) {
+	s, _ := newArticleService(t)
+	ctx := context.Background()
+
+	seedArticle(t, s, 40, 1, article.StatusPublished)
+	seedArticle(t, s, 41, 1, article.StatusPassed)
+	seedArticle(t, s, 42, 1, article.StatusDraft)
+	seedArticle(t, s, 43, 1, article.StatusPendingReview)
+	seedArticle(t, s, 44, 1, article.StatusRejected)
+	seedArticle(t, s, 45, 1, article.StatusFailed)
+
+	counts := s.CountArticlesByStatus(ctx, 1)
+	require.Equal(t, int64(2), counts["passed"], "published + legacy passed")
+	require.Equal(t, int64(1), counts["draft"])
+	require.Equal(t, int64(1), counts["processing"], "pending_review counts as processing")
+	require.Equal(t, int64(2), counts["rejected"], "rejected + failed")
+
+	// The processing filter must resolve to the stored pending_review status.
+	page, err := s.ListMyArticlesPage(ctx, 1, 1, 10, "processing", "", "time")
+	require.NoError(t, err)
+	require.Equal(t, int64(1), page.Total)
+	require.Len(t, page.Items, 1)
+	require.Equal(t, article.StatusPendingReview, page.Items[0].Status)
+
+	cur, err := s.ListMyArticlesCursor(ctx, 1, 0, 10, "processing", "", "time")
+	require.NoError(t, err)
+	require.Len(t, cur.Items, 1)
+	require.Equal(t, article.StatusPendingReview, cur.Items[0].Status)
+}

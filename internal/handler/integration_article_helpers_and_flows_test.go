@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"cakecake/internal/config"
+	"cakecake/internal/model/article"
 	"github.com/stretchr/testify/require"
 )
 
@@ -63,6 +64,47 @@ func TestArticleStatusAfterSubmit(t *testing.T) {
 	require.Equal(t, "draft", api.articleStatusAfterSubmit(false))
 	// With publish=true and ArticleReviewRequired=false (default), returns "published"
 	require.Equal(t, "published", api.articleStatusAfterSubmit(true))
+}
+
+func TestIntegration_MyArticleStatusCounts(t *testing.T) {
+	api, r, token := setupHandlerIntegrationDB(t)
+
+	rows := []article.Article{
+		{UserID: 1, Title: "draft", Status: article.StatusDraft},
+		{UserID: 1, Title: "pending", Status: article.StatusPendingReview},
+		{UserID: 1, Title: "pub1", Status: article.StatusPublished},
+		{UserID: 1, Title: "pub2", Status: article.StatusPublished},
+		{UserID: 1, Title: "rejected", Status: article.StatusRejected},
+		{UserID: 1, Title: "failed", Status: article.StatusFailed},
+	}
+	for i := range rows {
+		require.NoError(t, api.DB.Create(&rows[i]).Error)
+	}
+
+	w := srve(r, areq("GET", "/api/v1/users/me/articles?page=1&page_size=1", token, nil))
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	var body struct {
+		Data struct {
+			Counts map[string]int64 `json:"counts"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
+	require.Equal(t, int64(1), body.Data.Counts["draft"])
+	require.Equal(t, int64(1), body.Data.Counts["processing"])
+	require.Equal(t, int64(2), body.Data.Counts["passed"])
+	require.Equal(t, int64(2), body.Data.Counts["rejected"])
+
+	// The "processing" filter must list the pending_review article.
+	w = srve(r, areq("GET", "/api/v1/users/me/articles?status=processing", token, nil))
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	var filtered struct {
+		Data struct {
+			Total int64 `json:"total"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &filtered))
+	require.Equal(t, int64(1), filtered.Data.Total)
 }
 
 func TestMergeUniqueDisplayNames(t *testing.T) {
