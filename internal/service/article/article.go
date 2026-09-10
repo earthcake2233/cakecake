@@ -220,10 +220,10 @@ func manuscriptStatusToDB(status string) string {
 	case article.StatusDraft:
 		return article.StatusDraft
 	case article.StatusProcessing:
-		return article.StatusProcessing
+		return article.StatusPendingReview
 	case article.StatusPassed:
 		return article.StatusPublished
-	case article.StatusRejected:
+	case article.StatusRejected, article.StatusFailed:
 		return article.StatusRejected
 	default:
 		return ""

@@ -364,29 +364,14 @@ func orderClauseForMyArticles(sort string) string {
 }
 
 func (a *API) countMyArticlesByStatus(ctx context.Context, uid uint64) map[string]int64 {
-	type row struct {
-		Status string
-		N      int64
-	}
-	var rows []row
-	_ = a.ArticleSvc.CountArticlesByStatus(ctx, uid)
 	out := map[string]int64{
 		"draft":      0,
 		"processing": 0,
 		"passed":     0,
 		"rejected":   0,
 	}
-	for _, r := range rows {
-		switch r.Status {
-		case article.StatusDraft:
-			out["draft"] = r.N
-		case article.StatusPublished:
-			out["passed"] += r.N
-		case article.StatusPendingReview:
-			out["processing"] += r.N
-		case article.StatusRejected:
-			out["rejected"] = r.N
-		}
+	for st, n := range a.ArticleSvc.CountArticlesByStatus(ctx, uid) {
+		out[st] = n
 	}
 	dynN, _ := a.DynamicSvc.CountUserDynamics(ctx, uid)
 	out["dynamics"] = dynN
